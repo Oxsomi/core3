@@ -255,6 +255,16 @@ namespace oxc {
 			return res;
 		}
 
+		//Formats onto the end of what this holds. NEVER pass user generated content as the format.
+		[[nodiscard]] c::Bool appendFormat(c::Error *e_rr, const c::C8 *fmt, ...) noexcept {
+
+			va_list args;
+			va_start(args, fmt);
+			const c::Bool res = c::CharString_appendFormatVariadic(alloc, &str, e_rr, fmt, args);
+			va_end(args);
+			return res;
+		}
+
 		//Mutation
 
 		[[nodiscard]] c::Bool append(c::C8 ch, c::Error *e_rr = nullptr) noexcept {

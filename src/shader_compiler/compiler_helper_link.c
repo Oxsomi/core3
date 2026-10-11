@@ -161,11 +161,14 @@ Bool Compiler_getLinkEntries(
 
 		//Check extensions
 
-		Bool containsExtension = !ident.extensions && !entry.extensions.length;
+		Bool containsExtension = !ident.extensions && !ident.extensions2 && !entry.extensions.length;
 		U16 extensionId = 0;
 
 		for(U64 k = 0; k < entry.extensions.length; ++k)
-			if (entry.extensions.ptr[k] == (U32) ident.extensions) {
+			if (
+				entry.extensions.ptr[k].extensions == ident.extensions &&
+				entry.extensions.ptr[k].extensions2 == ident.extensions2
+			) {
 				containsExtension = true;
 				extensionId = (U16) k;
 				break;

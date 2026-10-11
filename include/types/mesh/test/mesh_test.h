@@ -45,7 +45,7 @@ typedef struct MeshResult {
 	MeshInfo info;
 	Buffer positions, attributes, indices, triangles;
 	Bool ok;
-	U8 padding[7];
+	U8 padding[15];
 } MeshResult;
 
 //Reads bytes through fn into resizable sinks. withAttributes and withTriangles leave those outputs NULL

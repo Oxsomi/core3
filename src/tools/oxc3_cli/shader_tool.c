@@ -189,6 +189,10 @@
 			for(U8 j = 0; j < ESHExtension_Count; ++j)
 				if(id->extensions & (1 << j))
 					Log_debugLnx("\t\tExtension: %s", ESHExtension_names[j]);
+
+			for(U8 j = 0; j < ESHExtension2_Count; ++j)
+				if(id->extensions2 & (1 << j))
+					Log_debugLnx("\t\tExtension: %s", ESHExtension2_names[j]);
 		}
 
 	clean:

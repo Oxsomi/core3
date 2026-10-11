@@ -105,9 +105,36 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		Bool mapped =
 			ok && r.shEntriesRuntime.length == 1 &&
 			r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-			(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & (1u << i));
+			(r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions & (1u << i));
 
 		Test_assert(t, ESHExtension_names[i], mapped);
+	}
+
+	//--- Every ESHExtension2 name is too, into the second mask alone ---
+
+	for (U64 i = 0; i < ESHExtension2_Count; ++i) {
+
+		CharString_free(&src, alloc);
+		gotoIfError3(clean, CharString_format(
+			alloc, &src, e_rr,
+			"RWByteAddressBuffer buf;\n"
+			"[[oxc::extension(\"%s\")]]\n"
+			"[[oxc::stage(\"compute\")]]\n"
+			"[numthreads(1, 1, 1)]\n"
+			"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, 1); }\n",
+			ESHExtension2_names[i]
+		));
+
+		CompileResult_free(&r, alloc);
+		Bool ok = parseShader(&comp, src, alloc, &r, false);
+
+		Bool mapped =
+			ok && r.shEntriesRuntime.length == 1 &&
+			r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
+			r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions2 == (1u << i) &&
+			!r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions;
+
+		Test_assert(t, ESHExtension2_names[i], mapped);
 	}
 
 	CharString_free(&src, alloc);
@@ -126,7 +153,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "RayReorder on raygen",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-		(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & ESHExtension_RayReorder)
+		(r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions & ESHExtension_RayReorder)
 	);
 
 	src = CharString_createRefCStrConst(
@@ -140,7 +167,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "PAQ on raygen",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-		(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & ESHExtension_PAQ)
+		(r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions & ESHExtension_PAQ)
 	);
 
 	//--- Unknown extension names are rejected ---

@@ -25,7 +25,7 @@
 #include "types/base/algorithm.h"
 #include "types/math/vec4i.h"
 
-#ifdef _MSC_VER
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
 	#include <intrin0.h>        //_umul128/__umulh; MSVC resolves those without this, clang-cl needs the declaration
 #endif
 
@@ -246,7 +246,7 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 			default:       halfa = vget_high_u64(va); halfb = vget_high_u64(vb); break;
 		}
 
-		#if defined(_MSC_VER) && !defined(__clang__)
+		#if _COMPILER == COMPILER_MSVC
 
 			//MSVC's vmull_p64 (neon_pmull_64) takes the 64-bit NEON vector operands (__n64) directly, not the ACLE
 			//scalar poly64_t; uint64x1_t is __n64 on MSVC so the selected halves pass through unchanged (hardware PMULL).

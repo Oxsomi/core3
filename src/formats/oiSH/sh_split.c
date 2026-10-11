@@ -87,9 +87,11 @@ Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, 
 				.defines = ListCharString_createRefFromList(ai.identifier.defines),
 				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint),
 				.uniformData = ListU8_createRefFromList(ai.identifier.uniformData),
-				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms)
+				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms),
+				.extensions2 = ai.identifier.extensions2
 			},
 			.dormantExtensions = ai.dormantExtensions,
+			.dormantExtensions2 = ai.dormantExtensions2,
 			.vendorMask = ai.vendorMask,
 			.hasShaderAnnotation = ai.hasShaderAnnotation
 		};

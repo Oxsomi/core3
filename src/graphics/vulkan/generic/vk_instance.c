@@ -233,8 +233,7 @@ VkBool32 onDebugReport(
 		//GPU assisted validation force enables the device features it needs and warns about doing so.
 		//That's an expected side effect of running maximum validation, not an app defect, so it's only logged.
 		//The entrypoint warning is GPU-AV admitting its own push constant lookup can't attribute variables in
-		// multi entrypoint SPIR-V below 1.4; legal modules, no validation lost, and the layer's condition is
-		// inverted anyway (it fires when there are no push constants at all), so it's noise rather than a defect.
+		// multi entrypoint SPIR-V below 1.4: legal modules and no validation lost, so it's noise rather than a defect.
 
 		const CharString messageStr = CharString_createRefCStrConst(message);
 		const CharString adjusting = CharString_createRefCStrConst("validation is adjusting settings");
@@ -828,7 +827,9 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_index_type_uint8",
 
-	"VK_EXT_memory_priority", "VK_EXT_pageable_device_local_memory"
+	"VK_EXT_memory_priority", "VK_EXT_pageable_device_local_memory",
+
+	"VK_MESA_experiment_tier1", "VK_MESA_experiment_tier2"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1671,6 +1672,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(optExtensions[EOptExtensions_BufferMarker])
 			capabilities.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
+
+		//The driver's own claim, taken as it is (EGraphicsFeatures2_ExperimentTier1).
+
+		if(optExtensions[EOptExtensions_ExperimentTier1])
+			capabilities.features2 |= EGraphicsFeatures2_ExperimentTier1;
+
+		if(optExtensions[EOptExtensions_ExperimentTier2])
+			capabilities.features2 |= EGraphicsFeatures2_ExperimentTier2;
 
 		if(optExtensions[EOptExtensions_ExternalMemoryHost])
 			capabilities.featuresExt |= EVkGraphicsFeatures_ExternalHostMemory;

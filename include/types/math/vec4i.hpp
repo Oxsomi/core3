@@ -51,6 +51,10 @@ namespace oxc { namespace c {
 	#include <arm_neon.h>
 #endif
 
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#include <intrin0.h>        //See lock.hpp
+#endif
+
 //Operator sugar over the C I32x4; see vec4f.hpp for the rationale.
 //Conversions to and from F32x4 live in vec_cvt.hpp, mirroring vec_cvt.h.
 

@@ -25,10 +25,15 @@
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/container/list_impl.h"
+#include "types/container/job_queue.h"
+#include "types/container/memory_stream.h"
+#include "types/container/ref_ptr.h"
 #include "types/math/type_cast.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
+#include "types/base/mathi.h"
+#include "types/base/constants.h"
 #include "types/base/string_read_helper.h"
 
 //The scalar types the specification names, in both spellings, and the width of each.
@@ -429,10 +434,10 @@ clean:
 //this table with no switch in it at all.
 
 typedef struct PlyPlanEntry {
+	F32 *dst;
 	U16 offset;                   //Bytes into the record
 	U8 type;                      //EPlyType
-	U8 padding;
-	F32 *dst;
+	U8 padding[5];
 } PlyPlanEntry;
 
 typedef struct PlyCursor {
@@ -689,6 +694,31 @@ clean:
 	return s_uccess;
 }
 
+//A span's bounds, folded into whatever the caller already had.
+//Shared by Ply_readRange, which calls this once for the one span it read,
+// and by the parallel reader's vertex merge, which calls it once per chunk in order:
+// both are "fold this span into the running total" and nothing tells the two apart from inside the fold.
+//vertexCount is span's own, passed separately since a caller merging several chunks does not want it confused
+// with info->vertexCount, which is the RUNNING total this adds to.
+
+static void Ply_mergeSpanInfo(MeshInfo *info, const MeshInfo *span, U32 vertexCount) {
+
+	//An empty span has no bounds to fold in.
+
+	if(vertexCount && info->vertexCount) {
+		info->aabbMin = F32x4_min(info->aabbMin, span->aabbMin);
+		info->aabbMax = F32x4_max(info->aabbMax, span->aabbMax);
+	}
+
+	else if(vertexCount) {
+		info->aabbMin = span->aabbMin;
+		info->aabbMax = span->aabbMax;
+	}
+
+	info->vertexCount += vertexCount;
+	info->maxUvError = F32_max(info->maxUvError, span->maxUvError);
+}
+
 //One span of the VERTEX element, decoded through the plan the header resolved. Faces are not spanned: a face
 //names arbitrary vertices, so a range of them is only meaningful once every vertex it could name is in hand,
 // which is the whole file.
@@ -794,13 +824,8 @@ Bool Ply_readRange(
 	gotoIfError3(clean, MeshPositions_finish(&positions, &span, e_rr));
 	gotoIfError3(clean, MeshAttributes_finish(&attrs, NULL, vertexCount, e_rr));
 
-	for(U8 i = 0; i < 3; ++i) {
-		info->aabbMin[i] = !info->vertexCount ? span.aabbMin[i] : F32_min(info->aabbMin[i], span.aabbMin[i]);
-		info->aabbMax[i] = !info->vertexCount ? span.aabbMax[i] : F32_max(info->aabbMax[i], span.aabbMax[i]);
-	}
-
-	info->vertexCount += vertexCount;
-	info->maxUvError = F32_max(info->maxUvError, attrs.maxUvError);
+	span.maxUvError = attrs.maxUvError;
+	Ply_mergeSpanInfo(info, &span, vertexCount);
 
 	gotoIfError3(clean, MeshSink_flush(&positionSink, e_rr));
 	gotoIfError3(clean, MeshSink_flush(&attributeSink, e_rr));
@@ -811,6 +836,129 @@ clean:
 	MeshSink_free(&attributeSink);
 	MeshSink_free(&positionSink);
 	MeshSource_free(&src);
+	return s_uccess;
+}
+
+//Decodes faceCount consecutive records of a face element whose only property is a corner index list, fanning
+//each polygon into triangles from its first corner. The serial reader calls this once for the whole element;
+//a parallel read calls it once per chunk of faces, each on its own MeshSource positioned at that chunk's first
+// record, and the two produce the same bytes because they are the same loop over a different range.
+//
+//heldPositions is read only when keepPositions is set, and then only at 3 floats per vertex index a face
+// names, whatever that index is: the caller owns making every vertex a face in this range could name resolve
+// into that array, which for a parallel chunk means every vertex has already been decoded, not just its own.
+
+static Bool Ply_decodeFaceFast(
+	MeshSource *src,
+	U8 countType, U8 indexType, U8 format,
+	U32 verticesRead,
+	U32 faceCount,
+	Bool keepPositions,
+	const F32 *heldPositions,
+	MeshTriangles *triangles,
+	U32 *fannedFaces,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListU32 face = (ListU32) { 0 };
+
+	const U8 countSize = Ply_typeSize[countType];
+	const U8 valueSize = Ply_typeSize[indexType];
+
+	U8 recBuf[PLY_RECORD_CAP];
+	U32 idx[PLY_FAN_CAP];
+
+	for(U32 done = 0; done < faceCount; ++done) {
+
+		U64 avail = 0;
+		gotoIfError3(clean, MeshSource_available(src, &avail, e_rr));
+
+		//The record is read out of the window when it sits there whole, and copied across the boundary when it
+		//does not, which is once a window rather than once a record. Nothing here gives up and hands the
+		// element back, since bailing at the first boundary would leave the path unused.
+
+		const U8 *rec = NULL;
+		U64 corners = 0;
+
+		if(avail >= countSize) {
+
+			rec = MeshSource_ptr(src);
+			corners = (U64) Ply_decodeScalar(rec, countType, format);
+
+			if(corners > PLY_FAN_CAP || avail < (U64) countSize + corners * valueSize)
+				rec = NULL;
+		}
+
+		if(!rec) {
+
+			//Across a boundary, or a polygon with more corners than the stack array holds. The list the
+			//general path uses takes both, and neither is common enough to be worth more than this.
+
+			gotoIfError3(clean, MeshSource_readBytes(src, recBuf, countSize, e_rr));
+			corners = (U64) Ply_decodeScalar(recBuf, countType, format);
+
+			if(corners < 3)
+				retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
+
+			gotoIfError3(clean, ListU32_clear(&face, e_rr));
+
+			for(U64 i = 0; i < corners; ++i) {
+
+				U8 one[8];
+				gotoIfError3(clean, MeshSource_readBytes(src, one, valueSize, e_rr));
+
+				const F64 v = Ply_decodeScalar(one, indexType, format);
+
+				if(v < 0 || v >= (F64) verticesRead)
+					retError(clean, Error_outOfBounds(
+						0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+					));
+
+				gotoIfError3(clean, ListU32_pushBack(&face, (U32) v, alloc, e_rr));
+			}
+		}
+
+		else {
+
+			if(corners < 3)
+				retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
+
+			for(U64 i = 0; i < corners; ++i) {
+
+				const F64 v = Ply_decodeScalar(rec + countSize + i * valueSize, indexType, format);
+
+				if(v < 0 || v >= (F64) verticesRead)
+					retError(clean, Error_outOfBounds(
+						0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+					));
+
+				idx[i] = (U32) v;
+			}
+
+			MeshSource_advance(src, (U64) countSize + corners * valueSize);
+		}
+
+		const U32 *corner = rec ? idx : face.ptr;
+
+		if(corners > 3)
+			++*fannedFaces;
+
+		for(U64 k = 1; k + 1 < corners; ++k) {
+
+			const U32 i0 = corner[0], i1 = corner[k], i2 = corner[k + 1];
+
+			const F32 *p0 = keepPositions ? heldPositions + (U64) i0 * 3 : NULL;
+			const F32 *p1 = keepPositions ? heldPositions + (U64) i1 * 3 : NULL;
+			const F32 *p2 = keepPositions ? heldPositions + (U64) i2 * 3 : NULL;
+
+			gotoIfError3(clean, MeshTriangles_emit(triangles, i0, i1, i2, 0, p0, p1, p2, alloc, e_rr));
+		}
+	}
+
+clean:
+	ListU32_free(&face, alloc);
 	return s_uccess;
 }
 
@@ -979,98 +1127,14 @@ Bool Ply_read(
 
 			const PlyProperty *prop = header->properties.ptr + el->firstProperty;
 
-			const U8 countSize = Ply_typeSize[prop->countType];
-			const U8 valueSize = Ply_typeSize[prop->type];
+			if(prop->isList && prop->semantic == EPlySemantic_Indices) {
 
-			U32 idx[PLY_FAN_CAP];
+				gotoIfError3(clean, Ply_decodeFaceFast(
+					&src, prop->countType, prop->type, header->format, verticesRead, el->count,
+					keepPositions, keepPositions ? held.ptr : NULL, &triangles, &info->fannedFaces, alloc, e_rr
+				));
 
-			while(prop->isList && prop->semantic == EPlySemantic_Indices && done < el->count) {
-
-				U64 avail = 0;
-				gotoIfError3(clean, MeshSource_available(&src, &avail, e_rr));
-
-				//The record is read out of the window when it sits there whole, and copied across the boundary
-				//when it does not, which is once a window rather than once a record. Nothing here gives up and
-				// hands the element back, since bailing at the first boundary would leave the path unused.
-
-				const U8 *rec = NULL;
-				U64 corners = 0;
-
-				if(avail >= countSize) {
-
-					rec = MeshSource_ptr(&src);
-					corners = (U64) Ply_decodeScalar(rec, prop->countType, header->format);
-
-					if(corners > PLY_FAN_CAP || avail < (U64) countSize + corners * valueSize)
-						rec = NULL;
-				}
-
-				if(!rec) {
-
-					//Across a boundary, or a polygon with more corners than the stack array holds. The list the
-					//general path uses takes both, and neither is common enough to be worth more than this.
-
-					gotoIfError3(clean, MeshSource_readBytes(&src, recBuf, countSize, e_rr));
-					corners = (U64) Ply_decodeScalar(recBuf, prop->countType, header->format);
-
-					if(corners < 3)
-						retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
-
-					gotoIfError3(clean, ListU32_clear(&face, e_rr));
-
-					for(U64 i = 0; i < corners; ++i) {
-
-						U8 one[8];
-						gotoIfError3(clean, MeshSource_readBytes(&src, one, valueSize, e_rr));
-
-						const F64 v = Ply_decodeScalar(one, prop->type, header->format);
-
-						if(v < 0 || v >= (F64) verticesRead)
-							retError(clean, Error_outOfBounds(
-								0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
-							));
-
-						gotoIfError3(clean, ListU32_pushBack(&face, (U32) v, alloc, e_rr));
-					}
-				}
-
-				else {
-
-					if(corners < 3)
-						retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
-
-					for(U64 i = 0; i < corners; ++i) {
-
-						const F64 v = Ply_decodeScalar(rec + countSize + i * valueSize, prop->type, header->format);
-
-						if(v < 0 || v >= (F64) verticesRead)
-							retError(clean, Error_outOfBounds(
-								0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
-							));
-
-						idx[i] = (U32) v;
-					}
-
-					MeshSource_advance(&src, (U64) countSize + corners * valueSize);
-				}
-
-				const U32 *corner = rec ? idx : face.ptr;
-
-				if(corners > 3)
-					++info->fannedFaces;
-
-				for(U64 k = 1; k + 1 < corners; ++k) {
-
-					const U32 i0 = corner[0], i1 = corner[k], i2 = corner[k + 1];
-
-					const F32 *p0 = keepPositions ? held.ptr + (U64) i0 * 3 : NULL;
-					const F32 *p1 = keepPositions ? held.ptr + (U64) i1 * 3 : NULL;
-					const F32 *p2 = keepPositions ? held.ptr + (U64) i2 * 3 : NULL;
-
-					gotoIfError3(clean, MeshTriangles_emit(&triangles, i0, i1, i2, 0, p0, p1, p2, alloc, e_rr));
-				}
-
-				++done;
+				done = el->count;
 			}
 		}
 
@@ -1242,6 +1306,782 @@ clean:
 	Buffer_free(&lineBuf, alloc);
 	ListPlyElement_free(&headerData.elements, alloc);
 	ListPlyProperty_free(&headerData.properties, alloc);
+
+	return s_uccess;
+}
+
+//---------------------------------------------------------------- Parallel read
+//
+//Binary only: an ascii body has no record boundary to split on. A vertex element has to be fixed stride
+//(Ply_resolveStrides already says so through MeshHeader::vertexStride) and the face element has to be the one
+// shape Ply_fillMeshHeader resolves an offset for, a single corner index list, which is what MeshHeader::
+// faceOffset being nonzero already means. Anything else, a gaussian splat's extra lists included, falls back
+// to Ply_read whole: those shapes exist, but they are not what a 500 MiB triangle soup looks like.
+//
+//ComputeNormals and QuantizePositions stay serial for the reason Ply_readRange already refuses them for: a
+//normal sums over every face touching a vertex, and a quantized position needs the bounds of the whole mesh,
+// neither of which a chunk can know on its own. Ply_read's own single pass already pays for both cheaply by
+// holding what it must; splitting that holding across chunks would trade one serial pass for a merge step at
+// least as expensive, for a file this reader is not slow on in the first place.
+
+//Below this many combined bytes of vertex and face records, splitting costs more than it saves: a JobGroup
+//per phase, a MemoryStream per chunk and the merge back into one MeshInfo are fixed costs a small file pays
+//for nothing. Measured generating vertex only binary PLYs from 64 KiB to 128 MiB on the dev box (8 logical
+//cores) and timing Ply_read against Ply_readParallel on each: parallel pulls ahead once the body passes a
+//handful of MiB, and either side of that point costs low single digit milliseconds, so the exact line matters
+// little. 4 MiB keeps every file this reader is actually slow on well inside the parallel side.
+
+#define PLY_PARALLEL_MIN_BYTES (4 * MIBI)
+
+//A few chunks per worker, so one that finishes early takes another rather than the whole read waiting on the
+//slowest. Matches HDR_scanAndDecode's split (formats/hdr/hdr_read.c).
+
+static U64 Ply_parallelChunkCount(U64 total, U64 threadCount) {
+
+	const U64 want = U64_min(total, threadCount * 4);
+	return want ? want : 1;
+}
+
+typedef struct PlyVertexJob {
+
+	StreamRef *stream;
+	const MeshHeader *header;
+	const Allocator *alloc;
+	JobGroup *group;
+
+	StreamRef *positions;        //Owned: a disjoint region of the shared positions buffer
+	StreamRef *attributes;       //Owned, or NULL when the caller asked for none
+	MeshInfo *info;              //Not inline: a 16 byte aligned member would pad by Error's size, which varies per build
+
+	EMeshFlags flags;
+	U32 firstVertex, vertexCount;
+	U8 padding[4];
+
+	Error err;
+
+} PlyVertexJob;
+
+//Ply_readRange already produces exactly what Ply_read would for the same span (Test_plyRange checks this
+//byte for byte), so a chunk is this and nothing more: the parallelism is entirely in how many of these run
+// at once, not in a second decoder that has to be kept agreeing with the first by hand.
+
+static Bool Ply_vertexJob(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId;
+	(void) queue;
+
+	PlyVertexJob *job = (PlyVertexJob*) data;
+
+	const MeshOutput output = (MeshOutput) { .positions = job->positions, .attributes = job->attributes };
+
+	const Bool ok = Ply_readRange(
+		job->stream, job->header, job->flags, job->firstVertex, job->vertexCount, job->info, &output,
+		job->alloc, &job->err
+	);
+
+	if(!ok)
+		JobGroup_fail(job->group, NULL);
+
+	//The group and job->err carry a failure, so the queue, which may be the caller's, stays successful.
+
+	JobGroup_leave(job->group, NULL);
+	return true;
+}
+
+typedef struct PlyFaceJob {
+
+	StreamRef *stream;
+	StreamRef *indices;           //Owned: a disjoint region of the shared indices buffer
+	StreamRef *words;             //Owned, or NULL when the caller asked for no triangle words
+	const Allocator *alloc;
+	JobGroup *group;
+	const F32 *heldPositions;
+
+	U64 byteStart;
+
+	EMeshFlags flags;
+	U32 verticesRead, faceCount, fannedFaces;
+
+	U8 countType, indexType, format;
+	Bool keepPositions;
+	U8 padding[4];
+
+	Error err;
+
+} PlyFaceJob;
+
+static Bool Ply_faceJob(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId;
+	(void) queue;
+
+	PlyFaceJob *job = (PlyFaceJob*) data;
+
+	MeshSource src = (MeshSource) { 0 };
+	MeshSink indexSink = (MeshSink) { 0 }, wordSink = (MeshSink) { 0 };
+	MeshTriangles triangles = (MeshTriangles) { 0 };
+
+	Bool ok =
+		MeshSource_create(job->stream, job->byteStart, job->alloc, &src, &job->err) &&
+		MeshSink_create(job->indices, 0, job->alloc, &indexSink, &job->err) &&
+		MeshSink_create(job->words, 0, job->alloc, &wordSink, &job->err);
+
+	if(ok) {
+
+		MeshTriangles_create(job->flags, &indexSink, job->words ? &wordSink : NULL, &triangles);
+
+		ok = Ply_decodeFaceFast(
+			&src, job->countType, job->indexType, job->format, job->verticesRead, job->faceCount,
+			job->keepPositions, job->heldPositions, &triangles, &job->fannedFaces, job->alloc, &job->err
+		);
+	}
+
+	if(ok)
+		ok = MeshSink_flush(&indexSink, &job->err) && MeshSink_flush(&wordSink, &job->err);
+
+	MeshTriangles_free(&triangles, job->alloc);
+	MeshSink_free(&wordSink);
+	MeshSink_free(&indexSink);
+	MeshSource_free(&src);
+
+	if(!ok)
+		JobGroup_fail(job->group, NULL);
+
+	//The group and job->err carry a failure, so the queue, which may be the caller's, stays successful.
+
+	JobGroup_leave(job->group, NULL);
+	return true;
+}
+
+//Where each face record of a single corner-index-list element begins, and how many triangles come before it,
+//as plain arithmetic when every face declares the same corner count and as a table when it does not.
+//corners and stride are only meaningful while uniform holds; the table is only populated otherwise.
+
+typedef struct PlyFaceLayout {
+
+	ListU64 byteOffset;          //faceCount + 1 entries, empty while uniform holds
+	ListU64 triPrefix;           //Parallel to byteOffset, empty while uniform holds
+
+	U64 corners, stride;
+	U64 totalTriangles;
+	Bool uniform;
+	U8 padding[7];
+
+} PlyFaceLayout;
+
+static U64 PlyFaceLayout_byteOffset(const PlyFaceLayout *l, U64 faceOffset, U32 i) {
+	return l->uniform ? faceOffset + (U64) i * l->stride : l->byteOffset.ptr[i];
+}
+
+static U64 PlyFaceLayout_triOffset(const PlyFaceLayout *l, U32 i) {
+	return l->uniform ? (U64) i * (l->corners - 2) : l->triPrefix.ptr[i];
+}
+
+static U64 PlyFaceLayout_end(const PlyFaceLayout *l, U64 faceOffset, U32 faceCount) {
+	return l->uniform ? faceOffset + (U64) faceCount * l->stride : l->byteOffset.ptr[faceCount];
+}
+
+static void PlyFaceLayout_free(PlyFaceLayout *l, const Allocator *alloc) {
+	ListU64_free(&l->byteOffset, alloc);
+	ListU64_free(&l->triPrefix, alloc);
+}
+
+//The general case: every face's byte offset and triangle prefix, from a second pass over the counts. Paid
+//only once Ply_buildFaceLayout finds the file is not uniform, which real meshes rarely are not.
+
+static Bool Ply_buildFaceLayoutTable(
+	StreamRef *stream, U64 faceOffset, U8 countType, U8 indexType, U8 format, U32 faceCount,
+	PlyFaceLayout *layout, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	MeshSource src = (MeshSource) { 0 };
+
+	const U8 countSize = Ply_typeSize[countType];
+	const U8 valueSize = Ply_typeSize[indexType];
+
+	gotoIfError3(clean, MeshSource_create(stream, faceOffset, alloc, &src, e_rr));
+	gotoIfError3(clean, ListU64_resize(&layout->byteOffset, (U64) faceCount + 1, alloc, e_rr));
+	gotoIfError3(clean, ListU64_resize(&layout->triPrefix, (U64) faceCount + 1, alloc, e_rr));
+
+	U64 tri = 0;
+
+	for(U32 i = 0; i < faceCount; ++i) {
+
+		layout->byteOffset.ptrNonConst[i] = MeshSource_offset(&src);
+		layout->triPrefix.ptrNonConst[i] = tri;
+
+		U8 countBuf[8];
+		gotoIfError3(clean, MeshSource_readBytes(&src, countBuf, countSize, e_rr));
+
+		const U64 corners = (U64) Ply_decodeScalar(countBuf, countType, format);
+
+		if(corners < 3)
+			retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
+
+		tri += corners - 2;
+		gotoIfError3(clean, MeshSource_skip(&src, corners * valueSize, e_rr));
+	}
+
+	layout->byteOffset.ptrNonConst[faceCount] = MeshSource_offset(&src);
+	layout->triPrefix.ptrNonConst[faceCount] = tri;
+	layout->totalTriangles = tri;
+
+clean:
+	MeshSource_free(&src);
+	return s_uccess;
+}
+
+//One chunk of the hypothesis Ply_buildFaceLayout tests: every face in [byteStart, byteStart + faceCount
+//records of corners0) declares exactly corners0 corners. Only the count field is read and only arithmetic
+// says where the next one is, which is what a uniform file lets this skip paying for.
+//
+//uniform is the answer; err is set only by a genuine stream failure, which the caller treats the same as a
+// mismatch. Either way this never fails the group: "the hypothesis does not hold here" is an outcome this
+// chunk reports, not a reason to abandon the ones still running.
+
+typedef struct PlyUniformCheckJob {
+
+	StreamRef *stream;
+	const Allocator *alloc;
+	JobGroup *group;
+
+	U64 byteStart;
+	U64 corners0;
+	U32 faceCount;
+	U8 countType, indexType, format;
+	U8 padding;
+
+	Bool uniform;
+	U8 padding2[7];
+	Error err;
+
+} PlyUniformCheckJob;
+
+static Bool Ply_uniformCheckJob(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId;
+	(void) queue;
+
+	PlyUniformCheckJob *job = (PlyUniformCheckJob*) data;
+	MeshSource src = (MeshSource) { 0 };
+
+	job->uniform = true;
+
+	Bool ok = MeshSource_create(job->stream, job->byteStart, job->alloc, &src, &job->err);
+
+	const U8 countSize = Ply_typeSize[job->countType];
+	const U8 valueSize = Ply_typeSize[job->indexType];
+
+	for(U32 i = 0; ok && job->uniform && i < job->faceCount; ++i) {
+
+		U8 countBuf[8];
+		ok = MeshSource_readBytes(&src, countBuf, countSize, &job->err);
+
+		if(!ok)
+			break;
+
+		if((U64) Ply_decodeScalar(countBuf, job->countType, job->format) != job->corners0) {
+			job->uniform = false;
+			break;
+		}
+
+		ok = MeshSource_skip(&src, job->corners0 * valueSize, &job->err);
+	}
+
+	MeshSource_free(&src);
+
+	if(!ok)
+		job->uniform = false;
+
+	JobGroup_leave(job->group, NULL);
+	return true;
+}
+
+//Where every face record begins, found the fast way when the file lets it: read the first face's corner
+//count once, then check IN PARALLEL that every other face agrees with it. The chunk that holds the first
+//face that actually disagrees always starts from a byte position every chunk before it already confirmed, so
+// it alone is enough to catch a real mismatch correctly; a chunk after it may by then be reading from the
+// wrong place entirely, which is why ANY chunk saying no, a stream error included, is treated as the whole
+// file disagreeing and falls back to Ply_buildFaceLayoutTable's serial, rigorous, always correct scan rather
+// than trusting a "yes" that cannot tell a real one from a lucky one.
+
+static Bool Ply_buildFaceLayout(
+	StreamRef *stream, U64 faceOffset, U8 countType, U8 indexType, U8 format, U32 faceCount, JobQueue *jobs,
+	PlyFaceLayout *layout, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	MeshSource first = (MeshSource) { 0 };
+	Buffer jobBuf = Buffer_createNull();
+
+	*layout = (PlyFaceLayout) { .uniform = true };
+
+	if(!faceCount)
+		goto clean;
+
+	const U8 countSize = Ply_typeSize[countType];
+	const U8 valueSize = Ply_typeSize[indexType];
+
+	gotoIfError3(clean, MeshSource_create(stream, faceOffset, alloc, &first, e_rr));
+
+	U8 countBuf[8];
+	gotoIfError3(clean, MeshSource_readBytes(&first, countBuf, countSize, e_rr));
+	MeshSource_free(&first);
+
+	const U64 corners0 = (U64) Ply_decodeScalar(countBuf, countType, format);
+
+	if(corners0 < 3)
+		retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
+
+	const U64 stride0 = countSize + corners0 * valueSize;
+
+	const U64 jobCount = Ply_parallelChunkCount(faceCount, JobQueue_threadCount(jobs));
+	const U32 perJob = (U32) (((U64) faceCount + jobCount - 1) / jobCount);
+	const U64 realJobCount = ((U64) faceCount + perJob - 1) / perJob;
+
+	//The checks are optional: if they can't run, the serial table below answers instead, so they take no e_rr.
+
+	Bool ranChecks = Buffer_createEmptyBytes(realJobCount * sizeof(PlyUniformCheckJob), alloc, &jobBuf, NULL);
+	Bool uniform = false;
+
+	if(ranChecks) {
+
+		PlyUniformCheckJob *jobArr = (PlyUniformCheckJob*) jobBuf.ptrNonConst;
+		JobGroup group = (JobGroup) { 0 };
+
+		ranChecks = JobGroup_create(&group, jobs, NULL, NULL, NULL, NULL) && JobGroup_enter(&group, realJobCount, NULL);
+
+		U64 pushed = 0;
+
+		if(ranChecks)
+			for(; pushed < realJobCount; ++pushed) {
+
+				const U32 chunkFirst = (U32) (pushed * perJob);
+				const U32 chunkFaces = (U32) U64_min(perJob, (U64) faceCount - chunkFirst);
+
+				jobArr[pushed] = (PlyUniformCheckJob) {
+					.stream = stream, .alloc = alloc, .group = &group,
+					.byteStart = faceOffset + (U64) chunkFirst * stride0, .corners0 = corners0, .faceCount = chunkFaces,
+					.countType = countType, .indexType = indexType, .format = format
+				};
+
+				if(!JobQueue_pushGroup(jobs, Ply_uniformCheckJob, jobArr + pushed, NULL, &group, NULL))
+					break;
+			}
+
+		for(U64 i = pushed; i < realJobCount; ++i)
+			JobGroup_leave(&group, NULL);
+
+		const Bool waited = JobGroup_wait(&group, NULL);
+		ranChecks = ranChecks && pushed == realJobCount && waited;
+
+		if(ranChecks) {
+
+			uniform = true;
+
+			for(U64 i = 0; i < realJobCount; ++i)
+				if(!jobArr[i].uniform) {
+					uniform = false;
+					break;
+				}
+		}
+	}
+
+	if(ranChecks && uniform) {
+		layout->corners = corners0;
+		layout->stride = stride0;
+		layout->totalTriangles = (U64) faceCount * (corners0 - 2);
+		goto clean;
+	}
+
+	layout->uniform = false;
+
+	gotoIfError3(clean, Ply_buildFaceLayoutTable(
+		stream, faceOffset, countType, indexType, format, faceCount, layout, alloc, e_rr
+	));
+
+clean:
+	MeshSource_free(&first);
+	Buffer_free(&jobBuf, alloc);
+	return s_uccess;
+}
+
+//Ply_read on a JobQueue: the vertex records, which are already fixed stride, split evenly across chunks that
+//each run Ply_readRange; the face records, fanned into triangles the same way Ply_read's own fast path does,
+// split the same way once Ply_buildFaceLayout says where each one begins. jobs == NULL, a shape the split
+// above does not cover, or a stream that does not declare EStreamType_ConcurrentRead all fall back to Ply_read
+// whole, which is always correct and is what this would have to do piece by piece otherwise.
+//
+//forceParallel bypasses PLY_PARALLEL_MIN_BYTES, nothing else: it still refuses the shapes above, since forcing
+//those through would not test the split, only that Ply_read gets called. Tests use it to exercise chunk
+// boundaries on inputs too small to ever pay for splitting on their own.
+
+//One scratch buffer handed to the real output in one write: MeshSink_write still stages it through
+//MeshSink_reserveFor's own geometric doubling, which sounds like it should lose to reserving the exact final
+// size up front, and measured slower by about 60% on Lucy's 336 MiB index stream: a single allocation that
+// big appears to cost more, in this allocator, than several smaller ones growing into it. Reserving ahead of
+// time is for a caller who knows it is about to write many times, not once.
+
+static Bool Ply_flushWhole(StreamRef *stream, U64 offset, Buffer data, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	MeshSink sink = (MeshSink) { 0 };
+
+	gotoIfError3(clean, MeshSink_create(stream, offset, alloc, &sink, e_rr));
+	gotoIfError3(clean, MeshSink_write(&sink, data.ptr, Buffer_length(data), e_rr));
+	gotoIfError3(clean, MeshSink_flush(&sink, e_rr));
+
+clean:
+	MeshSink_free(&sink);
+	return s_uccess;
+}
+
+Bool Ply_readParallel(
+	StreamRef *stream,
+	U64 *off,
+	EMeshFlags flags,
+	MeshInfo *info,
+	const MeshOutput *output,
+	JobQueue *jobs,
+	Bool forceParallel,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	MeshSource headSrc = (MeshSource) { 0 };
+	Buffer lineBuf = Buffer_createNull();
+	PlyHeader headerData = (PlyHeader) { 0 };
+	Bool headerFreed = false;
+
+	Buffer positionsBuf = Buffer_createNull(), attributesBuf = Buffer_createNull();
+	Buffer indicesBuf = Buffer_createNull(), wordsBuf = Buffer_createNull();
+	Buffer vertexJobBuf = Buffer_createNull(), vertexInfoBuf = Buffer_createNull(), faceJobBuf = Buffer_createNull();
+	PlyFaceLayout faceLayout = (PlyFaceLayout) { 0 };
+
+	JobGroup vertexGroup = (JobGroup) { 0 }, faceGroup = (JobGroup) { 0 };
+	U64 vertexJobCount = 0, faceJobCount = 0;
+
+	//Nothing here can help: no queue to split across, a null the caller will get the usual error for, or
+	//flags that need the whole mesh regardless of how the body is shaped.
+
+	if(
+		!jobs || !stream || !off || !info || !output || !output->positions || !output->indices ||
+		(flags & (EMeshFlags_ComputeNormals | EMeshFlags_QuantizePositions))
+	)
+		return Ply_read(stream, off, flags, info, output, alloc, e_rr);
+
+	const OxStream *streamData = RefPtr_data(stream, OxStream);
+
+	if(!(streamData->streamType & EStreamType_ConcurrentRead))
+		return Ply_read(stream, off, flags, info, output, alloc, e_rr);
+
+	*info = (MeshInfo) { 0 };
+
+	const U64 headOff = *off;
+	gotoIfError3(clean, MeshSource_create(stream, headOff, alloc, &headSrc, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_LINE_CAP, alloc, &lineBuf, e_rr));
+	gotoIfError3(clean, Ply_parseHeader(&headSrc, (C8*) lineBuf.ptrNonConst, &headerData, info, alloc, e_rr));
+
+	info->allNormals = info->hasNormals;
+	info->allUvs = info->hasUvs;
+
+	Ply_resolveStrides(&headerData);
+
+	MeshHeader header = (MeshHeader) { 0 };
+	gotoIfError3(clean, Ply_fillMeshHeader(&headerData, MeshSource_offset(&headSrc), &header, e_rr));
+
+	const Bool shapeOk =
+		headerData.format != EPlyFormat_Ascii &&
+		headerData.elements.length == 2 &&
+		header.vertexStride != 0 &&
+		header.faceOffset != 0 &&
+		header.vertexCount != 0;
+
+	const U64 bodyBytes = !shapeOk ? 0 :
+		(U64) header.vertexCount * header.vertexStride +
+		(U64) header.faceCount * (
+			EMeshScalarType_bytes((EMeshScalarType) header.faceCountType) +
+			3 * EMeshScalarType_bytes((EMeshScalarType) header.faceIndexType)
+		);
+
+	if(!shapeOk || (!forceParallel && bodyBytes < PLY_PARALLEL_MIN_BYTES)) {
+
+		ListPlyElement_free(&headerData.elements, alloc);
+		ListPlyProperty_free(&headerData.properties, alloc);
+		Buffer_free(&lineBuf, alloc);
+		MeshSource_free(&headSrc);
+
+		return Ply_read(stream, off, flags, info, output, alloc, e_rr);
+	}
+
+	//Past this point the header is fully resolved into header/headerData and nothing below reads the file's
+	//text again, so the parse scratch leaves now rather than at the end.
+
+	ListPlyElement_free(&headerData.elements, alloc);
+	ListPlyProperty_free(&headerData.properties, alloc);
+	Buffer_free(&lineBuf, alloc);
+	MeshSource_free(&headSrc);
+	headerFreed = true;
+
+	const U8 format = header.bigEndian ? EPlyFormat_BigEndian : EPlyFormat_LittleEndian;
+	const U64 threadCount = JobQueue_threadCount(jobs);
+	const RefPtrType memType = MemoryStream_makeType(alloc);
+
+	const U8 attrStride = output->attributes ? MeshAttributeLayout_fromFlags(flags).stride : 0;
+	const Bool keepPositions = output->triangles != NULL;
+
+	//---- vertices, split by the stride the header already resolved into chunks that each run Ply_readRange
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(
+		(U64) header.vertexCount * 3 * sizeof(F32), alloc, &positionsBuf, e_rr
+	));
+
+	if(attrStride)
+		gotoIfError3(clean, Buffer_createUninitializedBytes(
+			(U64) header.vertexCount * attrStride, alloc, &attributesBuf, e_rr
+		));
+
+	vertexJobCount = Ply_parallelChunkCount(header.vertexCount, threadCount);
+
+	const U32 vertexPerJob = (U32) (((U64) header.vertexCount + vertexJobCount - 1) / vertexJobCount);
+	vertexJobCount = ((U64) header.vertexCount + vertexPerJob - 1) / vertexPerJob;
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(vertexJobCount * sizeof(PlyVertexJob), alloc, &vertexJobBuf, e_rr));
+	gotoIfError3(clean, Buffer_createEmptyBytes(vertexJobCount * sizeof(MeshInfo), alloc, &vertexInfoBuf, e_rr));
+	gotoIfError3(clean, JobGroup_create(&vertexGroup, jobs, NULL, NULL, NULL, e_rr));
+	gotoIfError3(clean, JobGroup_enter(&vertexGroup, vertexJobCount, e_rr));
+
+	{
+		PlyVertexJob *jobArr = (PlyVertexJob*) vertexJobBuf.ptrNonConst;
+		Bool vertexOk = true;
+		U64 pushed = 0;
+
+		for(; pushed < vertexJobCount; ++pushed) {
+
+			const U32 firstVertex = (U32) (pushed * vertexPerJob);
+			const U32 vertexCount = (U32) U64_min(vertexPerJob, (U64) header.vertexCount - firstVertex);
+
+			PlyVertexJob *job = jobArr + pushed;
+
+			*job = (PlyVertexJob) {
+				.stream = stream, .header = &header, .flags = flags, .alloc = alloc, .group = &vertexGroup,
+				.info = (MeshInfo*) vertexInfoBuf.ptrNonConst + pushed,
+				.firstVertex = firstVertex, .vertexCount = vertexCount
+			};
+
+			if(!MemoryStream_createFromBufferRegion(
+				Buffer_createRef(positionsBuf.ptrNonConst, Buffer_length(positionsBuf)),
+				(U64) firstVertex * 3 * sizeof(F32), (U64) vertexCount * 3 * sizeof(F32),
+				EMemoryStreamFlags_IsWritable, &memType, (MemoryStreamRef**) &job->positions, e_rr
+			)) {
+				vertexOk = false;
+				break;
+			}
+
+			if(attrStride && !MemoryStream_createFromBufferRegion(
+				Buffer_createRef(attributesBuf.ptrNonConst, Buffer_length(attributesBuf)),
+				(U64) firstVertex * attrStride, (U64) vertexCount * attrStride,
+				EMemoryStreamFlags_IsWritable, &memType, (MemoryStreamRef**) &job->attributes, e_rr
+			)) {
+				vertexOk = false;
+				break;
+			}
+
+			if(!JobQueue_pushGroup(jobs, Ply_vertexJob, job, NULL, &vertexGroup, e_rr)) {
+				vertexOk = false;
+				break;
+			}
+		}
+
+		for(U64 i = pushed; i < vertexJobCount; ++i)
+			JobGroup_leave(&vertexGroup, NULL);
+
+		//Waited regardless of whether every chunk started: whatever did start is already running against this
+		//call's own stack and buffers, and nothing below may touch those until every chunk has finished.
+
+		if(!JobGroup_wait(&vertexGroup, vertexOk ? e_rr : NULL) && vertexOk)
+			vertexOk = false;
+
+		if(!vertexOk) {
+			s_uccess = false;
+			goto clean;
+		}
+
+		for(U64 i = 0; i < vertexJobCount; ++i) {
+
+			if(jobArr[i].err.genericError) {
+				if(e_rr) *e_rr = jobArr[i].err;
+				s_uccess = false;
+				goto clean;
+			}
+
+			Ply_mergeSpanInfo(info, jobArr[i].info, jobArr[i].info->vertexCount);
+		}
+	}
+
+	//---- faces, split by Ply_buildFaceLayout and decoded the same way Ply_read's own fast path does
+
+	U64 faceEnd = header.faceOffset;
+	U32 fannedFaces = 0;
+	U64 totalTriangles = 0;
+
+	if(header.faceCount) {
+
+		const U8 countType = Ply_fromScalarType[header.faceCountType];
+		const U8 indexType = Ply_fromScalarType[header.faceIndexType];
+
+		gotoIfError3(clean, Ply_buildFaceLayout(
+			stream, header.faceOffset, countType, indexType, format, header.faceCount, jobs, &faceLayout, alloc, e_rr
+		));
+
+		totalTriangles = faceLayout.totalTriangles;
+		faceEnd = PlyFaceLayout_end(&faceLayout, header.faceOffset, header.faceCount);
+
+		const U8 indexWidth = (flags & EMeshFlags_NarrowIndices) ? sizeof(U16) : sizeof(U32);
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(
+			totalTriangles * 3 * indexWidth, alloc, &indicesBuf, e_rr
+		));
+
+		if(keepPositions)
+			gotoIfError3(clean, Buffer_createUninitializedBytes(
+				totalTriangles * sizeof(U32), alloc, &wordsBuf, e_rr
+			));
+
+		faceJobCount = Ply_parallelChunkCount(header.faceCount, threadCount);
+
+		const U32 facePerJob = (U32) (((U64) header.faceCount + faceJobCount - 1) / faceJobCount);
+		faceJobCount = ((U64) header.faceCount + facePerJob - 1) / facePerJob;
+
+		gotoIfError3(clean, Buffer_createEmptyBytes(faceJobCount * sizeof(PlyFaceJob), alloc, &faceJobBuf, e_rr));
+		gotoIfError3(clean, JobGroup_create(&faceGroup, jobs, NULL, NULL, NULL, e_rr));
+		gotoIfError3(clean, JobGroup_enter(&faceGroup, faceJobCount, e_rr));
+
+		PlyFaceJob *jobArr = (PlyFaceJob*) faceJobBuf.ptrNonConst;
+		Bool faceOk = true;
+		U64 pushed = 0;
+
+		for(; pushed < faceJobCount; ++pushed) {
+
+			const U32 firstFace = (U32) (pushed * facePerJob);
+			const U32 faceCount = (U32) U64_min(facePerJob, (U64) header.faceCount - firstFace);
+
+			const U64 triStart = PlyFaceLayout_triOffset(&faceLayout, firstFace);
+			const U64 triCount = PlyFaceLayout_triOffset(&faceLayout, firstFace + faceCount) - triStart;
+
+			PlyFaceJob *job = jobArr + pushed;
+
+			*job = (PlyFaceJob) {
+				.stream = stream, .alloc = alloc, .group = &faceGroup, .flags = flags,
+				.countType = countType, .indexType = indexType, .format = format,
+				.byteStart = PlyFaceLayout_byteOffset(&faceLayout, header.faceOffset, firstFace),
+				.verticesRead = header.vertexCount, .faceCount = faceCount, .keepPositions = keepPositions,
+				.heldPositions = keepPositions ? (const F32*) positionsBuf.ptr : NULL
+			};
+
+			if(!MemoryStream_createFromBufferRegion(
+				Buffer_createRef(indicesBuf.ptrNonConst, Buffer_length(indicesBuf)),
+				triStart * 3 * indexWidth, triCount * 3 * indexWidth,
+				EMemoryStreamFlags_IsWritable, &memType, (MemoryStreamRef**) &job->indices, e_rr
+			)) {
+				faceOk = false;
+				break;
+			}
+
+			if(keepPositions && !MemoryStream_createFromBufferRegion(
+				Buffer_createRef(wordsBuf.ptrNonConst, Buffer_length(wordsBuf)),
+				triStart * sizeof(U32), triCount * sizeof(U32),
+				EMemoryStreamFlags_IsWritable, &memType, (MemoryStreamRef**) &job->words, e_rr
+			)) {
+				faceOk = false;
+				break;
+			}
+
+			if(!JobQueue_pushGroup(jobs, Ply_faceJob, job, NULL, &faceGroup, e_rr)) {
+				faceOk = false;
+				break;
+			}
+		}
+
+		for(U64 i = pushed; i < faceJobCount; ++i)
+			JobGroup_leave(&faceGroup, NULL);
+
+		if(!JobGroup_wait(&faceGroup, faceOk ? e_rr : NULL) && faceOk)
+			faceOk = false;
+
+		if(!faceOk) {
+			s_uccess = false;
+			goto clean;
+		}
+
+		for(U64 i = 0; i < faceJobCount; ++i) {
+
+			if(jobArr[i].err.genericError) {
+				if(e_rr) *e_rr = jobArr[i].err;
+				s_uccess = false;
+				goto clean;
+			}
+
+			fannedFaces += jobArr[i].fannedFaces;
+		}
+	}
+
+	//---- flush: one write per stream, in the order the records occupy it, which is as cheap as this ever gets
+
+	gotoIfError3(clean, Ply_flushWhole(output->positions, output->positionOffset, positionsBuf, alloc, e_rr));
+
+	if(output->attributes)
+		gotoIfError3(clean, Ply_flushWhole(output->attributes, output->attributeOffset, attributesBuf, alloc, e_rr));
+
+	gotoIfError3(clean, Ply_flushWhole(output->indices, output->indexOffset, indicesBuf, alloc, e_rr));
+
+	if(output->triangles)
+		gotoIfError3(clean, Ply_flushWhole(output->triangles, output->triangleOffset, wordsBuf, alloc, e_rr));
+
+	info->fannedFaces = fannedFaces;
+	info->indexCount = (U32) (totalTriangles * 3);
+	info->materialCount = 1;
+
+	*off = faceEnd;
+
+clean:
+
+	if(vertexJobBuf.ptr) {
+		PlyVertexJob *jobArr = (PlyVertexJob*) vertexJobBuf.ptrNonConst;
+
+		for(U64 i = 0; i < vertexJobCount; ++i) {
+			RefPtr_dec(&jobArr[i].attributes);
+			RefPtr_dec(&jobArr[i].positions);
+		}
+	}
+
+	if(faceJobBuf.ptr) {
+		PlyFaceJob *jobArr = (PlyFaceJob*) faceJobBuf.ptrNonConst;
+
+		for(U64 i = 0; i < faceJobCount; ++i) {
+			RefPtr_dec(&jobArr[i].words);
+			RefPtr_dec(&jobArr[i].indices);
+		}
+	}
+
+	PlyFaceLayout_free(&faceLayout, alloc);
+	Buffer_free(&faceJobBuf, alloc);
+	Buffer_free(&vertexInfoBuf, alloc);
+	Buffer_free(&vertexJobBuf, alloc);
+	Buffer_free(&wordsBuf, alloc);
+	Buffer_free(&indicesBuf, alloc);
+	Buffer_free(&attributesBuf, alloc);
+	Buffer_free(&positionsBuf, alloc);
+
+	if(!headerFreed) {
+		ListPlyElement_free(&headerData.elements, alloc);
+		ListPlyProperty_free(&headerData.properties, alloc);
+		Buffer_free(&lineBuf, alloc);
+		MeshSource_free(&headSrc);
+	}
 
 	return s_uccess;
 }

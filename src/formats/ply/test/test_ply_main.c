@@ -45,6 +45,12 @@ OXC3_TEST_MAIN(formats_ply) {
 	Test_plyWriteByteOrder(&t);
 	Test_plyWriteGeometryOnly(&t);
 
+	Test_plyParallelTriangles(&t);
+	Test_plyParallelMixedPolygons(&t);
+	Test_plyParallelFlags(&t);
+	Test_plyParallelSerialFlagsFallBack(&t);
+	Test_plyParallelBelowThreshold(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);
 }

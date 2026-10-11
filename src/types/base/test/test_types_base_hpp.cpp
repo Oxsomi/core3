@@ -94,7 +94,8 @@ extern "C" void Test_typesBaseHppTypeCheck(
 	(void) AcquiredLock::acquire(*rawLock, borrowed, c::SECOND);
 	(void) borrowed.lockedForThread();
 
-	//Move only: the source releases what it held, so an acquire stays paired with exactly one owner.
+	//Move only: the source hands what it held over without unlocking it, so an acquire stays paired with exactly one
+	// owner (test_types_base_lock_hpp.cpp runs it).
 
 	AcquiredLock movedLock(std::move(borrowed));
 	movedLock = std::move(acquired);

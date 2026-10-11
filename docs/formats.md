@@ -22,7 +22,7 @@ the [Formats table in STATUS.md](../STATUS.md#formats).
 | Area | Formats | What they are for |
 | --- | --- | --- |
 | Images | BMP, DDS, HDR | BMP for 8-bit BGRA dumps; DDS for GPU ready textures in the modern DXGI formats, block compressed BC4 to BC7 included; HDR (Radiance RGBE) for environment captures in linear radiance |
-| Meshes | OBJ, PLY | Both read into and write out of the flat mesh form in `types/mesh`: a position, a packed normal and a uv per vertex, and a triangle list. PLY is ASCII or binary in either byte order |
+| Meshes | OBJ, PLY | Both read into and write out of the flat mesh form in `types/mesh`: a position, a packed normal and a uv per vertex, and a triangle list. PLY is ASCII or binary in either byte order. A binary PLY with a fixed stride vertex element can also be read on a `JobQueue` (`Ply_readParallel`), splitting the vertex and face records into chunks that decode in parallel and merge into the same bytes `Ply_read` would have produced; ascii, `ComputeNormals`, `QuantizePositions` and a few header shapes a BLAS source rarely has stay on the single pass |
 | Audio | WAV | Wave audio, its chunks found by walking the file through a stream rather than loading it whole |
 
 A mesh file may carry more per vertex properties than the flat form holds. Those are parsed past and dropped, so

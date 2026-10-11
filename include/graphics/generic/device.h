@@ -79,7 +79,21 @@ typedef enum EGraphicsDeviceFlags {
 	// device can still say which scopes it was in (docs/graphics_api.md, "Device loss"). Two small writes a scope.
 	//On by default on a debug device.
 
-	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6
+	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6,
+
+	//Takes binaries marked [[oxc::extension("UnsafeExperimentExecution")]] (ESHExtension_UnsafeExperimentExecution),
+	// unvalidated and without checking the device supports what they declare, which no other device does.
+	//No API reports which instructions a device can execute, so the caller has to be certain of it, by an experiment
+	// tier its driver claims for instance (EGraphicsFeatures2_ExperimentTier1). Creating such a device logs a warning
+	// saying so.
+
+	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 7,
+
+	//Takes binaries marked [[oxc::extension("UnsafeExtensionExecution")]] (ESHExtension_UnsafeExtensionExecution), which
+	// use extensions OxC3 doesn't recognize and so can't check the device for. Their recognized extensions are still
+	// checked. Creating such a device logs a warning saying so.
+
+	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 8
 
 } EGraphicsDeviceFlags;
 

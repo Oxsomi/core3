@@ -559,6 +559,11 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsCapabilities(t, deviceRef);
 	c::Test_graphicsCapabilityExecution(t, deviceRef);
 
+	//That the device refuses both unsafe markers (the config variants run them), and the experiment tiers it claims
+
+	c::Test_graphicsUnsafeExecution(t, deviceRef);
+	c::Test_graphicsExperimentTiers(t, deviceRef);
+
 	c::Test_graphicsDeviceMemory(t, deviceRef);
 
 	//39. Config variants run after this adapter's device is gone so the extra devices don't share its

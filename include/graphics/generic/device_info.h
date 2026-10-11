@@ -349,7 +349,18 @@ typedef enum EGraphicsFeatures2 {
 	//The graphics queue can write a 32 bit value to a buffer address, ordered before or after the work around it.
 	//WriteBufferImmediate on D3D12 (direct queue support), VK_AMD_buffer_marker on Vulkan.
 
-	EGraphicsFeatures2_WriteBufferImmediate     = 1 << 12
+	EGraphicsFeatures2_WriteBufferImmediate     = 1 << 12,
+
+	//Experiment tiers the driver claims for itself, through device extensions a driver built for experiments may
+	// advertise: VK_MESA_experiment_tier1 and VK_MESA_experiment_tier2. OxC3 enables the extension and reports the
+	// claim, and that is all: it gives the tiers no meaning and says nothing about what an experiment at one may use.
+	//That is between the driver that claims a tier and the application relying on it. A binary declares the tier it
+	// needs with [[oxc::extension("ExperimentTier1")]] (ESHExtension2), and a device whose driver doesn't claim it
+	// refuses the binary, an UnsafeExperimentExecution one included, so first fit takes its fallback there.
+	//Vulkan only, as D3D12 has no such extension.
+
+	EGraphicsFeatures2_ExperimentTier1          = 1 << 13,
+	EGraphicsFeatures2_ExperimentTier2          = 1 << 14
 
 } EGraphicsFeatures2;
 

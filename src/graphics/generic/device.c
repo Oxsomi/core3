@@ -1080,6 +1080,22 @@ Bool GraphicsDeviceRef_create(
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
 		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
 
+	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
+		Log_warnLnx(
+			"GraphicsDeviceRef_create() EGraphicsDeviceFlags_AllowUnsafeExtensionExecution: binaries marked "
+			"UnsafeExtensionExecution may use extensions OxC3 doesn't recognize, which the device isn't checked for. "
+			"Be certain the device supports them (%s)",
+			device->info.name
+		);
+
+	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExperimentExecution)
+		Log_warnLnx(
+			"GraphicsDeviceRef_create() EGraphicsDeviceFlags_AllowUnsafeExperimentExecution: binaries marked "
+			"UnsafeExperimentExecution run unvalidated and without feature checks. The device cannot be asked which "
+			"instructions it executes, so be certain of what runs on it (%s)",
+			device->info.name
+		);
+
 	gotoIfError3(clean, RefPtr_inc(instanceRef));
 	device->instance = instanceRef;
 
@@ -1575,6 +1591,11 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	ESHExtension extensions = (bin->identifier.extensions &~ bin->dormantExtensions) & ESHExtension_All;
 
+	//The unsafe markers and the tiers are declarations, so a binary's dormant bits never excuse them.
+
+	const ESHExtension declared = bin->identifier.extensions;
+	const ESHExtension2 declared2 = bin->identifier.extensions2;
+
 	EGraphicsFeatures features = EGraphicsFeatures_None;
 	EGraphicsFeatures2 features2 = EGraphicsFeatures2_None;
 	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
@@ -1629,6 +1650,48 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 		GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Direct3D12 ?
 		EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 
+	//An unsafe experiment runs only on a device made to take one, and there its author vouches for what it
+	// declares, so its features are not held against the device.
+	//What is not a matter of support stays checked: the bindless layout, the vendor and a blob for this api.
+
+	const Bool isUnsafe = !!(declared & ESHExtension_UnsafeExperimentExecution);
+
+	if(isUnsafe && !(device->flags & EGraphicsDeviceFlags_AllowUnsafeExperimentExecution))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary is an unsafe experiment (UnsafeExperimentExecution), which "
+			"only a device created with EGraphicsDeviceFlags_AllowUnsafeExperimentExecution takes"
+		));
+
+	//Extensions OxC3 doesn't recognize were never reflected, so nothing below can check them: the device has to have
+	// been made to take that on trust.
+
+	if(
+		(declared & ESHExtension_UnsafeExtensionExecution) &&
+		!(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
+	)
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary uses extensions OxC3 doesn't recognize "
+			"(UnsafeExtensionExecution), which only a device created with "
+			"EGraphicsDeviceFlags_AllowUnsafeExtensionExecution takes"
+		));
+
+	//A tier is held against every device, an experiment's included: whether the driver claims it is the one thing an
+	// experiment can be checked for.
+
+	EGraphicsFeatures2 tiers = EGraphicsFeatures2_None;
+
+	if(declared2 & ESHExtension2_ExperimentTier1)           tiers |= EGraphicsFeatures2_ExperimentTier1;
+	if(declared2 & ESHExtension2_ExperimentTier2)           tiers |= EGraphicsFeatures2_ExperimentTier2;
+
+	if((device->info.capabilities.features2 & tiers) != tiers)
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary declares an experiment tier (ExperimentTier1 or "
+			"ExperimentTier2) that the device's driver doesn't claim"
+		));
+
 	//Bindless is the one feature a caller can take away from a device that has it,
 	// so it says as much instead of leaving it to the generic message below.
 
@@ -1639,13 +1702,13 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 			"(unsupported or turned off with EGraphicsDeviceFlags_DisableBindless)"
 		));
 
-	if((device->info.capabilities.features & features) != features)
+	if(!isUnsafe && (device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
 
-	if((device->info.capabilities.features2 & features2) != features2)
+	if(!isUnsafe && (device->info.capabilities.features2 & features2) != features2)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features2 is missing"));
 
-	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
+	if(!isUnsafe && (device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
 	//Reading an oiSH widens a was-everything mask to today's everything, so this comparison stays exact

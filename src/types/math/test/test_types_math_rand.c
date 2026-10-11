@@ -34,9 +34,9 @@ void Test_rand(Test *test) {
 	static const U32 sampleCount = 16;
 
 	for (U32 i = 0; i < sampleCount; ++i) {
-		const F32 r = Random_sample(&seed);
-		Test_assert(test, "Random_sample >= 0", r >= 0.0f);
-		Test_assert(test, "Random_sample < 1", r < 1.0f);
+		const F32 r = Random_nextFloat(&seed);
+		Test_assert(test, "Random_nextFloat >= 0", r >= 0.0f);
+		Test_assert(test, "Random_nextFloat < 1", r < 1.0f);
 	}
 
 	//Determinism
@@ -45,7 +45,7 @@ void Test_rand(Test *test) {
 	U32 seedB = Random_seed(123, 456);
 
 	for (U32 i = 0; i < sampleCount; ++i)
-		Test_assert(test, "Random determinism", Random_sample(&seedA) == Random_sample(&seedB));
+		Test_assert(test, "Random determinism", Random_nextFloat(&seedA) == Random_nextFloat(&seedB));
 
 	//Different seeds
 
@@ -55,7 +55,7 @@ void Test_rand(Test *test) {
 	Bool anyDiffer = false;
 
 	for (U32 i = 0; i < sampleCount; ++i)
-		if (Random_sample(&seedC) != Random_sample(&seedD))
+		if (Random_nextFloat(&seedC) != Random_nextFloat(&seedD))
 			anyDiffer = true;
 
 	Test_assert(test, "Random seeds", anyDiffer);
@@ -64,12 +64,27 @@ void Test_rand(Test *test) {
 
 	U32 seedE = Random_seed(123, 456);
 	const U32 stateBefore = seedE;
-	Random_sample(&seedE);
-	Test_assert(test, "Random_sample advances", seedE != stateBefore);
+	Random_nextFloat(&seedE);
+	Test_assert(test, "Random_nextFloat advances", seedE != stateBefore);
 
 	//Same seed inputs with swapped params produce different seeds
 
 	const U32 seedXY = Random_seed(111, 222);
 	const U32 seedYX = Random_seed(222, 111);
 	Test_assert(test, "Random_seed", seedXY != seedYX);
+
+	//From the high bits: an LCG's lowest bit flips on every call, so a value taken from the low bits would have its
+	// last mantissa bit alternate from one sample to the next.
+
+	U32 seedF = Random_seed(5, 6);
+	Bool alternates = true;
+	U32 previousBit = 2;
+
+	for (U32 i = 0; i < 64; ++i) {
+		const U32 bit = (U32)(Random_nextFloat(&seedF) * (F32)(0x01000000)) & 1;
+		alternates &= bit != previousBit;
+		previousBit = bit;
+	}
+
+	Test_assert(test, "Random_nextFloat takes the high bits", !alternates);
 }

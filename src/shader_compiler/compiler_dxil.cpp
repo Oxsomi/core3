@@ -53,7 +53,18 @@
 #include "dxcompiler/dxcreflect.h"
 #include <exception>
 
-static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtension *demotion, Error *e_rr) {
+//DXC reports dx::linalg use with this flag, which d3d12shader.h doesn't name yet.
+
+#ifndef D3D_SHADER_REQUIRES_LINEAR_ALGEBRA
+	#define D3D_SHADER_REQUIRES_LINEAR_ALGEBRA 0x200000000ull
+#endif
+
+//allowsUnknown lets requirement flags oiSH has no extension for pass and map to nothing (UnsafeExtensionExecution).
+//declared picks the extension for a flag that more than one extension raises.
+
+static inline Bool DxilMapToESHExtension(
+	U64 flags, ESHExtension declared, Bool allowsUnknown, ESHExtension *ext, ESHExtension *demotion, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -116,10 +127,20 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		tmp = (ESHExtension)(tmp | extensions[i]);
 	}
 
+	//Cooperative vectors and matrices both raise linear algebra, so either declaration covers it.
+	//Declaring neither reports both, which the caller refuses as undeclared.
+
+	if(flags & D3D_SHADER_REQUIRES_LINEAR_ALGEBRA) {
+		const ESHExtension coop = (ESHExtension)(ESHExtension_CoopVec | ESHExtension_CoopMat);
+		const ESHExtension used = (ESHExtension)(declared & coop);
+		tmp = (ESHExtension)(tmp | (used ? used : coop));
+		flags &= ~D3D_SHADER_REQUIRES_LINEAR_ALGEBRA;
+	}
+
 	*demotion = (ESHExtension)((~tmp) & ESHExtension_DxilNative);
 	*ext = tmp;
 
-	if(flags)
+	if(flags && !allowsUnknown)
 		retError(clean, Error_unsupportedOperation(0, "DxilMapToESHExtension() contained an unsupported extension"));
 
 clean:
@@ -238,6 +259,7 @@ extern "C" Bool Compiler_processDXIL(
 	HRESULT hr = S_OK;
 
 	Bool isLib = !CharString_length(toCompile->entrypoint);
+	Bool allowsUnknown = !!(toCompile->extensions & ESHExtension_UnsafeExtensionExecution);
 	ESHExtension exts = ESHExtension_None;
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
@@ -279,7 +301,9 @@ extern "C" Bool Compiler_processDXIL(
 
 			U64 featureFlags = funcRefl->GetRequiresFlags();
 			ESHExtension demote = ESHExtension_None;
-			gotoIfError3(clean, DxilMapToESHExtension(featureFlags, &exts, &demote, e_rr));
+			gotoIfError3(clean, DxilMapToESHExtension(
+				featureFlags, toCompile->extensions, allowsUnknown, &exts, &demote, e_rr
+			));
 
 			if(i)
 				*demotions = (ESHExtension)(*demotions & demote);
@@ -463,7 +487,7 @@ extern "C" Bool Compiler_processDXIL(
 			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"));
 
 		U64 reqFlags = dxilRefl->GetRequiresFlags();
-		gotoIfError3(clean, DxilMapToESHExtension(reqFlags, &exts, demotions, e_rr));
+		gotoIfError3(clean, DxilMapToESHExtension(reqFlags, toCompile->extensions, allowsUnknown, &exts, demotions, e_rr));
 
 		Bool isPixelShader = toCompile->stageType == EGfxPipelineStage_Pixel;
 
@@ -749,16 +773,12 @@ extern "C" Bool Compiler_processDXIL(
 		Buffer_memcpy(*result, Buffer_createRefConst(finalVersion->GetBufferPointer(), finalVersion->GetBufferSize()));
 	}
 
-	//Ensure we have a valid DXIL file
+	//Ensure we have a valid DXIL file, signed by DXC's bundled validator
 
-	//DXC signs DXIL through the bundled validator, which only knows shader models up to 6.9, so a 6.10 module
-	// (cooperative vectors / triangle position fetch) comes back structurally valid but unsigned (zero hash).
-	//D3D12 only accepts 6.10 with experimental shader models enabled anyway, so an unsigned hash is expected there.
 	if(
 		Buffer_length(*result) <= 0x14 ||
 		Buffer_readU32(*result, 0, NULL, NULL) != C8x4('D', 'X', 'B', 'C') ||
-		(toCompile->shaderVersion < OISH_SHADER_MODEL(6, 10) &&
-			I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero()))                  //Unsigned
+		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())                   //Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"));
 

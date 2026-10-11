@@ -978,6 +978,12 @@ Bool Compiler_parse(
 		tmp = CharString_createNull();
 	}
 
+	for(U32 i = 0; i < ESHExtension2_Count; ++i) {
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension2_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
 	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection parse,
 	// including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch).
 	//Reflection is stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage),
@@ -1055,7 +1061,11 @@ Bool Compiler_parse(
 
 		runtimeEntry.entry.stage = EGfxPipelineStage_Count;
 
-		for (uint32_t j = 0; j < nodeDesc.AnnotationCount; ++j) {
+		//The reflector hands a function's annotations back last first, so they are walked from the end to parse them in
+		// the order they were written.
+		//That order is what the permutation lists keep, and an entry's binaries follow it (Compiler_binaryIndex).
+
+		for (uint32_t j = nodeDesc.AnnotationCount; j-- > 0;) {
 
 			D3D12_HLSL_ANNOTATION annot;
 			if (FAILED(hr = reflectionData->GetAnnotationByIndex(funcDesc.NodeId, j, &annot)))
@@ -1103,14 +1113,14 @@ Bool Compiler_parse(
 
 				if(
 					runtimeEntry.entry.stage != EGfxPipelineStage_RaygenExt &&
-					(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
+					(runtimeEntry.extensions.ptr[j].extensions & ESHExtension_RayReorder)
 				)
 					retError(clean, Error_invalidState(
 						0,
 						"Compiler_parse() one of the non raygen stages uses RayReorder, which isn't supported"
 					));
 
-				if(!isRt && (runtimeEntry.extensions.ptr[j] & ESHExtension_PAQ))
+				if(!isRt && (runtimeEntry.extensions.ptr[j].extensions & ESHExtension_PAQ))
 					retError(clean, Error_invalidState(
 						0,
 						"Compiler_parse() one of the non raytracing stages uses PAQ, which isn't supported"
@@ -1120,7 +1130,7 @@ Bool Compiler_parse(
 					runtimeEntry.entry.stage != EGfxPipelineStage_Compute &&
 					runtimeEntry.entry.stage != EGfxPipelineStage_MeshExt &&
 					runtimeEntry.entry.stage != EGfxPipelineStage_TaskExt &&
-					(runtimeEntry.extensions.ptr[j] & ESHExtension_ComputeDeriv)
+					(runtimeEntry.extensions.ptr[j].extensions & ESHExtension_ComputeDeriv)
 				)
 					retError(clean, Error_invalidState(
 						0,
@@ -1848,6 +1858,12 @@ Bool Compiler_reflect(
 
 	for (U32 i = 0; i < ESHExtension_Count; ++i) {
 		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
+	for (U32 i = 0; i < ESHExtension2_Count; ++i) {
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension2_defines[i]));
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
 		tmp = CharString_createNull();
 	}

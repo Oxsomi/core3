@@ -406,8 +406,13 @@ void Test_SHEntryRuntimeGetCombinations(Test *t) {
 
 	//Extensions
 
-	U32 exts[3] = { ESHExtension_None, ESHExtension_F64, ESHExtension_I64 };
-	Test_assert(t, "Create ref extensions", ListU32_createRefConst(exts, 3, &rt.extensions, NULL));
+	SHExtensionSet exts[3] = {
+		{ ESHExtension_None, ESHExtension2_None },
+		{ ESHExtension_F64, ESHExtension2_None },
+		{ ESHExtension_I64, ESHExtension2_ExperimentTier1 }
+	};
+
+	Test_assert(t, "Create ref extensions", ListSHExtensionSet_createRefConst(exts, 3, &rt.extensions, NULL));
 
 	Test_assert(t, "extensions combined == 3", SHEntryRuntime_getCombinations(&rt)         == 3);
 	Test_assert(t, "extensions compiled == 3", SHEntryRuntime_getCombinationsCompiled(&rt) == 3);
@@ -436,7 +441,7 @@ void Test_SHEntryRuntimeGetCombinations(Test *t) {
 	
 	Test_assert(t, "Create complex versions", ListU16_createRefConst(versions, 2, &rt.shaderVersions, NULL));
 
-	Test_assert(t, "Create complex extensions", ListU32_createRefConst(exts, 3, &rt.extensions, NULL));
+	Test_assert(t, "Create complex extensions", ListSHExtensionSet_createRefConst(exts, 3, &rt.extensions, NULL));
 
 	Test_assert(t, "Create complex defines", ListU8_createRefConst(dpc, 2, &rt.definesPerCompilation, NULL));
 

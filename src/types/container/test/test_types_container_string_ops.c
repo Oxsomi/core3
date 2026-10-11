@@ -187,6 +187,38 @@ static void Test_stringMutate(Test *t) {
 	CharString_free(&s, t->alloc);
 }
 
+//========================= appendFormat =========================
+
+static void Test_stringAppendFormat(Test *t) {
+
+	Test_setModule(t, "CharString appendFormat");
+
+	CharString s = CharString_createNull();
+
+	Test_assert(t, "onto empty", CharString_appendFormat(t->alloc, &s, &t->err, "%d-%s", 12, "x") && Test_strEq(s, "12-x"));
+	Test_assert(t, "onto content", CharString_appendFormat(t->alloc, &s, &t->err, "/%03u", 7u) && Test_strEq(s, "12-x/007"));
+	Test_assert(t, "stays null terminated", CharString_isNullTerminated(s));
+
+	//Nothing formatted is nothing appended, rather than an error
+	Test_assert(t, "empty result", CharString_appendFormat(t->alloc, &s, &t->err, "%s", "") && Test_strEq(s, "12-x/007"));
+
+	//Wider than the capacity, so the write lands after a reallocation and the head has to survive it
+	const int width = (int) CharString_capacity(s) + 10;
+	Test_assert(t, "grows", CharString_appendFormat(t->alloc, &s, &t->err, "%0*d", width, 5));
+	Test_assert(t, "grown length", CharString_length(s) == 8 + (U64) width);
+	Test_assert(t, "grown head", Test_strEq(CharString_createRefSizedConst(s.ptr, 8, false), "12-x/007"));
+	Test_assert(t, "grown tail", s.ptr[8] == '0' && s.ptr[CharString_length(s) - 1] == '5');
+	Test_assert(t, "grown null terminated", CharString_isNullTerminated(s) && !s.ptr[CharString_length(s)]);
+	CharString_free(&s, t->alloc);
+
+	//A ref with content is someone else's memory, so it is refused and left as it was
+	CharString ref = S("ref");
+	Test_assert(t, "ref refused", !CharString_appendFormat(t->alloc, &ref, NULL, "%d", 1) && Test_strEq(ref, "ref"));
+
+	Test_assert(t, "s required", !CharString_appendFormat(t->alloc, NULL, NULL, "%d", 1));
+	Test_assert(t, "format required", !CharString_appendFormat(t->alloc, &s, NULL, NULL));
+}
+
 //========================= replace =========================
 
 static void Test_stringReplace(Test *t) {
@@ -526,6 +558,7 @@ static void Test_stringValidate(Test *t) {
 void Test_stringOps(Test *t) {
 	Test_stringRefs(t);
 	Test_stringMutate(t);
+	Test_stringAppendFormat(t);
 	Test_stringReplace(t);
 	Test_stringSearch(t);
 	Test_stringEqualsIgnoreEol(t);

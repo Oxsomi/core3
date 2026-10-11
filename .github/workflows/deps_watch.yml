@@ -1,0 +1,38 @@
+name: Dependency watch
+
+# Posts to Discord what upstream changed in the dependencies OxC3 pins (tools/deps_watch.py).
+#
+# The last report is kept in the Actions cache, saved per run and restored by prefix.
+# DEPS_WEBHOOK_URL picks the channel, else WEBHOOK_URL; without either the report is only printed and summarized.
+
+# nightly.yml starts this each night with the rest of the round.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore the last report
+        uses: actions/cache/restore@v4
+        with:
+          path: deps_watch.json
+          key: deps-watch-${{ github.run_id }}
+          restore-keys: deps-watch-
+
+      - name: Report what moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEBHOOK_URL: ${{ secrets.DEPS_WEBHOOK_URL || secrets.WEBHOOK_URL }}
+        run: python3 tools/deps_watch.py -state deps_watch.json
+
+      - name: Save this report
+        uses: actions/cache/save@v4
+        with:
+          path: deps_watch.json
+          key: deps-watch-${{ github.run_id }}

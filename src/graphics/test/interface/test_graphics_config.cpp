@@ -537,6 +537,27 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
+	//39e. AllowUnsafeExperimentExecution and AllowUnsafeExtensionExecution: a device per flag, the only devices that take
+	// a binary with the matching marker, each refusing the other's, as the suite's own device refuses both.
+
+	static const struct { c::EGraphicsDeviceFlags flag; const c::C8 *name; } unsafeFlags[] = {
+		{ c::EGraphicsDeviceFlags_AllowUnsafeExperimentExecution, "configUnsafeExperimentCreate" },
+		{ c::EGraphicsDeviceFlags_AllowUnsafeExtensionExecution, "configUnsafeExtensionCreate" }
+	};
+
+	for(const auto &unsafe : unsafeFlags) {
+
+		Device unsafeDev = Test_createConfigDevice(
+			t, instRef, info, unsafe.flag, c::EGraphicsBufferingMode_Default, unsafe.name
+		);
+
+		if (unsafeDev) {
+			Test_graphicsUnsafeExecution(t, unsafeDev.handle());
+			(void) unsafeDev.wait();
+			Test_setModule(t, "GraphicsDevice/configVariants");
+		}
+	}
+
 	//Log_debugLnx is a macro that names ELogOptions_NewLine unqualified, so it cannot be spelled through the c
 	// namespace; oxc::Log is the C++ front for the same call and takes the allocator the x suffix implies.
 

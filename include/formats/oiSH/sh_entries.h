@@ -116,7 +116,7 @@ typedef struct SHEntryRuntime {
 	U8 binaryTypes;                       //[[oxc::binary(...)]] mask of (1 << EGfxBinaryType); 0 = unset (all supported)
 	U16 uniformStride;                    //How many bytes all uniforms combined take
 
-	ListU32 extensions;                   //Explicitly enabled extensions (ESHExtension[])
+	ListSHExtensionSet extensions;        //Explicitly enabled extensions, a set per [[oxc::extension(...)]] line
 
 	ListU16 shaderVersions;               //U16: U8 major, minor;        If not defined will default.
 

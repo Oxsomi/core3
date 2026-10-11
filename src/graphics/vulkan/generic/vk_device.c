@@ -734,6 +734,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_PageableMemory:               on = featEx & EVkGraphicsFeatures_PageableMemory;           break;
 
 			case EOptExtensions_BufferMarker:                 on = feat2 & EGraphicsFeatures2_WriteBufferImmediate;       break;
+			case EOptExtensions_ExperimentTier1:              on = feat2 & EGraphicsFeatures2_ExperimentTier1;            break;
+			case EOptExtensions_ExperimentTier2:              on = feat2 & EGraphicsFeatures2_ExperimentTier2;            break;
 
 			//Only for breadcrumbs, which also need the buffer marker
 

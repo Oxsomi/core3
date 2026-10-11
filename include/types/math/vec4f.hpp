@@ -51,6 +51,10 @@ namespace oxc { namespace c {
 	#include <arm_neon.h>
 #endif
 
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#include <intrin0.h>        //See lock.hpp
+#endif
+
 //Operator sugar over the C F32x4.
 //
 //This is a value, not a resource: no allocator, no ownership, trivially copyable,

@@ -8,6 +8,21 @@ Last full revision: 2026-09-02.
 
 ## Open issues
 
+- **lavapipe 26.x: Shaders/draw (pixelsMatch) fails on the indexed, instanced draw, 335/336.** Every texel reads 0:
+  the draw produces nothing. lavapipe 24.2.8 and RADV 26.2.3 pass it; lavapipe 26.2.3 (LLVM 19) and a server's
+  newer lavapipe (LLVM 21) fail it. Reproduce with `python tools/mesa.py build 26.2.3` and `-mesa 26.2.3`.
+  Established: the validation layer, synchronization validation included, reports nothing; the index bind and the
+  draw are in the same command buffer; and an instrumented lavapipe executes the draw with the right parameters
+  (6 U16 indices, 2 instances, whole buffer, offset 0) and reads the right indices (0 1 2 2 1 3) at draw time.
+  A non indexed draw with the same pipeline and vertex buffer works, and so does the same draw in a standalone
+  program, with the same memory offsets (up to 136 MB into one allocation), maintenance5, buffer device address,
+  2 instances, this test's own compiled vertex shader and an exactly sized vertex buffer. So it takes more of
+  OxC3's state to trigger: dynamic rendering with synchronization2 barriers, the pixel shader's push constants
+  and layout, device local buffers filled by transfer, or the other enabled extensions.
+  Next, either: bisect Mesa between 24.2.8 and 26.2.3 with tools/mesa.py and this test as the oracle, which names
+  the commit (about 14 steps); or capture the run with gfxreconstruct and trim it to the failing draw, which is
+  a reproducer Mesa takes as is. Nothing found so far points at OxC3, but nothing clears it yet either.
+
 - **Linux mesa: Shaders/draw (entryFound) fails on arm64 and x64 static Vulkan.** Deterministic on both
   arches, so it is code or driver capability, not flake. Eliminated already: the DynamicSamplers refusal
   (none of that module's ten shaders declares a sampler, and checkShaderFeatures reads active-only
@@ -254,6 +269,14 @@ Roughly ordered by how often the gap bites.
   recording` in dx_device.c / vk_device.c). Walk the scopes and their barriers first to resolve state, then encode
   the scopes whose dependencies are met as jobs (needs the dependency item above settled).
 
+- **Shader requirements recorded rather than mapped, and Vulkan device extras** (agreed 11 Oct 2026).
+  oiSH records what each binary needs as emitted: SPIR-V capabilities and extensions, DXIL feature flags and
+  shader model. A table generated from vk.xml's enable rules gives what a device enabled, and pipeline creation
+  refuses a binary that needs more, naming it. Unknown capabilities become checked instead of refused.
+  Vulkan device creation takes extra extensions and a feature chain from the app, checked for support, duplicates
+  and missing dependencies. A query publishes what OxC3 itself requests, for deduping now and device import later.
+  The format gets variable length extension masks and optional tagged sections.
+
 ### Usability (review 2 Oct 2026, detail in `docs/proposals/gfx_usability_review.md`)
 
 - **Dynamic graphics linking as the default**, static as an opt-in (performance, Android). Document which
@@ -312,6 +335,11 @@ Roughly ordered by how often the gap bites.
   lock for long holds.
 - **Submit orchestration is duplicated per backend** (~400 lines each in dx_device.c / vk_device.c, and
   getCommandAllocator diverges). Proposal: [proposals/submit_skeleton.md](proposals/submit_skeleton.md).
+- **An idle JobQueue polls.** A worker with nothing to run sleeps `JobQueue_idleSleep` (100 us) and looks again, and
+  `JobQueue_wait` waits the same way, so a queue kept past its burst wakes every worker about ten thousand times a
+  second and a push waits up to 100 us for one to notice. Blocking needs a wait primitive the platform layer doesn't
+  have yet (a futex on Linux, `WaitOnAddress` on Windows, `__ulock_wait` or a condition variable on Apple): idle
+  workers wait on a counter `JobQueue_push` bumps and wakes, and the waiter on `pending` the same way.
 - **D3D12 / Vulkan surface loss:** `VK_ERROR_OUT_OF_DATE_KHR` and monitor reconnects have no recreate logic
   (vulkan.c ~71 maps it to Error_invalidState; GitHub #167). Vulkan flicker when dragging a window on Windows (#168).
   #171 is partly fixed (LoadImageW/LoadCursorW fallbacks done); CS_HREDRAW | CS_VREDRAW is still set at
@@ -486,6 +514,14 @@ Outlines only; each becomes a section in graphics_api.md (or its own page).
 
 ## Upstream / external
 
+- **DescriptorHeap doesn't compile to SPIR-V until DXC strides the heap array.** With
+  `-fspv-use-descriptor-heap`, DXC accesses the heap through a runtime array of descriptors that has neither
+  ArrayStride nor ArrayStrideIdEXT, and SPIRV-Tools refuses that since its explicit layout validation
+  (KhronosGroup/SPIRV-Tools#6792). Older pins emitted the same SPIR-V; their validator just didn't check it.
+  Upstream tracks it as microsoft/DirectXShaderCompiler#8740, with the codegen rewrite in the open #8517 series.
+  Until that lands, DescriptorHeap is in ESHExtension_NoSpirvCompile. Re-enabling it means removing it there and
+  restoring the SPIR-V cases of the descriptor heap block in test_shader_compiler_features.c (in git history). One
+  of them is that an unused heap stays active on SPIR-V, because heap mode declares the capability regardless.
 - The D3D12 debug layer OMM input-alignment false positive was confirmed fixed in Agility 1.619.5 but not in
   the 1.721 preview line; the engine floors ASRead alignment based on the accepted SDK version until the
   preview line picks the fix up.

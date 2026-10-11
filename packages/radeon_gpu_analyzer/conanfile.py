@@ -22,7 +22,7 @@ required_conan_version = ">=2.0"
 class radeon_gpu_analyzer(ConanFile):
 
 	name = "radeon_gpu_analyzer"
-	version = "2026.09.02"
+	version = "2026.10.06"
 
 	license = "MIT (RGA); the bundled amdllpc build carries the third party notices in RGA_NOTICES.txt"
 	author = "AMD (original) & Oxsomi (modifications only)"

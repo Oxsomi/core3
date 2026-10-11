@@ -56,6 +56,8 @@ void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessSampler(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsUnsafeExecution(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsExperimentTiers(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsStaticSamplerDevice(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef);

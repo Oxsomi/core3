@@ -136,10 +136,8 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//natively detected on SPIRV (see SHEntryRuntime_getSupportedBinaryTypes).
 		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       B_BOTH },
 
-		//SM6.6 dynamic resources (full bindless): native on DXIL, lowered to SPV_EXT_descriptor_heap on SPIRV.
-		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_BOTH },
-
 		//DXIL-only: DXC's SPIR-V backend genuinely fails to compile these (verified: SPIRV compile error)
+		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_DXIL },
 		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   B_DXIL },
 		{ "features/paq.hlsl",                 ESHExtension_PAQ,                B_DXIL },
 		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     B_DXIL },
@@ -200,7 +198,12 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//FP8 (e4m3) cooperative-matrix GEMM (F16 accumulate): DXIL Matrix<F8_E4M3FN,Wave>; SPIRV SPV_EXT_float8 +
 		// Float8CooperativeMatrixEXT (an inline FP8 OpTypeFloat).
 		//Gated behind CoopFP8.
-		{ "features/coop_mat_fp8.hlsl",         ESHExtension_CoopFP8,            B_BOTH }
+		{ "features/coop_mat_fp8.hlsl",         ESHExtension_CoopFP8,            B_BOTH },
+
+		//An unsafe experiment (a used NonSemantic instruction, SPIRV only) and extensions OxC3 doesn't recognize (a
+		// rasterizer ordered view, both backends). Their twins without the marker are refused below.
+		{ "features/unsafe_experiment.hlsl",    ESHExtension_UnsafeExperimentExecution, B_SPV },
+		{ "features/unsafe_extension.hlsl",     ESHExtension_UnsafeExtensionExecution,  B_BOTH }
 	};
 
 	static const struct { U8 mode; const C8 *name; } backends[] = {
@@ -250,11 +253,9 @@ void Test_shaderCompilerFeatures(Test *t) {
 	#undef B_DXIL
 	#undef B_BOTH
 
-	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on both backends ---
-	//The table above already asserts the used shader reflects the bit; this block additionally asserts
-	// 1) using the heaps does NOT mark the extension dormant (native detection sees the usage),
-	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
-	// 3) declaring the extension without using it DOES mark it dormant (native detection on both backends).
+	//An experiment tier, ESHExtension2's, on both backends: the line declaring it yields a binary carrying it in the
+	// second mask alone, the other line one without, and their code differs because only the first compile saw
+	// __OXC_EXT_EXPERIMENTTIER1.
 
 	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
 
@@ -262,10 +263,125 @@ void Test_shaderCompilerFeatures(Test *t) {
 		SHFile shFile = (SHFile) { 0 };
 		CharString label = CharString_createNull();
 
+		const C8 *file = "features/experiment_tier.hlsl";
+		const Bool compiled = compileFileShader(alloc, file, backends[b].mode, true, false, &out, &err);
+		const Bool read = compiled && out.length == 1 && readOiSH(alloc, out.ptr[0], &shFile, &err);
+
+		const SHBinaryInfo *tier = NULL, *plain = NULL;
+
+		for(U64 i = 0; read && i < shFile.binaries.length; ++i) {
+
+			const SHBinaryInfo *bin = &shFile.binaries.ptr[i];
+
+			if(!bin->identifier.extensions && bin->identifier.extensions2 == ESHExtension2_ExperimentTier1)
+				tier = bin;
+
+			else if(!bin->identifier.extensions && !bin->identifier.extensions2)
+				plain = bin;
+		}
+
+		const Bool separate =
+			tier && plain && shFile.binaries.length == 2 &&
+			Buffer_neq(tier->binaries[backends[b].mode], plain->binaries[backends[b].mode]) &&
+			oiSHRoundtrips(alloc, out.ptr[0], &err);
+
+		if (!separate)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		if (!CharString_format(alloc, &label, &err, "%s (%s)", file, backends[b].name))
+			label = CharString_createRefCStrConst(file);
+
+		Test_assert(t, label.ptr, separate);
+
+		CharString_free(&label, alloc);
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//The experiment's instruction survives to the binary: a pass that stripped its set would leave a module that
+	// compiles and validates nothing, so only the disassembly can tell.
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		Compiler comp = (Compiler) { 0 };
+		CharString disasm = CharString_createNull();
+		Bool created = false;
+
+		Bool ok =
+			compileFileShader(alloc, "features/unsafe_experiment.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) &&
+			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 1 &&
+			Compiler_create(alloc, &comp, &err);
+
+		created = ok;
+
+		ok = ok && Compiler_disassemble(
+			&comp, EGfxBinaryType_SPIRV, shFile.binaries.ptr[0].binaries[EGfxBinaryType_SPIRV], alloc, &disasm, &err
+		);
+
+		const CharString import = CharString_createRefCStrConst("OpExtInstImport \"NonSemantic.OxC3.Experiment\"");
+		const CharString use = CharString_createRefCStrConst("OpExtInst %uint");
+
+		const Bool kept =
+			ok &&
+			CharString_containsStringSensitive(&disasm, &import, 0, CharString_length(disasm)) &&
+			CharString_containsStringSensitive(&disasm, &use, 0, CharString_length(disasm));
+
+		if (!kept && CharString_length(disasm))
+			Log_debugLn(alloc, "%.*s", (int) CharString_length(disasm), disasm.ptr);
+
+		Test_assert(t, "features/unsafe_experiment.hlsl (spirv) keeps its instruction", kept);
+
+		CharString_free(&disasm, alloc);
+
+		if (created)
+			Compiler_free(&comp, alloc);
+
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//The same shaders without their markers: the validator refuses the NonSemantic result's use, and oiSH the
+	// extensions it doesn't recognize, which only UnsafeExperimentExecution and UnsafeExtensionExecution let through.
+	//coop_vec_undeclared.hlsl uses linear algebra without declaring CoopVec or CoopMat, which DXIL reports.
+
+	static const struct { const C8 *file; U8 mode; const C8 *label; } refused[] = {
+		{ "features/unsafe_experiment_refused.hlsl", EGfxBinaryType_SPIRV, "unsafe_experiment_refused.hlsl (spirv)" },
+		{ "features/unsafe_extension_refused.hlsl",  EGfxBinaryType_SPIRV, "unsafe_extension_refused.hlsl (spirv)" },
+		{ "features/unsafe_extension_refused.hlsl",  EGfxBinaryType_DXIL,  "unsafe_extension_refused.hlsl (dxil)" },
+		{ "features/coop_vec_undeclared.hlsl",       EGfxBinaryType_DXIL,  "coop_vec_undeclared.hlsl (dxil)" }
+	};
+
+	for (U64 i = 0; i < sizeof(refused) / sizeof(refused[0]); ++i) {
+
+		ListBuffer out = (ListBuffer) { 0 };
+
+		const Bool compiled = compileFileShader(alloc, refused[i].file, refused[i].mode, false, false, &out, &err);
+
+		Test_assert(t, refused[i].label, !compiled || out.length != 1 || !Buffer_length(out.ptr[0]));
+
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on DXIL ---
+	//The table above already asserts the used shader reflects the bit; this block additionally asserts
+	// 1) using the heaps does NOT mark the extension dormant (native detection sees the usage),
+	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
+	// 3) declaring the extension without using it DOES mark it dormant (no requires flags emitted).
+	//DescriptorHeap is in ESHExtension_NoSpirvCompile, so compiling it for SPIRV alone succeeds and writes nothing.
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+
 		//Used: active extension; the only register is the normally bound output UAV (heap accesses create none)
 
-		Bool usedOk =
-			compileFileShader(alloc, "features/descriptor_heap.hlsl", backends[b].mode, true, false, &out, &err) &&
+		const Bool usedOk =
+			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_DXIL, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
 			(shFile.binaries.ptr[0].identifier.extensions & ESHExtension_DescriptorHeap) &&
@@ -275,39 +391,37 @@ void Test_shaderCompilerFeatures(Test *t) {
 		if (!usedOk)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		if (!CharString_format(alloc, &label, &err, "descriptor heap used stays active (%s)", backends[b].name))
-			label = CharString_createRefCStrConst("descriptor heap used stays active");
+		Test_assert(t, "descriptor heap used stays active (dxil)", usedOk);
 
-		Test_assert(t, label.ptr, usedOk);
-
-		CharString_free(&label, alloc);
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 
-		//Declared but unused: demoted to dormant by native detection on DXIL (no requires flags emitted).
-		//On SPIRV the heap mode declares the DescriptorHeapEXT capability even without a heap access,
-		// so the binary genuinely requires the feature and the extension stays active there.
-
-		Bool expectDormant = backends[b].mode == EGfxBinaryType_DXIL;
-
-		Bool unusedOk =
-			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", backends[b].mode, true, false, &out, &err) &&
+		const Bool unusedOk =
+			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", EGfxBinaryType_DXIL, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
 			(shFile.binaries.ptr[0].identifier.extensions & ESHExtension_DescriptorHeap) &&
-			!(shFile.binaries.ptr[0].dormantExtensions & ESHExtension_DescriptorHeap) == !expectDormant;
+			(shFile.binaries.ptr[0].dormantExtensions & ESHExtension_DescriptorHeap);
 
 		if (!unusedOk)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		if (!CharString_format(alloc, &label, &err, "descriptor heap unused goes dormant (%s)", backends[b].name))
-			label = CharString_createRefCStrConst("descriptor heap unused goes dormant");
+		Test_assert(t, "descriptor heap unused goes dormant (dxil)", unusedOk);
 
-		Test_assert(t, label.ptr, unusedOk);
-
-		CharString_free(&label, alloc);
 		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+
+		const Bool spirvSkipped =
+			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
+			(!out.length || !Buffer_length(out.ptr[0]));
+
+		if (!spirvSkipped)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		Test_assert(t, "descriptor heap skips spirv", spirvSkipped);
+
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 	}

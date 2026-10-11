@@ -21,9 +21,12 @@
 //formats/oiSH/test/test_oiSH_round_trip.c
 
 #include "test_oiSH_shared.h"
+#include "formats/oiSH/sh_headers.h"
 #include "types/container/memory_stream.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/string_read_helper.h"
+
+#include <stddef.h>
 
 static inline Bool cmpstr(const C8 *a, const C8 *b) {
 	const CharString str = CharString_createRefCStrConst(a);
@@ -56,6 +59,19 @@ void Test_SHFileRoundTripBasic(Test *t) {
 
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
+
+	//Without entrypoints the reader refuses the file, so the writer refuses it first.
+
+	MemoryStreamRef *ms = NULL;
+	U64 writeOff = 0;
+	Error err = Error_none();
+
+	const Bool emptyWritten =
+		MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, &err) &&
+		SHFile_write((StreamRef*) ms, &writeOff, &sh, t->alloc, &err);
+
+	Test_assert(t, "no entrypoints refused", ms && !emptyWritten);
+	RefPtr_dec(&ms);
 
 	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
 	SHBinaryInfo infoCopy = info;
@@ -137,13 +153,15 @@ void Test_SHFileRoundTripBinaryExtensions(Test *t) {
 
 	const RefPtrType msType = MemoryStream_makeType(t->alloc);
 
-	Test_setModule(t, "SHFile round-trip: binary extension flags (F64|I64) preserved");
+	Test_setModule(t, "SHFile round-trip: binary extension flags (F64|I64, ExperimentTier1|2) preserved");
 
 	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
 	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	info.identifier.extensions = ESHExtension_F64 | ESHExtension_I64;
+	info.identifier.extensions2 = ESHExtension2_ExperimentTier1 | ESHExtension2_ExperimentTier2;
+	info.dormantExtensions2 = ESHExtension2_ExperimentTier2;
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
@@ -159,8 +177,82 @@ void Test_SHFileRoundTripBinaryExtensions(Test *t) {
 	Test_assert(t, "F64 preserved", (rt.binaries.ptr[0].identifier.extensions & ESHExtension_F64) != 0);
 	Test_assert(t, "I64 preserved", (rt.binaries.ptr[0].identifier.extensions & ESHExtension_I64) != 0);
 
+	Test_assert(
+		t, "extensions2 preserved",
+		rt.binaries.ptr[0].identifier.extensions2 == (ESHExtension2_ExperimentTier1 | ESHExtension2_ExperimentTier2)
+	);
+
+	Test_assert(t, "dormantExtensions2 preserved", rt.binaries.ptr[0].dormantExtensions2 == ESHExtension2_ExperimentTier2);
+
 	SHFile_free(&sh, t->alloc);
 	SHFile_free(&rt, t->alloc);
+}
+
+//The header's extension2Count, ESHExtension2_Count of the writer, is held to 1 through 32 like extensionCount.
+//The written file is patched in place: the count is checked before the hash, so the refusal names the count.
+
+void Test_SHFileReadExtension2Count(Test *t) {
+
+	const RefPtrType msType = MemoryStream_makeType(t->alloc);
+
+	Test_setModule(t, "SHFile read: header extension2Count of 0 or past 32 rejected");
+
+	SHFile sh = (SHFile) { 0 }, rt = (SHFile) { 0 };
+	MemoryStreamRef *ms = NULL;
+	Buffer bytes = Buffer_createNull();
+	U64 writeOff = 0;
+
+	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
+
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
+
+	SHEntry e = (SHEntry) { 0 };
+	e.name = CharString_createRefCStrConst("cs");
+	e.stage = EGfxPipelineStage_Compute;
+	e.groupX = e.groupY = e.groupZ = 8;
+	U16 bid = 0;
+	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));
+	Test_assert(t, "addEntry", SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, &t->err));
+	Test_assert(t, "write", ms && SHFile_write((StreamRef*) ms, &writeOff, &sh, t->alloc, &t->err));
+	Test_assert(t, "bytes", ms && MemoryStream_move(&ms, &bytes, &t->err));
+
+	const U64 at = sizeof(U32) + offsetof(SHHeader, extension2Count);        //Past the magic number
+	const U16 counts[3] = { ESHExtension2_Count, 0, 33 };
+
+	for(U8 i = 0; i < 3 && Buffer_length(bytes) >= at + sizeof(U16); ++i) {
+
+		Buffer_memcpy(Buffer_createRef(bytes.ptrNonConst + at, sizeof(U16)), Buffer_createRefConst(&counts[i], sizeof(U16)));
+
+		Error err = Error_none();
+		MemoryStreamRef *in = NULL;
+		U64 readOff = 0;
+		Buffer region = Buffer_createRefFromBuffer(bytes, true);
+
+		const Bool read =
+			MemoryStream_createFromBuffer(&region, EMemoryStreamFlags_None, &msType, &in, &err) &&
+			SHFile_read((StreamRef*) in, &readOff, false, t->alloc, &rt, &err);
+
+		const CharString why = CharString_createRefCStrConst(err.errorStr ? err.errorStr : "");
+		const CharString name = CharString_createRefCStrConst("extension2Count");
+
+		if(!i)
+			Test_assert(t, "read as written", read);
+
+		else Test_assert(
+			t, i == 1 ? "zero rejected" : "past 32 rejected",
+			!read && CharString_containsStringSensitive(&why, &name, 0, CharString_length(why))
+		);
+
+		RefPtr_dec(&in);
+		SHFile_free(&rt, t->alloc);
+	}
+
+	RefPtr_dec(&ms);
+	Buffer_free(&bytes, t->alloc);
+	SHFile_free(&sh, t->alloc);
 }
 
 void Test_SHFileRoundTripComputeGroupSize(Test *t) {

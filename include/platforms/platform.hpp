@@ -49,7 +49,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef _MSC_VER
+#ifdef __APPLE__
+	#include <TargetConditionals.h>            //platform_types.h reaches for this on apple
+#endif
+
+//platform_types.h goes into oxc::c first, where its types belong, and its _COMPILER picks the header below.
+
+namespace oxc { namespace c {
+	#include "types/base/platform_types.h"
+} }
+
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
 	#include <intrin0.h>
 #endif
 

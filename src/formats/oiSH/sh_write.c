@@ -68,6 +68,11 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	if (!shFile || !shFile->entries.ptr)
 		retError(clean, Error_nullPointer(2, "SHFile_write()::shFile is required"));
 
+	//SHFile_read refuses a file without entrypoints, so one is never written.
+
+	if (!shFile->entries.length)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_write()::shFile has no entrypoints"));
+
 	U64 fileStart = *offset;
 
 	//Get header size
@@ -451,6 +456,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			.version = ESHVersion_V1_2,
 			.extensionCount = ESHExtension_Count,
 			.vendorCount = ESHVendor_Count,
+			.extension2Count = ESHExtension2_Count,
 			.sizeTypes = sizeTypes,
 			.binaryCount = (U16) shFile->binaries.length,
 			.stageCount = (U16) shFile->entries.length,
@@ -529,6 +535,8 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			.extensions = binary.identifier.extensions,
 			.dormantExt = binary.dormantExtensions,
+			.extensions2 = binary.identifier.extensions2,
+			.dormantExt2 = binary.dormantExtensions2,
 
 			.registerCount = (U16)binary.registers.length,
 			.uniformCount = (U8)binary.identifier.uniforms.length

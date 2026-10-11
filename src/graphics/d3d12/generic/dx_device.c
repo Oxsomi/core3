@@ -49,7 +49,7 @@
 #include "types/base/constants.h"
 #include "types/container/string_unicode.h"
 
-#if _ARCH == ARCH_X86_64
+#ifdef _HAS_NV_API
 	#include <nvapi.h>
 #endif
 
@@ -106,7 +106,7 @@ void onDebugReport(
 	}
 }
 
-#if _ARCH == ARCH_X86_64
+#ifdef _HAS_NV_API
 
 	void onDebugReportNv(
 		void *pUserData,
@@ -360,7 +360,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			), e_rr));
 		}
 
-		#if _ARCH == ARCH_X86_64
+		#ifdef _HAS_NV_API
 
 			//Nv specific initialization
 
@@ -1670,7 +1670,7 @@ clean:
 		device->timingSlots[device->fifId] = 0;
 	}
 
-	#if _ARCH == ARCH_X86_64
+	#ifdef _HAS_NV_API
 
 		//Regardless of device removal, we'll ask NV to report anything fishy to us.
 		//It's technically possible that a TDR/Device removal is caused during setup time, but it's very unlikely.

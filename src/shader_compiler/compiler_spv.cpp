@@ -149,6 +149,12 @@ extern "C" Bool Compiler_processSPIRV(
 
 	Bool isLinalg = !!(toCompile->extensions & linalg);
 
+	//Nothing in an unsafe experiment's module is validated (ESHExtension_UnsafeExperimentExecution), and capabilities
+	// oiSH has no extension for pass for a binary that uses unrecognized extensions (UnsafeExtensionExecution)
+
+	Bool isUnsafe = !!(toCompile->extensions & ESHExtension_UnsafeExperimentExecution);
+	Bool allowsUnknown = !!(toCompile->extensions & ESHExtension_UnsafeExtensionExecution);
+
 	spvtools::Optimizer optimizerRt{ SPV_ENV_UNIVERSAL_1_4 };
 	spvtools::Optimizer optimizerNoRt{ SPV_ENV_UNIVERSAL_1_3 };
 	spvtools::Optimizer optimizerLinalg{ SPV_ENV_UNIVERSAL_1_6 };
@@ -198,11 +204,19 @@ extern "C" Bool Compiler_processSPIRV(
 
 	//Validate capabilities.
 	//This makes sure that we only output a binary that's supported by oiSH and no unknown extensions are used.
+	//A binary that uses unrecognized extensions may hold capabilities oiSH has no extension for; those pass and map to
+	// nothing.
 
 	for (U64 i = 0; i < spvMod.capability_count; ++i) {
 
 		ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
-		gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr));
+
+		if(allowsUnknown) {
+			if(!spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, NULL))
+				continue;
+		}
+
+		else gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr));
 
 		//Check if extension was known to oiSH
 
@@ -639,8 +653,16 @@ extern "C" Bool Compiler_processSPIRV(
 
 		optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
 
-		if (!isDebug)
-			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
+		//The reflection strip is SPIRV-Tools' non-semantic strip under its old name: it deletes every instruction of a
+		// NonSemantic set, which is how an unsafe experiment's own instructions come in, and leaves their uses dangling.
+
+		if (!isDebug) {
+
+			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass());
+
+			if (!isUnsafe)
+				optimizer.RegisterPass(spvtools::CreateStripReflectInfoPass());
+		}
 
 		//Alignment was already fixed at the top of the function, before the decoration scan.
 
@@ -648,6 +670,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 		spvtools::OptimizerOptions optimizerOptions;
 		optimizerOptions.set_preserve_bindings(keepRegisters);
+		optimizerOptions.set_run_validator(!isUnsafe);
 
 		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp, optimizerOptions))
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
@@ -1038,8 +1061,13 @@ extern "C" Bool Compiler_linkSPIRV(
 
 		opt.RegisterPerformancePasses();
 
+		//An unsafe experiment's module is not validated here either (see Compiler_processSPIRV)
+
+		spvtools::OptimizerOptions optimizerOptions;
+		optimizerOptions.set_run_validator(!(exts & ESHExtension_UnsafeExperimentExecution));
+
 		std::vector<U32> tmp;
-		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp))
+		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp, optimizerOptions))
 			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() couldn't run optimizer"));
 
 		//Note: we don't strip reflection here, Compiler_process will handle that.

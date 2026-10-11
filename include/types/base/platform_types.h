@@ -35,9 +35,7 @@ typedef U32 EPlatform;
 #define PLATFORM_IOS 5
 #define PLATFORM_OSX 6
 
-#if _PLATFORM_TYPE != PLATFORM_WINDOWS
-	#include <assert.h>
-#endif
+#include <assert.h>        //static_assert below is a macro of assert.h before C23
 
 //Platform and arch stuff
 
@@ -56,6 +54,17 @@ typedef U32 EPlatform;
 #define ARCH_X86_64 1
 #define ARCH_ARM64 2
 #define ARCH_WASM64 3
+
+//The compiler, compared against these rather than the compilers' own predefines, which overlap.
+//clang-cl takes MSVC's command line and headers, so it defines _MSC_VER beside __clang__.
+//Emscripten is clang targeting the web, so it defines __clang__ and __GNUC__ as well.
+
+#define COMPILER_NONE 0
+#define COMPILER_MSVC 1
+#define COMPILER_CLANG_CL 2
+#define COMPILER_CLANG 3
+#define COMPILER_GCC 4
+#define COMPILER_EMSCRIPTEN 5
 
 //wasm64 (-m64 / MEMORY64) satisfies this; wasm32 is rejected on purpose, same as other 32-bit targets
 static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
@@ -109,12 +118,36 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _SIMD SIMD_NONE
 #endif
 
+#if defined(__EMSCRIPTEN__)
+	#define _COMPILER COMPILER_EMSCRIPTEN
+#elif defined(__clang__) && defined(_MSC_VER)
+	#define _COMPILER COMPILER_CLANG_CL
+#elif defined(__clang__)
+	#define _COMPILER COMPILER_CLANG
+#elif defined(_MSC_VER)
+	#define _COMPILER COMPILER_MSVC
+#elif defined(__GNUC__)
+	#define _COMPILER COMPILER_GCC
+#else
+	#error "Undetected compiler type"
+#endif
+
+//MSVC's spellings are taken by clang-cl too, since it compiles against MSVC's headers.
+
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#define MIGHT_BE_UNUSED
+	#define __forceinline__ __forceinline
+#else
+	#define MIGHT_BE_UNUSED __attribute__((unused))
+	#define __forceinline__ __attribute__((always_inline)) inline
+#endif
+
 //Whether the transcendental _mm_*_ps intrinsics (pow, log, exp, sin, ...) and _mm_div_epi32 resolve.
 //They're Intel SVML, which MSVC and ICC ship but clang and gcc do not, on any platform.
 //clang-cl targets Windows and still lacks them, so this has to key off the compiler rather than the OS.
 //_SIMD_HAS_SVML == 0 means the naive per-component fallbacks in vec4f.h / vec4i.h are used instead.
 
-#if _SIMD == SIMD_SSE && defined(_MSC_VER) && !defined(__clang__)
+#if _SIMD == SIMD_SSE && _COMPILER == COMPILER_MSVC
 	#define _SIMD_HAS_SVML 1
 #else
 	#define _SIMD_HAS_SVML 0

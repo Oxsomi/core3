@@ -45,15 +45,15 @@ static inline U32 Random_seed(U32 val0, U32 val1) {
 	return v0;
 }
 
-//Generate 'random' value [0, 1>
+//Generate 'random' value [0, 1>; from the high bits as Random_nextInt, since an LCG's low bits repeat quickly
 
-static inline F32 Random_sample(U32 *seed) {
+static inline F32 Random_nextFloat(U32 *seed) {
 
 	if (!seed)
 		return 0;
 
 	*seed = (1664525 * *seed + 1013904223);
-	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
+	return (F32)(*seed >> 8) / (F32)(0x01000000);
 }
 
 //Generate 'random' value [0, max>; from the high bits, since an LCG's low bits repeat quickly

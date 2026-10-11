@@ -160,38 +160,31 @@ static Bool LiveResource_describe(
 ) {
 
 	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
 
 	const C8 *kind = live->type < EResourceType_Count ? EResourceType_names[live->type] : "resource";
 	const C8 *name = CharString_length(live->name) ? live->name.ptr : "(unnamed)";
 
 	if(live->freedAt) {
-		gotoIfError3(clean, CharString_format(
-			alloc, &tmp, e_rr, "freed %s '%s', %.1f s ago", kind, name,
+		gotoIfError3(clean, CharString_appendFormat(
+			alloc, str, e_rr, "freed %s '%s', %.1f s ago", kind, name,
 			(F64) (Time_now() - live->freedAt) / SECOND
 		));
 	}
 
-	else gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "%s '%s'", kind, name));
-
-	gotoIfError3(clean, CharString_appendString(str, &tmp, alloc, e_rr));
-	CharString_free(&tmp, alloc);
+	else gotoIfError3(clean, CharString_appendFormat(alloc, str, e_rr, "%s '%s'", kind, name));
 
 	if(address && live->size && address >= live->address) {
-		gotoIfError3(clean, CharString_format(
-			alloc, &tmp, e_rr, " at +0x%" PRIx64 " of 0x%" PRIx64, address - live->address, live->size
+		gotoIfError3(clean, CharString_appendFormat(
+			alloc, str, e_rr, " at +0x%" PRIx64 " of 0x%" PRIx64, address - live->address, live->size
 		));
 	}
 
 	else if(live->blockId != U32_MAX)
-		gotoIfError3(clean, CharString_format(
-			alloc, &tmp, e_rr, " in memory block %" PRIu32 " at 0x%" PRIx64, live->blockId, live->blockOffset
+		gotoIfError3(clean, CharString_appendFormat(
+			alloc, str, e_rr, " in memory block %" PRIu32 " at 0x%" PRIx64, live->blockId, live->blockOffset
 		));
 
-	gotoIfError3(clean, CharString_appendString(str, &tmp, alloc, e_rr));
-
 clean:
-	CharString_free(&tmp, alloc);
 	return s_uccess;
 }
 
@@ -245,7 +238,6 @@ Bool GraphicsDevice_describeNearest(
 ) {
 
 	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
 
 	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
@@ -278,21 +270,18 @@ Bool GraphicsDevice_describeNearest(
 	}
 
 	if(hasBelow) {
-		gotoIfError3(clean, CharString_format(
-			alloc, &tmp, e_rr, "0x%" PRIx64 " past the end of ", address - (below.address + below.size)
+		gotoIfError3(clean, CharString_appendFormat(
+			alloc, str, e_rr, "0x%" PRIx64 " past the end of ", address - (below.address + below.size)
 		));
 
-		gotoIfError3(clean, CharString_appendString(str, &tmp, alloc, e_rr));
 		gotoIfError3(clean, LiveResource_describe(&below, 0, str, alloc, e_rr));
-		CharString_free(&tmp, alloc);
 	}
 
 	if(hasAbove) {
-		gotoIfError3(clean, CharString_format(
-			alloc, &tmp, e_rr, "%s0x%" PRIx64 " before ", hasBelow ? "; " : "", above.address - address
+		gotoIfError3(clean, CharString_appendFormat(
+			alloc, str, e_rr, "%s0x%" PRIx64 " before ", hasBelow ? "; " : "", above.address - address
 		));
 
-		gotoIfError3(clean, CharString_appendString(str, &tmp, alloc, e_rr));
 		gotoIfError3(clean, LiveResource_describe(&above, 0, str, alloc, e_rr));
 	}
 
@@ -301,7 +290,6 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
-	CharString_free(&tmp, alloc);
 	return s_uccess && (hasBelow || hasAbove);
 }
 

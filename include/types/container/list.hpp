@@ -144,6 +144,18 @@ namespace oxc {
 			return oxc::c::Name##_reserve(&l, cap, &a, e);                                                              \
 		}                                                                                                               \
 																														\
+		static oxc::c::Bool resizeUninitialized(                                                                        \
+			oxc::c::Name &l, oxc::c::U64 len, const oxc::c::Allocator &a, oxc::c::Error *e                              \
+		) {                                                                                                             \
+			return oxc::c::Name##_resizeUninitialized(&l, len, &a, e);                                                  \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool createUninitialized(                                                                        \
+			oxc::c::U64 len, const oxc::c::Allocator &a, oxc::c::Name *result, oxc::c::Error *e                         \
+		) {                                                                                                             \
+			return oxc::c::Name##_createUninitialized(len, &a, result, e);                                              \
+		}                                                                                                               \
+																														\
 		static oxc::c::Bool clear(oxc::c::Name &l) { return oxc::c::Name##_clear(&l, nullptr); }                        \
 		static void freeList(oxc::c::Name &l, const oxc::c::Allocator &a) { FreeFunc; }                                 \
 	};
@@ -307,6 +319,19 @@ namespace oxc {
 
 		[[nodiscard]] c::Bool reserve(c::U64 cap, c::Error *e_rr = nullptr) noexcept {
 			return Traits::reserve(list, cap, alloc, e_rr);
+		}
+
+		//resize without zeroing what it adds, for elements written in full before anything reads them
+		// (GenericList_resizeUninitialized).
+
+		[[nodiscard]] c::Bool resizeUninitialized(c::U64 len, c::Error *e_rr = nullptr) noexcept {
+			return Traits::resizeUninitialized(list, len, alloc, e_rr);
+		}
+
+		//Resets *this to exactly 'length' elements left as the allocator returned them
+		[[nodiscard]] c::Bool createUninitialized(c::U64 length, c::Error *e_rr = nullptr) noexcept {
+			release();
+			return Traits::createUninitialized(length, alloc, &list, e_rr);
 		}
 
 		//Resets *this to a list of 'length' copies of 'value'

@@ -53,16 +53,18 @@ static F32x4 MeshFlat_position(const MeshFlat *mesh, U32 vertex) {
 	F32 out[3] = { 0, 0, 0 };
 	ETextureFormatId_decode(mesh->positions.ptr + (U64) vertex * size, id, out, 3);
 
-	//Quantized positions are the snorm extent of the bounds. Scalar and in this order because the result is
-	// packed into a word another pass compares against, so the rounding has to stay the one it was.
+	F32x4 position = F32x4_load3(out);
 
-	if(MeshPositionFormat_isQuantized(id))
-		for(U8 i = 0; i < 3; ++i) {
-			const F32 half = (mesh->aabbMax[i] - mesh->aabbMin[i]) * 0.5f;
-			out[i] = (mesh->aabbMin[i] + mesh->aabbMax[i]) * 0.5f + out[i] * half;
-		}
+	//Quantized positions are the snorm extent of the bounds.
+	//Keep these operations and their order: another pass compares the packed result, so the rounding must not change.
 
-	return F32x4_load3(out);
+	if(MeshPositionFormat_isQuantized(id)) {
+		const F32x4 half = F32x4_mul(F32x4_sub(mesh->aabbMax, mesh->aabbMin), F32x4_xxxx4(0.5f));
+		const F32x4 center = F32x4_mul(F32x4_add(mesh->aabbMin, mesh->aabbMax), F32x4_xxxx4(0.5f));
+		position = F32x4_add(center, F32x4_mul(position, half));
+	}
+
+	return position;
 }
 
 //Twice the area of the triangle, in the direction it faces. Unnormalized on purpose: its length is exactly the
@@ -107,13 +109,10 @@ Bool MeshFlat_fromInfo(
 		.positionFormat = (U8) MeshPositionFormat_fromFlags(flags),
 		.narrowIndices = !!(flags & EMeshFlags_NarrowIndices),
 		.vertexCount = info->vertexCount,
-		.triangleCount = info->indexCount / 3
+		.triangleCount = info->indexCount / 3,
+		.aabbMin = info->aabbMin,
+		.aabbMax = info->aabbMax
 	};
-
-	for(U8 i = 0; i < 3; ++i) {
-		flat->aabbMin[i] = info->aabbMin[i];
-		flat->aabbMax[i] = info->aabbMax[i];
-	}
 
 	//Checked here so a pass that derives from this never reads past a stream that was shorter than its count.
 

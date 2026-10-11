@@ -247,15 +247,23 @@ namespace oxc {
 			return true;
 		}
 
-		//len 0 reads to the end. out is reset first,
-		// the C side refuses a filled output because that would indicate a leak,
-		// and must be built on the allocator Types was made with.
+		//[off, off + len) into out, replacing what it held with a buffer of exactly that size from out's own allocator;
+		// len 0 reads to the end. FileHandleRef_read fills the buffer it is given, so the size is decided here and the
+		// range is still checked there.
 
 		[[nodiscard]] c::Bool read(
 			Buffer &out, c::U64 off = 0, c::U64 len = 0, c::Error *e_rr = nullptr
 		) const noexcept {
+
+			const c::U64 fileSize = c::FileHandle_fileSize(data());
+			const c::U64 size = len ? len : (off < fileSize ? fileSize - off : 0);
+
 			out.release();
-			return c::FileHandleRef_read(ref.handle(), off, len, &out.handle(), e_rr);
+
+			if(size && !out.createUninitializedBytes(size, e_rr))
+				return false;
+
+			return c::FileHandleRef_read(ref.handle(), off, size, &out.handle(), e_rr);
 		}
 
 		[[nodiscard]] c::Bool write(

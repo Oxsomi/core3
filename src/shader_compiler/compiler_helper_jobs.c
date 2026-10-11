@@ -96,10 +96,20 @@ Bool Compiler_registerShaderBinary(
 Bool Compiler_registerShaderEntries(
 	SHFile *shFile,
 	const ListSHEntryRuntime *entries,
-	ListU32 binaryIndices,
+	ListU64 binaryIndices,
 	const Allocator *alloc,
 	Error *e_rr
 );
+
+//What a leaf records per runtime entry it links: the entry, the combination it compiled and the binary it produced.
+//The combination is SHEntryRuntime's index (shader version fastest, then extension line, define set, uniform set),
+// and each of those lists is in declaration order.
+//Sorted as one key, an entry's binaries therefore follow the order its annotations were written in.
+//That is the order GraphicsDeviceRef_getFirstShaderEntry tries them in, so the first line the device can run wins.
+
+static inline U64 Compiler_binaryIndex(U16 runtimeEntry, U16 combination, U16 binaryId) {
+	return ((U64) runtimeEntry << 32) | ((U64) combination << 16) | binaryId;
+}
 
 //A file's work runs as a 3-level JobGroup fan-out tree on the shared queue:
 //  file latch  ->  per-combination compile jobs  ->  per-linkEntry leaf jobs.
@@ -127,7 +137,7 @@ typedef struct CompilerFileCtx {
 	ListU32 compileCombinations;            //Owned
 
 	SHFile shFile;                          //Shared; mutated by leaves under lock
-	ListU32 binaryIndices;                  //Shared; mutated by leaves under lock
+	ListU64 binaryIndices;                  //Shared; mutated by leaves under lock (Compiler_binaryIndex)
 
 	JobGroup group;                         //File latch; finalize = Compiler_finalizeShaderFile
 
@@ -176,7 +186,7 @@ void CompilerFileCtx_free(void *ptr) {
 	const Allocator *alloc = ctx->job->alloc;      //job outlives the queue (owned by Compiler_compileShaders), so this is safe
 
 	SHFile_free(&ctx->shFile, alloc);
-	ListU32_free(&ctx->binaryIndices, alloc);
+	ListU64_free(&ctx->binaryIndices, alloc);
 	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, alloc);
 	ListU32_free(&ctx->compileCombinations, alloc);
 
@@ -252,8 +262,17 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	Buffer uniformData = linkEntry.uniformData;
 	U16 currentCombinationId = linkEntry.combinationId;
 
+	//The combination index belongs to the entry being linked (Compiler_getLinkEntries computes it from that entry's
+	// own annotation lists), so it is that entry's lists that turn it back into an identifier.
+	//The combination's own entry is only the one that was compiled, and with lists in another order or of another
+	// length the same index names a different extension set, uniform or define set than this binary was built with.
+	//A lib binary (no entrypointId) is shared by every entry it links and keeps the compiled entry's identifier.
+
+	const SHEntryRuntime *identifierEntry =
+		linkEntry.entrypointId != U16_MAX ? &file->runtimeEntries.ptr[linkEntry.entrypointId] : &runtimeEntry;
+
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr));
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(identifierEntry, currentCombinationId, &binaryIdentifier, e_rr));
 
 	ListBuffer inputs = (ListBuffer) { 0 };
 	gotoIfError3(clean, ListBuffer_createRefConst(&combo->tempResult.binary, 1, &inputs, e_rr));
@@ -371,8 +390,10 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	));
 
 	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)       //Link runtime entry to binary
-		gotoIfError3(clean, ListU32_pushBack(
-			&file->binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc, e_rr
+		gotoIfError3(clean, ListU64_pushBack(
+			&file->binaryIndices,
+			Compiler_binaryIndex(linkEntry.runtimeEntries.ptr[l], linkEntry.combinationId, binaryId),
+			alloc, e_rr
 		));
 
 	SpinLock_unlock(&file->lock);
@@ -617,6 +638,8 @@ clean:
 
 //File finalize: runs once every combination has drained and nothing failed.
 //Sorts the binary indices, links entrypoints to binaries and hands the finished SHFile to the job's output slot.
+//The file's binaries are sorted by identifier for reproducibility, but an entry's binaryIds are not.
+//They keep its declaration order (Compiler_binaryIndex), since that order is what binary selection treats as preference.
 //Binaries are appended in whatever order their leaf jobs won the SHFile lock, which is thread scheduling,
 //so two runs over identical sources produce the same oiSH with its binaries in a different order and the
 //file differs byte for byte. -threads 1 is stable, anything else is not.
@@ -636,6 +659,9 @@ Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 
 	if(a->identifier.extensions != b->identifier.extensions)
 		return a->identifier.extensions < b->identifier.extensions;
+
+	if(a->identifier.extensions2 != b->identifier.extensions2)
+		return a->identifier.extensions2 < b->identifier.extensions2;
 
 	const ECompareResult name =
 		CharString_compareSensitive(&a->identifier.entrypoint, &b->identifier.entrypoint);
@@ -662,7 +688,7 @@ Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 //Reorders the file's binaries into that order and remaps binaryIndices onto it.
 //Insertion sort rather than anything cleverer: a file has tens of binaries, and this runs once.
 
-Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocator *alloc, Error *e_rr) {
+Bool Compiler_sortBinaries(SHFile *shFile, ListU64 *binaryIndices, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Buffer orderBuf = Buffer_createNull();
@@ -707,7 +733,7 @@ Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocat
 
 	for (U64 i = 0; i < binaryIndices->length; ++i) {
 
-		const U32 v = binaryIndices->ptr[i];
+		const U64 v = binaryIndices->ptr[i];
 		const U16 oldId = (U16) v;
 
 		U16 newId = oldId;
@@ -718,7 +744,7 @@ Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocat
 				break;
 			}
 
-		binaryIndices->ptrNonConst[i] = (v & 0xFFFF0000u) | newId;
+		binaryIndices->ptrNonConst[i] = (v & ~(U64) 0xFFFF) | newId;
 	}
 
 clean:
@@ -745,7 +771,7 @@ Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 	if(!Compiler_sortBinaries(&ctx->shFile, &ctx->binaryIndices, alloc, &errTmp))
 		s_uccess = false;
 
-	else if(!ListU32_sort(ctx->binaryIndices))
+	else if(!ListU64_sort(ctx->binaryIndices))
 		s_uccess = false;
 
 	else if(!Compiler_registerShaderEntries(&ctx->shFile, &ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))
@@ -1045,7 +1071,7 @@ clean:
 Bool Compiler_registerShaderEntries(
 	SHFile *shFile,
 	const ListSHEntryRuntime *entries,
-	ListU32 binaryIndices,
+	ListU64 binaryIndices,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -1064,7 +1090,7 @@ Bool Compiler_registerShaderEntries(
 		if (k == binaryIndices.length)
 			break;
 
-		if ((binaryIndices.ptr[k] >> 16) != j)
+		if ((binaryIndices.ptr[k] >> 32) != j)
 			continue;
 
 		//Validate that [k, k + l> is valid (points to same binary)
@@ -1075,7 +1101,7 @@ Bool Compiler_registerShaderEntries(
 				"CLI_compileShader() runtime accessed binaryIndices out of bounds"
 			));
 
-		if((binaryIndices.ptr[k + l - 1] >> 16) != j)
+		if((binaryIndices.ptr[k + l - 1] >> 32) != j)
 			retError(clean, Error_invalidState(0, "CLI_compileShader() has missing binaries for index j"));
 
 		if(runtime->entry.binaryIds.length)
@@ -1224,6 +1250,16 @@ Bool Compiler_compileShaders(
 		if(errorInPrevious) {
 			if(enableLogging)
 				Log_warnLn(alloc, "One of the previous oiSH compilations failed, not producing a binary");
+		}
+
+		//Every entrypoint skipped for the requested binary types leaves nothing to write, which isn't an error.
+
+		else if (previous.entries.ptr && !previous.entries.length) {
+			if(enableLogging)
+				Log_warnLn(
+					alloc, "No oiSH written for %.*s: no entrypoint targets the requested binary types",
+					(int) CharString_length(allOutputs->ptr[i]), allOutputs->ptr[i].ptr
+				);
 		}
 
 		else if (previous.entries.ptr) {

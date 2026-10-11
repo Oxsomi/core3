@@ -288,6 +288,26 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
+		case C8x2('U', 'n'):    //UnsafeExperimentExecution, UnsafeExtensionExecution
+
+			if (
+				stageNameLen == 25 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('s', 'a', 'f', 'e', 'E', 'x', 'p', 'e') &&
+				Buffer_readU64(buf, 10, NULL, NULL) == C8x8('r', 'i', 'm', 'e', 'n', 't', 'E', 'x') &&
+				Buffer_readU64(buf, 17, NULL, NULL) == C8x8('x', 'e', 'c', 'u', 't', 'i', 'o', 'n')
+			)
+				return ESHExtension_UnsafeExperimentExecution;
+
+			if (
+				stageNameLen == 24 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('s', 'a', 'f', 'e', 'E', 'x', 't', 'e') &&
+				Buffer_readU64(buf, 10, NULL, NULL) == C8x8('n', 's', 'i', 'o', 'n', 'E', 'x', 'e') &&
+				Buffer_readU64(buf, 16, NULL, NULL) == C8x8('x', 'e', 'c', 'u', 't', 'i', 'o', 'n')
+			)
+				return ESHExtension_UnsafeExtensionExecution;
+
+			break;
+
 		case C8x2('D', 'e'):    //DescriptorHeap
 
 			if (
@@ -409,36 +429,63 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 	return (ESHExtension)(1u << ESHExtension_Count);
 }
 
-Bool Compiler_registerExtension(U32 *extensions, CharString extensionName, Error *e_rr) {
+//The ESHExtension2 a name refers to, or 1 << ESHExtension2_Count for one that is none of them.
+
+ESHExtension2 Compiler_parseExtension2(CharString extensionName) {
+
+	const Buffer buf = CharString_bufferConst(extensionName);
+
+	if(
+		CharString_length(extensionName) == 15 &&
+		Buffer_readU64(buf, 0, NULL, NULL) == C8x8('E', 'x', 'p', 'e', 'r', 'i', 'm', 'e')
+	)
+		switch (Buffer_readU64(buf, 7, NULL, NULL)) {
+			case C8x8('e', 'n', 't', 'T', 'i', 'e', 'r', '1'):        return ESHExtension2_ExperimentTier1;
+			case C8x8('e', 'n', 't', 'T', 'i', 'e', 'r', '2'):        return ESHExtension2_ExperimentTier2;
+		}
+
+	return (ESHExtension2)(1u << ESHExtension2_Count);
+}
+
+//A name into the mask it belongs to, ESHExtension's or ESHExtension2's.
+
+Bool Compiler_registerExtension(SHExtensionSet *extensions, CharString extensionName, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	ESHExtension extension = Compiler_parseExtension(extensionName);
+	const ESHExtension extension = Compiler_parseExtension(extensionName);
+	const Bool isFirst = !(extension >> ESHExtension_Count);
+	const ESHExtension2 extension2 = isFirst ? ESHExtension2_None : Compiler_parseExtension2(extensionName);
 
-	if(extension >> ESHExtension_Count)
+	if(!isFirst && (extension2 >> ESHExtension2_Count))
 		retError(clean, Error_invalidParameter(
 			0, 5, "Compiler_registerExtension() unrecognized extension in extension annotation"
 		));
 
-	if(*extensions & extension)
+	if(isFirst ? (extensions->extensions & extension) : (extensions->extensions2 & extension2))
 		retError(clean, Error_invalidParameter(
 			0, 6, "Compiler_registerExtension() duplicate extension found"
 		));
 
-	*extensions |= extension;
+	if(isFirst)
+		extensions->extensions = (ESHExtension) (extensions->extensions | extension);
+
+	else extensions->extensions2 = (ESHExtension2) (extensions->extensions2 | extension2);
 
 clean:
 	return s_uccess;
 }
 
-Bool Compiler_registerExtensions(ListU32 *extensionsRegistered, U32 extensions, const Allocator *alloc, Error *e_rr) {
+Bool Compiler_registerExtensions(
+	ListSHExtensionSet *extensionsRegistered, SHExtensionSet extensions, const Allocator *alloc, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
-	if(ListU32_contains(*extensionsRegistered, extensions, 0, NULL))
+	if(ListSHExtensionSet_contains(*extensionsRegistered, extensions, 0, NULL))
 		retError(clean, Error_alreadyDefined(0, "Compiler_registerExtensions() extensions already defined"));
 
-	gotoIfError3(clean, ListU32_pushBack(extensionsRegistered, extensions, alloc, e_rr));
+	gotoIfError3(clean, ListSHExtensionSet_pushBack(extensionsRegistered, extensions, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -962,7 +1009,7 @@ Bool Compiler_parseExtensionAnnot(SHEntryRuntime &entry, const C8 *&str, const A
 
 	const C8 *annotStart = NULL;
 	const C8 *annotEnd = NULL;
-	U32 extensions = 0;
+	SHExtensionSet extensions = SHExtensionSet{};
 
 	//oxc::extension ( "16BitTypes", "I64" )
 	//              ^^

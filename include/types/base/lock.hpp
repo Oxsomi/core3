@@ -24,7 +24,7 @@
 
 //Pre-include system headers used by the C headers below at global scope;
 //they must not be pulled in for the first time inside a namespace.
-//On Windows atomic.h includes <intrin0.h>, which intrin.h also includes.
+//Under MSVC and clang-cl the C headers take their intrinsics from <intrin0.h>, which intrin.h also includes.
 //Were intrin0.h first seen inside oxc::c, its guard would hide those declarations from the global scope,
 // and the next intrin.h user there (the UCRT's wchar.h inlines wmemchr with them) fails to compile.
 
@@ -34,7 +34,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef _MSC_VER
+#ifdef __APPLE__
+	#include <TargetConditionals.h>            //platform_types.h reaches for this on apple
+#endif
+
+//platform_types.h is what decides _COMPILER,
+// so pull it into oxc::c first, its *types* belong there like every other C header's.
+//The macros it defines are global regardless (macros don't see namespaces),
+// which is what lets the intrinsic header be picked below, at the global scope intrinsics require.
+
+namespace oxc { namespace c {
+	#include "types/base/platform_types.h"
+} }
+
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
 	#include <intrin0.h>
 #endif
 
@@ -88,9 +101,12 @@ namespace oxc {
 			return SpinLock_isLockedForThread(lock);
 		}
 
+		//The source gives up what it held without unlocking it: the lock stays acquired, now owned here.
+
 		inline AcquiredLock(AcquiredLock &&other) noexcept :
 			lock(other.lock), acq(other.acq) {
-			other.release();
+			other.lock = nullptr;
+			other.acq = c::ELockAcquire_Invalid;
 		}
 
 		inline AcquiredLock &operator=(AcquiredLock &&other) noexcept {

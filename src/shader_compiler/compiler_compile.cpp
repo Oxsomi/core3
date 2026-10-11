@@ -175,6 +175,12 @@ Bool Compiler_compile(
 			if(settings->debug)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-debug=vulkan-with-source", alloc, e_rr));
 
+			//An experiment's instructions are unknown to SPIRV-Tools by design, so its module is not validated:
+			// a NonSemantic instruction whose result is used is exactly what the validator refuses.
+
+			if(toCompile->extensions & ESHExtension_UnsafeExperimentExecution)
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Vd", alloc, e_rr));
+
 			ESHExtension vk13 = (ESHExtension) (
 				ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
 			);
@@ -209,11 +215,18 @@ Bool Compiler_compile(
 			if(CharString_length(toCompile->entrypoint))
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr));
 
-			gotoIfError3(clean, Compiler_registerArgCStr(
-				&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
-			));
+			//The SPIR-V extensions DXC may use on its own, an allow list. A binary that uses unrecognized extensions gets
+			// none listed, which DXC takes as every extension it knows.
+
+			const Bool listExtensions = !(toCompile->extensions & ESHExtension_UnsafeExtensionExecution);
+
+			if(listExtensions)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
+				));
 
 			if(
+				listExtensions &&
 				toCompile->stageType >= EGfxPipelineStage_RtStartExt &&
 				toCompile->stageType <= EGfxPipelineStage_RtEndExt
 			)
@@ -222,29 +235,31 @@ Bool Compiler_compile(
 				));
 
 			if(
-				toCompile->stageType == EGfxPipelineStage_MeshExt ||
-				toCompile->stageType == EGfxPipelineStage_TaskExt
+				listExtensions && (
+					toCompile->stageType == EGfxPipelineStage_MeshExt ||
+					toCompile->stageType == EGfxPipelineStage_TaskExt
+				)
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_mesh_shader", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_ComputeDeriv)
+			if(listExtensions && (toCompile->extensions & ESHExtension_ComputeDeriv))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_compute_shader_derivatives", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_16BitTypes)
+			if(listExtensions && (toCompile->extensions & ESHExtension_16BitTypes))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_16bit_storage", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_Multiview)
+			if(listExtensions && (toCompile->extensions & ESHExtension_Multiview))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_RayQuery)
+			if(listExtensions && (toCompile->extensions & ESHExtension_RayQuery))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
 				));
@@ -252,7 +267,7 @@ Bool Compiler_compile(
 			//SV_Barycentrics is a semantic DXC lowers natively (no inline [[vk::ext_*]] declares the extension for us
 			// like the RT hlsli helpers do), so the allow list must admit it.
 
-			if(toCompile->extensions & ESHExtension_Barycentrics)
+			if(listExtensions && (toCompile->extensions & ESHExtension_Barycentrics))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_fragment_shader_barycentric", alloc, e_rr
 				));
@@ -266,15 +281,17 @@ Bool Compiler_compile(
 
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-use-descriptor-heap", alloc, e_rr));
 
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_heap", alloc, e_rr
-				));
+				if(listExtensions)
+					gotoIfError3(clean, Compiler_registerArgCStr(
+						&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_heap", alloc, e_rr
+					));
 
 				//The heap lowering accesses the heaps through OpUntypedAccessChainKHR
 
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_KHR_untyped_pointers", alloc, e_rr
-				));
+				if(listExtensions)
+					gotoIfError3(clean, Compiler_registerArgCStr(
+						&stringsUTF8, "-fspv-extension=SPV_KHR_untyped_pointers", alloc, e_rr
+					));
 			}
 
 			//NOTE: F32/F64 atomics have no native HLSL intrinsic and are expressed via inline SPIR-V
@@ -446,6 +463,13 @@ Bool Compiler_compile(
 		for(U32 i = 0; i < lastExtension; ++i)
 			if ((toCompile->extensions >> i) & 1) {
 				gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
+				tempStr = CharString_createNull();
+			}
+
+		for(U32 i = 0; i < ESHExtension2_Count; ++i)
+			if ((toCompile->extensions2 >> i) & 1) {
+				gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D__OXC_EXT_%s", ESHExtension2_defines[i]));
 				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 				tempStr = CharString_createNull();
 			}

@@ -434,8 +434,8 @@ Bool MeshPositions_finish(MeshPositions *p, MeshInfo *info, Error *e_rr) {
 	const F32x4 mi = p->count ? p->aabbMin : F32x4_zero();
 	const F32x4 ma = p->count ? p->aabbMax : F32x4_zero();
 
-	F32x4_store3(info->aabbMin, mi);
-	F32x4_store3(info->aabbMax, ma);
+	info->aabbMin = mi;
+	info->aabbMax = ma;
 
 	if(!p->hold)
 		goto clean;

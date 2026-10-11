@@ -37,7 +37,7 @@ static Bool CLI_logCpus(const C8 *name, ListU32 cpus, Error *e_rr) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = Platform_instance->alloc;
-	CharString line = CharString_createNull(), part = CharString_createNull();
+	CharString line = CharString_createNull();
 
 	if(!cpus.length)
 		goto clean;
@@ -49,13 +49,11 @@ static Bool CLI_logCpus(const C8 *name, ListU32 cpus, Error *e_rr) {
 		while(last + 1 < cpus.length && cpus.ptr[last + 1] == cpus.ptr[last] + 1)
 			++last;
 
-		CharString_free(&part, alloc);
-		gotoIfError3(clean, CharString_format(
-			alloc, &part, e_rr, i == last ? "%s%"PRIu32 : "%s%"PRIu32"-%"PRIu32,
+		gotoIfError3(clean, CharString_appendFormat(
+			alloc, &line, e_rr, i == last ? "%s%"PRIu32 : "%s%"PRIu32"-%"PRIu32,
 			i ? ", " : "", cpus.ptr[i], cpus.ptr[last]
 		));
 
-		gotoIfError3(clean, CharString_appendString(&line, &part, alloc, e_rr));
 		i = last + 1;
 	}
 
@@ -65,7 +63,6 @@ static Bool CLI_logCpus(const C8 *name, ListU32 cpus, Error *e_rr) {
 	);
 
 clean:
-	CharString_free(&part, alloc);
 	CharString_free(&line, alloc);
 	return s_uccess;
 }

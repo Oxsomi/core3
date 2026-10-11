@@ -31,6 +31,7 @@
 
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
+TListImpl(SHExtensionSet);
 
 const C8 *EGfxBinaryType_names[EGfxBinaryType_Count] = {
 	"SPV",
@@ -65,7 +66,14 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"COOPVECTRAINING",
 	"DESCRIPTORHEAP",
 	"SUBGROUPQUAD",
-	"DYNAMICSAMPLERS"          //resources.hlsli declares _samplers[] behind __OXC_EXT_DYNAMICSAMPLERS
+	"DYNAMICSAMPLERS",         //resources.hlsli declares _samplers[] behind __OXC_EXT_DYNAMICSAMPLERS
+	"UNSAFEEXPERIMENTEXECUTION",
+	"UNSAFEEXTENSIONEXECUTION"
+};
+
+const C8 *ESHExtension2_defines[ESHExtension2_Count] = {
+	"EXPERIMENTTIER1",
+	"EXPERIMENTTIER2"
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -96,8 +104,32 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"CoopVecTraining",
 	"DescriptorHeap",
 	"SubgroupQuad",
-	"DynamicSamplers"
+	"DynamicSamplers",
+	"UnsafeExperimentExecution",
+	"UnsafeExtensionExecution"
 };
+
+const C8 *ESHExtension2_names[ESHExtension2_Count] = {
+	"ExperimentTier1",
+	"ExperimentTier2"
+};
+
+void SHExtensionSet_logNames(SHExtensionSet set, const Allocator *alloc) {
+
+	Bool prev = false;
+
+	for(U64 j = 0; j < ESHExtension_Count; ++j)
+		if((set.extensions >> j) & 1) {
+			Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
+			prev = true;
+		}
+
+	for(U64 j = 0; j < ESHExtension2_Count; ++j)
+		if((set.extensions2 >> j) & 1) {
+			Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension2_names[j]);
+			prev = true;
+		}
+}
 
 const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
 	"NV",
@@ -151,6 +183,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 	if(binaries->identifier.extensions >> ESHExtension_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.extensions out of bounds"));
+
+	if(binaries->identifier.extensions2 >> ESHExtension2_Count)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.extensions2 out of bounds"));
 
 	if(binaries->identifier.stageType >= EGfxPipelineStage_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.stageType out of bounds"));
@@ -454,6 +489,8 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 		Buffer_createRefConst(&binaries->identifier.extensions, sizeof(U64))
 	);
 
+	info.identifier.extensions2 = binaries->identifier.extensions2;
+
 	//Copy buffers
 
 	for(U8 i = 0; i < EGfxBinaryType_Count; ++i) {
@@ -574,6 +611,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 	info.vendorMask = binaries->vendorMask;
 	info.hasShaderAnnotation = binaries->hasShaderAnnotation;
 	info.dormantExtensions = binaries->dormantExtensions;
+	info.dormantExtensions2 = binaries->dormantExtensions2;
 
 	gotoIfError3(clean, ListSHBinaryInfo_pushBack(&shFile->binaries, info, alloc, e_rr));
 	*binaries = info = (SHBinaryInfo) { 0 };
@@ -611,6 +649,7 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 
 	if(
 		extensionsA != extensionsB ||
+		a->extensions2 != b->extensions2 ||
 		a->shaderVersion != b->shaderVersion ||
 		a->defines.length != b->defines.length ||
 		a->uniforms.length != b->uniforms.length ||
@@ -668,6 +707,7 @@ Bool SHBinaryInfo_equalsExact(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 	if (
 		a->registers.length != b->registers.length ||
 		a->dormantExtensions != b->dormantExtensions ||
+		a->dormantExtensions2 != b->dormantExtensions2 ||
 		a->vendorMask != b->vendorMask ||
 		a->hasShaderAnnotation != b->hasShaderAnnotation
 	)
@@ -703,46 +743,35 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 	if (isVerbose || (shaderVersion != OISH_SHADER_MODEL_MIN))
 		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 
-	ESHExtension activeExt = (binary->identifier.extensions &~ binary->dormantExtensions) & ESHExtension_All;
-	ESHExtension exts = binary->identifier.extensions;
+	const SHExtensionSet exts = (SHExtensionSet) {
+		.extensions = binary->identifier.extensions,
+		.extensions2 = binary->identifier.extensions2
+	};
 
-	if (!exts) {
+	const SHExtensionSet activeExt = (SHExtensionSet) {
+		.extensions = (binary->identifier.extensions &~ binary->dormantExtensions) & ESHExtension_All,
+		.extensions2 = (binary->identifier.extensions2 &~ binary->dormantExtensions2) & ESHExtension2_All
+	};
+
+	if (!exts.extensions && !exts.extensions2) {
 		if(isVerbose)
 			Log_debugLn(alloc, "\t[[oxc::extension()]]");
 	}
 
 	else {
-
 		Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
-
-		Bool prev = false;
-
-		for(U64 j = 0; j < ESHExtension_Count; ++j)
-			if((exts >> j) & 1) {
-				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
-				prev = true;
-			}
-
+		SHExtensionSet_logNames(exts, alloc);
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
-	if (!activeExt) {
+	if (!activeExt.extensions && !activeExt.extensions2) {
 		if(isVerbose)
 			Log_debugLn(alloc, "\t[[oxc::active_extension()]]");
 	}
 
 	else {
-
 		Log_debug(alloc, ELogOptions_None, "\t//[[oxc::active_extension(");
-
-		Bool prev = false;
-
-		for(U64 j = 0; j < ESHExtension_Count; ++j)
-			if((activeExt >> j) & 1) {
-				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
-				prev = true;
-			}
-
+		SHExtensionSet_logNames(activeExt, alloc);
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 

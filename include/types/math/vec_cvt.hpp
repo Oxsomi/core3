@@ -51,6 +51,10 @@ namespace oxc { namespace c {
 	#include <arm_neon.h>
 #endif
 
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#include <intrin0.h>        //See lock.hpp
+#endif
+
 #include "types/math/vec4f.hpp"
 #include "types/math/vec4i.hpp"
 

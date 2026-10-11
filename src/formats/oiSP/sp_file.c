@@ -1533,7 +1533,6 @@ clean:
 Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, CharString *result, Error *e_rr) {
 
 	Bool s_uccess = true;
-	CharString line = CharString_createNull();
 
 	if(!spFile || !result)
 		retError(clean, Error_nullPointer(0, "SPFile_print()::spFile and result are required"));
@@ -1546,14 +1545,11 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 
 	const SPPipelineBase base = spFile->pipelines.ptr[pipelineId];
 
-	gotoIfError3(clean, CharString_format(
-		alloc, &line, e_rr, "; Pipeline state (%s), %"PRIu32" stage(s), %"PRIu64" assumed field(s)\n",
+	gotoIfError3(clean, CharString_appendFormat(
+		alloc, result, e_rr, "; Pipeline state (%s), %"PRIu32" stage(s), %"PRIu64" assumed field(s)\n",
 		base.type < ESPPipelineType_Count ? typeNames[base.type] : "<unknown>",
 		(U32) base.stageCount, SPFile_assumedCount(spFile, pipelineId)
 	));
-
-	gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-	CharString_free(&line, alloc);
 
 	if (base.flags & ESPPipelineFlag_GeneratedVertexStage) {
 
@@ -1595,19 +1591,16 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 		const C8 *source = spec.source < ESPFieldSource_Count ? sourceNames[spec.source] : "<unknown>";
 
 		if (ESPField_isIndexed((ESPField) spec.field)) {
-			gotoIfError3(clean, CharString_format(
-				alloc, &line, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (%s; %s)\n",
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, result, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (%s; %s)\n",
 				name, (U32) spec.index, spec.value, source, ESPField_domain((ESPField) spec.field)
 			));
 		}
 
-		else gotoIfError3(clean, CharString_format(
-			alloc, &line, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
+		else gotoIfError3(clean, CharString_appendFormat(
+			alloc, result, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
 			name, spec.value, source, ESPField_domain((ESPField) spec.field)
 		));
-
-		gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-		CharString_free(&line, alloc);
 	}
 
 	//The layout the pipeline was built against, one settable path per row so overriding needs no other syntax.
@@ -1635,13 +1628,10 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 
 				const CharString rowName = layout->names.entryStrings.ptr[rowNameId];
 
-				gotoIfError3(clean, CharString_format(
-					alloc, &line, e_rr, ";   layout.binding[%"PRIu32"] '%.*s'\n",
+				gotoIfError3(clean, CharString_appendFormat(
+					alloc, result, e_rr, ";   layout.binding[%"PRIu32"] '%.*s'\n",
 					i, (int) CharString_length(rowName), rowName.ptr
 				));
-
-				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-				CharString_free(&line, alloc);
 			}
 
 			const GfxBinding spvPair = row.bindings.arr[EGfxBinaryType_SPIRV];
@@ -1654,13 +1644,10 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 
 			for (U8 j = 0; j < 8; ++j) {
 
-				gotoIfError3(clean, CharString_format(
-					alloc, &line, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (%s; %s)\n",
+				gotoIfError3(clean, CharString_appendFormat(
+					alloc, result, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (%s; %s)\n",
 					ESPField_name(bindingFields[j]), i, values[j], source, ESPField_domain(bindingFields[j])
 				));
-
-				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-				CharString_free(&line, alloc);
 			}
 		}
 
@@ -1682,13 +1669,10 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 
 			for (U8 j = 0; j < 8; ++j) {
 
-				gotoIfError3(clean, CharString_format(
-					alloc, &line, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (supplied; %s)\n",
+				gotoIfError3(clean, CharString_appendFormat(
+					alloc, result, e_rr, ";   %s[%"PRIu32"] = %"PRIu32" (supplied; %s)\n",
 					ESPField_name(samplerFields[j]), i, values[j], ESPField_domain(samplerFields[j])
 				));
-
-				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-				CharString_free(&line, alloc);
 			}
 
 			const F16 lods[3] = { smp.mipBias, smp.minLod, smp.maxLod };
@@ -1697,13 +1681,10 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 
 				const F32 lod = F32_fromU32Bits((U32) EFloatType_convert(EFloatType_F16, lods[j], EFloatType_F32));
 
-				gotoIfError3(clean, CharString_format(
-					alloc, &line, e_rr, ";   %s[%"PRIu32"] = %f (supplied; %s)\n",
+				gotoIfError3(clean, CharString_appendFormat(
+					alloc, result, e_rr, ";   %s[%"PRIu32"] = %f (supplied; %s)\n",
 					ESPField_name(samplerFields[8 + j]), i, lod, ESPField_domain(samplerFields[8 + j])
 				));
-
-				gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-				CharString_free(&line, alloc);
 			}
 		}
 
@@ -1713,23 +1694,17 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 			const EPLSource pcSource = PLDescriptorBinding_source(pc);
 			const C8 *source = pcSource < EPLSource_Count ? sourceNames[pcSource] : "<unknown>";
 
-			gotoIfError3(clean, CharString_format(
-				alloc, &line, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, result, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
 				ESPField_name(ESPField_LayoutPushConstantSize), pc.strideOrLength, source,
 				ESPField_domain(ESPField_LayoutPushConstantSize)
 			));
 
-			gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-			CharString_free(&line, alloc);
-
-			gotoIfError3(clean, CharString_format(
-				alloc, &line, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, result, e_rr, ";   %s = %"PRIu32" (%s; %s)\n",
 				ESPField_name(ESPField_LayoutPushConstantVisibility), pc.visibility, source,
 				ESPField_domain(ESPField_LayoutPushConstantVisibility)
 			));
-
-			gotoIfError3(clean, CharString_appendString(result, &line, alloc, e_rr));
-			CharString_free(&line, alloc);
 		}
 	}
 
@@ -1740,7 +1715,6 @@ Bool SPFile_print(const SPFile *spFile, U32 pipelineId, const Allocator *alloc, 
 	}
 
 clean:
-	CharString_free(&line, alloc);
 	return s_uccess;
 }
 

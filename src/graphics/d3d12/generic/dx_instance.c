@@ -51,7 +51,7 @@
 #include <dxgi1_6.h>
 #include <d3d11.h>            //AMD AGS needs it...
 
-#if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64    //TODO: Enable for arm later
+#ifdef _HAS_NV_API
 	#include <nvapi.h>
 	#define USE_NVAPI
 #endif

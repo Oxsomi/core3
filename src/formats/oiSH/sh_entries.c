@@ -420,7 +420,7 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	ESHExtension used = ESHExtension_None;
 
 	for (U64 i = 0; i < runtime->extensions.length; ++i)
-		used = (ESHExtension)(used | runtime->extensions.ptr[i]);
+		used = (ESHExtension)(used | runtime->extensions.ptr[i].extensions);
 
 	if (used & ESHExtension_NoDxilCompile)
 		mask &= (U8)(1 << EGfxBinaryType_SPIRV);
@@ -519,8 +519,8 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	// dedupes, so the combination space stays DENSE: every combination still resolves to a binary, which is
 	// what entry->binaryIds and Compiler_registerShaderEntries require.
 
-	const ESHExtension extensionSet =
-		(ESHExtension)(runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0);
+	const SHExtensionSet extensionSet =
+		runtime->extensions.length ? runtime->extensions.ptr[extensionId] : (SHExtensionSet) { 0 };
 
 	const U16 declaredVersion =
 		runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL_MIN;
@@ -530,9 +530,10 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 		.entrypoint =
 			runtime->isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime->entry.name),
 
-		.extensions = extensionSet,
-		.shaderVersion = U16_max(declaredVersion, ESHExtension_minShaderModel(extensionSet)),
-		.stageType = runtime->isShaderAnnotation ? EGfxPipelineStage_Count : runtime->entry.stage    //Turn into lib if possible
+		.extensions = extensionSet.extensions,
+		.shaderVersion = U16_max(declaredVersion, ESHExtension_minShaderModel(extensionSet.extensions)),
+		.stageType = runtime->isShaderAnnotation ? EGfxPipelineStage_Count : runtime->entry.stage,  //Into a lib if possible
+		.extensions2 = extensionSet.extensions2
 	};
 
 	//Only combine raytracing shaders, since they don't have different configs
@@ -595,6 +596,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 
 	binaryInfo->identifier = *identifier;
 	binaryInfo->dormantExtensions = dormantExtensions;
+	binaryInfo->dormantExtensions2 = ESHExtension2_None;        //Nothing in it is reflected, so nothing is demoted
 	binaryInfo->vendorMask = runtime->vendorMask;
 	binaryInfo->hasShaderAnnotation = runtime->isShaderAnnotation;
 	binaryInfo->binaries[binaryType] = Buffer_createRefFromBuffer(buf, true);
@@ -762,26 +764,9 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 	}
 
 	for (U64 i = 0; i < entry->extensions.length; ++i) {
-
-		ESHExtension exts = entry->extensions.ptr[i];
-
-		if(!exts)
-			Log_debugLn(alloc, "\t[[oxc::extension()]]");
-		
-		else {
-
-			Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
-
-			Bool prev = false;
-
-			for(U64 j = 0; j < ESHExtension_Count; ++j)
-				if((exts >> j) & 1) {
-					Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
-					prev = true;
-				}
-
-			Log_debug(alloc, ELogOptions_NewLine, ")]]");
-		}
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
+		SHExtensionSet_logNames(entry->extensions.ptr[i], alloc);
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
 	for (U64 i = 0, k = 0; i < entry->definesPerCompilation.length; ++i) {
@@ -906,7 +891,7 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, const Allocator *alloc) {
 
 	SHEntry_free(&entry->entry, alloc);
 	ListU16_free(&entry->shaderVersions, alloc);
-	ListU32_free(&entry->extensions, alloc);
+	ListSHExtensionSet_free(&entry->extensions, alloc);
 
 	ListU8_free(&entry->definesPerCompilation, alloc);
 	ListCharString_freeUnderlying(&entry->defineNameValues, alloc);

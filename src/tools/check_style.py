@@ -63,7 +63,7 @@
 #        Use Time_now() / Time_elapsed()
 #   B14. system()  (always banned)
 #   B15. rand() / srand()  (always banned)
-#        Use Random_seed / Random_sample
+#        Use Random_seed / Random_nextFloat / Random_nextInt
 #
 # Informational (no error, printed at end):
 #   T.  TODO/FIXME/HACK/NOTE/XXX list with file + line
@@ -292,7 +292,7 @@ BANNED_SYMBOLS: list[dict] = [
     # B15, rand / srand
     {
         "pattern": re.compile(r'\b(rand|srand)\s*\('),
-        "message": "'{}()', use Random_seed / Random_sample",
+        "message": "'{}()', use Random_seed / Random_nextFloat / Random_nextInt",
         "allow_paths": (),
     },
 ]

@@ -153,6 +153,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(cap.features2 & EGraphicsFeatures2_WriteBufferImmediate)
 			Log_debugLnx("\t\tWrite buffer immediate");
 
+		if(cap.features2 & EGraphicsFeatures2_ExperimentTier1)
+			Log_debugLnx("\t\tExperiment tier 1 (claimed by the driver, meaning undefined by OxC3)");
+
+		if(cap.features2 & EGraphicsFeatures2_ExperimentTier2)
+			Log_debugLnx("\t\tExperiment tier 2 (claimed by the driver, meaning undefined by OxC3)");
+
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 
