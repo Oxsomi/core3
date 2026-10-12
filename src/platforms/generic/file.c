@@ -656,8 +656,8 @@ Bool FileHandleRef_read(const FileHandleRef *handleRef, U64 off, U64 len, Buffer
 
 	U64 size = !len ? fileSize - off : len;
 
-	if(off + size > fileSize)
-		retError(clean, Error_outOfBounds(2, off + size, fileSize, "FileHandleRef_read() offset + length out of bounds"));
+	if(size > fileSize - off)
+		retError(clean, Error_outOfBounds(2, size, fileSize - off, "FileHandleRef_read() offset + length out of bounds"));
 
 	if(size > Buffer_length(*output))
 		retError(clean, Error_outOfBounds(3, size, Buffer_length(*output), "FileHandleRef_read() size exceeds output buffer"));

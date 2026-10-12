@@ -2085,11 +2085,8 @@ namespace oxc {
 				return true;
 			}
 
-			//Whether a shader binary can run here at all:
-			// features, data types, shader model, vendor,
-			// and for binaries oiSH marks as bindless whether their registers match the device's bindless layout (see
-			// GraphicsDeviceRef_checkShaderFeatures). getFirstShaderEntry applies the same test per entry;
-			// call this directly to learn WHY a binary was refused.
+			//Whether a shader binary can run here at all, by the rules GraphicsDeviceRef_checkShaderFeatures states.
+			//getFirstShaderEntry applies the same test per entry; call this directly to learn WHY a binary was refused.
 
 			[[nodiscard]] c::Bool checkShaderFeatures(
 				const c::SHBinaryInfo &binary, const c::SHEntry &entry, c::Error *e_rr = nullptr

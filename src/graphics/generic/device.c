@@ -1573,6 +1573,32 @@ clean:
 	return s_uccess;
 }
 
+U8 GraphicsDeviceCapabilities_pickWaveSize(const GraphicsDeviceCapabilities *caps, U16 waveSize, U8 defaultLanes) {
+
+	if(!caps || !waveSize || !SHEntry_isValidWaveSize(waveSize))
+		return 0;
+
+	const U8 required = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Required);
+
+	if(required)
+		return required >= caps->waveSizeMin && required <= caps->waveSizeMax ? required : 0;
+
+	const U8 low = U8_max(SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Min), caps->waveSizeMin);
+	const U8 high = U8_min(SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Max), caps->waveSizeMax);
+
+	if(low > high)
+		return 0;
+
+	const U8 preferred = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Preferred);
+
+	if(preferred >= low && preferred <= high)
+		return preferred;
+
+	//Every bound is a power of two, so the clamp is one too.
+
+	return U8_clamp(defaultLanes, low, high);
+}
+
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *deviceRef, const SHBinaryInfo *bin, const SHEntry *entry, Error *e_rr
 ) {
@@ -1735,6 +1761,16 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	else if(!Buffer_length(bin->binaries[EGfxBinaryType_SPIRV]))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"));
+
+	//A wave size outside the device's range is refused here rather than by the pipeline, as D3D12 would refuse it.
+	//It counts for an unsafe experiment too, since it is no feature the author could vouch for.
+
+	if(entry->waveSize && !GraphicsDeviceCapabilities_pickWaveSize(&device->info.capabilities, entry->waveSize, 0))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() entry's WaveSize names no wave size the device runs "
+			"(GraphicsDeviceCapabilities::waveSizeMin to waveSizeMax)"
+		));
 
 	//A sampler ARRAY only resolves against the bindless _samplers[] binding, which the device only declares
 	// when it was created with EnableDynamicSamplers.

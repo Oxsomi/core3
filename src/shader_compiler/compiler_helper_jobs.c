@@ -389,12 +389,16 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
-	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)       //Link runtime entry to binary
+	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l) {       //Link runtime entry to binary
+
+		const U16 combination = linkEntry.combinationIds.length ? linkEntry.combinationIds.ptr[l] : linkEntry.combinationId;
+
 		gotoIfError3(clean, ListU64_pushBack(
 			&file->binaryIndices,
-			Compiler_binaryIndex(linkEntry.runtimeEntries.ptr[l], linkEntry.combinationId, binaryId),
+			Compiler_binaryIndex(linkEntry.runtimeEntries.ptr[l], combination, binaryId),
 			alloc, e_rr
 		));
+	}
 
 	SpinLock_unlock(&file->lock);
 	locked = false;

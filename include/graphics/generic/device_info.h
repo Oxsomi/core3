@@ -175,7 +175,12 @@ typedef enum EVkGraphicsFeatures {
 	//VK_EXT_pageable_device_local_memory: device local memory pages out to host memory under pressure instead of
 	// failing, as every D3D12 heap does, in the order the blocks' priorities give.
 
-	EVkGraphicsFeatures_PageableMemory           = 1 << 11
+	EVkGraphicsFeatures_PageableMemory           = 1 << 11,
+
+	//VK_EXT_subgroup_size_control with compute among its stages: a compute pipeline asks for the subgroup size its
+	// entry's [WaveSize] names, so the range in GraphicsDeviceCapabilities is the device's whole range.
+
+	EVkGraphicsFeatures_SubgroupSizeControl      = 1 << 12
 
 } EVkGraphicsFeatures;
 
@@ -446,7 +451,12 @@ typedef struct GraphicsDeviceCapabilities {
 	U32 featuresExt;                //Extended device features, API dependent
 	
 	F32 timestampPeriod;            //Nanoseconds per GPU timestamp tick under EGraphicsFeatures2_Timestamps, else 0
-	U32 padding;
+
+	//The wave sizes a compute shader's [WaveSize] can name, in lanes: every power of two from min to max.
+	//On Vulkan without EVkGraphicsFeatures_SubgroupSizeControl both are the device's one subgroup size.
+
+	U8 waveSizeMin, waveSizeMax;
+	U16 padding;
 
 	U64 dedicatedMemory;            //Memory accessible directly to the device
 	U64 sharedMemory;               //Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)

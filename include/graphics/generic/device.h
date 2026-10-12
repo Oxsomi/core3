@@ -470,14 +470,27 @@ Bool GraphicsDeviceRef_create(
 );
 
 //Checks whether a shader binary can run on this device at all.
-//Besides features, data types, shader model and vendor, this also refuses a binary whose bindless registers don't
-// match the device's bindless layout, since the descriptor handles it indexes with would resolve to the wrong arrays.
-//Only binaries the oiSH marks as needing bindless are held to that, so a bindful shader with a pipeline layout of
-// its own is unaffected; the mismatch itself is logged with the register and what the layout has instead.
+//Its shader model and vendor are checked, and the extensions it uses against the device's features and data types.
+//A dormant extension, declared but unused, is not held against the device.
+//The unsafe markers and experiment tiers count as declared, dormant or not.
+//An unsafe marker needs the device flag allowing it, and an unsafe experiment skips the feature and data type checks.
+//A declared tier needs the driver to claim it, an unsafe experiment's included.
+//A sampler array needs the device's bindless layout to have _samplers[] (EGraphicsDeviceFlags_EnableDynamicSamplers).
+//A binary the oiSH marks as needing bindless has to match the device's bindless layout, since the descriptor handles
+// it indexes with would resolve to the wrong arrays; the mismatch is logged with the register and what the layout has
+// instead.
+//An entry's [WaveSize] has to name a size the device runs (GraphicsDeviceCapabilities_pickWaveSize).
 
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *device, const SHBinaryInfo *info, const SHEntry *entry, Error *e_rr
 );
+
+//The lanes a compute entry with this SHEntry::waveSize runs at on a device with these capabilities: the required size,
+// else the preferred one, else the size of the range nearest defaultLanes.
+//0 when the entry names no size, or none it names is in the device's range (waveSizeMin to waveSizeMax).
+//D3D12 leaves a ranged entry's choice to its driver, so only Vulkan takes the answer; both refuse an entry it is 0 for.
+
+U8 GraphicsDeviceCapabilities_pickWaveSize(const GraphicsDeviceCapabilities *caps, U16 waveSize, U8 defaultLanes);
 
 //Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);

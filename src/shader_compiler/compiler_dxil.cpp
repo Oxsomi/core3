@@ -170,6 +170,10 @@ clean:
 	return s_uccess;
 }
 
+//DXIL reflects [WaveSize(N)] as a minimum of N without a maximum, and the ranged form (SM6.8) as its minimum, maximum
+// and optional preferred size.
+//The entry keeps the codes, not the lane counts: the first form as its required size, the second as the other three.
+
 static inline Bool Compiler_convertWaveSize(
 	U32 waveSizeRecommended,
 	U32 waveSizeMin,
@@ -181,33 +185,22 @@ static inline Bool Compiler_convertWaveSize(
 	Bool s_uccess = true;
 	U8 recommend = 0, waveMin = 0, waveMax = 0;
 
-	U32 waveSizeRecommendedTmp = waveSizeRecommended;
-	U32 waveSizeMinTmp = waveSizeMin;
-	U32 waveSizeMaxTmp = waveSizeMax;
+	const U32 sizes[3] = { waveSizeRecommended, waveSizeMin, waveSizeMax };
 
-	if(!waveSizeMaxTmp)
-		waveSizeMaxTmp = 128;
-
-	if(!waveSizeMinTmp)
-		waveSizeMinTmp = 4;
-
-	if(!waveSizeRecommendedTmp)
-		waveSizeRecommendedTmp = (waveSizeMinTmp + waveSizeMaxTmp) / 2;        //Not base2, but don't care
-
-	if(
-		U32_min(waveSizeMinTmp, U32_min(waveSizeMaxTmp, waveSizeRecommendedTmp)) < 4 ||
-		U32_max(waveSizeMinTmp, U32_max(waveSizeMaxTmp, waveSizeRecommendedTmp)) > 128
-	)
-		retError(clean, Error_invalidState(0, "Compiler_convertWaveSize() couldn't get groupSize; out of bounds"));
+	for(U8 i = 0; i < 3; ++i)
+		if(sizes[i] && (sizes[i] < 4 || sizes[i] > 128))
+			retError(clean, Error_outOfBounds(
+				i, sizes[i], 128, "Compiler_convertWaveSize() a wave size is outside 4 to 128 lanes"
+			));
 
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeRecommended, &recommend, e_rr));
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMin, &waveMin, e_rr));
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMax, &waveMax, e_rr));
 
-	if(waveSizeMin || waveSizeMax)
-		*waveSizes = ((U16)waveSizeMin << 4) | ((U16)waveSizeMax << 8) | ((U16)recommend << 12);
+	if(waveMax)
+		*waveSizes = (U16)(((U16)waveMin << 4) | ((U16)waveMax << 8) | ((U16)recommend << 12));
 
-	else *waveSizes = recommend;
+	else *waveSizes = waveMin;
 
 clean:
 	return s_uccess;

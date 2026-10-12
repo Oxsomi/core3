@@ -27,6 +27,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <assert.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
 #include "types/base/bool_arg.hpp"
 
 namespace oxc {

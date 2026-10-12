@@ -34,10 +34,6 @@ static const F32 F32_radToDeg = 180 / F32_pi;
 template<typename T>
 T pow2(T v) { return v * v; }
 
-//Barycentric interpolation of a per vertex attribute. bc is the pair a hit reports, DXR's hit attributes and a ray
-// query's CommittedTriangleBarycentrics alike: the weights of the second and third vertex, the first's implied as
-// 1 - u - v. Passing a triple around instead is how the two stop agreeing.
-
 //1 / v kept finite: v clamped away from zero to a magnitude of at least 1e-5, keeping its own sign bit, so an exactly
 // zero component (a ray along an axis has two) gives a large reciprocal of its sign instead of an infinity, and a slab
 // test over it never computes inf - inf. sign(v) is 0 for a zero, which is what this exists to avoid.
@@ -48,6 +44,10 @@ template<typename T>
 T rcpSafe(T v) {
 	return 1 / asfloat(asuint(max(abs(v), 1e-5f)) | (asuint(v) & 0x80000000u));
 }
+
+//Barycentric interpolation of a per vertex attribute. bc is the pair a hit reports, DXR's hit attributes and a ray
+// query's CommittedTriangleBarycentrics alike: the weights of the second and third vertex, the first's implied as
+// 1 - u - v. Passing a triple around instead is how the two stop agreeing.
 
 template<typename T>
 T interpolateBary(T a0, T a1, T a2, F32x2 bc) {

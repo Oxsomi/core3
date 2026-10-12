@@ -796,6 +796,72 @@ clean:
 	return s_uccess;
 }
 
+//[WaveSize(N)], [WaveSize(min, max)] or [WaveSize(min, max, preferred)] as the reflector spells the attribute, into
+// SHEntry::waveSize's codes. The parse is the one place every binary type sees it: SPIR-V can't carry a wave size.
+
+Bool Compiler_parseWaveSizeAnnot(SHEntryRuntime &entry, const C8 *&str, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U8 codes[3] = { 0 };
+	U8 count = 0;
+
+	if (entry.entry.waveSize)
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_parseWaveSizeAnnot() entry already had a WaveSize"));
+
+	//WaveSize ( 16 , 64 , 32 )
+	//        ^^^^^^^^^^^^^^^^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	for (; count < 3; ++count) {
+
+		if (count) {
+
+			if (!Compiler_skipWhitespace(str) || *str == ')')
+				break;
+
+			if (*str != ',')
+				retError(clean, Error_invalidParameter(0, 1, "Compiler_parseWaveSizeAnnot() expected , or )"));
+
+			++str;
+		}
+
+		Compiler_skipWhitespace(str);
+
+		if (!C8_isDec(*str))
+			retError(clean, Error_invalidParameter(0, 2, "Compiler_parseWaveSizeAnnot() expected a lane count"));
+
+		U32 lanes = 0;
+
+		while (C8_isDec(*str) && lanes < 1000)
+			lanes = lanes * 10 + C8_dec(*str++);
+
+		if (lanes < 4 || lanes > 128 || (lanes & (lanes - 1)))
+			retError(clean, Error_invalidParameter(
+				0, 3, "Compiler_parseWaveSizeAnnot() a wave size is a power of two from 4 to 128 lanes"
+			));
+
+		codes[count] = (U8) (U32_bitScan(lanes) + 1);
+	}
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseWaveSizeAnnot() expected end of token"));
+
+	//One size is the one the entry requires, two or three a range and the size preferred in it.
+
+	entry.entry.waveSize = count == 1 ? codes[0] : (U16) (codes[0] << 4 | codes[1] << 8 | codes[2] << 12);
+
+	if (!SHEntry_isValidWaveSize(entry.entry.waveSize))
+		retError(clean, Error_invalidParameter(
+			0, 4, "Compiler_parseWaveSizeAnnot() expected min up to max, with preferred between them"
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_parseStageAnnot(
 	SHEntryRuntime &entry, CharString functionName, const C8 *&str, const Allocator *alloc, Error *e_rr
 ) {
@@ -1415,7 +1481,7 @@ Bool Compiler_parseAnnot(
 
 	annotLen = annotEnd - str;
 
-	if (annotLen != 3 && annotLen != 6)    //Ignore non oxc and shader annots
+	if (annotLen != 3 && annotLen != 6 && annotLen != 8)    //Ignore non oxc, shader and WaveSize annots
 		goto clean;
 
 	//[shader()]
@@ -1423,6 +1489,21 @@ Bool Compiler_parseAnnot(
 
 	if (annotLen == 6) {
 		gotoIfError3(clean, Compiler_parseShaderAnnot(annot, funcName, str, annotLen, entry, alloc, e_rr));
+		goto clean;
+	}
+
+	//[WaveSize()], a builtin the reflector spells this way whatever the source's case
+	// ^
+
+	if (annotLen == 8) {
+
+		const CharString name = CharString_createRefSizedConst(str, annotLen, false);
+
+		if (annot.IsBuiltin && CharString_equalsCStringSensitive(&name, "WaveSize")) {
+			str += annotLen;
+			gotoIfError3(clean, Compiler_parseWaveSizeAnnot(entry, str, e_rr));
+		}
+
 		goto clean;
 	}
 

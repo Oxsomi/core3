@@ -27,12 +27,18 @@
 //Under MSVC and clang-cl the C headers take their intrinsics from <intrin0.h>, which intrin.h also includes.
 //Were intrin0.h first seen inside oxc::c, its guard would hide those declarations from the global scope,
 // and the next intrin.h user there (the UCRT's wchar.h inlines wmemchr with them) fails to compile.
+//<vcruntime_string.h> is the same under MSVC, for buffer_base.h's copies: string.h includes it, and would then declare
+// no memcpy at global scope. Every header here that pre-includes <stdint.h> pre-includes it too.
 
 #include <atomic>
 #include <stdalign.h>
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see above
+#endif
 
 #ifdef __APPLE__
 	#include <TargetConditionals.h>            //platform_types.h reaches for this on apple
@@ -63,6 +69,7 @@ namespace oxc {
 
 		c::SpinLock *lock;
 		c::ELockAcquire acq;
+		[[maybe_unused]] c::U32 padding = 0;
 
 		inline AcquiredLock(c::SpinLock *lock, c::ELockAcquire acq) noexcept:
 			lock(lock), acq(acq) {}

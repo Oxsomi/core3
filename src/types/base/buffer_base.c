@@ -42,34 +42,6 @@ clean:
 	return s_uccess;
 }
 
-Bool Buffer_memcpy(const Buffer dst, const Buffer src) {
-
-	if(!dst.ptr || !src.ptr)
-		return true;
-
-	if(Buffer_isConstRef(dst))
-		return false;
-
-	U64 dstLen = Buffer_length(dst);
-	U64 srcLen = Buffer_length(src);
-	memcpy(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
-	return true;
-}
-
-Bool Buffer_memmove(const Buffer dst, const Buffer src) {
-
-	if(!dst.ptr || !src.ptr)
-		return true;
-
-	if(Buffer_isConstRef(dst))
-		return false;
-
-	U64 dstLen = Buffer_length(dst);
-	U64 srcLen = Buffer_length(src);
-	memmove(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
-	return true;
-}
-
 Bool Buffer_setBit(const Buffer buf, U64 offset, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -322,22 +294,6 @@ Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 		if(end & 7)
 			dst.ptrNonConst[lastFull] &=~ (U8)((1U << (end & 7)) - 1);
 	}
-
-clean:
-	return s_uccess;
-}
-
-Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	if(!buf.ptr)
-		retError(clean, Error_nullPointer(0, "Buffer_setAllTo()::buf is required"));
-
-	if(Buffer_isConstRef(buf))
-		retError(clean, Error_constData(0, 0, "Buffer_setAllTo()::buf should be writable"));
-
-	memset(buf.ptrNonConst, b8, Buffer_length(buf));
 
 clean:
 	return s_uccess;

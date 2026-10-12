@@ -104,8 +104,10 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_AMD_buffer_marker as WriteBufferImmediate (features2).
   - VK_EXT_external_memory_host as Vk extension ExternalHostMemory.
   - VK_EXT_memory_priority (.memoryPriority) as Vk extension MemoryPriority.
+  - VK_MESA_experiment_tier1 and VK_MESA_experiment_tier2 as ExperimentTier1 and ExperimentTier2 (features2), a tier the driver claims and OxC3 gives no meaning (see graphics_api.md).
   - VK_EXT_pageable_device_local_memory (.pageableDeviceLocalMemory), with MemoryPriority, as Vk extension PageableMemory.
   - VK_EXT_device_address_binding_report (.reportAddressBinding), when the instance has a debug utils messenger, as Vk extension AddressBindingReport.
+  - VK_EXT_subgroup_size_control (.subgroupSizeControl, with compute in requiredSubgroupSizeStages) as Vk extension SubgroupSizeControl, and minSubgroupSize to maxSubgroupSize (held to 4 to 128) as waveSizeMin and waveSizeMax; without it both are subgroupSize.
 - sampleRateShading of true.
 - maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).
 - SubgroupOperations extension: subgroupSize of 4 - 128. subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
@@ -420,7 +422,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
 - The following features:
   - Tiled resource tier 1 (Bindful) or 3 (Bindless).
-  - waveSize of 4 to 128.
+  - waveSize of 4 to 128, WaveLaneCountMin and WaveLaneCountMax being waveSizeMin and waveSizeMax.
   - Logical blend operations.
   - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
   - All standard ETextureFormat types have to be supported. Meaning float/snorm/unorm textures can be sampled and all texture formats have typed uav read/write. Non standard types include RGB32f/RGB32u/RGB32i which only requires usage as vertex attribute. All BCn formats have to be supported. BGRA8 doesn't need to be writable.
@@ -471,6 +473,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - DRED page fault reporting (ID3D12DeviceRemovedExtendedDataSettings1 on both device factories) as DeviceFault (features2).
 - WriteBufferImmediateSupportFlags with D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT as WriteBufferImmediate (features2). Every command list is recorded for the direct queue today, so that is the only flag checked.
 - D3D12_FEATURE_ARCHITECTURE1 CacheCoherentUMA as EDxGraphicsFeatures_CacheCoherentUMA, which switches upload heaps to WRITE_BACK (snooping is free there, and WRITE_COMBINE would make CPU reads disastrous for no gain).
+- ExperimentTier1 and ExperimentTier2 (features2) are never set: D3D12 has no extension a driver could claim them through.
 
 #### Direct3D12 specific extensions
 

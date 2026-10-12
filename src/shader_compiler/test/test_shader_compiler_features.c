@@ -625,5 +625,54 @@ void Test_shaderCompilerFeatures(Test *t) {
 		err = Error_none();
 	}
 
+	//[WaveSize] in both forms, read off the source by the parse: the SPIR-V entry carries it as the DXIL one does, though
+	// SPIR-V can't hold it (a Vulkan pipeline asks for it), so a package of SPIR-V alone keeps it, and the two combine.
+
+	static const struct { const C8 *file; U16 waveSize; } waves[] = {
+		{ "features/wave_size.hlsl",            0x0006 },   //32 lanes required
+		{ "features/wave_size_range.hlsl",      0x6750 },   //16 to 64 lanes, preferring 32
+		{ "features/wave_size_expression.hlsl", 0x6750 }    //the same, from an enum, a constant and a macro
+	};
+
+	for (U64 i = 0; i < sizeof(waves) / sizeof(waves[0]); ++i) {
+
+		ListBuffer dxil = (ListBuffer) { 0 }, spirv = (ListBuffer) { 0 };
+		SHFile dxilFile = (SHFile) { 0 }, spirvFile = (SHFile) { 0 }, combined = (SHFile) { 0 };
+		Buffer written = Buffer_createNull();
+		CharString label = CharString_createNull();
+
+		const Bool ok =
+			compileFileShader(alloc, waves[i].file, EGfxBinaryType_DXIL, true, false, &dxil, &err) &&
+			compileFileShader(alloc, waves[i].file, EGfxBinaryType_SPIRV, true, false, &spirv, &err) &&
+			dxil.length == 1 && spirv.length == 1 &&
+			readOiSH(alloc, dxil.ptr[0], &dxilFile, &err) && readOiSH(alloc, spirv.ptr[0], &spirvFile, &err) &&
+			dxilFile.entries.length == 1 && spirvFile.entries.length == 1 &&
+			SHFile_combine(&dxilFile, &spirvFile, alloc, &combined, &err) && combined.entries.length == 1 &&
+			writeOiSH(alloc, &combined, &written, &err) && oiSHRoundtrips(alloc, written, &err);
+
+		if (!ok)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		const Bool reflected =
+			ok &&
+			dxilFile.entries.ptr[0].waveSize == waves[i].waveSize &&
+			spirvFile.entries.ptr[0].waveSize == waves[i].waveSize &&
+			combined.entries.ptr[0].waveSize == waves[i].waveSize;
+
+		if (!CharString_format(alloc, &label, &err, "%s (dxil, spirv, combined)", waves[i].file))
+			label = CharString_createRefCStrConst(waves[i].file);
+
+		Test_assert(t, label.ptr, reflected);
+
+		CharString_free(&label, alloc);
+		Buffer_free(&written, alloc);
+		SHFile_free(&combined, alloc);
+		SHFile_free(&spirvFile, alloc);
+		SHFile_free(&dxilFile, alloc);
+		ListBuffer_freeUnderlying(&spirv, alloc);
+		ListBuffer_freeUnderlying(&dxil, alloc);
+		err = Error_none();
+	}
+
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }

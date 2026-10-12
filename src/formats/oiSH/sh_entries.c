@@ -78,6 +78,28 @@ const C8 *EGfxPipelineStage_getStagePrefix(EGfxPipelineStage stage) {
 	return targetPrefix;
 }
 
+Bool SHEntry_isValidWaveSize(U16 waveSize) {
+
+	for(U8 i = 0; i < ESHWaveSize_Count; ++i) {
+		const U8 code = (U8) ((waveSize >> (i << 2)) & 0xF);
+		if(code && (code < 3 || code > 8))
+			return false;
+	}
+
+	const U8 required = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Required);
+	const U8 low = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Min);
+	const U8 high = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Max);
+	const U8 preferred = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Preferred);
+
+	if(required)
+		return !low && !high && !preferred;
+
+	if(!low != !high || low > high)
+		return false;
+
+	return !preferred || (low && preferred >= low && preferred <= high);
+}
+
 Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -121,11 +143,10 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			0, entry->binaryIds.length, U8_MAX, "SHFile_addEntrypoint() binaryIds.length out of bounds"
 		));
 
-	for(U8 i = 0; i < 4; ++i)
-		if(((entry->waveSize >> (i << 2)) & 0xF) > 9)
-			retError(clean, Error_outOfBounds(
-				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
-			));
+	if(!SHEntry_isValidWaveSize(entry->waveSize))
+		retError(clean, Error_invalidParameter(
+			1, 0, "SHFile_addEntrypoint() waveSize is neither a required size nor a range (SHEntry_isValidWaveSize)"
+		));
 
 	if(entry->waveSize && entry->stage != EGfxPipelineStage_Compute)
 		retError(clean, Error_invalidOperation(
@@ -717,19 +738,19 @@ void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *allo
 					shEntry->groupX, shEntry->groupY, shEntry->groupZ
 				);
 
-				for (U8 j = 0; j < 4; ++j) {
+				for (U8 j = 0; j < ESHWaveSize_Count; ++j) {
 
-					const C8 *formats[] = {
-						"\tWaveSize.required: %"PRIu8,
-						"\tWaveSize.min: %"PRIu8,
-						"\tWaveSize.max: %"PRIu8,
-						"\tWaveSize.recommended: %"PRIu8,
+					const C8 *formats[ESHWaveSize_Count] = {
+						"\tWaveSize.required: %"PRIu8" lanes",
+						"\tWaveSize.min: %"PRIu8" lanes",
+						"\tWaveSize.max: %"PRIu8" lanes",
+						"\tWaveSize.preferred: %"PRIu8" lanes",
 					};
 
-					U8 curr = (shEntry->waveSize >> (j << 2)) & 0xF;
+					const U8 lanes = SHEntry_waveSizeLanes(shEntry->waveSize, (ESHWaveSize) j);
 
-					if(curr)
-						Log_debugLn(alloc, formats[j], curr);
+					if(lanes)
+						Log_debugLn(alloc, formats[j], lanes);
 				}
 
 				break;

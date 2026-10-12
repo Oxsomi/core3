@@ -314,7 +314,7 @@ Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entryp
 	U32 localSize[3],                   //If compute-adj (mesh shaders too) the local size per group
 	U8 payloadSize,                     //If miss/hit/callable, the payload size that gets transmitted (bytes)
 	U8 intersectSize,                   //If intersection/hit shader, size of intersection attributes (generally 8 bytes)
-	U16 waveSize,                       //4 pairs of log2(thread) + 1 where 0 = none. req, min, max, rec
+	U16 waveSize,                       //What DXIL reflected (SHEntry::waveSize), 0 for SPIR-V, which can't carry one
 	ESBType inputs[16],                 //Input types for graphics shaders
 	ESBType outputs[16],                //Output types for graphics shaders
 	U8 uniqueInputSemantics,            //How many unique semantic names there are
@@ -332,8 +332,8 @@ Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entryp
 //This makes it possible to get a list of all includes.
 Bool Compiler_mergeIncludeInfo(Compiler *comp, const Allocator *alloc, ListIncludeInfo *infos, Error *e_rr);
 
-//Determine what minimum shader version is required
-U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSize);
+//Determine what minimum shader version is required; waveSizeType 1 for a required wave size, 2 for a range.
+U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSizeType);
 U16 Compiler_minFeatureSetExtension(ESHExtension ext);
 
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr);

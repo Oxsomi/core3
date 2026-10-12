@@ -81,18 +81,7 @@ Bool AudioInterface_getDeviceInfos(
 	ALCdevice *device = NULL;
 
 	ListCharString strings = (ListCharString) { 0 };
-
-	//No backend at all (emscripten under node has no Web Audio, headless CI has no sound server):
-	//report an empty device list rather than an error, callers already handle "no devices".
-
-	extensionsStr = alcGetString(NULL, ALC_EXTENSIONS);
-
-	if(!extensionsStr) {
-		alcGetError(NULL); //Clear ALC_INVALID_DEVICE
-		goto clean;
-	}
-
-	CharString extensions = CharString_createRefCStrConst(extensionsStr);
+	CharString extensions = CharString_createNull();
 
 	CharStringSplit split = (CharStringSplit) {
 		.s = &extensions,
@@ -100,26 +89,25 @@ Bool AudioInterface_getDeviceInfos(
 		.result = &strings
 	};
 
-	gotoIfError3(clean, CharString_splitSensitive(&split, ' ', e_rr));
+	//Asked rather than read from ALC_EXTENSIONS, which emscripten refuses without a device.
+	//Without ALC_ENUMERATE_ALL_EXT, the plain specifiers list and name the playback devices.
 
-	Bool containsEnumAll = false;
+	const Bool enumerateAll = alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT") == ALC_TRUE;
+	alcGetError(NULL);
 
-	for(U64 i = 0; i < strings.length; ++i)
-		if (CharString_equalsCStringSensitive(&strings.ptr[i], "ALC_ENUMERATE_ALL_EXT")) {
-			containsEnumAll = true;
-			break;
-		}
+	const ALCenum devicesSpecifier = enumerateAll ? ALC_ALL_DEVICES_SPECIFIER : ALC_DEVICE_SPECIFIER;
+	const ALCenum defaultSpecifier = enumerateAll ? ALC_DEFAULT_ALL_DEVICES_SPECIFIER : ALC_DEFAULT_DEVICE_SPECIFIER;
 
-	if (containsEnumAll) {
-		ALC_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER));
-	}
+	ALC_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, devicesSpecifier));
 
-	else ALC_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER));
+	//No backend at all (emscripten under node has no Web Audio, headless CI has no sound server):
+	//report an empty device list rather than an error, callers already handle "no devices".
 
-	ListCharString_free(&strings, alloc);
+	if(!devicesStr || !*devicesStr)
+		goto clean;
 
 	const C8 *mainOutput = NULL;
-	ALC_PROCESS_ERROR(NULL, mainOutput = alcGetString(NULL, ALC_DEFAULT_ALL_DEVICES_SPECIFIER));
+	ALC_PROCESS_ERROR(NULL, mainOutput = alcGetString(NULL, defaultSpecifier));
 
 	CharString defaultNameStr = CharString_createRefCStrConst(mainOutput);
 
@@ -176,17 +164,33 @@ Bool AudioInterface_getDeviceInfos(
 			}
 
 			for(U64 k = 0; k < strings.length; ++k)
-
 				if (CharString_equalsCStringSensitive(&strings.ptr[k], "ALC_EXT_debug"))
 					info.flags |= EAudioDeviceFlags_Debug;
 
-				else if (CharString_equalsCStringSensitive(&strings.ptr[k], "AL_EXT_double"))
-					info.flags |= EAudioDeviceFlags_HasF64Ext;
+			ListCharString_free(&strings, alloc);
 
-				else if (CharString_equalsCStringSensitive(&strings.ptr[k], "AL_EXT_float32"))
+			//AL_EXT_float32 and AL_EXT_double belong to a context, so a probe context is made current to ask,
+			// and the previous one restored.
+			//The names are emscripten's spelling: it matches them exactly, OpenAL Soft ignores case.
+
+			ALCcontext *previous = alcGetCurrentContext();
+			ALCcontext *probe = alcCreateContext(device, NULL);
+
+			if (probe && alcMakeContextCurrent(probe)) {
+
+				if (alIsExtensionPresent("AL_EXT_float32"))
 					info.flags |= EAudioDeviceFlags_HasF32Ext;
 
-			ListCharString_free(&strings, alloc);
+				if (alIsExtensionPresent("AL_EXT_double"))
+					info.flags |= EAudioDeviceFlags_HasF64Ext;
+
+				alcMakeContextCurrent(previous);
+			}
+
+			if (probe)
+				alcDestroyContext(probe);
+
+			alcGetError(device);
 
 			//Prevent duplicates
 

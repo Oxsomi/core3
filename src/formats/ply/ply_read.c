@@ -365,6 +365,39 @@ clean:
 	return s_uccess;
 }
 
+//Every count comes from the header, so a reader that sizes buffers from them holds them to the body first.
+//The bound is the least a record takes: its fixed properties and only the counts of its lists, or a byte a token.
+
+static Bool Ply_checkCounts(const PlyHeader *header, const MeshSource *src, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 least = 0;
+
+	for(U64 e = 0; e < header->elements.length; ++e) {
+
+		const PlyElement *el = header->elements.ptr + e;
+		U64 record = 0;
+
+		for(U32 p = 0; p < el->propertyCount; ++p) {
+
+			const PlyProperty *prop = header->properties.ptr + el->firstProperty + p;
+
+			if(header->format == EPlyFormat_Ascii)
+				++record;
+
+			else record += Ply_typeSize[prop->isList ? prop->countType : prop->type];
+		}
+
+		least += (U64) el->count * record;
+	}
+
+	if(least > src->size - src->pos)
+		retError(clean, Error_invalidParameter(0, 20, "Ply_read() the header declares more than the file holds"));
+
+clean:
+	return s_uccess;
+}
+
 //One scalar out of bytes already in hand, as a double since that holds every type the format has.
 //Assembled from the bytes in the FILE's order rather than loaded and swapped, so the host's byte order never
 // enters into it. Unrolled per width because the width is not a constant here, and a byte at a time loop
@@ -1011,6 +1044,7 @@ Bool Ply_read(
 	C8 *line = (C8*) lineBuf.ptrNonConst;
 
 	gotoIfError3(clean, Ply_parseHeader(&src, line, &headerData, info, alloc, e_rr));
+	gotoIfError3(clean, Ply_checkCounts(&headerData, &src, e_rr));
 	PlyHeader *header = &headerData;
 
 	//A PLY property is declared on the ELEMENT, so either every vertex carries one or none does. Partial
@@ -1766,17 +1800,32 @@ Bool Ply_readParallel(
 
 	//Nothing here can help: no queue to split across, a null the caller will get the usual error for, or
 	//flags that need the whole mesh regardless of how the body is shaped.
+	//forceParallel refuses instead of falling back, at each of the three places, so a test that forces it knows
+	// the split ran.
 
-	if(
-		!jobs || !stream || !off || !info || !output || !output->positions || !output->indices ||
-		(flags & (EMeshFlags_ComputeNormals | EMeshFlags_QuantizePositions))
-	)
+	const Bool wholeMesh = !!(flags & (EMeshFlags_ComputeNormals | EMeshFlags_QuantizePositions));
+
+	if(!jobs || !stream || !off || !info || !output || !output->positions || !output->indices || wholeMesh) {
+
+		if(forceParallel && (!jobs || wholeMesh))
+			retError(clean, Error_unsupportedOperation(
+				0, "Ply_readParallel()::forceParallel can't split without a queue or with flags that need the whole mesh"
+			));
+
 		return Ply_read(stream, off, flags, info, output, alloc, e_rr);
+	}
 
 	const OxStream *streamData = RefPtr_data(stream, OxStream);
 
-	if(!(streamData->streamType & EStreamType_ConcurrentRead))
+	if(!(streamData->streamType & EStreamType_ConcurrentRead)) {
+
+		if(forceParallel)
+			retError(clean, Error_unsupportedOperation(
+				1, "Ply_readParallel()::forceParallel can't split a stream without EStreamType_ConcurrentRead"
+			));
+
 		return Ply_read(stream, off, flags, info, output, alloc, e_rr);
+	}
 
 	*info = (MeshInfo) { 0 };
 
@@ -1784,6 +1833,7 @@ Bool Ply_readParallel(
 	gotoIfError3(clean, MeshSource_create(stream, headOff, alloc, &headSrc, e_rr));
 	gotoIfError3(clean, Buffer_createUninitializedBytes(MESH_LINE_CAP, alloc, &lineBuf, e_rr));
 	gotoIfError3(clean, Ply_parseHeader(&headSrc, (C8*) lineBuf.ptrNonConst, &headerData, info, alloc, e_rr));
+	gotoIfError3(clean, Ply_checkCounts(&headerData, &headSrc, e_rr));
 
 	info->allNormals = info->hasNormals;
 	info->allUvs = info->hasUvs;
@@ -1806,6 +1856,11 @@ Bool Ply_readParallel(
 			EMeshScalarType_bytes((EMeshScalarType) header.faceCountType) +
 			3 * EMeshScalarType_bytes((EMeshScalarType) header.faceIndexType)
 		);
+
+	if(!shapeOk && forceParallel)
+		retError(clean, Error_unsupportedOperation(
+			2, "Ply_readParallel()::forceParallel can't split this file's elements"
+		));
 
 	if(!shapeOk || (!forceParallel && bodyBytes < PLY_PARALLEL_MIN_BYTES)) {
 

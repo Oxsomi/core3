@@ -655,11 +655,8 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 						0, 0, "SHFile_read() waveSize not supported by mesh or task shader"
 					));
 
-				for (U8 k = 0; k < 4; ++k) {
-					U8 curr = (entry.waveSize >> (k << 2)) & 0xF;
-					if (curr == 1 || curr == 2 || curr > 8)
-						retError(clean, Error_invalidParameter(0, 0, "SHFile_read() entry.waveSize contained invalid data"));
-				}
+				if(!SHEntry_isValidWaveSize(entry.waveSize))
+					retError(clean, Error_invalidParameter(0, 0, "SHFile_read() entry.waveSize contained invalid data"));
 
 				break;
 			}

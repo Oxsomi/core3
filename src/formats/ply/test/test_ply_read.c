@@ -419,4 +419,31 @@ void Test_plyValidation(Test *t) {
 	MeshResult r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, NULL);
 	Test_assert(t, "truncatedBinary", !r.ok);
 	MeshResult_free(t, &r);
+
+	//A header promising billions of vertices to a body of one is refused by the count check, before anything is
+	// sized from the count.
+
+	len = 0;
+
+	{
+		const C8 *header =
+			"ply\nformat binary_little_endian 1.0\nelement vertex 2000000000\n"
+			"property float x\nproperty float y\nproperty float z\nend_header\n";
+
+		for(const C8 *c = header; *c; ++c)
+			bytes[len++] = (U8) *c;
+
+		for(U8 i = 0; i < 12; ++i)
+			bytes[len++] = 0;
+	}
+
+	Error countErr = Error_none();
+	r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, &countErr);
+
+	Test_assert(
+		t, "countPastBody",
+		!r.ok && countErr.genericError == EGenericError_InvalidParameter && countErr.errorSubId == 20
+	);
+
+	MeshResult_free(t, &r);
 }

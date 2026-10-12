@@ -68,8 +68,9 @@ Bool Ply_read(
 // stream.h) also falls back, since splitting a read the source cannot safely serve from two threads at once
 // would tear rather than speed anything up.
 //
-//forceParallel bypasses the size below which splitting costs more than it saves; it does not bypass the
-// shape checks above. Benchmark and test code only, to exercise the split on inputs too small to pay for it.
+//forceParallel bypasses the size below which splitting costs more than it saves, and refuses a read it can't
+// split rather than falling back, so a forced read that succeeds is one that split.
+//Benchmark and test code only, to exercise the split on inputs too small to pay for it.
 
 Bool Ply_readParallel(
 	StreamRef *stream,
@@ -84,6 +85,8 @@ Bool Ply_readParallel(
 );
 
 //The header ALONE: counts, the body offset and whether the body is fixed stride, without touching the data.
+//The counts are the header's, unchecked against the body: Ply_read and Ply_readParallel hold them to it before
+// sizing anything from them, and a caller sizing buffers from these has to do the same.
 //What it fills is described in types/mesh/mesh.h. Left at the first byte of the body, so a caller can hand the
 // same stream and offset to Ply_read and lose nothing by having asked.
 

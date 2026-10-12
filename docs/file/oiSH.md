@@ -407,8 +407,9 @@ SHFile {		//Must be 16-byte aligned
 
 	    if compute, mesh or task:
 		    U16x4 groups;
-               	groups.w = waveSize: U4[4] required, min, max, recommended
-                    Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
+               	groups.w = waveSize: U4[4] required, min, max, preferred
+                    Where the U4: 0 = None, 3-8 = 4-128 lanes (log2 + 1), else invalid
+                    Either required alone ([WaveSize(N)]) or min and max, with preferred inside them if set
                     groups.w should be 0 for mesh or task shader
 
     	if closestHit, anyHit or intersection:

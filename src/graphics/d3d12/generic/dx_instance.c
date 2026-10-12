@@ -845,6 +845,9 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					"D3D12: Unsupported device %"PRIu64", subgroup size %"PRIu32"-%"PRIu32" is not in range 4-128!",
 					i, opt1.WaveLaneCountMin, opt1.WaveLaneCountMax
 				);
+
+			caps.waveSizeMin = (U8) opt1.WaveLaneCountMin;
+			caps.waveSizeMax = (U8) opt1.WaveLaneCountMax;
 		}
 
 		if(

@@ -121,6 +121,10 @@ static void expectReadRefused(Test *t, const C8 *name, const C8 *bytes, U64 len)
 		Test_assert(t, "pending freed", !pending);
 	}
 
+	//A refusal the jobs find is the read's to report: the queue is the caller's and has to stay usable.
+
+	Test_assert(t, "caller's queue stays successful", JobQueue_isSuccess(&jobs));
+
 clean:
 	JobQueue_free(&jobs);
 	Buffer_free(&output, t->alloc);

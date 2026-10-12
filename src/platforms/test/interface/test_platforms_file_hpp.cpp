@@ -66,6 +66,17 @@ extern "C" void Test_fileHandleHpp(oxc::c::Test *t) {
 		));
 
 		Test_assert(t, "readPastEndFails", !handle.read(past, length, 1));
+		Test_assert(t, "refusedReadLeavesNothing", !c::Buffer_length(past.handle()));
+
+		//Refused on the range rather than on allocating it.
+
+		c::Error rangeErr = c::Error_none();
+
+		Test_assert(
+			t, "hugeRangeRefusedOnBounds",
+			!handle.read(past, 0, c::U64_MAX / 2, &rangeErr) && rangeErr.genericError == c::EGenericError_OutOfBounds
+		);
+
 		handle.release();
 	}
 

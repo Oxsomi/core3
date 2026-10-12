@@ -131,7 +131,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		Bool mapped =
 			ok && r.shEntriesRuntime.length == 1 &&
 			r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-			r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions2 == (1u << i) &&
+			(U32) r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions2 == (1u << i) &&
 			!r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions;
 
 		Test_assert(t, ESHExtension2_names[i], mapped);

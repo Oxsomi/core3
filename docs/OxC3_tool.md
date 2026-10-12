@@ -294,7 +294,8 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
     - Minimum must be 6.5+ since that's the minimum OxC3 supports (the maximum is 6.10).
     - AtomicI64, ComputeDeriv and PAQ (Payload Access Qualifiers) require SM6.6.
     - WaveSize requires SM6.6.
-    - WaveSize with 2 or 3 arguments (min, max, recommended) requires SM6.8.
+    - WaveSize with 2 or 3 arguments (min, max, preferred) requires SM6.8.
+    - WaveSize is read off the source with the entry (through the HLSL reflector, which hands it over as a builtin annotation), so the entry carries it for every binary type: SPIR-V can't hold a wave size, and a Vulkan pipeline asks for it instead (graphics_api.md, Wave size). A DXIL compile's reflected size has to be the same one, and WaveSize is for compute entries only.
     - WriteMSTexture (writable multisampled textures) requires SM6.7.
     - RayReorder (Shader Execution Reordering / SER) and RayMicromapOpacity (Opacity Micromaps / OMM) require SM6.9.
     - DescriptorHeap requires SM6.6 (dynamic resources).

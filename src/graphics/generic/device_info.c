@@ -190,7 +190,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			Log_debugLnx("\t\tPipeline executable info (live ISA disassembly + statistics)");
 
 		if(feat & EGraphicsFeatures_SubgroupOperations)
-			Log_debugLnx("\t\tSubgroup operations");
+			Log_debugLnx(
+				"\t\tSubgroup operations (WaveSize %"PRIu8" to %"PRIu8" lanes)", cap.waveSizeMin, cap.waveSizeMax
+			);
 
 		if(feat & EGraphicsFeatures_CoopVec)
 			Log_debugLnx("\t\tCooperative vectors (matvec)");
@@ -373,6 +375,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_PageableMemory)
 				Log_debugLnx("\t\tPageable device local memory");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_SubgroupSizeControl)
+				Log_debugLnx("\t\tSubgroup size control");
 		}
 	}
 }

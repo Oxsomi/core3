@@ -353,9 +353,14 @@ def post(webhook, embeds):
 	if current:
 		messages.append(current)
 
+	# Returns how many embeds went out, since the state records only those.
+
+	sent = 0
+
 	for message in messages:
 
 		body = json.dumps({ "embeds": message }).encode("utf-8")
+		delivered = False
 
 		for attempt in range(5):
 
@@ -365,14 +370,17 @@ def post(webhook, embeds):
 
 			try:
 				urllib.request.urlopen(request, timeout = 60).close()
+				delivered = True
 				break
 
 			# Discord answers a burst with 429 and how long to wait, which is trusted up to a minute.
+			# Any other failure ends the post.
 
 			except urllib.error.HTTPError as e:
 
 				if e.code != 429 or attempt == 4:
-					raise
+					print(f"[deps_watch] the post was refused: {e}", flush = True)
+					break
 
 				try:
 					wait = float(json.loads(e.read() or b"{}").get("retry_after", 2))
@@ -381,6 +389,17 @@ def post(webhook, embeds):
 					wait = 2
 
 				time.sleep(min(max(wait, 0), 60))
+
+			except OSError as e:
+				print(f"[deps_watch] the post failed: {e}", flush = True)
+				break
+
+		if not delivered:
+			return sent
+
+		sent += len(message)
+
+	return sent
 
 def summary(embeds):
 	return "\n\n".join(f"### [{e['title']}]({e['url']})\n" + e["description"] for e in embeds)
@@ -428,7 +447,7 @@ def main():
 			print(f"[deps_watch] ignoring the unreadable state {args.state}: {e}", flush = True)
 
 	deps = state.get("deps", {})
-	nextDeps, embeds, failed = dict(deps), [], 0
+	nextDeps, embeds, embedKeys, failed = dict(deps), [], [], 0
 
 	for dep in gitPins(args.root, args.conandata) + nugetPins(args.root) + waylandPins(args.root):
 
@@ -470,6 +489,7 @@ def main():
 
 		if embed:
 			embeds.append(embed)
+			embedKeys.append(key)
 
 		status = "query failed" if embed and embed["color"] == COLOR_FAILED else "moved" if embed else "nothing new"
 		print(f"[deps_watch] {key}: {status}", flush = True)
@@ -486,8 +506,19 @@ def main():
 		print(report)
 		return 1 if failed else 0
 
-	if embeds:
-		post(webhook, embeds)
+	sent = post(webhook, embeds) if embeds else 0
+
+	# A report that did not go out leaves its dependency's state as it was, so the next run sends it again.
+
+	for key in embedKeys[sent:]:
+
+		if key in deps:
+			nextDeps[key] = deps[key]
+
+		else:
+			nextDeps.pop(key, None)
+
+	failed += len(embeds) - sent
 
 	# Written beside and moved over, so a run cut short leaves the last state whole.
 

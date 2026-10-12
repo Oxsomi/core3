@@ -281,7 +281,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 			Bool same = true;
 
 			for (U64 j = 0; j < 4; ++j)
-				same &= (sh.binaries.ptr[entry->binaryIds.ptr[j]].identifier.extensions & rich) == (U64) want[j];
+				same &= (U64) (sh.binaries.ptr[entry->binaryIds.ptr[j]].identifier.extensions & rich) == (U64) want[j];
 
 			if(isRich)
 				richOk = same;
@@ -291,6 +291,56 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 		Test_assert(t, "binaryIds follow declaration order (richest line first)", ok && richOk);
 		Test_assert(t, "binaryIds follow declaration order (baseline line first)", ok && baseOk);
+
+		SHFile_free(&sh, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//--- The same in one lib compile, where both entrypoints share every binary: each keeps its own order. ---
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile sh = (SHFile) { 0 };
+
+		const Bool ok =
+			compileFileShader(
+				alloc, "permutations/extension_order_lib.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err
+			) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
+
+		const ESHExtension rich = (ESHExtension)(ESHExtension_16BitTypes | ESHExtension_I64);
+		const ESHExtension richFirst[] = { rich, ESHExtension_I64 };
+		const ESHExtension baseFirst[] = { ESHExtension_I64, rich };
+
+		const CharString richName = CharString_createRefCStrConst("rayRichFirst");
+		const CharString baseName = CharString_createRefCStrConst("missBaseFirst");
+
+		Bool richOk = false, baseOk = false;
+
+		for (U64 i = 0; ok && i < sh.entries.length; ++i) {
+
+			const SHEntry *entry = &sh.entries.ptr[i];
+			const Bool isRich = CharString_equalsStringSensitive(&entry->name, &richName);
+			const Bool isBase = CharString_equalsStringSensitive(&entry->name, &baseName);
+			const ESHExtension *want = isRich ? richFirst : baseFirst;
+
+			if((!isRich && !isBase) || entry->binaryIds.length != 2)
+				continue;
+
+			Bool same = true;
+
+			for (U64 j = 0; j < 2; ++j)
+				same &= (U64) (sh.binaries.ptr[entry->binaryIds.ptr[j]].identifier.extensions & rich) == (U64) want[j];
+
+			if(isRich)
+				richOk = same;
+
+			else baseOk = same;
+		}
+
+		Test_assert(t, "lib binaryIds follow declaration order (richest line first)", ok && richOk);
+		Test_assert(t, "lib binaryIds follow declaration order (baseline line first)", ok && baseOk);
 
 		SHFile_free(&sh, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);

@@ -200,6 +200,7 @@ Bool TestShaders_checkPixels(
 );
 
 void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsWaveSize(Test *t, GraphicsDeviceRef *deviceRef);
 
 //Config variants build their own devices from the flags under test, so this one takes the instance and the
 //adapter rather than a device the suite already created.

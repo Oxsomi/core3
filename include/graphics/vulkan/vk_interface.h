@@ -53,6 +53,7 @@
 		const CharString *entryName,
 		Pipeline *pipeline,
 		const SHBinaryInfo *buf,
+		const SHEntry *entry,
 		Error *e_rr
 	);
 

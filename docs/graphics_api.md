@@ -158,7 +158,7 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
-  - Vulkan: PerformanceQuery, MemoryBudget, PerformantPushDescriptor, NoCompactionQuery, AddressBindingReport, ExternalHostMemory, MemoryPriority.
+  - Vulkan: PerformanceQuery, MemoryBudget, PerformantPushDescriptor, NoCompactionQuery, AddressBindingReport, ExternalHostMemory, MemoryPriority, PageableMemory, SubgroupSizeControl.
     - PerformantPushDescriptor: VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer is pushed straight into the command buffer instead of bound from a set allocated to hold it. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 allocates one descriptor set per frame in flight, writes each once to that frame's globals buffer and binds it unchanged afterwards, so there's no per-frame update and nothing is rewritten while in flight. A one-time performance warning is logged on the first submit that takes the emulated path. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
     - MemoryBudget: VK_EXT_memory_budget, so new blocks can respect the OS budget (see the device's Properties).
     - NoCompactionQuery: the driver can't be asked for a compacted size, so a BLAS built with AllowCompaction is marked compacted by its build, with no query and no copy.
@@ -166,8 +166,10 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
     - ExternalHostMemory: VK_EXT_external_memory_host; memory the process allocated can be imported as device memory.
     - MemoryPriority: VK_EXT_memory_priority; blocks carry a priority so the OS pages staging out before acceleration structures.
     - PageableMemory: VK_EXT_pageable_device_local_memory (needs MemoryPriority); device local memory pages out to host memory under pressure instead of failing, as a D3D12 heap does.
+    - SubgroupSizeControl: VK_EXT_subgroup_size_control with compute among its stages, so a compute pipeline asks for the subgroup size its entry's `[WaveSize]` names and waveSizeMin to waveSizeMax is the device's whole range (see Wave size under Pipeline).
   - Direct3D12: ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+), CacheCoherentUMA (UMA that snoops CPU caches; upload heaps then use WRITE_BACK instead of WRITE_COMBINE), AllowTearing (DXGI tearing support, needed for the Immediate present mode).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
+- waveSizeMin and waveSizeMax: the wave sizes, in lanes, a compute shader's `[WaveSize]` can name on this device: every power of two from one to the other. D3D12 reports WaveLaneCountMin and WaveLaneCountMax; Vulkan the subgroup size control range, or without SubgroupSizeControl its one subgroup size as both.
 
 ### Functions
 
@@ -1142,6 +1144,13 @@ A pipeline is a combination of the states and shader binaries that are required 
 - `GraphicsDeviceRef_createPipelineFromSPFile(dev, spFile, pipelineId, files, shaderNames, layout, alloc, &pipeline, e_rr)` creates a pipeline described by an oiSP file: `shaderNames` is parallel to `files` and resolves a stage's shader by name; a NULL layout takes the device's default one (`SPFile_createPipelineLayout` resolves the file's own).
 - `GraphicsDeviceRef_getPipelineExecutables(pipeline, alloc, &list, e_rr)` returns per executable ISA disassembly and VGPR/SGPR statistics. The pipeline needs `EPipelineFlags_CaptureISA` and the device `EGraphicsFeatures2_PipelineExecutableInfo`: Vulkan through VK_KHR_pipeline_executable_properties, D3D12 only on AMD through the driver's shader analyzer extension (`dx_amd_shader_analyzer.h`; D3D12 has no API of its own for it, so other vendors don't advertise the bit); free the list with `ListPipelineExecutable_freeUnderlying`.
 - Used in CommandListRef's setComputePipeline, setGraphicsPipeline and setRaytracingPipelineExt; `CommandListRef_setPipeline(list, pipeline, EPipelineType, e_rr)` is the generic form of those three.
+
+### Wave size
+
+A compute entry's `[WaveSize]` names the wave sizes it runs at: `[WaveSize(N)]` (SM6.6) one it requires, `[WaveSize(min, max)]` or `[WaveSize(min, max, preferred)]` (SM6.8) a range. The oiSH entry keeps it in `SHEntry::waveSize` (see `SHEntry_waveSizeLanes`), and both backends hold it to the device's range (waveSizeMin to waveSizeMax in the capabilities): `GraphicsDeviceRef_checkShaderFeatures` refuses an entry none of whose sizes the device runs, as D3D12 would refuse its pipeline, so `GraphicsDeviceRef_getFirstShaderEntry` never takes it there.
+
+- D3D12: the DXIL carries the size, and the driver picks one from a range. The SM6.6 form needs EDxGraphicsFeatures_WaveSize and the ranged one EDxGraphicsFeatures_WaveSizeMinMax.
+- Vulkan: SPIR-V can't carry a size, so the compute pipeline asks for one (`VkPipelineShaderStageRequiredSubgroupSizeCreateInfo`): the required size, else the preferred one, else the size of the range nearest the device's own (`GraphicsDeviceCapabilities_pickWaveSize`). Without SubgroupSizeControl the only size is the device's own, which the pipeline runs at without asking. At its size the workgroup has to fit the device's maxComputeWorkgroupSubgroups, or the pipeline is refused.
 
 ### Obtaining an extended Pipeline info
 

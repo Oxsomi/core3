@@ -31,7 +31,10 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DEPS_WEBHOOK_URL || secrets.WEBHOOK_URL }}
         run: python3 tools/deps_watch.py -state deps_watch.json
 
+      # Saved when the report step fails too, since the state it wrote records only what went out.
+
       - name: Save this report
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: deps_watch.json

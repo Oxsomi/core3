@@ -110,6 +110,7 @@ typedef struct SHFile {
 	U32 compilerVersion;        //OxC3 compiler version
 
 	U32 sourceHash;             //CRC32C of sources
+	U32 padding;
 
 } SHFile;
 

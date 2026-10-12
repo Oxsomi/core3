@@ -118,7 +118,9 @@ typedef enum EOptExtensions {
 	EOptExtensions_PageableMemory,         //EVkGraphicsFeatures_PageableMemory, needs MemoryPriority
 
 	EOptExtensions_ExperimentTier1,        //EGraphicsFeatures2_ExperimentTier1
-	EOptExtensions_ExperimentTier2         //EGraphicsFeatures2_ExperimentTier2
+	EOptExtensions_ExperimentTier2,        //EGraphicsFeatures2_ExperimentTier2
+
+	EOptExtensions_SubgroupSizeControl     //EVkGraphicsFeatures_SubgroupSizeControl
 
 } EOptExtensions;
 

@@ -534,6 +534,14 @@ def generate(spec):
 	for inc in spec.get("systemIncludes", [ "stdbool.h", "stdint.h", "assert.h" ]):
 		out.append(f"#include <{inc}>")
 
+	# The C headers go into oxc::c below, so what they include from the system has to be seen at global scope first
+	# (types/base/lock.hpp has why): under MSVC that is vcruntime_string.h, for buffer_base.h's copies.
+
+	out.append("")
+	out.append("#ifdef _MSC_VER")
+	out.append("\t#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp")
+	out.append("#endif")
+
 	for inc in spec.get("cppIncludes", []):
 		out.append(f"#include \"{inc}\"")
 

@@ -365,6 +365,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceSubgroupSizeControlFeaturesEXT,
+		featEx & EVkGraphicsFeatures_SubgroupSizeControl,
+		(VkPhysicalDeviceSubgroupSizeControlFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT,
+			.subgroupSizeControl = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceAddressBindingReportFeaturesEXT,
 		featEx & EVkGraphicsFeatures_AddressBindingReport,
 		(VkPhysicalDeviceAddressBindingReportFeaturesEXT) {
@@ -736,6 +745,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_BufferMarker:                 on = feat2 & EGraphicsFeatures2_WriteBufferImmediate;       break;
 			case EOptExtensions_ExperimentTier1:              on = feat2 & EGraphicsFeatures2_ExperimentTier1;            break;
 			case EOptExtensions_ExperimentTier2:              on = feat2 & EGraphicsFeatures2_ExperimentTier2;            break;
+			case EOptExtensions_SubgroupSizeControl:          on = featEx & EVkGraphicsFeatures_SubgroupSizeControl;      break;
 
 			//Only for breadcrumbs, which also need the buffer marker
 
@@ -1228,14 +1238,34 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT
 	};
 
+	//An extension's struct is chained only where the extension is on: at the Vulkan 1.1 the instance asks for, it doesn't
+	// exist otherwise.
+
+	VkPhysicalDeviceSubgroupSizeControlPropertiesEXT subgroupSizeProperties =
+		(VkPhysicalDeviceSubgroupSizeControlPropertiesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES_EXT,
+			.pNext = device->info.capabilities.features2 & EGraphicsFeatures2_DescriptorHeap ?
+				&deviceExt->descriptorHeapProperties : NULL
+		};
+
+	VkPhysicalDeviceSubgroupProperties subgroupProperties = (VkPhysicalDeviceSubgroupProperties) {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES,
+		.pNext = featEx & EVkGraphicsFeatures_SubgroupSizeControl ?
+			(void*) &subgroupSizeProperties : subgroupSizeProperties.pNext
+	};
+
 	VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-		.pNext = device->info.capabilities.features2 & EGraphicsFeatures2_DescriptorHeap ?
-			&deviceExt->descriptorHeapProperties : NULL
+		.pNext = &subgroupProperties
 	};
 
 	instanceExt->getPhysicalDeviceProperties2((VkPhysicalDevice) device->info.ext, &properties2);
 	deviceExt->descriptorHeapProperties.pNext = NULL;
+
+	deviceExt->subgroupSize = (U16) subgroupProperties.subgroupSize;
+
+	if(featEx & EVkGraphicsFeatures_SubgroupSizeControl)
+		deviceExt->maxComputeWorkgroupSubgroups = (U16) U32_min(subgroupSizeProperties.maxComputeWorkgroupSubgroups, U16_MAX);
 
 	deviceExt->atomSize = (U8) properties2.properties.limits.nonCoherentAtomSize;
 

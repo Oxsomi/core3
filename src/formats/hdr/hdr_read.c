@@ -714,8 +714,10 @@ static Bool HDR_decodeJob(void *data, U64 threadId, JobQueue *queue) {
 	if(!ok)
 		JobGroup_fail(&p->group, NULL);
 
+	//The group and job->err carry a failure, so the queue, which may be the caller's, stays successful.
+
 	JobGroup_leave(&p->group, NULL);
-	return ok;
+	return true;
 }
 
 //A file with an old style scanline, decoded serially by HDR_read through streams over the borrowed buffers.
@@ -828,8 +830,10 @@ static Bool HDR_scanJob(void *data, U64 threadId, JobQueue *queue) {
 	if(!ok)
 		JobGroup_fail(&p->group, NULL);
 
+	//As in HDR_decodeJob, p->err carries the failure rather than the queue.
+
 	JobGroup_leave(&p->group, NULL);
-	return ok;
+	return true;
 }
 
 static void HDR_freePending(HDRReadPending **pending) {

@@ -34,14 +34,20 @@
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
+#include "types/base/platform_types.h"
 
 #include <inttypes.h>
 
 //A few chunks per thread even on a tiny file, and both single and multi threaded contexts: threadCount 1 runs
 //every chunk inline on the calling thread (job_queue.h), which keeps a failing case reproducible, and
 // threadCount 3 is what actually exercises concurrent chunks.
+//Web without pthreads can't spawn threads, so it runs the inline mode there, which still splits into every chunk.
 
-#define PLY_TEST_THREADS 3
+#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
+	#define PLY_TEST_THREADS 1
+#else
+	#define PLY_TEST_THREADS 3
+#endif
 
 static U64 putU32At(U8 *out, U32 v, Bool bigEndian) {
 
@@ -235,6 +241,7 @@ clean:
 //Ply_read once, then Ply_readParallel both without a queue (which is Ply_read again, a guard against the
 //comparison becoming trivially true) and with one under forceParallel, and asserts every output stream and
 // every MeshInfo field the two produced is identical.
+//forceParallel refuses a read it can't split, so a forced read that succeeds is one that split.
 
 static void checkMatchesSerial(Test *t, const C8 *name, const PlyGenSpec *spec, EMeshFlags flags) {
 
@@ -258,7 +265,7 @@ static void checkMatchesSerial(Test *t, const C8 *name, const PlyGenSpec *spec, 
 	Bool queued = JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err);
 	Test_assert(t, name, queued);
 
-	MeshResult withoutQueue = readPlyParallel(t, bytes, flags, withAttributes, withTriangles, NULL, true, &t->err);
+	MeshResult withoutQueue = readPlyParallel(t, bytes, flags, withAttributes, withTriangles, NULL, false, &t->err);
 	MeshResult forced = queued
 		? readPlyParallel(t, bytes, flags, withAttributes, withTriangles, &jobs, true, &t->err)
 		: (MeshResult) { 0 };
@@ -370,18 +377,50 @@ void Test_plyParallelFlags(Test *t) {
 	checkMatchesSerial(t, "wideUvs", &spec, EMeshFlags_WideUvs);
 }
 
-//ComputeNormals and QuantizePositions both need the whole mesh, so Ply_readParallel has to fall all the way
-//back to Ply_read for them even when forced; what is asserted is that forcing changes nothing about the
-// result, not that it changes nothing about the code path.
+//ComputeNormals and QuantizePositions both need the whole mesh, so Ply_readParallel reads them through Ply_read:
+// unforced with the same result, forced not at all.
 
 void Test_plyParallelSerialFlagsFallBack(Test *t) {
 
 	Test_setModule(t, "PLY/parallelSerialFlagsFallBack");
 
 	const PlyGenSpec spec = { .vertexCount = 131, .faceCount = 43 };
+	const EMeshFlags wholeMesh[] = { EMeshFlags_ComputeNormals, EMeshFlags_QuantizePositions };
 
-	checkMatchesSerial(t, "computeNormals", &spec, EMeshFlags_ComputeNormals);
-	checkMatchesSerial(t, "quantizePositions", &spec, EMeshFlags_QuantizePositions);
+	Buffer bytes = Buffer_createNull();
+	JobQueue jobs = (JobQueue) { 0 };
+
+	if(
+		!Test_assert(t, "build", Ply_genBuild(t, &spec, &bytes, &t->err)) ||
+		!Test_assert(t, "queue", JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err))
+	)
+		goto clean;
+
+	for(U8 i = 0; i < (U8) (sizeof(wholeMesh) / sizeof(wholeMesh[0])); ++i) {
+
+		MeshResult serial = Test_meshRead(
+			t, Ply_read, bytes.ptr, Buffer_length(bytes), wholeMesh[i], true, true, &t->err
+		);
+
+		MeshResult unforced = readPlyParallel(t, bytes, wholeMesh[i], true, true, &jobs, false, &t->err);
+		MeshResult forced = readPlyParallel(t, bytes, wholeMesh[i], true, true, &jobs, true, NULL);
+
+		if(Test_assert(t, "read", serial.ok) && Test_assert(t, "unforced", unforced.ok)) {
+			Test_assert(t, "positions", Buffer_eq(unforced.positions, serial.positions));
+			Test_assert(t, "attributes", Buffer_eq(unforced.attributes, serial.attributes));
+			Test_assert(t, "indices", Buffer_eq(unforced.indices, serial.indices));
+		}
+
+		Test_assert(t, "forced refuses", !forced.ok);
+
+		MeshResult_free(t, &forced);
+		MeshResult_free(t, &unforced);
+		MeshResult_free(t, &serial);
+	}
+
+clean:
+	JobQueue_free(&jobs);
+	Buffer_free(&bytes, t->alloc);
 }
 
 //A file under PLY_PARALLEL_MIN_BYTES, read without forceParallel, has to come back byte identical too: this

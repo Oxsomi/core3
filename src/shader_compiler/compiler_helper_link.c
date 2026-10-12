@@ -57,6 +57,7 @@ void ListLinkEntry_freeUnderlying(ListLinkEntry* entries, const Allocator *alloc
 		LinkEntry* entry = &entries->ptrNonConst[i];
 		Buffer_free(&entry->uniformData, alloc);
 		ListU16_free(&entry->runtimeEntries, alloc);
+		ListU16_free(&entry->combinationIds, alloc);
 	}
 
 	ListLinkEntry_free(entries, alloc);
@@ -75,7 +76,7 @@ Bool Compiler_getLinkEntries(
 ) {
 
 	Bool s_uccess = true;
-	ListU16 tmpEntries = (ListU16) { 0 };
+	ListU16 tmpEntries = (ListU16) { 0 }, tmpCombinations = (ListU16) { 0 };
 	Bool freeEntrypoints = false;
 	Bool freeLinkEntries = false;
 
@@ -318,17 +319,22 @@ Bool Compiler_getLinkEntries(
 				// which has nothing to do with an index into linkEntries (and can run past its length)
 
 				if (l != linkEntries->length) {
-					gotoIfError3(clean, ListU16_pushBack(&linkEntries->ptrNonConst[l].runtimeEntries, (U16)j, alloc, e_rr));
+					LinkEntry *shared = &linkEntries->ptrNonConst[l];
+					gotoIfError3(clean, ListU16_pushBack(&shared->runtimeEntries, (U16)j, alloc, e_rr));
+					gotoIfError3(clean, ListU16_pushBack(&shared->combinationIds, (U16)combinationId, alloc, e_rr));
 					continue;
 				}
 
 				linkEntry.entrypointId = U16_MAX;
 				gotoIfError3(clean, ListU16_pushBack(&tmpEntries, (U16)j, alloc, e_rr));
+				gotoIfError3(clean, ListU16_pushBack(&tmpCombinations, (U16)combinationId, alloc, e_rr));
 				linkEntry.runtimeEntries = tmpEntries;
+				linkEntry.combinationIds = tmpCombinations;
 			}
 
 			gotoIfError3(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc, e_rr));
 			tmpEntries = (ListU16) { 0 };    //Moved
+			tmpCombinations = (ListU16) { 0 };
 			freeLinkEntries = true;
 		}
 	}
@@ -348,5 +354,6 @@ clean:
 	}
 
 	ListU16_free(&tmpEntries, alloc);
+	ListU16_free(&tmpCombinations, alloc);
 	return s_uccess;
 }
