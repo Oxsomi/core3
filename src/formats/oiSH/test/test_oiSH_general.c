@@ -469,14 +469,14 @@ void Test_SHValueParse(Test *t) {
 
 	//Each type takes what it can hold, to its limits, and refuses one past them.
 
-	static const struct { TypeId typeId; const C8 *str; Bool ok; U64 bits; } cases[] = {
+	static const struct { ETypeId typeId; const C8 *str; Bool ok; U64 bits; } cases[] = {
 
 		{ ETypeId_B1,  "true",  true, 1 },  { ETypeId_B1, "false", true, 0 },  { ETypeId_B1, "yes", false, 0 },
 
 		{ ETypeId_U8,  "255",   true, 255 },     { ETypeId_U8,  "256",   false, 0 },  { ETypeId_U8, "-1", false, 0 },
 		{ ETypeId_U8,  "+3",    true, 3 },       { ETypeId_U16, "65535", true, 65535 },  { ETypeId_U16, "65536", false, 0 },
 		{ ETypeId_U32, "300",   true, 300 },     { ETypeId_U32, "4294967295", true, 0xFFFFFFFF },
-		{ ETypeId_U32, "4294967296", false, 0 }, { ETypeId_U64, "18446744073709551615", true, U64_MAX },
+		{ ETypeId_U32, "4294967296", false, 0 }, { ETypeId_U64, "18446744073709551615", true, ~(U64)0 },
 
 		{ ETypeId_I8,  "-128",  true, 0x80 },    { ETypeId_I8,  "127",   true, 127 },  { ETypeId_I8, "128", false, 0 },
 		{ ETypeId_I8,  "-129",  false, 0 },      { ETypeId_I16, "-2",    true, 0xFFFE },
@@ -505,7 +505,7 @@ void Test_SHValueParse(Test *t) {
 
 	//Spellings of one value are equal, and a stored value prints so that it parses back to the same bits.
 
-	static const struct { TypeId typeId; const C8 *a; const C8 *b; } same[] = {
+	static const struct { ETypeId typeId; const C8 *a; const C8 *b; } same[] = {
 		{ ETypeId_U32, "+3", "3" }, { ETypeId_F32, "1.5", "1.50" }, { ETypeId_I16, "-0", "0" }, { ETypeId_B1, "true", "true" }
 	};
 
@@ -520,7 +520,7 @@ void Test_SHValueParse(Test *t) {
 		);
 	}
 
-	static const struct { TypeId typeId; const C8 *str; } exact[] = {
+	static const struct { ETypeId typeId; const C8 *str; } exact[] = {
 		{ ETypeId_F32, "0.123456789" }, { ETypeId_F64, "0.1" }, { ETypeId_F16, "0.333" },
 		{ ETypeId_F32, "3.4028234e38" }, { ETypeId_I64, "-9223372036854775808" }, { ETypeId_U64, "18446744073709551615" }
 	};
