@@ -239,7 +239,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 			CharString label = CharString_createNull();
 
-			//At preprocess: five of the six define and extension combinations.
+			//At compile: five of the six define and extension combinations.
 
 			{
 				ListBuffer out = (ListBuffer) { 0 };

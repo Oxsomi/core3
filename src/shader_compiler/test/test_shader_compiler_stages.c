@@ -137,7 +137,8 @@ void Test_shaderCompilerStages(Test *t) {
 	static const struct { const C8 *file; const C8 *stageA; const C8 *stageB; } uniformStages[] = {
 		{ "stages/raygeneration_uniform.hlsl", "raygeneration", "miss" },
 		{ "stages/mesh_uniform.hlsl",          "mesh",          NULL },
-		{ "stages/task_uniform.hlsl",          "task",          NULL }
+		{ "stages/task_uniform.hlsl",          "task",          NULL },
+		{ "stages/mesh_compute_uniform.hlsl",  "mesh",          "compute" }
 	};
 
 	for (U64 i = 0; i < sizeof(uniformStages) / sizeof(uniformStages[0]); ++i)

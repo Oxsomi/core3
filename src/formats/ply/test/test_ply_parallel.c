@@ -75,7 +75,8 @@ typedef struct PlyGenSpec {
 	Bool bigEndian;
 	Bool withNormals;
 	Bool withUvs;
-	U8 padding[5];
+	Bool faceFirst;      //Declares and stores the face element ahead of the vertex element
+	U8 padding[4];
 
 } PlyGenSpec;
 
@@ -100,9 +101,18 @@ static Bool Ply_genBuild(Test *t, const PlyGenSpec *spec, Buffer *out, Error *e_
 	}
 
 	Bool built = CharString_appendFormat(
+		t->alloc, &header, &t->err, "ply\nformat binary_%s_endian 1.0\n", spec->bigEndian ? "big" : "little"
+	);
+
+	if(built && spec->faceFirst)
+		built = CharString_appendFormat(
+			t->alloc, &header, &t->err,
+			"element face %" PRIu32 "\nproperty list uchar int vertex_indices\n", spec->faceCount
+		);
+
+	built = built && CharString_appendFormat(
 		t->alloc, &header, &t->err,
-		"ply\nformat binary_%s_endian 1.0\nelement vertex %" PRIu32 "\nproperty float x\nproperty float y\nproperty float z\n",
-		spec->bigEndian ? "big" : "little", spec->vertexCount
+		"element vertex %" PRIu32 "\nproperty float x\nproperty float y\nproperty float z\n", spec->vertexCount
 	);
 
 	if(built && spec->withNormals)
@@ -113,10 +123,13 @@ static Bool Ply_genBuild(Test *t, const PlyGenSpec *spec, Buffer *out, Error *e_
 	if(built && spec->withUvs)
 		built = CharString_appendFormat(t->alloc, &header, &t->err, "property float s\nproperty float t\n");
 
-	built = built && CharString_appendFormat(
-		t->alloc, &header, &t->err,
-		"element face %" PRIu32 "\nproperty list uchar int vertex_indices\nend_header\n", spec->faceCount
-	);
+	if(built && !spec->faceFirst)
+		built = CharString_appendFormat(
+			t->alloc, &header, &t->err,
+			"element face %" PRIu32 "\nproperty list uchar int vertex_indices\n", spec->faceCount
+		);
+
+	built = built && CharString_appendFormat(t->alloc, &header, &t->err, "end_header\n");
 
 	if(!built)
 		retError(clean, Error_invalidState(0, "Ply_genBuild() couldn't format the header"));
@@ -130,6 +143,17 @@ static Bool Ply_genBuild(Test *t, const PlyGenSpec *spec, Buffer *out, Error *e_
 	);
 
 	at += CharString_length(header);
+
+	U8 *faceAt = at;
+	U64 faceBytes = 0;
+
+	for(U32 f = 0; f < spec->faceCount; ++f)
+		faceBytes += 1 + (U64) (spec->faceCorners ? spec->faceCorners[f] : 3) * 4;
+
+	if(spec->faceFirst)
+		at += faceBytes;
+
+	else faceAt = at + (U64) spec->vertexCount * vertexStride;
 
 	for(U32 v = 0; v < spec->vertexCount; ++v) {
 
@@ -150,6 +174,7 @@ static Bool Ply_genBuild(Test *t, const PlyGenSpec *spec, Buffer *out, Error *e_
 	}
 
 	U32 cursor = 0;
+	at = faceAt;
 
 	for(U32 f = 0; f < spec->faceCount; ++f) {
 
@@ -457,5 +482,73 @@ void Test_plyParallelBelowThreshold(Test *t) {
 	if(queued)
 		JobQueue_free(&jobs);
 
+	Buffer_free(&bytes, t->alloc);
+}
+
+//A file declaring the face element before the vertex element is refused by Ply_read, and so by the parallel read
+// forced or not: the split addresses vertices from the body offset and would decode the faces as vertices.
+
+void Test_plyParallelFaceBeforeVertex(Test *t) {
+
+	Test_setModule(t, "PLY/parallelFaceBeforeVertex");
+
+	Buffer bytes = Buffer_createNull();
+	JobQueue jobs = (JobQueue) { 0 };
+	const PlyGenSpec spec = { .vertexCount = 131, .faceCount = 43, .faceFirst = true };
+
+	if(
+		!Test_assert(t, "build", Ply_genBuild(t, &spec, &bytes, &t->err)) ||
+		!Test_assert(t, "queue", JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err))
+	)
+		goto clean;
+
+	Error serialErr = Error_none();
+	MeshResult serial = Test_meshRead(t, Ply_read, bytes.ptr, Buffer_length(bytes), EMeshFlags_None, true, true, &serialErr);
+	MeshResult forced = readPlyParallel(t, bytes, EMeshFlags_None, true, true, &jobs, true, NULL);
+	MeshResult unforced = readPlyParallel(t, bytes, EMeshFlags_None, true, true, &jobs, false, NULL);
+
+	Test_assert(t, "serial refuses a face first file", !serial.ok);
+	Test_assert(t, "forced refuses a face first file", !forced.ok);
+	Test_assert(t, "unforced refuses a face first file", !unforced.ok);
+
+	MeshResult_free(t, &unforced);
+	MeshResult_free(t, &forced);
+	MeshResult_free(t, &serial);
+
+clean:
+	JobQueue_free(&jobs);
+	Buffer_free(&bytes, t->alloc);
+}
+
+//A body cut short has to fail the forced split the way it fails Ply_read, from the chunk that runs out of bytes.
+
+void Test_plyParallelTruncated(Test *t) {
+
+	Test_setModule(t, "PLY/parallelTruncated");
+
+	Buffer bytes = Buffer_createNull();
+	JobQueue jobs = (JobQueue) { 0 };
+	const PlyGenSpec spec = { .vertexCount = 131, .faceCount = 43 };
+
+	if(
+		!Test_assert(t, "build", Ply_genBuild(t, &spec, &bytes, &t->err)) ||
+		!Test_assert(t, "queue", JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err))
+	)
+		goto clean;
+
+	static const U64 cuts[] = { 1, 5, 40, 300 };
+
+	for(U8 i = 0; i < (U8) (sizeof(cuts) / sizeof(cuts[0])); ++i) {
+
+		Buffer cut = Buffer_createRefConst(bytes.ptr, Buffer_length(bytes) - cuts[i]);
+
+		Error err = Error_none();
+		MeshResult forced = readPlyParallel(t, cut, EMeshFlags_None, true, true, &jobs, true, &err);
+		Test_assert(t, "forced truncated body fails", !forced.ok);
+		MeshResult_free(t, &forced);
+	}
+
+clean:
+	JobQueue_free(&jobs);
 	Buffer_free(&bytes, t->alloc);
 }

@@ -50,6 +50,8 @@ OXC3_TEST_MAIN(formats_ply) {
 	Test_plyParallelFlags(&t);
 	Test_plyParallelSerialFlagsFallBack(&t);
 	Test_plyParallelBelowThreshold(&t);
+	Test_plyParallelFaceBeforeVertex(&t);
+	Test_plyParallelTruncated(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

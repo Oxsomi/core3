@@ -63,8 +63,24 @@ COLOR_FAILED = 15158332
 
 # A GET, retried with a growing wait: a large compare is sometimes cut off mid response.
 # Of the HTTP errors only a rate limit or a server error is worth asking again; the rest are answers.
+# A 403 is a rate limit when GitHub says no requests remain or names a wait.
 
 RETRY_STATUS = (429, 500, 502, 503, 504)
+MAX_WAIT = 60
+
+def retryWait(e, attempt):
+
+	if e.code == 403 and e.headers.get("X-RateLimit-Remaining") != "0" and not e.headers.get("Retry-After"):
+		return None
+
+	if e.code != 403 and e.code not in RETRY_STATUS:
+		return None
+
+	try:
+		return min(float(e.headers.get("Retry-After")), MAX_WAIT)
+
+	except (TypeError, ValueError):
+		return 5 * (attempt + 1)
 
 def fetch(url, token = None, raw = False):
 
@@ -86,8 +102,12 @@ def fetch(url, token = None, raw = False):
 
 		except urllib.error.HTTPError as e:
 
-			if e.code not in RETRY_STATUS or attempt == 2:
+			wait = retryWait(e, attempt)
+
+			if wait is None or attempt == 2:
 				raise
+
+			time.sleep(wait)
 
 		except (OSError, http.client.HTTPException):
 

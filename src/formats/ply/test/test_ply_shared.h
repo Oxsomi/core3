@@ -51,3 +51,5 @@ void Test_plyParallelMixedPolygons(Test *t);
 void Test_plyParallelFlags(Test *t);
 void Test_plyParallelSerialFlagsFallBack(Test *t);
 void Test_plyParallelBelowThreshold(Test *t);
+void Test_plyParallelFaceBeforeVertex(Test *t);
+void Test_plyParallelTruncated(Test *t);

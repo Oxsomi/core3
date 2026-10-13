@@ -1975,6 +1975,9 @@ Bool Ply_readParallel(
 
 			Ply_mergeSpanInfo(info, jobArr[i].info, jobArr[i].info->vertexCount);
 		}
+
+		if(!JobGroup_isSuccess(&vertexGroup))
+			retError(clean, Error_invalidState(0, "Ply_readParallel() a vertex chunk failed without naming why"));
 	}
 
 	//---- faces, split by Ply_buildFaceLayout and decoded the same way Ply_read's own fast path does
@@ -2082,6 +2085,9 @@ Bool Ply_readParallel(
 
 			fannedFaces += jobArr[i].fannedFaces;
 		}
+
+		if(!JobGroup_isSuccess(&faceGroup))
+			retError(clean, Error_invalidState(0, "Ply_readParallel() a face chunk failed without naming why"));
 	}
 
 	//---- flush: one write per stream, in the order the records occupy it, which is as cheap as this ever gets
