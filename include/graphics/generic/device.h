@@ -389,6 +389,12 @@ typedef struct GraphicsDevice {
 
 	U32 stagingPeakKiB, stagingQuietFrames;
 
+	//The readback buffer shrinks the same way once pulls stay small, never below the most reserveReadback asked for a
+	// frame
+
+	U32 stagingReadbackPeakKiB, stagingReadbackQuietFrames;
+	U64 stagingReadbackFloor;
+
 	AtomicI64 pipelineEstimateBytes, pipelineEstimateCount;
 
 	//The driver's code size of each pipeline built so far or loaded with a pipeline cache, as sorted (key, bytes)
@@ -619,7 +625,8 @@ U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage m
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory
 // block mid frame; reserving during load time moves that hitch to a predictable place.
-//Zero reserves the minimum, the buffers only ever grow and underestimating just re-grows at the next pull.
+//Zero reserves the minimum. The buffers grow for bigger pulls and shrink back once pulls stay small, but never below
+// the most reserved for a frame; underestimating just re-grows at the next pull.
 Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePerFrame, Error *e_rr);
 
 //Private

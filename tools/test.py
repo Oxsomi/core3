@@ -458,7 +458,8 @@ def main():
 		# ---- audio (probed) -----------------------------------------------------------------------
 		section("audio")
 		if available(exe, "audio", "devices"):
-			run(exe, ["audio", "devices"], contains=["Device"])
+			# The count, which a machine with no audio device prints as well; the device lines depend on the machine.
+			run(exe, ["audio", "devices"], contains=["Audio devices:"])
 			# audio convert needs a 32-bit-float WAV source (WAV_write rejects int PCM); synthesizing a valid
 			# float WAV portably is out of scope for this smoke test, so it's intentionally not exercised here.
 			skip("audio convert", "needs a float-format WAV source to exercise meaningfully")

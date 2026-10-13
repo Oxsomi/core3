@@ -776,7 +776,7 @@ DeviceTexture and DeviceBuffer can be pulled back from GPU by their pullRegion f
 
 A buffer can send the region to a stream instead of into its cpuData, with `DeviceBufferRef_pullRegionStream(buf, offset, len, stream, streamOffset, callback, context, e_rr)`. The timing is the one above; what changes is the destination and what the buffer has to be. A stream destination needs no CPUBacked, so nothing the size of the resource has to stay resident, which is what a readback headed for a file or a cache wants. The stream is referenced until the pull completes and has to be writable, and its callback is a `DeviceStreamPullCallback`, carrying whether the write landed: the bytes reach the host either way, so a false only ever means the stream refused them, which a copy into cpuData has no way to fail at. `DeviceTextureRef_pullRegionStream` and `TextureRef_pullRegionStream` do the same for textures, writing the region as tight rows: the first replaces the copy into cpuData, the second replaces the buffer the runtime allocates to hand a render target's region over, so a frame headed for an encoder or a file costs no destination of its own and its callback becomes optional.
 
-The staging memory that carries pulls back to the CPU is created at the first pull and only ever grows. On D3D12 that first allocation can bring in a whole new CPU sided memory block mid frame, so latency sensitive applications can call GraphicsDeviceRef_reserveReadback(device, sizePerFrame, e_rr) during load time to move that cost to a predictable place. Underestimating (or passing 0) is fine, the buffers simply grow at the next pull that needs more.
+The staging memory that carries pulls back to the CPU is created at the first pull and grows for any pull that needs more. Once 64 frames have read back less than a quarter of it, it shrinks as the upload staging buffer does, to three regions of 4 MiB doubled until they hold twice the peak. On D3D12 that first allocation can bring in a whole new CPU sided memory block mid frame, so latency sensitive applications can call GraphicsDeviceRef_reserveReadback(device, sizePerFrame, e_rr) during load time to move that cost to a predictable place; the most reserved for a frame is also the floor the buffer never shrinks below. Underestimating (or passing 0) is fine, the buffers simply grow at the next pull that needs more.
 
 Texture pulls follow the same region semantics as markDirty: zero for an axis means the rest of that axis, and for block compressed formats the region snaps outward to whole blocks, so slightly more than asked can be refreshed. Compressed formats are supported; the pulled data lands in cpuData in the same tight block rows the upload reads from.
 
@@ -1277,6 +1277,7 @@ U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
 	&tempShader,
 	&entrypoint,
 	NULL,						//Defines ([ key, value ][], NULL = none)
+	NULL,						//Uniforms ([ name, value ][], NULL = none), each value compared as the uniform's type
 	ESHExtension_None,			//Extensions to disallow
 	ESHExtension_None			//Extensions to require
 );

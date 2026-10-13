@@ -53,6 +53,10 @@ Bool CLI_audioDevices(const ParsedArgs *args) {
 	gotoIfError3(clean, AudioInterface_create(&ref, alloc, &type, &err));
 	gotoIfError3(clean, AudioInterface_getDeviceInfos(AudioInterfaceRef_ptr(ref), alloc, &infos, &err));
 
+	//The count first, so a machine with no audio device (a headless CI runner) still says what it found.
+
+	Log_debugLnx("Audio devices: %"PRIu64, infos.length);
+
 	for(U64 i = 0; i < infos.length; ++i)
 		AudioDeviceInfo_print(infos.ptr[i], alloc);
 

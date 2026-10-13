@@ -109,6 +109,19 @@ EGfxPipelineStage Compiler_parseStage(CharString stageName) {
 			if(stageNameLen == 4)            return EGfxPipelineStage_TaskExt;
 			break;
 
+		//amplification: DXC's name for the task stage, the only one [shader()] takes
+
+		case C8x4('a', 'm', 'p', 'l'):
+
+			if(
+				stageNameLen == 13 &&
+				Buffer_readU64(buf, 4, NULL, NULL) == C8x8('i', 'f', 'i', 'c', 'a', 't', 'i', 'o') &&
+				stageName.ptr[12] == 'n'
+			)
+				return EGfxPipelineStage_TaskExt;
+
+			break;
+
 		case C8x4('h', 'u', 'l', 'l'):        //hull
 			if(stageNameLen == 4)            return EGfxPipelineStage_Hull;
 			break;

@@ -460,3 +460,83 @@ void Test_SHEntryRuntimeGetCombinations(Test *t) {
 	Test_assert(t, "create /0 safety combined == 1", SHEntryRuntime_getCombinations(&rt) == 1);
 	Test_assert(t, "create /0 safety compiled == 1", SHEntryRuntime_getCombinationsCompiled(&rt) == 1);
 }
+
+void Test_SHValueParse(Test *t) {
+
+	Test_setModule(t, "SHValue parse");
+
+	const Allocator *alloc = t->alloc;
+
+	//Each type takes what it can hold, to its limits, and refuses one past them.
+
+	static const struct { TypeId typeId; const C8 *str; Bool ok; U64 bits; } cases[] = {
+
+		{ ETypeId_B1,  "true",  true, 1 },  { ETypeId_B1, "false", true, 0 },  { ETypeId_B1, "yes", false, 0 },
+
+		{ ETypeId_U8,  "255",   true, 255 },     { ETypeId_U8,  "256",   false, 0 },  { ETypeId_U8, "-1", false, 0 },
+		{ ETypeId_U8,  "+3",    true, 3 },       { ETypeId_U16, "65535", true, 65535 },  { ETypeId_U16, "65536", false, 0 },
+		{ ETypeId_U32, "300",   true, 300 },     { ETypeId_U32, "4294967295", true, 0xFFFFFFFF },
+		{ ETypeId_U32, "4294967296", false, 0 }, { ETypeId_U64, "18446744073709551615", true, U64_MAX },
+
+		{ ETypeId_I8,  "-128",  true, 0x80 },    { ETypeId_I8,  "127",   true, 127 },  { ETypeId_I8, "128", false, 0 },
+		{ ETypeId_I8,  "-129",  false, 0 },      { ETypeId_I16, "-2",    true, 0xFFFE },
+		{ ETypeId_I16, "-32769", false, 0 },     { ETypeId_I32, "-70000", true, 0xFFFEEE90 },
+		{ ETypeId_I32, "2147483648", false, 0 }, { ETypeId_I64, "-9223372036854775808", true, (U64)1 << 63 },
+		{ ETypeId_I64, "9223372036854775808", false, 0 },
+
+		{ ETypeId_F16, "1.5",   true, 0x3E00 },  { ETypeId_F16, "70000", false, 0 },
+		{ ETypeId_F32, "0.123456789", true, 0x3DFCD6EA },  { ETypeId_F32, "1.50", true, 0x3FC00000 },
+		{ ETypeId_F32, "1e40",  false, 0 },      { ETypeId_F64, "0.1",   true, 0x3FB999999999999A },
+		{ ETypeId_F32, "abc",   false, 0 },      { ETypeId_I32, "",      false, 0 }
+	};
+
+	for (U64 i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+
+		SHValue value = (SHValue) { 0 };
+		const Bool parsed = SHValue_parse(CharString_createRefCStrConst(cases[i].str), cases[i].typeId, &value, NULL);
+		U64 bits = 0;
+
+		Buffer_memcpy(
+			Buffer_createRef(&bits, sizeof(bits)), Buffer_createRefConst(&value, ETypeId_getBytes(cases[i].typeId))
+		);
+
+		Test_assert(t, cases[i].str, parsed == cases[i].ok && (!parsed || bits == cases[i].bits));
+	}
+
+	//Spellings of one value are equal, and a stored value prints so that it parses back to the same bits.
+
+	static const struct { TypeId typeId; const C8 *a; const C8 *b; } same[] = {
+		{ ETypeId_U32, "+3", "3" }, { ETypeId_F32, "1.5", "1.50" }, { ETypeId_I16, "-0", "0" }, { ETypeId_B1, "true", "true" }
+	};
+
+	for (U64 i = 0; i < sizeof(same) / sizeof(same[0]); ++i) {
+
+		SHValue a = (SHValue) { 0 }, b = (SHValue) { 0 };
+
+		Test_assert(t, same[i].a,
+			SHValue_parse(CharString_createRefCStrConst(same[i].a), same[i].typeId, &a, NULL) &&
+			SHValue_parse(CharString_createRefCStrConst(same[i].b), same[i].typeId, &b, NULL) &&
+			SHValue_equals(&a, &b, same[i].typeId)
+		);
+	}
+
+	static const struct { TypeId typeId; const C8 *str; } exact[] = {
+		{ ETypeId_F32, "0.123456789" }, { ETypeId_F64, "0.1" }, { ETypeId_F16, "0.333" },
+		{ ETypeId_F32, "3.4028234e38" }, { ETypeId_I64, "-9223372036854775808" }, { ETypeId_U64, "18446744073709551615" }
+	};
+
+	for (U64 i = 0; i < sizeof(exact) / sizeof(exact[0]); ++i) {
+
+		SHValue value = (SHValue) { 0 }, back = (SHValue) { 0 };
+		CharString str = CharString_createNull();
+
+		Test_assert(t, exact[i].str,
+			SHValue_parse(CharString_createRefCStrConst(exact[i].str), exact[i].typeId, &value, NULL) &&
+			SHValue_stringify(&value, exact[i].typeId, alloc, &str, NULL) &&
+			SHValue_parse(str, exact[i].typeId, &back, NULL) &&
+			SHValue_equals(&value, &back, exact[i].typeId)
+		);
+
+		CharString_free(&str, alloc);
+	}
+}

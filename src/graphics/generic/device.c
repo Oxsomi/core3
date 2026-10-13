@@ -1873,6 +1873,21 @@ clean:
 }
 
 static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef);
+static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef);
+
+//What a ring's frame region holds right now, the blocks still allocated
+
+static U64 GraphicsDevice_allocatedBytes(const AllocationBuffer *allocations) {
+
+	const ListAllocationBufferBlock *entries = &allocations->allocations;
+	U64 used = 0;
+
+	for(U64 i = 0; i < entries->length; ++i)
+		if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
+			used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
+
+	return used;
+}
 
 Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr) {
 
@@ -1902,13 +1917,7 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 	//Release all allocations of buffer that was in flight, after noting how much of it the frame used
 
 	{
-		const ListAllocationBufferBlock *entries = &device->stagingAllocations[device->fifId].allocations;
-		U64 used = 0;
-
-		for(U64 i = 0; i < entries->length; ++i)
-			if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
-				used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
-
+		const U64 used = GraphicsDevice_allocatedBytes(&device->stagingAllocations[device->fifId]);
 		device->stagingPeakKiB = (U32) U64_max(device->stagingPeakKiB, (used + KIBI - 1) / KIBI);
 		++device->stagingQuietFrames;
 	}
@@ -1917,9 +1926,22 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 	GraphicsDevice_shrinkStaging(deviceRef);
 
+	//The readback buffer's use by the same frame, counted before its pulls complete and free it
+
+	if (device->stagingReadback) {
+
+		const U64 used = GraphicsDevice_allocatedBytes(&device->stagingReadbackAllocations[device->fifId]);
+		const U64 peakKiB = U64_max(device->stagingReadbackPeakKiB, (used + KIBI - 1) / KIBI);
+
+		device->stagingReadbackPeakKiB = (U32) U64_min(U32_MAX, peakKiB);
+		++device->stagingReadbackQuietFrames;
+	}
+
 	//This frame in flight provably completed, so its readbacks can land in cpuData and report
 
 	GraphicsDevice_completePulls(device, device->fifId);
+
+	GraphicsDevice_shrinkStagingReadback(deviceRef);
 
 	//Update buffer data
 
@@ -2150,7 +2172,7 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_reserveReadback() couldn't acquire device lock"));
 
-	//Only ever grow; a live ring may hold recorded pulls sized for the current buffer
+	//A reservation only grows the buffer, and stays the floor the automatic shrink keeps to
 
 	if(
 		!device->stagingReadback ||
@@ -2158,12 +2180,44 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 	)
 		gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, sizePerFrame * 3, e_rr));
 
+	device->stagingReadbackFloor = U64_max(device->stagingReadbackFloor, sizePerFrame);
+
 clean:
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
+}
+
+//A large pull grows the readback buffer, after which a frame reads back little. Once that has held for 64 frames it
+// shrinks as the staging buffer does, to three regions of 4 MiB doubled until they hold twice the peak, and never
+// below the most reserveReadback asked for a frame. A pull still in flight holds the buffer it was recorded into, so
+// swapping it here is safe. Optional, so a failure keeps the old buffer.
+
+static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->stagingReadbackQuietFrames < 64 || !device->stagingReadback)
+		return;
+
+	const U64 region = DeviceBufferRef_ptr(device->stagingReadback)->resource.size / 3;
+	const U64 peak = (U64) device->stagingReadbackPeakKiB * KIBI;
+
+	device->stagingReadbackQuietFrames = 0;
+	device->stagingReadbackPeakKiB = 0;
+
+	U64 target = 4 * MIBI;
+
+	while(target < peak * 2 || target < device->stagingReadbackFloor)
+		target <<= 1;
+
+	if(peak * 4 > region || target >= region)
+		return;
+
+	if(!GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, target * 3, NULL))
+		Log_warnLnx("GraphicsDevice_shrinkStagingReadback() couldn't shrink the readback buffer, it keeps its size");
 }
 
 //Row measures of a pull region for any pullable texture type, in block rows for compressed formats.

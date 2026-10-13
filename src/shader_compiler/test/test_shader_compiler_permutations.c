@@ -162,6 +162,197 @@ void Test_shaderCompilerPermutations(Test *t) {
 		ListBuffer_freeUnderlying(&out, alloc);
 	}
 
+	//--- The same uniform with rows of each entrypoint's own: one library compile, every entry linked once a row, ---
+	//--- each binary holding its own entry's value (mainWide 0, 1 and 2, mainDeep 3 and 5). ---
+
+	{
+		static const struct { U8 mode; const C8 *name; } targets[] = {
+			{ EGfxBinaryType_SPIRV, "spirv" },
+			{ EGfxBinaryType_DXIL,  "dxil"  }
+		};
+
+		for (U64 tg = 0; tg < sizeof(targets) / sizeof(targets[0]); ++tg) {
+
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			CharString label = CharString_createNull();
+
+			Bool ok =
+				compileFileShader(
+					alloc, "permutations/uniform_rows_per_entry.hlsl", targets[tg].mode, true, false, &out, &err
+				) &&
+				out.length == 1 && Buffer_length(out.ptr[0]) &&
+				readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.entries.length == 2;
+
+			for (U64 j = 0; ok && j < shFile.entries.length; ++j) {
+
+				const SHEntry *entry = &shFile.entries.ptr[j];
+				const Bool wide = CharString_equalsCStringSensitive(&entry->name, "mainWide");
+				const U8 expected = wide ? 0x07 : 0x28;        //Bits of the rows: 0, 1 and 2, or 3 and 5
+				U8 seen = 0;
+
+				ok = wide || CharString_equalsCStringSensitive(&entry->name, "mainDeep");
+
+				for (U64 k = 0; ok && k < entry->binaryIds.length; ++k) {
+
+					const SHBinaryIdentifier *id = &shFile.binaries.ptr[entry->binaryIds.ptr[k]].identifier;
+
+					if (id->uniforms.length != 1) {
+						ok = false;
+						break;
+					}
+
+					const U8 row = id->uniformData.ptr[id->uniforms.ptr[0].dataOffset];
+					ok = row < 8 && !((seen >> row) & 1);
+					seen |= ok ? (U8) (1 << row) : 0;
+				}
+
+				ok = ok && seen == expected;
+			}
+
+			if (!ok)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "uniform rows of each entrypoint's own (%s)", targets[tg].name))
+				label = CharString_createRefCStrConst("uniform rows of each entrypoint's own");
+
+			Test_assert(t, label.ptr, ok);
+
+			CharString_free(&label, alloc);
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
+		}
+	}
+
+	//--- Disabled combinations (@variants.hlsli), on both backends: dropped at compile (OXC_DISABLE_COMBINATION) ---
+	//--- or after their link (oxcDisableBinary()), the entry keeping the binaries left, and the marker's register ---
+	//--- never reaching a kept binary, with --keep-registers too. A marker reached by every combination writes nothing. ---
+
+	{
+		static const struct { U8 mode; const C8 *name; } targets[] = {
+			{ EGfxBinaryType_SPIRV, "spirv" },
+			{ EGfxBinaryType_DXIL,  "dxil"  }
+		};
+
+		for (U64 tg = 0; tg < sizeof(targets) / sizeof(targets[0]); ++tg) {
+
+			CharString label = CharString_createNull();
+
+			//At preprocess: five of the six define and extension combinations.
+
+			{
+				ListBuffer out = (ListBuffer) { 0 };
+				SHFile shFile = (SHFile) { 0 };
+
+				Bool ok =
+					compileFileShader(
+						alloc, "permutations/disable_combination.hlsl", targets[tg].mode, true, false, &out, &err
+					) &&
+					out.length == 1 && Buffer_length(out.ptr[0]) &&
+					readOiSH(alloc, out.ptr[0], &shFile, &err) &&
+					shFile.binaries.length == 5 && shFile.entries.length == 1 &&
+					shFile.entries.ptr[0].binaryIds.length == 5;
+
+				for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+					const SHBinaryIdentifier *id = &shFile.binaries.ptr[j].identifier;
+					const Bool has16 = !!(id->extensions & ESHExtension_16BitTypes);
+
+					ok = id->defines.length == 2 &&
+						!(has16 && CharString_equalsCStringSensitive(&id->defines.ptr[1], "2"));
+				}
+
+				if (!ok)
+					Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+				if (!CharString_format(alloc, &label, &err, "combination disabled at compile (%s)", targets[tg].name))
+					label = CharString_createRefCStrConst("combination disabled at compile");
+
+				Test_assert(t, label.ptr, ok);
+
+				CharString_free(&label, alloc);
+				SHFile_free(&shFile, alloc);
+				ListBuffer_freeUnderlying(&out, alloc);
+				err = Error_none();
+			}
+
+			//After the link: rows 0 and 1 kept, and no marker register, whether unused registers are kept or not.
+
+			for (U8 keep = 0; keep < 2; ++keep) {
+
+				ListBuffer out = (ListBuffer) { 0 };
+				SHFile shFile = (SHFile) { 0 };
+
+				Bool ok =
+					compileFileShader(
+						alloc, "permutations/disable_binary.hlsl", targets[tg].mode, true, keep, &out, &err
+					) &&
+					out.length == 1 && Buffer_length(out.ptr[0]) &&
+					readOiSH(alloc, out.ptr[0], &shFile, &err) &&
+					shFile.binaries.length == 2 && shFile.entries.length == 1;
+
+				U8 rowsSeen = 0;
+
+				for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+					const SHBinaryInfo *bin = &shFile.binaries.ptr[j];
+					const SHBinaryIdentifier *id = &bin->identifier;
+
+					ok = id->uniforms.length == 1;
+
+					if (ok)
+						rowsSeen |= (U8) (1 << (id->uniformData.ptr[id->uniforms.ptr[0].dataOffset] & 7));
+
+					for (U64 i = 0; ok && i < bin->registers.length; ++i)
+						ok = !CharString_equalsCStringSensitive(&bin->registers.ptr[i].name, "_oxcDisableBinary");
+				}
+
+				ok = ok && rowsSeen == 3;
+
+				if (!ok)
+					Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+				if (!CharString_format(
+					alloc, &label, &err, "binary disabled after its link (%s%s)", targets[tg].name,
+					keep ? ", keep registers" : ""
+				))
+					label = CharString_createRefCStrConst("binary disabled after its link");
+
+				Test_assert(t, label.ptr, ok);
+
+				CharString_free(&label, alloc);
+				SHFile_free(&shFile, alloc);
+				ListBuffer_freeUnderlying(&out, alloc);
+				err = Error_none();
+			}
+
+			//Every combination disabled, at compile or by a call the specialization can't fold: nothing written.
+
+			static const C8 *nothing[] = {
+				"permutations/disable_everything.hlsl", "permutations/disable_binary_unfolded.hlsl"
+			};
+
+			for (U64 n = 0; n < sizeof(nothing) / sizeof(nothing[0]); ++n) {
+
+				ListBuffer out = (ListBuffer) { 0 };
+
+				const Bool ok =
+					compileFileShader(alloc, nothing[n], targets[tg].mode, false, false, &out, &err) &&
+					out.length == 1 && !Buffer_length(out.ptr[0]);
+
+				if (!CharString_format(alloc, &label, &err, "%s writes nothing (%s)", nothing[n], targets[tg].name))
+					label = CharString_createRefCStrConst(nothing[n]);
+
+				Test_assert(t, label.ptr, ok);
+
+				CharString_free(&label, alloc);
+				ListBuffer_freeUnderlying(&out, alloc);
+				err = Error_none();
+			}
+		}
+	}
+
 	//--- An empty defines annotation means one combination with no defines, not zero combinations. ---
 	//--- Nothing else compiles that spelling, so the link time define matching never walked an empty range. ---
 

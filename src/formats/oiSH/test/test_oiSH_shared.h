@@ -38,6 +38,7 @@ void Test_GfxBindingsDummy(Test *t);
 
 void Test_SHEntryRuntimeGetCombinations(Test *t);
 void Test_SHBinaryIdentifierEquals(Test *t);
+void Test_SHValueParse(Test *t);
 
 void Test_SHFileAddIncNullGuards(Test *t);
 void Test_SHFileAddIncEmptyPathRejected(Test *t);

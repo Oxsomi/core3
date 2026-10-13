@@ -100,6 +100,54 @@ clean:
 	return found;
 }
 
+//Whether disasm holds number between prefix and suffix, and, with an empty suffix, no digit after it, so 7 doesn't
+//match 70000.
+
+static Bool Test_disasmHasNumber(
+	const CharString *disasm, const C8 *prefix, I64 number, const C8 *suffix, const Allocator *alloc
+) {
+
+	CharString needle = CharString_createNull();
+	Bool found = false;
+
+	if (!CharString_format(alloc, &needle, NULL, "%s%" PRIi64 "%s", prefix, number, suffix))
+		return false;
+
+	for (U64 at = 0; !found; ++at) {
+
+		at = CharString_findFirstStringSensitive(disasm, &needle, at, 0);
+
+		if (at == U64_MAX)
+			break;
+
+		const U64 end = at + CharString_length(needle);
+		found = *suffix || end >= CharString_length(*disasm) || !C8_isDec(disasm->ptr[end]);
+	}
+
+	CharString_free(&needle, alloc);
+	return found;
+}
+
+//Whether disasm holds token with neither a digit nor a decimal point after it, so 1.5 doesn't match 1.55.
+
+static Bool Test_disasmHasToken(const CharString *disasm, const C8 *token) {
+
+	const CharString needle = CharString_createRefCStrConst(token);
+
+	for (U64 at = 0; ; ++at) {
+
+		at = CharString_findFirstStringSensitive(disasm, &needle, at, 0);
+
+		if (at == U64_MAX)
+			return false;
+
+		const U64 end = at + CharString_length(needle);
+
+		if (end >= CharString_length(*disasm) || (!C8_isDec(disasm->ptr[end]) && disasm->ptr[end] != '.'))
+			return true;
+	}
+}
+
 void Test_shaderCompilerFeatures(Test *t) {
 
 	Test_setModule(t, "Compiler features");
@@ -540,6 +588,162 @@ void Test_shaderCompilerFeatures(Test *t) {
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
+	}
+
+	//--- Under --keep-registers, a register only a uniform-dead branch reads stays listed in every binary ---
+
+	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		CharString label = CharString_createNull();
+
+		Bool ok =
+			compileFileShader(alloc, "features/dead_uniform_register.hlsl", backends[b].mode, true, true, &out, &err) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) &&
+			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2;
+
+		for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+			const SHBinaryInfo *bin = &shFile.binaries.ptr[j];
+			const SHBinaryIdentifier *id = &bin->identifier;
+
+			if (id->uniforms.length != 1) {
+				ok = false;
+				break;
+			}
+
+			Bool readExtra = id->uniformData.ptr[id->uniforms.ptr[0].dataOffset] != 0;
+			Bool listed = false, used = false;
+
+			for (U64 i = 0; i < bin->registers.length; ++i)
+				if (CharString_equalsCStringSensitive(&bin->registers.ptr[i].name, "deadRead")) {
+					listed = true;
+					used = (bin->registers.ptr[i].reg.isUsedFlag >> backends[b].mode) & 1;
+				}
+
+			ok &= listed && used == readExtra;
+		}
+
+		if (!ok)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		if (!CharString_format(alloc, &label, &err, "uniform-dead register kept by keep registers (%s)", backends[b].name))
+			label = CharString_createRefCStrConst("uniform-dead register kept by keep registers");
+
+		Test_assert(t, label.ptr, ok);
+
+		CharString_free(&label, alloc);
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//--- Every scalar uniform type keeps its value: as stored in the oiSH, and as the constant its binary holds ---
+	//Each uniform is stored back as a word (features/uniform_values.hlsl), so the constant is that word: DXIL prints it
+	//as a signed i32 store operand, the undef after it the store's unused lanes, and SPIRV as a uint or int constant,
+	//whichever the optimizer folded it to, or for a float as the float a bitcast it didn't fold reads.
+
+	{
+		static const struct { const C8 *name; const C8 *value; U32 word; const C8 *spirvFloat; } values[] = {
+			{ "big", "300",         300,        NULL },
+			{ "neg", "-70000",      0xFFFEEE90, NULL },
+			{ "f",   "0.123456789", 0x3DFCD6EA, "OpConstant %float 0.123456791" },
+			{ "s16", "-2",          0xFFFFFFFE, NULL },
+			{ "s8",  "-1",          0xFFFFFFFF, NULL },
+			{ "h",   "1.5",         0x3FC00000, "OpConstant %float 1.5" },
+			{ "u16", "65535",       65535,      NULL },
+			{ "u8",  "255",         255,        NULL },
+			{ "b",   "true",        7,          NULL }
+		};
+
+		for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			Compiler comp = (Compiler) { 0 };
+			CharString disasm = CharString_createNull();
+			CharString label = CharString_createNull();
+			Bool created = false;
+
+			//One binary for each extension line: SPIRV builds its spec constants with and without 16 bit types.
+
+			Bool ok =
+				compileFileShader(alloc, "features/uniform_values.hlsl", backends[b].mode, true, false, &out, &err) &&
+				out.length == 1 && Buffer_length(out.ptr[0]) &&
+				readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2 &&
+				(created = Compiler_create(alloc, &comp, &err));
+
+			for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+				const SHBinaryInfo *bin = &shFile.binaries.ptr[j];
+				const SHBinaryIdentifier *id = &bin->identifier;
+
+				ok = id->uniforms.length == sizeof(values) / sizeof(values[0]) &&
+					Compiler_disassemble(&comp, backends[b].mode, bin->binaries[backends[b].mode], alloc, &disasm, &err);
+
+				for (U64 v = 0; ok && v < sizeof(values) / sizeof(values[0]); ++v) {
+
+					U64 u = 0;
+
+					for (; u < id->uniforms.length; ++u)
+						if (CharString_equalsCStringSensitive(&id->uniforms.ptr[u].name, values[v].name))
+							break;
+
+					if (u == id->uniforms.length) {
+						ok = false;
+						break;
+					}
+
+					const TypeId typeId = ETypeId_arr[id->uniforms.ptr[u].typeIdShort];
+					const U64 len = ETypeId_getBytes(typeId);
+					const U16 at = id->uniforms.ptr[u].dataOffset;
+					SHValue stored = (SHValue) { 0 }, expected = (SHValue) { 0 };
+
+					ok = (U64) at + len <= id->uniformData.length &&
+						SHValue_parse(CharString_createRefCStrConst(values[v].value), typeId, &expected, &err);
+
+					if (ok)
+						Buffer_memcpy(
+							Buffer_createRef(&stored, sizeof(stored)), Buffer_createRefConst(id->uniformData.ptr + at, len)
+						);
+
+					ok = ok && SHValue_equals(&stored, &expected, typeId);
+
+					if (backends[b].mode == EGfxBinaryType_DXIL)
+						ok = ok && Test_disasmHasNumber(&disasm, "i32 ", (I32) values[v].word, ", i32 undef", alloc);
+
+					else ok = ok && (
+						Test_disasmHasNumber(&disasm, "OpConstant %uint ", values[v].word, "", alloc) ||
+						Test_disasmHasNumber(&disasm, "OpConstant %int ", (I32) values[v].word, "", alloc) ||
+						(values[v].spirvFloat && Test_disasmHasToken(&disasm, values[v].spirvFloat))
+					);
+
+					if (!ok)
+						Log_debugLn(alloc, "uniform %s = %s isn't kept in binary %" PRIu64, values[v].name, values[v].value, j);
+				}
+
+				CharString_free(&disasm, alloc);
+			}
+
+			if (!ok)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "uniform values kept (%s)", backends[b].name))
+				label = CharString_createRefCStrConst("uniform values kept");
+
+			Test_assert(t, label.ptr, ok);
+
+			CharString_free(&label, alloc);
+			CharString_free(&disasm, alloc);
+
+			if (created)
+				Compiler_free(&comp, alloc);
+
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
+		}
 	}
 
 	//--- Disassembly: a compiled SPIRV binary round-trips to non-empty, plausible SPIRV text ---

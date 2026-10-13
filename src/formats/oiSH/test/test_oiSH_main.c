@@ -44,6 +44,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 
 	Test_SHEntryRuntimeGetCombinations(&t);
 	Test_SHBinaryIdentifierEquals(&t);
+	Test_SHValueParse(&t);
 
 	Test_SHFileAddIncNullGuards(&t);
 	Test_SHFileAddIncEmptyPathRejected(&t);

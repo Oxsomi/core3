@@ -87,7 +87,8 @@ typedef struct CompilerSettings {
 	Bool containsGfxOrComp;
 	Bool isRt;
 	Bool keepUnusedRegisters;   //Keep declared but unused resources bound and reflected (stable layouts across variants)
-	U8 padding[2];
+	Bool isMeshTask;            //A library compile with a mesh or task entry, which needs the mesh extension
+	U8 padding;
 
 } CompilerSettings;
 
@@ -155,7 +156,7 @@ typedef struct CompileResult {
 	Bool isSuccess;
 	Bool infoAboutIncludes;
 	U8 type;                    //ECompileResultType
-	U8 padding;
+	Bool isDisabled;            //The combination reached OXC_DISABLE_COMBINATION (@variants.hlsli): nothing compiled
 
 	union {
 		ListSHEntryRuntime shEntriesRuntime;
@@ -304,6 +305,7 @@ Bool Compiler_link(
 	U16 shaderVersion,                     //U8 maj, minor
 	EGfxPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,                    //Keep declared but unused resources bound, as the compile did
 	ListCompileError *errors,
 	Buffer *result,                        //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
 	const Allocator *alloc,

@@ -339,7 +339,7 @@ extern "C" Bool Compiler_linkDXIL(
 	#endif
 
 	Bool isShaderAnnotation =
-		(stageType >= EGfxPipelineStage_RtStartExt && stageType >= EGfxPipelineStage_RtEndExt) ||
+		(stageType >= EGfxPipelineStage_RtStartExt && stageType <= EGfxPipelineStage_RtEndExt) ||
 		stageType >= EGfxPipelineStage_Count;            //Maintain lib linking
 
 	Bool hasErrors = false;
@@ -545,16 +545,24 @@ extern "C" Bool Compiler_linkDXIL(
 	CharString_free(&tempStr, alloc);
 
 	//Link
+	//A library link (no entrypoint) keeps every function its inputs export, the uniforms' value exports included,
+	//which the entry walk in Compiler_processDXIL would then take for shaders. Only its shaders are exported, and the
+	//values, inlined by then, go with the rest of the dead functions.
 
-	hr = linker->Link(
-		tmpWStr2.ptr ? (const wchar_t*) tmpWStr2.ptr : NULL,
-		(const wchar_t*) tmpWStr3.ptr,
-		(const LPCWSTR*) wstrConstArr.ptr,
-		(U32) wstrConstArr.length,
-		nullptr,
-		0,
-		&result
-	);
+	{
+		const wchar_t *libArgs[] = { L"-export-shaders-only" };
+		const Bool isLibLink = !tmpWStr2.ptr;
+
+		hr = linker->Link(
+			tmpWStr2.ptr ? (const wchar_t*) tmpWStr2.ptr : NULL,
+			(const wchar_t*) tmpWStr3.ptr,
+			(const LPCWSTR*) wstrConstArr.ptr,
+			(U32) wstrConstArr.length,
+			isLibLink ? (const LPCWSTR*) libArgs : nullptr,
+			isLibLink ? 1 : 0,
+			&result
+		);
+	}
 
 	if (SUCCEEDED(result->GetErrorBuffer(&errs)) && errs && errs->GetBufferSize()) {
 		CharString errStr = CharString_createRefSizedConst((const C8*)errs->GetBufferPointer(), errs->GetBufferSize(), false);

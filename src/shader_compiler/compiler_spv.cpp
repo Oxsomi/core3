@@ -29,6 +29,7 @@
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
 #include "types/base/mathi.h"
+#include "types/math/flp.h"
 
 #include "optimizer.hpp"
 #include "linker.hpp"
@@ -888,6 +889,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	const CharString *entrypoint,
 	EGfxPipelineStage stage,
 	ESHExtension exts,
+	Bool keepRegisters,
 	ListCompileError *errors,
 	Buffer *result,
 	const Allocator *alloc,
@@ -910,11 +912,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	Bool isMeshTask = stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt;
 
 	ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
-	spv_target_env env =
-		spvVer == ESpirvVersion_1_6 ? SPV_ENV_UNIVERSAL_1_6 :
-		(spvVer == ESpirvVersion_1_4 ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
-
-	spvtools::Optimizer opt(env);
+	spv_target_env env = SPV_ENV_UNIVERSAL_1_3;
 
 	//Link (or just use the already linked binary)
 
@@ -943,13 +941,29 @@ extern "C" Bool Compiler_linkSPIRV(
 		linkedBinPtr = alignedBin.data();
 	}
 
+	//A library compiled for one of its entries (a mesh one at SPIR-V 1.4) holds the others at that version too, so the
+	//module's own version is the floor of the optimizer's, whatever the entry being linked needs.
+
+	if (linkedBinSiz > 1) {
+
+		const U32 minor = (linkedBinPtr[1] >> 8) & 0xFF;
+
+		if (minor >= 6)
+			spvVer = ESpirvVersion_1_6;
+
+		else if (minor >= 4 && spvVer != ESpirvVersion_1_6)
+			spvVer = ESpirvVersion_1_4;
+	}
+
+	env =
+		spvVer == ESpirvVersion_1_6 ? SPV_ENV_UNIVERSAL_1_6 :
+		(spvVer == ESpirvVersion_1_4 ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
+
 	//Run optimizer to get rid of uniforms
 
 	if (uniforms->length || CharString_length(*entrypoint)) {
 
-		//TODO: Think about this; what if a binary with RT enabled produces a non RT entrypoint.
-		//We need to produce SPV1.4 but afterwards we need to go back to SPV1.3?
-		//Maybe we need to disallow this since we can't go backwards.
+		spvtools::Optimizer opt(env);
 
 		opt.SetMessageConsumer(
 			[alloc, errors, e_rr, &s_uccess](
@@ -990,53 +1004,42 @@ extern "C" Bool Compiler_linkSPIRV(
 				EDataTypeStride dts = ETypeId_getDataTypeStride(typeId);
 
 				Bool isBool = dt == EDataType_Bool;
-
-				Bool isX8 = dts == EDataTypeStride_8;
-				Bool isX16 = dts == EDataTypeStride_16;
-
-				Bool is16 = (exts & ESHExtension_16BitTypes) && (isX16 || (isX8 && !isBool));
-
+				Bool isNarrow = dts == EDataTypeStride_8 || dts == EDataTypeStride_16;
 				Bool is64 = dts == EDataTypeStride_64;
 
-				U32 stride16 = is64 ? 4 : (is16 ? 1 : 2);        //width in U16s
-				uniformMap[i].resize((width * height * stride16 + 1) >> 1);
+				uniformMap[i].resize(width * height * (is64 ? 2 : 1));
 
-				//Copy into uniformMap; normally this is quite straightforward.
-				//Except for bools and 8-bit types; not natively supported.
-				//Another exception is 16-bit while 16-bit types aren't supported.
-				//These all get expanded to either 16-bit (if supported, unless bool) or 32-bit.
+				//Every B1, 8 and 16 bit uniform is a 32 bit spec constant (Compiler_compile declares it so, since DXC has
+				//no 8 or 16 bit ones): a B1 becomes 0 or 1, an unsigned value is widened with zeros, a signed one with its
+				//sign and a half becomes the float of the same value. 32 and 64 bit ones are copied as they are.
 
 				U32 *asU32 = uniformMap[i].data();
-				U16 *asU16 = (U16*) asU32;
 
-				const U8 *inputAsU8 = uniformData.ptr + uniform.dataOffset;
-
-				//dataOffset is an unpadded running byte sum, so a U16 view of the input can be misaligned
+				//dataOffset is an unpadded running byte sum, so a wider view of the input can be misaligned
 				// (e.g. a U8 uniform declared before a U16 one puts it at an odd offset).
-				//The words are copied to an aligned local instead; 16 elements is the widest expandable
-				// uniform (a 4x4 matrix) and Buffer_memcpy clamps to the smaller side.
+				//The value is copied to an aligned local instead; Buffer_memcpy clamps to the smaller side.
 
-				U16 inputU16Copy[16] = {};
+				SHValue value = SHValue{};
 				Buffer_memcpy(
-					Buffer_createRef(inputU16Copy, sizeof(inputU16Copy)),
-					Buffer_createRefConst(inputAsU8, len)
+					Buffer_createRef(&value, sizeof(value)),
+					Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
 				);
 
-				const U16 *inputAsU16 = inputU16Copy;
+				if (isBool || isNarrow)
+					for (U64 j = 0; j < (U64) width * height; ++j) {
 
-				if (isBool || isX8 || (!is16 && isX16))
-					for (U64 j = 0; j < width * height; ++j) {
+						if (isBool)
+							asU32[j] = (U32) ((value.vu64[0] >> j) & 1);
 
-						if (is16)                         //Expand 8-bit to 16-bit
-							asU16[j] = inputAsU8[j];
+						else if (dt == EDataType_Int)
+							asU32[j] = (U32) (dts == EDataTypeStride_8 ? (I32) value.vi8[j] : (I32) value.vi16[j]);
 
-						else if (isX8)                    //Expand 8-bit to 32-bit
-							asU32[j] = inputAsU8[j];
+						else if (dt == EDataType_Float) {
+							const F32 f = F16_castF32(value.vu16[j]);
+							Buffer_memcpy(Buffer_createRef(asU32 + j, sizeof(U32)), Buffer_createRefConst(&f, sizeof(f)));
+						}
 
-						else if (isBool)                  //Expand B1 to 32-bit
-							asU32[j] = (inputAsU16[0] >> j) & 1;
-
-						else asU32[j] = inputAsU16[j];    //Expand 16-bit to 32-bit
+						else asU32[j] = dts == EDataTypeStride_8 ? value.vu8[j] : value.vu16[j];
 					}
 
 				//Size of this uniform's own storage, not the number of uniforms in the map.
@@ -1063,8 +1066,12 @@ extern "C" Bool Compiler_linkSPIRV(
 
 		//An unsafe experiment's module is not validated here either (see Compiler_processSPIRV)
 
+		//keep-all: the bindings DXC preserved for --keep-registers have to survive this optimizer too, dead branches'
+		//included, or a binary specialized past a resource's only read drops its register.
+
 		spvtools::OptimizerOptions optimizerOptions;
 		optimizerOptions.set_run_validator(!(exts & ESHExtension_UnsafeExperimentExecution));
+		optimizerOptions.set_preserve_bindings(keepRegisters);
 
 		std::vector<U32> tmp;
 		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp, optimizerOptions))

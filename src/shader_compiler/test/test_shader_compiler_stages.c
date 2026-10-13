@@ -131,5 +131,75 @@ void Test_shaderCompilerStages(Test *t) {
 			err = Error_none();
 		}
 
+	//--- Stages written with [shader()] and a uniform: every stage is linked and reflected as itself, on both ---
+	//--- backends, and each of its entries gets one binary a row, holding that row's value. ---
+
+	static const struct { const C8 *file; const C8 *stageA; const C8 *stageB; } uniformStages[] = {
+		{ "stages/raygeneration_uniform.hlsl", "raygeneration", "miss" },
+		{ "stages/mesh_uniform.hlsl",          "mesh",          NULL },
+		{ "stages/task_uniform.hlsl",          "task",          NULL }
+	};
+
+	for (U64 i = 0; i < sizeof(uniformStages) / sizeof(uniformStages[0]); ++i)
+		for (U64 tg = 0; tg < sizeof(targets) / sizeof(targets[0]); ++tg) {
+
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			CharString label = CharString_createNull();
+
+			Bool ok =
+				compileFileShader(alloc, uniformStages[i].file, targets[tg].mode, true, false, &out, &err) &&
+				out.length == 1 && Buffer_length(out.ptr[0]) &&
+				readOiSH(alloc, out.ptr[0], &shFile, &err) &&
+				shFile.entries.length == (uniformStages[i].stageB ? 2 : 1);
+
+			for (U64 j = 0; ok && j < shFile.entries.length; ++j) {
+
+				const SHEntry *entry = &shFile.entries.ptr[j];
+				const C8 *stage = SHEntry_stageName(entry);
+				const CharString got = CharString_createRefCStrConst(stage ? stage : "");
+
+				ok =
+					CharString_equalsCStringSensitive(&got, uniformStages[i].stageA) ||
+					(uniformStages[i].stageB && CharString_equalsCStringSensitive(&got, uniformStages[i].stageB));
+
+				//Rows 1 and 2, one binary each.
+
+				U8 rowsSeen = 0;
+
+				for (U64 k = 0; ok && k < entry->binaryIds.length; ++k) {
+
+					const SHBinaryIdentifier *id = &shFile.binaries.ptr[entry->binaryIds.ptr[k]].identifier;
+
+					if (id->uniforms.length != 1) {
+						ok = false;
+						break;
+					}
+
+					const U8 row = id->uniformData.ptr[id->uniforms.ptr[0].dataOffset];
+
+					ok = row == 1 || row == 2;
+					rowsSeen |= ok ? (U8) (1 << row) : 0;
+				}
+
+				ok = ok && entry->binaryIds.length == 2 && rowsSeen == 6;
+			}
+
+			ok = ok && oiSHRoundtrips(alloc, out.ptr[0], &err);
+
+			if (!ok)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "%s (%s)", uniformStages[i].file, targets[tg].name))
+				label = CharString_createRefCStrConst(uniformStages[i].file);
+
+			Test_assert(t, label.ptr, ok);
+
+			CharString_free(&label, alloc);
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
+		}
+
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }

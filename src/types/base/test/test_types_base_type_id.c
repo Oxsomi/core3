@@ -34,4 +34,25 @@ void Test_typeId(Test *test) {
 
 		Test_assert(test, "ETypeId_toShortId", shortTypeId == i);
 	}
+
+	//A scalar's size is its width's: the data type only says how the bits are read.
+
+	static const struct { TypeId typeId; U8 bytes; } scalars[] = {
+		{ ETypeId_U8,  1 }, { ETypeId_U16, 2 }, { ETypeId_U32, 4 }, { ETypeId_U64, 8 },
+		{ ETypeId_I8,  1 }, { ETypeId_I16, 2 }, { ETypeId_I32, 4 }, { ETypeId_I64, 8 },
+		{ ETypeId_F16, 2 }, { ETypeId_F32, 4 }, { ETypeId_F64, 8 },
+		{ ETypeId_B1,  1 }, { ETypeId_C8,  1 }
+	};
+
+	for (U64 i = 0; i < sizeof(scalars) / sizeof(scalars[0]); ++i) {
+		Test_assert(test, "ETypeId_getDataTypeBytes", ETypeId_getDataTypeBytes(scalars[i].typeId) == scalars[i].bytes);
+		Test_assert(test, "ETypeId_getBytes", ETypeId_getBytes(scalars[i].typeId) == scalars[i].bytes);
+	}
+
+	//A vector or matrix is its elements' bytes, a B1 one its bits rounded up to bytes.
+
+	Test_assert(test, "ETypeId_getBytes F32x4", ETypeId_getBytes(ETypeId_F32x4) == 16);
+	Test_assert(test, "ETypeId_getBytes U16x3", ETypeId_getBytes(ETypeId_U16x3) == 6);
+	Test_assert(test, "ETypeId_getBytes F64x4x4", ETypeId_getBytes(ETypeId_F64x4x4) == 128);
+	Test_assert(test, "ETypeId_getBytes B1x4", ETypeId_getBytes(ETypeId_B1x4) == 1);
 }

@@ -81,6 +81,7 @@ Bool Compiler_linkSingle(
 	U16 shaderVersion,
 	EGfxPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	Bool enableLogging,
 	Buffer *result,
 	const Allocator *alloc

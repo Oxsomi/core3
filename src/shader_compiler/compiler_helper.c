@@ -25,6 +25,7 @@
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/container/list_basic_types.h"
+#include "types/base/string_read_helper.h"
 #include "formats/oiSH/sh_file.h"
 #include "shader_compiler/compiler.h"
 #include "compiler_helper_internal.h"
@@ -194,6 +195,13 @@ Bool Compiler_getUniqueCompiles(
 
 			SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtime, (U16) j, &binaryIdentifier, e_rr));
+
+			//The compile never sees a uniform's value, each row being a link of it, so entries whose rows differ share
+			//one compile. Told apart by their first row, they got one compile each, and each compile linked every entry
+			//in it, every binary twice.
+
+			binaryIdentifier.uniforms = (ListSHUniformRuntime) { 0 };
+			binaryIdentifier.uniformData = (ListU8) { 0 };
 
 			//Find SHBinaryIdentifier or not
 
@@ -386,6 +394,20 @@ Bool Compiler_compileShaderSingle(
 	settings.containsGfxOrComp = SHEntryRuntime_containsGfxOrComp(entry);
 	settings.isRt = SHEntryRuntime_isRt(entry);
 
+	//A library compile holds every [shader()] entry of the file, so a mesh or task one among them needs the mesh
+	//extension allowed and its SPIR-V version, or DXC falls back to NV's.
+
+	for (U64 i = 0; settings.isLib && i < runtimeEntries->length; ++i) {
+
+		const SHEntryRuntime *other = &runtimeEntries->ptr[i];
+
+		if(
+			other->isShaderAnnotation &&
+			(other->entry.stage == EGfxPipelineStage_MeshExt || other->entry.stage == EGfxPipelineStage_TaskExt)
+		)
+			settings.isMeshTask = true;
+	}
+
 	gotoIfError3(clean, Compiler_compile(compiler, &settings, &binaryIdentifier, alloc, dest, e_rr));
 
 	if(enableLogging)
@@ -395,7 +417,14 @@ clean:
 
 	s_uccess &= dest && dest->isSuccess;
 
-	if(enableLogging)
+	if(enableLogging && dest && dest->isDisabled)
+		Log_debugLn(
+			alloc, "Disabled at compile: %.*s (%s, %" PRIu32 ":%" PRIu32 ")",
+			(int) CharString_length(inputPath), inputPath.ptr,
+			binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil", (U32) runtimeEntryId, (U32) combinationId
+		);
+
+	else if(enableLogging)
 		Compiler_logStatus(binaryType, "Compile", inputPath, runtimeEntryId, combinationId, alloc, s_uccess);
 		
 	Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
@@ -415,6 +444,7 @@ Bool Compiler_linkSingle(
 	U16 shaderVersion,
 	EGfxPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	Bool enableLogging,
 	Buffer *result,
 	const Allocator *alloc
@@ -431,17 +461,18 @@ Bool Compiler_linkSingle(
 		retError(clean, Error_invalidParameter(5, 0, "Compiler_linkSingle()::result was present, but not empty"));
 
 	gotoIfError3(clean, Compiler_link(
-		compiler, type, inputs, uniforms, uniformData, &entrypoint, shaderVersion, stageType, exts, &errors, result,
-		alloc, e_rr
+		compiler, type, inputs, uniforms, uniformData, &entrypoint, shaderVersion, stageType, exts, keepRegisters,
+		&errors, result, alloc, e_rr
 	));
-
-	if (enableLogging)
-		Compiler_printErrors(errors, alloc);
 
 clean:
 
-	if (enableLogging)
+	//What the optimizer or linker said is most of the reason a link failed, so it prints either way.
+
+	if (enableLogging) {
+		Compiler_printErrors(errors, alloc);
 		Compiler_logStatus(type, "Link", path, runtimeEntryId, combinationId, alloc, s_uccess);
+	}
 		
 	Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
 	ListCompileError_freeUnderlying(&errors, alloc);
