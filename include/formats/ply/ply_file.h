@@ -29,6 +29,7 @@
 
 typedef struct Allocator Allocator;
 typedef struct Error Error;
+typedef struct JobQueue JobQueue;
 
 //Stanford PLY, the format the scanned classics are published in, ascii or binary of either byte order.
 //
@@ -55,7 +56,37 @@ Bool Ply_read(
 	Error *e_rr
 );
 
+//Ply_read on a JobQueue: a binary file whose vertex element is fixed stride and whose face element is a
+//single corner index list, which is every triangle soup a BLAS builder would want and most meshes besides,
+//splits its vertex and face records into chunks that decode in parallel and merge back into one result
+//identical to what Ply_read would have produced from the same bytes. Ascii, a vertex element with a list
+//property, a face element with more than one property, ComputeNormals and QuantizePositions all stay on
+// Ply_read's single pass instead, each for a reason ply_read.c documents at Ply_readParallel's definition.
+//
+//jobs may be NULL, which is Ply_read directly and the only difference a caller who does not have a queue
+//handy needs to know about. A stream that does not declare EStreamType_ConcurrentRead (types/container/
+// stream.h) also falls back, since splitting a read the source cannot safely serve from two threads at once
+// would tear rather than speed anything up.
+//
+//forceParallel bypasses the size below which splitting costs more than it saves, and refuses a read it can't
+// split rather than falling back, so a forced read that succeeds is one that split.
+//Benchmark and test code only, to exercise the split on inputs too small to pay for it.
+
+Bool Ply_readParallel(
+	StreamRef *stream,
+	U64 *off,                     //Left after the last byte consumed
+	EMeshFlags flags,
+	MeshInfo *info,
+	const MeshOutput *output,
+	JobQueue *jobs,
+	Bool forceParallel,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
 //The header ALONE: counts, the body offset and whether the body is fixed stride, without touching the data.
+//The counts are the header's, unchecked against the body: Ply_read and Ply_readParallel hold them to it before
+// sizing anything from them, and a caller sizing buffers from these has to do the same.
 //What it fills is described in types/mesh/mesh.h. Left at the first byte of the body, so a caller can hand the
 // same stream and offset to Ply_read and lose nothing by having asked.
 

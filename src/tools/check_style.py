@@ -41,10 +41,10 @@
 #        Allowed in: include/types/base/lock.h
 #   B5.  gets / scanf / strncpy / strncat  (always banned)
 #   B6.  memcpy / memmove
-#        Allowed in: src/types/base/buffer_base.c
+#        Allowed in: src/types/base/buffer_base.c, include/types/base/buffer_base.h
 #        Use Buffer_memcpy / Buffer_memmove
 #   B7.  memset
-#        Allowed in: src/types/base/buffer_base.c
+#        Allowed in: src/types/base/buffer_base.c, include/types/base/buffer_base.h
 #        Use Buffer_setBitRange / Buffer_unsetBitRange / Buffer_clearAllSecure
 #   B8.  memcmp
 #        Allowed in: src/types/base/buffer_base.c
@@ -63,7 +63,7 @@
 #        Use Time_now() / Time_elapsed()
 #   B14. system()  (always banned)
 #   B15. rand() / srand()  (always banned)
-#        Use Random_seed / Random_sample
+#        Use Random_seed / Random_nextFloat / Random_nextInt
 #
 # Informational (no error, printed at end):
 #   T.  TODO/FIXME/HACK/NOTE/XXX list with file + line
@@ -233,13 +233,13 @@ BANNED_SYMBOLS: list[dict] = [
     {
         "pattern": re.compile(r'\b(memcpy|memmove)\s*\('),
         "message": "'{}', use Buffer_memcpy / Buffer_memmove",
-        "allow_paths": ("src/types/base/buffer_base.c",),
+        "allow_paths": ("src/types/base/buffer_base.c", "include/types/base/buffer_base.h"),
     },
     # B7, memset
     {
         "pattern": re.compile(r'\bmemset\s*\('),
         "message": "'memset', use Buffer_setBitRange / Buffer_unsetBitRange / Buffer_clearAllSecure",
-        "allow_paths": ("src/types/base/buffer_base.c",),
+        "allow_paths": ("src/types/base/buffer_base.c", "include/types/base/buffer_base.h"),
     },
     # B8, memcmp
     {
@@ -292,7 +292,7 @@ BANNED_SYMBOLS: list[dict] = [
     # B15, rand / srand
     {
         "pattern": re.compile(r'\b(rand|srand)\s*\('),
-        "message": "'{}()', use Random_seed / Random_sample",
+        "message": "'{}()', use Random_seed / Random_nextFloat / Random_nextInt",
         "allow_paths": (),
     },
 ]

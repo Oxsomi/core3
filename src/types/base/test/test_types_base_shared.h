@@ -36,3 +36,4 @@ void Test_mathi(Test *test);
 void Test_mathu(Test *test);
 void Test_mathf(Test *test);
 void Test_mathd(Test *test);
+void Test_lockHpp(Test *test);       //Defined in the C++ TU test_types_base_lock_hpp.cpp

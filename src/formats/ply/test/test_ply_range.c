@@ -67,9 +67,9 @@ static U64 buildRangePly(U8 *out) {
 
 	for(U8 v = 0; v < RANGE_VERTICES; ++v) {
 
-		const F32 f = (F32) v;
+		const F32 f = (F32) v, p = f + 1;      //Positions sit off the origin, so a bound left at zero shows
 
-		n += putLEF32(out + n, f);           n += putLEF32(out + n, f * 2);   n += putLEF32(out + n, f * 3);
+		n += putLEF32(out + n, p);           n += putLEF32(out + n, p * 2);   n += putLEF32(out + n, p * 3);
 		n += putLEF32(out + n, 0);           n += putLEF32(out + n, 0);       n += putLEF32(out + n, 1);
 		n += putLEF32(out + n, f * 0.125f);  n += putLEF32(out + n, f * 0.25f);
 	}
@@ -306,9 +306,7 @@ void Test_plyRange(Test *t) {
 
 	Test_assert(
 		t, "mergedBounds",
-		info.aabbMin[0] == whole.info.aabbMin[0] && info.aabbMax[0] == whole.info.aabbMax[0] &&
-		info.aabbMin[1] == whole.info.aabbMin[1] && info.aabbMax[1] == whole.info.aabbMax[1] &&
-		info.aabbMin[2] == whole.info.aabbMin[2] && info.aabbMax[2] == whole.info.aabbMax[2]
+		F32x4_eqExact3(info.aabbMin, whole.info.aabbMin) && F32x4_eqExact3(info.aabbMax, whole.info.aabbMax)
 	);
 
 	Buffer spanPositions = Buffer_createNull(), spanAttributes = Buffer_createNull();

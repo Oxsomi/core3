@@ -30,6 +30,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
 #include <stdarg.h>
 #include <assert.h>
 
@@ -251,6 +255,16 @@ namespace oxc {
 			va_list args;
 			va_start(args, fmt);
 			const c::Bool res = c::CharString_formatVariadic(alloc, &str, e_rr, fmt, args);
+			va_end(args);
+			return res;
+		}
+
+		//Formats onto the end of what this holds. NEVER pass user generated content as the format.
+		[[nodiscard]] c::Bool appendFormat(c::Error *e_rr, const c::C8 *fmt, ...) noexcept {
+
+			va_list args;
+			va_start(args, fmt);
+			const c::Bool res = c::CharString_appendFormatVariadic(alloc, &str, e_rr, fmt, args);
 			va_end(args);
 			return res;
 		}

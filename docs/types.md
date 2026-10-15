@@ -16,7 +16,9 @@ beside the C headers they wrap.
 - **Limits and units are named constants** (`U32_MAX`, `KIBI`, `MIBI`, `SECOND`, `MS`) in `types/base/constants.h`.
 - **`impl`** marks a function a platform or graphics backend defines, rather than the generic code.
 - **Build defines** in `types/base/platform_types.h` say what is being targeted: `_PLATFORM_TYPE` (Windows, Linux,
-  OS X, iOS, Android, web), `_ARCH` (x64, arm64) and `_SIMD` (SSE, NEON, wasm, or none, the scalar fallback).
+  OS X, iOS, Android, web), `_ARCH` (x64, arm64), `_SIMD` (SSE, NEON, wasm, or none, the scalar fallback) and
+  `_COMPILER` (MSVC, clang-cl, clang, gcc, emscripten). Code compares against `_COMPILER` rather than the compilers'
+  own predefines, which overlap: clang-cl defines `_MSC_VER` and emscripten defines `__GNUC__`.
   `_FORCE_FLOAT_FALLBACK` simulates every float conversion in software.
 
 ## Errors

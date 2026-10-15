@@ -121,7 +121,7 @@ impl static inline I64 AtomicI64_dec(AtomicI64 *ptr);
 			//0x9 is _ARM64_BARRIER_ISHLD, spelled out because that enum lives in arm64intr.h, which only the full
 			// intrin.h brings in; intrin0.h declares __dmb itself but not its operands.
 			//clang-cl's intrin0.h declares neither, so there the barrier is the compiler builtin, which needs no header.
-			#ifdef __clang__
+			#if _COMPILER == COMPILER_CLANG_CL
 				__builtin_arm_dmb(0x9);
 			#else
 				__dmb(0x9);

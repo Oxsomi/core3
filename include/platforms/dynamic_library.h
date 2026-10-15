@@ -48,7 +48,7 @@ impl Bool DynamicLibrary_isValidPath(CharString str);
 	impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
 #endif
 
-#ifdef _MSC_VER
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
 	#define EXPORT_SYMBOL __declspec(dllexport)
 	#define IMPORT_SYMBOL __declspec(dllimport)
 #else

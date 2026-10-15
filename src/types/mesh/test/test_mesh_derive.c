@@ -77,8 +77,8 @@ static void DeriveMesh_create(DeriveMesh *m) {
 		.hasUvs = true,
 		.allNormals = true,
 		.allUvs = true,
-		.aabbMin = { 0, 0, 0 },
-		.aabbMax = { 1, 1, 0 }
+		.aabbMin = F32x4_create3(0, 0, 0),
+		.aabbMax = F32x4_create3(1, 1, 0)
 	};
 }
 

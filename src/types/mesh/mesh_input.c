@@ -95,10 +95,8 @@ Bool MeshInputReader_create(
 
 	//The bounds are the space a quantized position lives in, so they are decoded once here rather than per vertex
 
-	for(U8 i = 0; i < 3; ++i) {
-		reader->center[i] = (info->aabbMax[i] - info->aabbMin[i]) * 0.5f + info->aabbMin[i];
-		reader->halfExtent[i] = (info->aabbMax[i] - info->aabbMin[i]) * 0.5f;
-	}
+	reader->halfExtent = F32x4_mul(F32x4_sub(info->aabbMax, info->aabbMin), F32x4_xxxx4(0.5f));
+	reader->center = F32x4_add(reader->halfExtent, info->aabbMin);
 
 	gotoIfError3(clean, MeshInputReader_open(
 		input->positions, reader->positionBase, (U64) info->vertexCount * reader->positionStride, 0, alloc,
@@ -155,8 +153,8 @@ Bool MeshInputReader_vertex(MeshInputReader *reader, U32 i, F32 position[3], F32
 			reader->positionBase + (U64) i * reader->positionStride, 0, sizeof(q), false, reader->alloc, e_rr
 		));
 
-		for(U8 c = 0; c < 3; ++c)
-			position[c] = reader->center[c] + (F32) q[c] / 32767.f * reader->halfExtent[c];
+		const F32x4 snorm = F32x4_div(F32x4_create3((F32) q[0], (F32) q[1], (F32) q[2]), F32x4_xxxx4(32767.f));
+		F32x4_store3(position, F32x4_add(reader->center, F32x4_mul(snorm, reader->halfExtent)));
 	}
 
 	else gotoIfError3(clean, StreamCursor_read(

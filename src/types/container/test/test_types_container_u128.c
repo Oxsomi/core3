@@ -108,6 +108,15 @@ void Test_u128BitScan(Test *t) {
 		const U16  expected = (U16)(127 - n);
 		Test_assert(t, "U128_bitScan", got == expected);
 	}
+
+	//allOnes moved up by n has bit n as its lowest.
+
+	for (U8 n = 0; n <= 127; ++n)
+		Test_assert(t, "U128_bitScanReverse", U128_bitScanReverse(U128_lsh(allOnes, n)) == n);
+
+	const U128 zero = U128_createU64x2(0, 0);
+	Test_assert(t, "U128_bitScan zero", U128_bitScan(zero) == U8_MAX);
+	Test_assert(t, "U128_bitScanReverse zero", U128_bitScanReverse(zero) == U8_MAX);
 }
 
 void Test_u128(Test *t) {

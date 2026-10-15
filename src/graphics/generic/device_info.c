@@ -153,6 +153,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(cap.features2 & EGraphicsFeatures2_WriteBufferImmediate)
 			Log_debugLnx("\t\tWrite buffer immediate");
 
+		if(cap.features2 & EGraphicsFeatures2_ExperimentTier1)
+			Log_debugLnx("\t\tExperiment tier 1 (claimed by the driver, meaning undefined by OxC3)");
+
+		if(cap.features2 & EGraphicsFeatures2_ExperimentTier2)
+			Log_debugLnx("\t\tExperiment tier 2 (claimed by the driver, meaning undefined by OxC3)");
+
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 
@@ -184,7 +190,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			Log_debugLnx("\t\tPipeline executable info (live ISA disassembly + statistics)");
 
 		if(feat & EGraphicsFeatures_SubgroupOperations)
-			Log_debugLnx("\t\tSubgroup operations");
+			Log_debugLnx(
+				"\t\tSubgroup operations (WaveSize %"PRIu8" to %"PRIu8" lanes)", cap.waveSizeMin, cap.waveSizeMax
+			);
 
 		if(feat & EGraphicsFeatures_CoopVec)
 			Log_debugLnx("\t\tCooperative vectors (matvec)");
@@ -367,6 +375,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_PageableMemory)
 				Log_debugLnx("\t\tPageable device local memory");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_SubgroupSizeControl)
+				Log_debugLnx("\t\tSubgroup size control");
 		}
 	}
 }

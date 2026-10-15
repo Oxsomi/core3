@@ -39,10 +39,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	const CharString *entryName,
 	Pipeline *pipeline,
 	const SHBinaryInfo *binary,
+	const SHEntry *entry,
 	Error *e_rr
 ) {
 
-	(void) entryName;        //DXIL carries its own entrypoint metadata; the override only matters for SPIRV
+	//DXIL carries its own entrypoint metadata and wave size; the name override and the entry only matter for SPIRV.
+
+	(void) entryName;
+	(void) entry;
 
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDevice_getAlloc(device);

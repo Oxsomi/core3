@@ -443,15 +443,7 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 				while(CharString_length(line) < 60)
 					gotoIfError3(clean, CharString_append(&line, ' ', alloc, e_rr));
 
-				CharString addr = CharString_createNull();
-				gotoIfError3(clean, CharString_format(alloc, &addr, e_rr, "// %012"PRIX64, codeSize));
-
-				if(!CharString_appendString(&line, &addr, alloc, e_rr)) {
-					CharString_free(&addr, alloc);
-					retError(clean, Error_invalidState(0, "SpvISA_clean() couldn't append the address"));
-				}
-
-				CharString_free(&addr, alloc);
+				gotoIfError3(clean, CharString_appendFormat(alloc, &line, e_rr, "// %012"PRIX64, codeSize));
 				codeSize += bytes;
 			}
 
@@ -637,7 +629,7 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 		{ "gfx900", "GCN5/Vega" }, { "gfx906", "GCN5/Vega20" },
 		{ "gfx1010", "RDNA1" }, { "gfx1030", "RDNA2" }, { "gfx1032", "RDNA2" }, { "gfx1034", "RDNA2" }, { "gfx1035", "RDNA2" },
 		{ "gfx1100", "RDNA3" }, { "gfx1101", "RDNA3" }, { "gfx1102", "RDNA3" }, { "gfx1103", "RDNA3" },
-		{ "gfx1150", "RDNA3.5" },
+		{ "gfx1150", "RDNA3.5" }, { "gfx1151", "RDNA3.5" }, { "gfx1152", "RDNA3.5" }, { "gfx1153", "RDNA3.5" },
 		{ "gfx1200", "RDNA4" }, { "gfx1201", "RDNA4" }
 	};
 

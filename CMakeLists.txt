@@ -1073,6 +1073,10 @@ else()                                            # Multi-config generators (Vis
     endforeach()
 endif()
 
+# The binaries' folder for either kind of generator, for a rule that places files next to them.
+
+set(oxc3BinDir "${oxc3OutRoot}/$<CONFIG>${oxc3OutTail}/bin")
+
 # Enable symbols
 
 if("${platform}" STREQUAL "linux")

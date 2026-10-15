@@ -555,6 +555,8 @@ clean:
 //platform_test_longpath/ + ^ > MAX_PATH (260)
 #define LONG_NAME_LEN 240
  
+void Test_fileHandleHpp(Test *t);          //Defined in the C++ TU test_platforms_file_hpp.cpp
+
 static void Test_fileLongPath(Test *t) {
  
 	Test_setModule(t, "File/LongPaths");
@@ -645,12 +647,8 @@ static void Test_fileLongPath(Test *t) {
 		//Build the deep dir path incrementally
 		gotoIfError3(clean, CharString_createCopy(root, t->alloc, &deepDir, &t->err));
  
-		for (U32 i = 1; i <= 32; ++i) {
-			CharString component = CharString_createNull();
-			gotoIfError3(clean, CharString_format(t->alloc, &component, &t->err, "/level_%02u", i));
-			gotoIfError3(clean, CharString_appendString(&deepDir, &component, t->alloc, &t->err));
-			CharString_free(&component, t->alloc);
-		}
+		for (U32 i = 1; i <= 32; ++i)
+			gotoIfError3(clean, CharString_appendFormat(t->alloc, &deepDir, &t->err, "/level_%02u", i));
  
 		//File_add with createParentOnly=false should create all missing ancestors
 		Test_assert(t, "addDeepDir", File_add(&deepDir, EFileType_Folder, false, t->alloc, &t->err));
@@ -1535,6 +1533,7 @@ OXC3_TEST_ENTRY(platforms_interface) {
 
 	Test_platformsFilePhysical(&t);
 	Test_fileHandle(&t);
+	Test_fileHandleHpp(&t);
 	Test_fileLongPath(&t);
 	Test_fileEdgeCases(&t);
 	Test_fileCaseAndUtf8(&t);

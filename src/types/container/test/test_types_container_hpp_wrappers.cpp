@@ -137,6 +137,7 @@ extern "C" void Test_hppWrappers(oxc::c::Test *t) {
 		Test_assert(t, "String: recreate", s.createCopy(StringView("fresh"), e_rr) && s == StringView("fresh"));
 
 		Test_assert(t, "String: format", s.format(e_rr, "%s-%u", "id", 42u) && s == StringView("id-42"));
+		Test_assert(t, "String: appendFormat", s.appendFormat(e_rr, "/%02u", 7u) && s == StringView("id-42/07"));
 
 		Test_assert(t, "String: repeated", s.createRepeated('x', 4, e_rr) && s == StringView("xxxx"));
 

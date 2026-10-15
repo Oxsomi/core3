@@ -28,6 +28,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
 #include <assert.h>
 
 #ifdef __APPLE__
@@ -49,6 +53,10 @@ namespace oxc { namespace c {
 	#include <immintrin.h>
 #elif _SIMD == SIMD_NEON
 	#include <arm_neon.h>
+#endif
+
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#include <intrin0.h>        //See lock.hpp
 #endif
 
 //Operator sugar over the C I32x4; see vec4f.hpp for the rationale.

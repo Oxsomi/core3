@@ -70,7 +70,6 @@ clean:
 static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 
 	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
 
 	gotoIfError3(clean, CharString_append(w->out, '"', w->alloc, e_rr));
 
@@ -93,9 +92,7 @@ static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 			default:
 
 				if((U8) c < 0x20) {
-					CharString_free(&tmp, w->alloc);
-					gotoIfError3(clean, CharString_format(w->alloc, &tmp, e_rr, "\\u%04x", (U32)(U8) c));
-					gotoIfError3(clean, CharString_appendString(w->out, &tmp, w->alloc, e_rr));
+					gotoIfError3(clean, CharString_appendFormat(w->alloc, w->out, e_rr, "\\u%04x", (U32)(U8) c));
 					break;
 				}
 
@@ -107,7 +104,6 @@ static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 	gotoIfError3(clean, CharString_append(w->out, '"', w->alloc, e_rr));
 
 clean:
-	CharString_free(&tmp, w->alloc);
 	return s_uccess;
 }
 

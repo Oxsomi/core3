@@ -182,9 +182,12 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		const CharString *entryName,
 		Pipeline *pipeline,
 		const SHBinaryInfo *buf,
+		const SHEntry *entry,
 		Error *e_rr
 	) {
-		return WrapperFunction(pipeline->device, pipelineCreateCompute)(device, name, entryName, pipeline, buf, e_rr);
+		return WrapperFunction(pipeline->device, pipelineCreateCompute)(
+			device, name, entryName, pipeline, buf, entry, e_rr
+		);
 	}
 
 	Bool GraphicsDevice_createPipelineGraphicsExt(

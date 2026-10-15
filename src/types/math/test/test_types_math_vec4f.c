@@ -256,4 +256,17 @@ void Test_vec4f(Test *test) {
 
 	c = F32x4_create3(20, 50, 80);
 	Test_assert(test, "F32x4_mul3x4", !F32x4_neqExact4(F32x4_mul3x4(F32x4_create4(1, 2, 3, 4), mat4), c));
+
+	//rcpSafe: a zero keeps its sign, which is the whole point, and anything under the floor takes the floor's
+
+	const F32 big = 1 / 1e-5f;
+
+	Test_assert(test, "F32_rcpSafe two", F32_rcpSafe(2) == 0.5f);
+	Test_assert(test, "F32_rcpSafe negative", F32_rcpSafe(-4) == -0.25f);
+	Test_assert(test, "F32_rcpSafe zero", F32_rcpSafe(0) == big);
+	Test_assert(test, "F32_rcpSafe negative zero", F32_rcpSafe(-0.0f) == -big);
+	Test_assert(test, "F32_rcpSafe tiny", F32_rcpSafe(1e-7f) == big && F32_rcpSafe(-1e-7f) == -big);
+
+	c = F32x4_create4(big, -big, 0.5f, -0.25f);
+	Test_assert(test, "F32x4_rcpSafe", !F32x4_neqExact4(F32x4_rcpSafe(F32x4_create4(0, -0.0f, 2, -4)), c));
 }

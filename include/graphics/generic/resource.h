@@ -185,7 +185,7 @@ typedef struct DevicePendingPull {
 	Buffer textureData;
 
 	//Strong ref to the readback buffer the pull was recorded into, only set once in flight.
-	//A grow (or reserveReadback) swaps the device's ring, so completion has to read the buffer the GPU wrote.
+	//A grow, a shrink or reserveReadback swaps the device's ring, so completion has to read the buffer the GPU wrote.
 
 	RefPtr *stagingReadback;
 

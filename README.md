@@ -40,7 +40,8 @@ a new compiler, and the prebuilt dependencies (DXC among them) are MSVC.
 
 ### Nightly sanitizer builds (ASan + UBSan)
 
-These run on a nightly schedule rather than per push, and instrument OxC3, the spirv_reflect fork and DXC.
+These run once a night rather than per push, all started together by `nightly.yml`,
+and instrument OxC3, the spirv_reflect fork and DXC.
 A green badge means that configuration built and ran the suite clean under the sanitizers.
 
 | Nightly (ASan + UBSan) | x64 | ARM64 |
@@ -373,6 +374,13 @@ The shader compiler needs no extra binaries (DXC is statically linked). `d3d10wa
 - **OxC3_graphics**: Vulkan and/or D3D12 (+ NVAPI, AMD_AGS, AgilitySDK; optional WARP).
 - **OxC3_shader_compiler**: DXC (LLVM/clang, DirectX-Headers, SPIRV-Headers/Tools), SPIRV-Reflect; SPIRV-Cross planned for MSL.
 - **OxC3(CLI)**: platforms + formats (+ optional shader_compiler, graphics).
+
+Every dependency in `packages/` is pinned, most of them as forks. Each night `deps_watch.yml` posts to Discord what
+upstream did since its last report: how far each pin is behind the repository it forks, the commits and releases
+upstream added, whether the fork moved past its pin, newer Agility SDK and wayland-protocols versions, and the
+Vulkan extensions and SPIR-V capabilities the Vulkan registry gained since the pin. `python tools/deps_watch.py -dry`
+prints the same report locally (`-all` for everything behind upstream, moved or not). `-root` and `-conandata` point
+it at another repository's pins, and `-branch` follows another upstream branch for one of them.
 
 ## Contributing
 

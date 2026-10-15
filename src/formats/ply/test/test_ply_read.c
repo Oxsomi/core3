@@ -27,8 +27,6 @@
 #include "types/container/string.h"
 #include "types/base/error.h"
 
-#include <stdarg.h>
-
 static MeshResult readPly(Test *t, const void *bytes, U64 len, EMeshFlags flags, Bool attrs, Bool words) {
 	return Test_meshRead(t, Ply_read, bytes, len, flags, attrs, words, &t->err);
 }
@@ -259,7 +257,9 @@ void Test_plyQuantizedPositions(Test *t) {
 		return;
 
 	Test_assert(t, "bytes", Buffer_length(r.positions) == 4 * 4 * sizeof(I16));
-	Test_assert(t, "aabb", r.info.aabbMin[0] == 0 && r.info.aabbMax[0] == 1 && r.info.aabbMax[2] == 0);
+	Test_assert(
+		t, "aabb", F32x4_x(r.info.aabbMin) == 0 && F32x4_x(r.info.aabbMax) == 1 && F32x4_z(r.info.aabbMax) == 0
+	);
 
 	const I16 *q0 = MeshResult_quantized(&r, 0), *q2 = MeshResult_quantized(&r, 2);
 
@@ -285,23 +285,6 @@ static void expectRefused(Test *t, const C8 *name, const C8 *ply) {
 	MeshResult_free(t, &r);
 }
 
-//Appends a formatted piece to the text being built. CharString_format refuses a result that is not empty, so
-// the piece is freed between calls.
-
-static Bool Test_plyAppend(Test *t, CharString *text, const C8 *format, ...) {
-
-	CharString part = CharString_createNull();
-
-	va_list args;
-	va_start(args, format);
-	const Bool formatted = CharString_formatVariadic(t->alloc, &part, &t->err, format, args);
-	va_end(args);
-
-	const Bool appended = formatted && CharString_appendString(text, &part, t->alloc, &t->err);
-	CharString_free(&part, t->alloc);
-	return appended;
-}
-
 //A gaussian splat's vertex element carries 62 properties: xyz, a normal, 3 f_dc, 45 f_rest for spherical
 // harmonics of degree 3, opacity, 3 scale and 4 rot. Degree 2 still needs 41.
 //Every one of them has to be kept, both to find the positions among them and to know the widths to step over,
@@ -314,26 +297,26 @@ void Test_plyManyProperties(Test *t) {
 	CharString text = CharString_createNull();
 
 	Bool built =
-		Test_plyAppend(t, &text, "ply\nformat ascii 1.0\nelement vertex 3\n") &&
-		Test_plyAppend(t, &text, "property float x\nproperty float y\nproperty float z\n") &&
-		Test_plyAppend(t, &text, "property float nx\nproperty float ny\nproperty float nz\n");
+		CharString_appendFormat(t->alloc, &text, &t->err, "ply\nformat ascii 1.0\nelement vertex 3\n") &&
+		CharString_appendFormat(t->alloc, &text, &t->err, "property float x\nproperty float y\nproperty float z\n") &&
+		CharString_appendFormat(t->alloc, &text, &t->err, "property float nx\nproperty float ny\nproperty float nz\n");
 
 	for(U8 i = 0; i < 3 && built; ++i)
-		built = Test_plyAppend(t, &text, "property float f_dc_%u\n", (U32) i);
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "property float f_dc_%u\n", (U32) i);
 
 	for(U8 i = 0; i < 45 && built; ++i)
-		built = Test_plyAppend(t, &text, "property float f_rest_%u\n", (U32) i);
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "property float f_rest_%u\n", (U32) i);
 
-	built = built && Test_plyAppend(t, &text, "property float opacity\n");
+	built = built && CharString_appendFormat(t->alloc, &text, &t->err, "property float opacity\n");
 
 	for(U8 i = 0; i < 3 && built; ++i)
-		built = Test_plyAppend(t, &text, "property float scale_%u\n", (U32) i);
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "property float scale_%u\n", (U32) i);
 
 	for(U8 i = 0; i < 4 && built; ++i)
-		built = Test_plyAppend(t, &text, "property float rot_%u\n", (U32) i);
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "property float rot_%u\n", (U32) i);
 
-	built = built && Test_plyAppend(
-		t, &text, "element face 1\nproperty list uchar int vertex_indices\nend_header\n"
+	built = built && CharString_appendFormat(
+		t->alloc, &text, &t->err, "element face 1\nproperty list uchar int vertex_indices\nend_header\n"
 	);
 
 	//The first three values of a vertex are its position; the other 59 are carried and dropped
@@ -342,15 +325,17 @@ void Test_plyManyProperties(Test *t) {
 
 	for(U8 v = 0; v < 3 && built; ++v) {
 
-		built = Test_plyAppend(t, &text, "%u %u %u", positions[v][0], positions[v][1], positions[v][2]);
+		built = CharString_appendFormat(
+			t->alloc, &text, &t->err, "%u %u %u", positions[v][0], positions[v][1], positions[v][2]
+		);
 
 		for(U8 i = 0; i < 59 && built; ++i)
-			built = Test_plyAppend(t, &text, " 0.5");
+			built = CharString_appendFormat(t->alloc, &text, &t->err, " 0.5");
 
-		built = built && Test_plyAppend(t, &text, "\n");
+		built = built && CharString_appendFormat(t->alloc, &text, &t->err, "\n");
 	}
 
-	built = built && Test_plyAppend(t, &text, "3 0 1 2\n");
+	built = built && CharString_appendFormat(t->alloc, &text, &t->err, "3 0 1 2\n");
 
 	if(!Test_assert(t, "built", built)) {
 		CharString_free(&text, t->alloc);
@@ -433,5 +418,32 @@ void Test_plyValidation(Test *t) {
 
 	MeshResult r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, NULL);
 	Test_assert(t, "truncatedBinary", !r.ok);
+	MeshResult_free(t, &r);
+
+	//A header promising billions of vertices to a body of one is refused by the count check, before anything is
+	// sized from the count.
+
+	len = 0;
+
+	{
+		const C8 *header =
+			"ply\nformat binary_little_endian 1.0\nelement vertex 2000000000\n"
+			"property float x\nproperty float y\nproperty float z\nend_header\n";
+
+		for(const C8 *c = header; *c; ++c)
+			bytes[len++] = (U8) *c;
+
+		for(U8 i = 0; i < 12; ++i)
+			bytes[len++] = 0;
+	}
+
+	Error countErr = Error_none();
+	r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, &countErr);
+
+	Test_assert(
+		t, "countPastBody",
+		!r.ok && countErr.genericError == EGenericError_InvalidParameter && countErr.errorSubId == 20
+	);
+
 	MeshResult_free(t, &r);
 }

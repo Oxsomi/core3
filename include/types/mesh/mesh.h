@@ -28,6 +28,7 @@
 #include "types/container/buffer.h"
 #include "types/container/texture_format.h"
 #include "types/math/flp.h"
+#include "types/math/vec4f.h"
 #include "types/base/types.h"
 #include "types/base/c8.h"
 #include "types/base/mathf.h"
@@ -166,13 +167,13 @@ typedef struct MeshInfo {
 
 	//Of every position read, always. Under QuantizePositions it is also the space positions are in: a stored
 	// snorm16 s maps to center + s / 32767 * halfExtent per axis, both taken from these two.
+	//Three lanes are used and the fourth is zero.
 
-	F32 aabbMin[3];
+	F32x4 aabbMin;
+	F32x4 aabbMax;
 
 	//Faces with more than three corners that got fanned, which is right for convex polygons and wrong otherwise.
 	U32 fannedFaces;
-
-	F32 aabbMax[3];
 
 	//Distinct materials the triangles name, numbered by first use. A format with no notion of one, PLY, reports 1
 	// with every triangle on material 0.
@@ -191,6 +192,7 @@ typedef struct MeshInfo {
 	// different vertex, so NarrowIndices REFUSES at the index that crosses rather than reporting a magnitude.
 
 	F32 maxUvError;
+	U32 padding1;
 
 } MeshInfo;
 
@@ -490,19 +492,19 @@ typedef struct MeshFlat {
 	Buffer attributes;            //attributeLayout.stride per vertex, empty where the mesh has none
 	Buffer triangles;             //One U32 word per triangle, empty where the mesh has none
 
-	MeshAttributeLayout attributeLayout;
+	//The space quantized positions are in, and what a consumer needs to decode them. Copied from the MeshInfo.
 
-	U8 positionFormat;            //ETextureFormatId
-	Bool narrowIndices;
-	U8 padding[6];
+	F32x4 aabbMin;
+	F32x4 aabbMax;
+
+	MeshAttributeLayout attributeLayout;
 
 	U32 vertexCount;
 	U32 triangleCount;
 
-	//The space quantized positions are in, and what a consumer needs to decode them. Copied from the MeshInfo.
-
-	F32 aabbMin[3];
-	F32 aabbMax[3];
+	U8 positionFormat;            //ETextureFormatId
+	Bool narrowIndices;
+	U8 padding[14];
 
 } MeshFlat;
 

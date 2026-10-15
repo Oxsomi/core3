@@ -11,9 +11,8 @@ name: Linux x64 Vulkan static (clang, ASan + UBSan)
 # Clang only, deliberately: MSVC's sanitizers aren't trusted here (see the note in CMakeLists.txt), and an
 # unreliable sanitizer is worse than none because a clean run reads as proof that nothing is wrong.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:

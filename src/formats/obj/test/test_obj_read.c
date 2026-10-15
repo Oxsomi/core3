@@ -406,8 +406,8 @@ void Test_objQuantizedPositions(Test *t) {
 		return;
 
 	Test_assert(t, "bytes", Buffer_length(r.positions) == 3 * 4 * sizeof(I16));
-	Test_assert(t, "aabbMin", r.info.aabbMin[0] == -1 && r.info.aabbMin[1] == -2 && r.info.aabbMin[2] == -3);
-	Test_assert(t, "aabbMax", r.info.aabbMax[0] == 3 && r.info.aabbMax[1] == 2 && r.info.aabbMax[2] == 1);
+	Test_assert(t, "aabbMin", F32x4_eqExact3(r.info.aabbMin, F32x4_create3(-1, -2, -3)));
+	Test_assert(t, "aabbMax", F32x4_eqExact3(r.info.aabbMax, F32x4_create3(3, 2, 1)));
 
 	const I16 *lo = MeshResult_quantized(&r, 0), *hi = MeshResult_quantized(&r, 1), *mid = MeshResult_quantized(&r, 2);
 
@@ -421,7 +421,7 @@ void Test_objQuantizedPositions(Test *t) {
 	r = readObj(t, flat, EMeshFlags_QuantizePositions, false, false);
 
 	if(Test_assert(t, "readFlat", r.ok)) {
-		Test_assert(t, "flatAabb", r.info.aabbMin[2] == 5 && r.info.aabbMax[2] == 5);
+		Test_assert(t, "flatAabb", F32x4_z(r.info.aabbMin) == 5 && F32x4_z(r.info.aabbMax) == 5);
 		Test_assert(t, "flatZero", MeshResult_quantized(&r, 1)[2] == 0 && MeshResult_quantized(&r, 1)[0] == 32767);
 	}
 
@@ -433,7 +433,7 @@ void Test_objQuantizedPositions(Test *t) {
 
 	if(Test_assert(t, "readPlain", r.ok)) {
 		Test_assert(t, "plainBytes", Buffer_length(r.positions) == 3 * 3 * sizeof(F32));
-		Test_assert(t, "plainAabb", r.info.aabbMax[0] == 3 && r.info.aabbMin[2] == -3);
+		Test_assert(t, "plainAabb", F32x4_x(r.info.aabbMax) == 3 && F32x4_z(r.info.aabbMin) == -3);
 	}
 
 	MeshResult_free(t, &r);

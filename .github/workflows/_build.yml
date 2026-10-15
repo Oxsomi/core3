@@ -262,7 +262,7 @@ jobs:
             || echo "vulkaninfo failed; the graphics suite will report what it found"
 
       # The Khronos validation layer, pinned near the header version conanfile.py pins (vulkan_headers is
-      # 1.4.357 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
+      # 1.4.365 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
       # layer silently weakens validation. Khronos only publishes Android prebuilts, so the layer comes out of
       # the LunarG SDK tarball; only the two layer files are extracted, the rest of the SDK stays untouched.
       # The graphics suite enables the layer by name in debug builds and counts every message it reports;
@@ -271,7 +271,7 @@ jobs:
       - name: Install Vulkan validation layer (lavapipe)
         if: inputs.vulkan_icd && runner.os == 'Linux' && runner.arch == 'X64'
         run: |
-          VVL_VERSION=1.4.357.1
+          VVL_VERSION=1.4.363.0
           curl -fL -o vvl.tar.xz "https://sdk.lunarg.com/sdk/download/${VVL_VERSION}/linux/vulkansdk-linux-x86_64-${VVL_VERSION}.tar.xz" \
             || { echo "::error::LunarG SDK ${VVL_VERSION} download failed; check https://vulkan.lunarg.com/sdk/versions/linux.json"; exit 1; }
           mkdir -p "$HOME/vvl"
@@ -703,7 +703,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           COMMIT_SHA: ${{ github.sha }}
-          # Only push events carry a head_commit, so this is empty on the nightly schedule and the subject is
+          # Only push events carry a head_commit, so this is empty for a dispatched nightly and the subject is
           # then simply left out.
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           ACTOR: ${{ github.actor }}

@@ -309,6 +309,17 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 	if(presentMode == (VkPresentModeKHR) -1)
 		retError(clean, Error_invalidOperation(7, "VkGraphicsDeviceRef_createSwapchain() unsupported present mode"));
 
+	//What the surface offered and what was taken, once per creation: a window that runs at the refresh rate while
+	//headless runs are faster is otherwise indistinguishable from a slow frame.
+
+	Log_debugLnx(
+		"-- Graphics: Swapchain %ux%u, %u images, present mode %u (surface offers immediate %u, mailbox %u, "
+		"fifo %u, fifo relaxed %u)",
+		(U32) I32x2_x(window->size), (U32) I32x2_y(window->size), requestedImages, (U32) swapchain->presentMode,
+		(U32) supports[ESwapchainPresentMode_Immediate - 1], (U32) supports[ESwapchainPresentMode_Mailbox - 1],
+		(U32) supports[ESwapchainPresentMode_Fifo - 1], (U32) supports[ESwapchainPresentMode_FifoRelaxed - 1]
+	);
+
 	//Turn it into a swapchain
 
 	VkSwapchainKHR prevSwapchain = swapchainExt->swapchain;

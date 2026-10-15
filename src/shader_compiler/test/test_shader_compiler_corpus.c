@@ -297,7 +297,10 @@ static Bool shReflectionMatches(const Allocator *alloc, Buffer a, Buffer b) {
 	match = true;
 
 	for(U64 i = 0; i < fa.binaries.length && match; ++i)
-		if(fa.binaries.ptr[i].identifier.extensions != fb.binaries.ptr[i].identifier.extensions)
+		if(
+			fa.binaries.ptr[i].identifier.extensions != fb.binaries.ptr[i].identifier.extensions ||
+			fa.binaries.ptr[i].identifier.extensions2 != fb.binaries.ptr[i].identifier.extensions2
+		)
 			match = false;
 
 	for(U64 i = 0; i < fa.entries.length && match; ++i) {

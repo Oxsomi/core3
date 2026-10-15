@@ -233,8 +233,7 @@ VkBool32 onDebugReport(
 		//GPU assisted validation force enables the device features it needs and warns about doing so.
 		//That's an expected side effect of running maximum validation, not an app defect, so it's only logged.
 		//The entrypoint warning is GPU-AV admitting its own push constant lookup can't attribute variables in
-		// multi entrypoint SPIR-V below 1.4; legal modules, no validation lost, and the layer's condition is
-		// inverted anyway (it fires when there are no push constants at all), so it's noise rather than a defect.
+		// multi entrypoint SPIR-V below 1.4: legal modules and no validation lost, so it's noise rather than a defect.
 
 		const CharString messageStr = CharString_createRefCStrConst(message);
 		const CharString adjusting = CharString_createRefCStrConst("validation is adjusting settings");
@@ -828,7 +827,11 @@ const C8 *optExtensionsName[] = {
 
 	"VK_KHR_index_type_uint8",
 
-	"VK_EXT_memory_priority", "VK_EXT_pageable_device_local_memory"
+	"VK_EXT_memory_priority", "VK_EXT_pageable_device_local_memory",
+
+	"VK_MESA_experiment_tier1", "VK_MESA_experiment_tier2",
+
+	"VK_EXT_subgroup_size_control"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1109,6 +1112,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		getDeviceProperties(
 			true, VkPhysicalDeviceSubgroupProperties, subgroup, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
+		);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_SubgroupSizeControl],
+			VkPhysicalDeviceSubgroupSizeControlPropertiesEXT,
+			subgroupSizeProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES_EXT
 		);
 
 		getDeviceProperties(
@@ -1484,6 +1494,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR
 		);
 
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_SubgroupSizeControl],
+			VkPhysicalDeviceSubgroupSizeControlFeaturesEXT,
+			subgroupSizeFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT
+		);
+
 		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		VkPhysicalDeviceProperties properties = properties2.properties;
@@ -1672,6 +1689,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(optExtensions[EOptExtensions_BufferMarker])
 			capabilities.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
 
+		//The driver's own claim, taken as it is (EGraphicsFeatures2_ExperimentTier1).
+
+		if(optExtensions[EOptExtensions_ExperimentTier1])
+			capabilities.features2 |= EGraphicsFeatures2_ExperimentTier1;
+
+		if(optExtensions[EOptExtensions_ExperimentTier2])
+			capabilities.features2 |= EGraphicsFeatures2_ExperimentTier2;
+
 		if(optExtensions[EOptExtensions_ExternalMemoryHost])
 			capabilities.featuresExt |= EVkGraphicsFeatures_ExternalHostMemory;
 
@@ -1819,6 +1844,22 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				deviceUnsupported("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
 
 			capabilities.features |= EGraphicsFeatures_SubgroupOperations;
+
+			//The wave sizes a compute shader's [WaveSize] can name: the device's whole range where a compute pipeline
+			// can ask for one, else its one subgroup size.
+			//HLSL names 4 to 128 lanes, so a range reaching past them is held to them.
+
+			capabilities.waveSizeMin = capabilities.waveSizeMax = (U8) subgroup.subgroupSize;
+
+			if(
+				optExtensions[EOptExtensions_SubgroupSizeControl] && subgroupSizeFeat.subgroupSizeControl &&
+				(subgroupSizeProp.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT) &&
+				subgroupSizeProp.minSubgroupSize <= subgroupSizeProp.maxSubgroupSize
+			) {
+				capabilities.featuresExt |= EVkGraphicsFeatures_SubgroupSizeControl;
+				capabilities.waveSizeMin = (U8) U32_clamp(subgroupSizeProp.minSubgroupSize, 4, 128);
+				capabilities.waveSizeMax = (U8) U32_clamp(subgroupSizeProp.maxSubgroupSize, 4, 128);
+			}
 		}
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)

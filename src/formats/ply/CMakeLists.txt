@@ -47,3 +47,34 @@ if(EnableTests AND OxC3TestExecutables)
 	)
 
 endif()
+
+# A standalone benchmark (Ply_read against Ply_readParallel on a real file), the same shape as
+# types/container/perf: a small lib the numbers live in and an executable that calls it with a path.
+
+if(EnableOxC3CLI)
+
+	file(GLOB formatsPLYPerfHeaders CONFIGURE_DEPENDS "../../../include/formats/ply/perf/*.h")
+	file(GLOB formatsPLYPerfSources CONFIGURE_DEPENDS "perf/*.c")
+
+	add_library(
+		OxC3_formats_ply_perf_lib STATIC
+		${formatsPLYPerfHeaders}
+		${formatsPLYPerfSources}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_ply_perf_lib PUBLIC OxC3_formats_ply OxC3_platforms)
+	set_target_properties(OxC3_formats_ply_perf_lib PROPERTIES FOLDER Oxsomi/perf)
+
+	file(GLOB formatsPLYPerfExecSources CONFIGURE_DEPENDS "perf/exec/*.c")
+
+	add_executable(
+		OxC3_formats_ply_perf
+		${formatsPLYPerfExecSources}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_ply_perf PUBLIC OxC3_formats_ply_perf_lib)
+	set_target_properties(OxC3_formats_ply_perf PROPERTIES FOLDER Oxsomi/perf)
+
+endif()

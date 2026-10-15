@@ -56,6 +56,9 @@ typedef struct SHHeader {		//4-byte aligned
 	U16 extensionCount;			//ESHExtension_Count of the writer, so newer readers can fix up dormant extensions
 	U16 vendorCount;			//ESHVendor_Count of the writer, so newer readers can widen an all-vendors mask
 
+	U16 extension2Count;		//ESHExtension2_Count of the writer, as extensionCount is for ESHExtension
+	U16 padding;
+
 } SHHeader;
 
 //Settings that are persisted in SHHeader::flags (the low 16 bits are stored; the rest must be 0)
@@ -166,9 +169,22 @@ typedef enum ESHExtension {
 	ESHExtension_CoopMat					= 1 << 22		//SM6.10 cooperative matrix (GEMM, SPV_KHR_cooperative_matrix)
 	ESHExtension_CoopFP8					= 1 << 23		//FP8 (e4m3/e5m2) cooperative tier (additive gate; base is FP16 + INT8)
 	ESHExtension_CoopVecTraining			= 1 << 24,		//Cooperative-vector training (outer-product / reduce-sum accumulate; Tier 1.1)
-	ESHExtension_DescriptorHeap				= 1 << 25		//Full bindless: SM6.6 dynamic resources / SPV_EXT_descriptor_heap
+	ESHExtension_DescriptorHeap				= 1 << 25,		//Full bindless: SM6.6 dynamic resources / SPV_EXT_descriptor_heap
+	ESHExtension_SubgroupQuad				= 1 << 26,		//QuadReadAcrossX/Y/Diagonal, QuadReadLaneAt
+	ESHExtension_DynamicSamplers			= 1 << 27,		//An array of samplers, served by the bindless _samplers[]
+	ESHExtension_UnsafeExperimentExecution	= 1 << 28,		//Unvalidated SPIR-V an author vouches for (graphics_api.md)
+	ESHExtension_UnsafeExtensionExecution	= 1 << 29		//Extensions oiSH doesn't recognize pass unchecked (graphics_api.md)
 
 } ESHExtension;
+
+//The extensions past ESHExtension, which is full: 1 << ESHExtension_Count has to stay an int.
+//None of these is detected by reflection, so their dormant mask is zero.
+
+typedef enum ESHExtension2 {
+	ESHExtension2_None						= 0,
+	ESHExtension2_ExperimentTier1			= 1 << 0,		//An experiment tier the driver claims; OxC3 gives it no meaning
+	ESHExtension2_ExperimentTier2			= 1 << 1		//(graphics_api.md, EGraphicsFeatures2_ExperimentTier1)
+} ESHExtension2;
 
 //Maps to EGraphicsVendorId
 typedef enum ESHVendor {
@@ -200,6 +216,9 @@ typedef struct BinaryInfoFixedSize {
 	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
 
 	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
+
+	ESHExtension2 extensions2;	//The same pair for ESHExtension2
+	ESHExtension2 dormantExt2;
 
 	U16 registerCount;
     U8 uniformCount;
@@ -388,8 +407,9 @@ SHFile {		//Must be 16-byte aligned
 
 	    if compute, mesh or task:
 		    U16x4 groups;
-               	groups.w = waveSize: U4[4] required, min, max, recommended
-                    Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
+               	groups.w = waveSize: U4[4] required, min, max, preferred
+                    Where the U4: 0 = None, 3-8 = 4-128 lanes (log2 + 1), else invalid
+                    Either required alone ([WaveSize(N)]) or min and max, with preferred inside them if set
                     groups.w should be 0 for mesh or task shader
 
     	if closestHit, anyHit or intersection:
@@ -525,8 +545,9 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
   - D3D_SHADER_REQUIRES_WAVE_OPS as SubgroupOperations.
   - D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES or D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS as WriteMSTexture. An RWTexture2DMS write reports both flags; OxC3 has no dedicated bit for the parent AdvancedTextureOps feature, so it is folded into WriteMSTexture (the use case that trips it).
+  - D3D_SHADER_REQUIRES_LINEAR_ALGEBRA (0x200000000, DXC's flag for dx::linalg, which d3d12shader.h doesn't name yet) as CoopVec or CoopMat, whichever the binary declares. Both raise it, so declaring either one covers it, and a binary that declares neither is refused.
 - SER (dx::HitObject) and OMM (RayQuery opacity-micromap flags) are native (DXR 1.2 / SM6.9).
-- cooperative vectors/matrix (CoopVec/CoopMat/CoopFP8) and RayTriPosition (ray tri vertex position fetch) are SM6.10 features that can't be detected from DXIL flags; they must be marked with annotations (they only bump the target shader model), or the oiSH is illegal - the OxC3 validator can't verify this.
+- CoopFP8 and RayTriPosition (ray tri vertex position fetch) are SM6.10 features that can't be detected from DXIL flags; they must be marked with annotations (they only bump the target shader model), or the oiSH is illegal - the OxC3 validator can't verify this. CoopVec and CoopMat are only detected together, as above, so a binary declaring both can't be checked for which one it uses.
 
 ## ESHExtension_Bindless / ESHExtension_UnboundArraySize
 
@@ -602,3 +623,7 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
 
 1.2(.6): No major bump, no oiSH files exist in the wild yet. Repurposed the trailing `SHHeader::padding` U16 as `flags`, persisting `ESHSettingsFlags` (see Header flags section). This adds `ESHSettingsFlags_ReflectionOnly`, marking an oiSH that carries reflection but no compiled binaries; it is what `OxC3 shader reflect` emits and what lets such a file load even though `SHFile_isComplete` is false. Backwards compatible: existing files wrote the padding as zero, which reads back as `ESHSettingsFlags_None`. The field is inside the hashed range, so the reflection-only state is integrity-checked.
+
+1.2(.7): No major bump, no oiSH files exist in the wild yet. Added ESHExtension2, the extensions past ESHExtension's 32 bits, with ExperimentTier1 and ExperimentTier2: `BinaryInfoFixedSize` gains `extensions2` and `dormantExt2`, and `SHHeader` gains `extension2Count` (the writer's ESHExtension2_Count, held to 1 through 32 like extensionCount) and a padding U16. Not backwards compatible: both structs grew, so files written before read as invalid and are recompiled.
+
+1.2(.8): No major bump, no oiSH files exist in the wild yet. A uniform's data is stored at its type's width, as `uniformData`'s size above always said: `ETypeId_getBytes` had taken an element's size from its data type instead of its stride, one byte for every unsigned type, two for every signed one and eight for every float. Not backwards compatible for files with uniforms: their data was laid out at those sizes, which the reader either refuses as out of bounds or reads at the wrong offsets, so they are recompiled. Files without uniforms are unchanged.

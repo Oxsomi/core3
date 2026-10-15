@@ -67,24 +67,25 @@ find_package(agility_sdk REQUIRED)
 target_link_libraries(${TARGET_NAME} PUBLIC agility_sdk::agility_sdk)
 target_include_directories(${TARGET_NAME} PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 
+# AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
+# NVAPI gives NV extensions and the real driver version, on x64 and arm64 alike.
+
+find_package(nvapi)
+
+if (nvapi_FOUND)
+	target_link_libraries(${TARGET_NAME} PUBLIC nvapi::nvapi)
+	target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_NV_API)
+endif()
+
+# AGS gives AMD extensions and the real driver version, and ships no arm64 library.
+
 if(NOT ${ARM})
 
-	# AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
-	# These are not supported for ARM, so don't include them there
-
-	# NVAPI, used for NV extensions and getting driver version
-
 	find_package(ags)
-	find_package(nvapi)
 
 	if (ags_FOUND)
 		target_link_libraries(${TARGET_NAME} PUBLIC ags::ags)
 		target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_AMD_AGS)
-	endif()
-
-	if (nvapi_FOUND)
-		target_link_libraries(${TARGET_NAME} PUBLIC nvapi::nvapi)
-		target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_NV_API)
 	endif()
 
 endif()

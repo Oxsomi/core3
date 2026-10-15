@@ -175,6 +175,22 @@ static inline F32x4 F32x4_sign(F32x4 v) {
 	return F32x4_sub(F32x4_gt(v, F32x4_zero()), F32x4_lt(v, F32x4_zero()));
 }
 
+//1 / v kept finite: v clamped away from zero to a magnitude of at least 1e-5, keeping its own sign bit, so an exactly
+// zero component (a ray along an axis has two) gives a large reciprocal of its sign instead of an infinity, and a slab
+// test over it never computes inf - inf. F32_sign is 0 for a zero, which is what this exists to avoid.
+//Twin of math.hlsli's rcpSafe: the clamp is the same bits on both sides, the division as exact as each side makes it.
+
+static inline F32 F32_rcpSafe(F32 v) {
+	const U32 magnitude = U32_fromF32Bits(F32_max(F32_abs(v), 1e-5f));
+	return 1 / F32_fromU32Bits(magnitude | (U32_fromF32Bits(v) & 0x80000000u));
+}
+
+static inline F32x4 F32x4_rcpSafe(F32x4 v) {
+	return F32x4_create4(
+		F32_rcpSafe(F32x4_x(v)), F32_rcpSafe(F32x4_y(v)), F32_rcpSafe(F32x4_z(v)), F32_rcpSafe(F32x4_w(v))
+	);
+}
+
 static inline F32 F32x4_satDot2(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot2(x, y)); }
 static inline F32 F32x4_satDot3(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot3(x, y)); }
 static inline F32 F32x4_satDot4(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot4(x, y)); }

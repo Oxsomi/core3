@@ -79,7 +79,21 @@ typedef enum EGraphicsDeviceFlags {
 	// device can still say which scopes it was in (docs/graphics_api.md, "Device loss"). Two small writes a scope.
 	//On by default on a debug device.
 
-	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6
+	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6,
+
+	//Takes binaries marked [[oxc::extension("UnsafeExperimentExecution")]] (ESHExtension_UnsafeExperimentExecution),
+	// unvalidated and without checking the device supports what they declare, which no other device does.
+	//No API reports which instructions a device can execute, so the caller has to be certain of it, by an experiment
+	// tier its driver claims for instance (EGraphicsFeatures2_ExperimentTier1). Creating such a device logs a warning
+	// saying so.
+
+	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 7,
+
+	//Takes binaries marked [[oxc::extension("UnsafeExtensionExecution")]] (ESHExtension_UnsafeExtensionExecution), which
+	// use extensions OxC3 doesn't recognize and so can't check the device for. Their recognized extensions are still
+	// checked. Creating such a device logs a warning saying so.
+
+	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 8
 
 } EGraphicsDeviceFlags;
 
@@ -375,6 +389,12 @@ typedef struct GraphicsDevice {
 
 	U32 stagingPeakKiB, stagingQuietFrames;
 
+	//The readback buffer shrinks the same way once pulls stay small, never below the most reserveReadback asked for a
+	// frame
+
+	U32 stagingReadbackPeakKiB, stagingReadbackQuietFrames;
+	U64 stagingReadbackFloor;
+
 	AtomicI64 pipelineEstimateBytes, pipelineEstimateCount;
 
 	//The driver's code size of each pipeline built so far or loaded with a pipeline cache, as sorted (key, bytes)
@@ -456,14 +476,27 @@ Bool GraphicsDeviceRef_create(
 );
 
 //Checks whether a shader binary can run on this device at all.
-//Besides features, data types, shader model and vendor, this also refuses a binary whose bindless registers don't
-// match the device's bindless layout, since the descriptor handles it indexes with would resolve to the wrong arrays.
-//Only binaries the oiSH marks as needing bindless are held to that, so a bindful shader with a pipeline layout of
-// its own is unaffected; the mismatch itself is logged with the register and what the layout has instead.
+//Its shader model and vendor are checked, and the extensions it uses against the device's features and data types.
+//A dormant extension, declared but unused, is not held against the device.
+//The unsafe markers and experiment tiers count as declared, dormant or not.
+//An unsafe marker needs the device flag allowing it, and an unsafe experiment skips the feature and data type checks.
+//A declared tier needs the driver to claim it, an unsafe experiment's included.
+//A sampler array needs the device's bindless layout to have _samplers[] (EGraphicsDeviceFlags_EnableDynamicSamplers).
+//A binary the oiSH marks as needing bindless has to match the device's bindless layout, since the descriptor handles
+// it indexes with would resolve to the wrong arrays; the mismatch is logged with the register and what the layout has
+// instead.
+//An entry's [WaveSize] has to name a size the device runs (GraphicsDeviceCapabilities_pickWaveSize).
 
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *device, const SHBinaryInfo *info, const SHEntry *entry, Error *e_rr
 );
+
+//The lanes a compute entry with this SHEntry::waveSize runs at on a device with these capabilities: the required size,
+// else the preferred one, else the size of the range nearest defaultLanes.
+//0 when the entry names no size, or none it names is in the device's range (waveSizeMin to waveSizeMax).
+//D3D12 leaves a ranged entry's choice to its driver, so only Vulkan takes the answer; both refuse an entry it is 0 for.
+
+U8 GraphicsDeviceCapabilities_pickWaveSize(const GraphicsDeviceCapabilities *caps, U16 waveSize, U8 defaultLanes);
 
 //Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
@@ -592,7 +625,8 @@ U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage m
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory
 // block mid frame; reserving during load time moves that hitch to a predictable place.
-//Zero reserves the minimum, the buffers only ever grow and underestimating just re-grows at the next pull.
+//Zero reserves the minimum. The buffers grow for bigger pulls and shrink back once pulls stay small, but never below
+// the most reserved for a frame; underestimating just re-grows at the next pull.
 Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePerFrame, Error *e_rr);
 
 //Private

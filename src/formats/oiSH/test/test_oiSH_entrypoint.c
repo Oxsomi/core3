@@ -199,7 +199,7 @@ void Test_SHFileAddEntryWaveSizeOnNonCompute(Test *t) {
 
 void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 
-	Test_setModule(t, "SHFile addEntry: any waveSize nibble > 9 rejected");
+	Test_setModule(t, "SHFile addEntry: waveSize must be a required size or a range");
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
@@ -207,10 +207,15 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	//Each nibble position loaded with 0xA (=10 > 9)
-	const U16 badWaves[] = { 0x000A, 0x00A0, 0x0A00, 0xA000 };
+	//A code is log2 of the lanes plus one, so 3 is 4 lanes and 8 is 128: 1, 2 and 9 name sizes HLSL can't.
+	//The rest mix the two forms, leave half a range or put the preferred size outside it.
 
-	for (U8 i = 0; i < 4; ++i) {
+	const U16 badWaves[] = {
+		0x0009, 0x0090, 0x0900, 0x9000, 0x0001, 0x0020,
+		0x0056, 0x0050, 0x0700, 0x0570, 0x8750, 0x6000
+	};
+
+	for (U8 i = 0; i < sizeof(badWaves) / sizeof(badWaves[0]); ++i) {
 
 		SHEntry e = (SHEntry) { 0 };
 		e.name     = CharString_createRefCStrConst("cs");
@@ -221,20 +226,33 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 		U16 binId = 0;
 		e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
-		Test_assert(t, "nibble>9 rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
+		Test_assert(t, "invalid waveSize rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
 	}
 
-	//nibble value 3 (maps to wave-8) is valid
-	SHEntry good = (SHEntry) { 0 };
-	good.name     = CharString_createRefCStrConst("cs");
-	good.stage    = EGfxPipelineStage_Compute;
-	good.groupX   = 8; good.groupY = 8; good.groupZ = 1;
-	good.waveSize = 0x0003;
+	//4 and 32 lanes required, 16 to 64 lanes, and the same range preferring 32
 
-	U16 binId = 0;
-	good.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
+	const U16 goodWaves[] = { 0x0003, 0x0006, 0x0750, 0x6750 };
+	const C8 *goodNames[] = { "cs4", "cs32", "csRange", "csPreferred" };
 
-	Test_assert(t, "valid waveSize accepted", SHFile_addEntrypoint(&sh, &good, t->alloc, &t->err));
+	for (U8 i = 0; i < sizeof(goodWaves) / sizeof(goodWaves[0]); ++i) {
+
+		SHEntry good = (SHEntry) { 0 };
+		good.name     = CharString_createRefCStrConst(goodNames[i]);
+		good.stage    = EGfxPipelineStage_Compute;
+		good.groupX   = 8; good.groupY = 8; good.groupZ = 1;
+		good.waveSize = goodWaves[i];
+
+		U16 binId = 0;
+		good.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
+
+		Test_assert(t, "valid waveSize accepted", SHFile_addEntrypoint(&sh, &good, t->alloc, &t->err));
+	}
+
+	Test_assert(t, "4 lanes", SHEntry_waveSizeLanes(0x0003, ESHWaveSize_Required) == 4);
+	Test_assert(t, "range min", SHEntry_waveSizeLanes(0x6750, ESHWaveSize_Min) == 16);
+	Test_assert(t, "range max", SHEntry_waveSizeLanes(0x6750, ESHWaveSize_Max) == 64);
+	Test_assert(t, "range preferred", SHEntry_waveSizeLanes(0x6750, ESHWaveSize_Preferred) == 32);
+	Test_assert(t, "no required size in a range", !SHEntry_waveSizeLanes(0x6750, ESHWaveSize_Required));
 
 	SHFile_free(&sh, t->alloc);
 }

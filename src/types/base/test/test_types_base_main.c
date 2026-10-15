@@ -38,6 +38,7 @@ OXC3_TEST_MAIN(types_base) {
 	Test_mathd(&t);
 
 	Test_buffer(&t);
+	Test_lockHpp(&t);
 
 	Test_baseString(&t);
 	Test_stringMut(&t);

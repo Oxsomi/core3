@@ -43,6 +43,7 @@ typedef struct DescriptorHeap DescriptorHeap;
 typedef struct PipelineLayout PipelineLayout;
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct SHBinaryInfo SHBinaryInfo;
+typedef struct SHEntry SHEntry;
 typedef struct DeviceMemoryAllocator DeviceMemoryAllocator;
 typedef struct CBufferData CBufferData;
 typedef struct Descriptor Descriptor;
@@ -129,6 +130,7 @@ typedef struct GraphicsObjectSizes {
 		const CharString *entryName,
 		Pipeline *pipeline,
 		const SHBinaryInfo *buf,
+		const SHEntry *entry,
 		Error *e_rr
 	);
 
@@ -494,6 +496,7 @@ Bool GraphicsDevice_createPipelineComputeExt(
 	const CharString *entryName,        //Optional SPIRV entrypoint override (NULL/empty = "main"); ignored for DXIL
 	Pipeline *pipeline,
 	const SHBinaryInfo *buf,
+	const SHEntry *entry,               //Its wave size, which a SPIR-V pipeline asks for and DXIL carries itself
 	Error *e_rr
 );
 

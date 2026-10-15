@@ -33,15 +33,15 @@ typedef struct Error Error;
 
 typedef struct MeshInputReader {
 
+	//center + s / 32767 * halfExtent, which is what a quantized position decodes through
+
+	F32x4 center, halfExtent;
+
 	StreamCursor positions, attributes, indices;
 
 	const Allocator *alloc;
 
 	U64 positionBase, attributeBase, indexBase;
-
-	//center + s / 32767 * halfExtent per axis, which is what a quantized position decodes through
-
-	F32 center[3], halfExtent[3];
 
 	U32 vertexCount, indexCount;
 
@@ -50,7 +50,7 @@ typedef struct MeshInputReader {
 	U8 positionStride, attributeStride, indexStride;
 
 	Bool hasAttributes, quantized;
-	U8 padding[5];
+	U8 padding[19];
 
 } MeshInputReader;
 

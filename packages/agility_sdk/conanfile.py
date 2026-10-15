@@ -64,7 +64,7 @@ class agility_sdk(ConanFile):
 		# The WARP + agility runtimes are Windows DLLs.
 		# Everywhere else (e.g. Linux/macOS building the shader compiler) only the headers are needed
 		# (DXC's dxcreflect.h includes d3d12shader.h),
-		# so this is an include-only package there, just like nvapi on non-(Windows x64).
+		# so this is an include-only package there, just like nvapi off Windows.
 
 		if self.settings.os == "Windows":
 

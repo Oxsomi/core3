@@ -51,6 +51,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
+
 namespace oxc {
 
 	namespace c {
@@ -247,15 +251,29 @@ namespace oxc {
 			return true;
 		}
 
-		//len 0 reads to the end. out is reset first,
-		// the C side refuses a filled output because that would indicate a leak,
-		// and must be built on the allocator Types was made with.
+		//[off, off + len) into out, replacing what it held with a buffer of exactly that size from out's own allocator;
+		// len 0 reads to the end, and a failed read leaves out empty.
+		//FileHandleRef_read fills the buffer it is given and reports a range past the end, so such a range is handed
+		// over without allocating anything for it.
 
 		[[nodiscard]] c::Bool read(
 			Buffer &out, c::U64 off = 0, c::U64 len = 0, c::Error *e_rr = nullptr
 		) const noexcept {
+
+			const c::U64 fileSize = c::FileHandle_fileSize(data());
+			const c::U64 size = len ? len : (off < fileSize ? fileSize - off : 0);
+			const c::Bool inRange = off < fileSize && size <= fileSize - off;
+
 			out.release();
-			return c::FileHandleRef_read(ref.handle(), off, len, &out.handle(), e_rr);
+
+			if(size && inRange && !out.createUninitializedBytes(size, e_rr))
+				return false;
+
+			if(c::FileHandleRef_read(ref.handle(), off, size, &out.handle(), e_rr))
+				return true;
+
+			out.release();
+			return false;
 		}
 
 		[[nodiscard]] c::Bool write(

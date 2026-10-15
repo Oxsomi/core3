@@ -170,7 +170,12 @@ typedef struct VkGraphicsDevice {
 	F32 timestampPeriod;
 	U32 timestampValidBits;
 	U32 timestampCursor;
-	U32 padding4;
+
+	//The subgroup size a compute pipeline runs at unless it asks for another, and the most subgroups its workgroup may
+	// hold when it does (zero without EVkGraphicsFeatures_SubgroupSizeControl), queried once.
+
+	U16 subgroupSize;
+	U16 maxComputeWorkgroupSubgroups;
 
 	//Push descriptor emulation, only allocated on a device that lacks VK_KHR_push_descriptor.
 	//One set per frame in flight, each pointing at that frame's globals buffer for the lifetime of the device,

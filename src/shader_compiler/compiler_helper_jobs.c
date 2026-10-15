@@ -96,10 +96,20 @@ Bool Compiler_registerShaderBinary(
 Bool Compiler_registerShaderEntries(
 	SHFile *shFile,
 	const ListSHEntryRuntime *entries,
-	ListU32 binaryIndices,
+	ListU64 binaryIndices,
 	const Allocator *alloc,
 	Error *e_rr
 );
+
+//What a leaf records per runtime entry it links: the entry, the combination it compiled and the binary it produced.
+//The combination is SHEntryRuntime's index (shader version fastest, then extension line, define set, uniform set),
+// and each of those lists is in declaration order.
+//Sorted as one key, an entry's binaries therefore follow the order its annotations were written in.
+//That is the order GraphicsDeviceRef_getFirstShaderEntry tries them in, so the first line the device can run wins.
+
+static inline U64 Compiler_binaryIndex(U16 runtimeEntry, U16 combination, U16 binaryId) {
+	return ((U64) runtimeEntry << 32) | ((U64) combination << 16) | binaryId;
+}
 
 //A file's work runs as a 3-level JobGroup fan-out tree on the shared queue:
 //  file latch  ->  per-combination compile jobs  ->  per-linkEntry leaf jobs.
@@ -127,7 +137,7 @@ typedef struct CompilerFileCtx {
 	ListU32 compileCombinations;            //Owned
 
 	SHFile shFile;                          //Shared; mutated by leaves under lock
-	ListU32 binaryIndices;                  //Shared; mutated by leaves under lock
+	ListU64 binaryIndices;                  //Shared; mutated by leaves under lock (Compiler_binaryIndex)
 
 	JobGroup group;                         //File latch; finalize = Compiler_finalizeShaderFile
 
@@ -176,7 +186,7 @@ void CompilerFileCtx_free(void *ptr) {
 	const Allocator *alloc = ctx->job->alloc;      //job outlives the queue (owned by Compiler_compileShaders), so this is safe
 
 	SHFile_free(&ctx->shFile, alloc);
-	ListU32_free(&ctx->binaryIndices, alloc);
+	ListU64_free(&ctx->binaryIndices, alloc);
 	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, alloc);
 	ListU32_free(&ctx->compileCombinations, alloc);
 
@@ -252,8 +262,17 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	Buffer uniformData = linkEntry.uniformData;
 	U16 currentCombinationId = linkEntry.combinationId;
 
+	//The combination index belongs to the entry being linked (Compiler_getLinkEntries computes it from that entry's
+	// own annotation lists), so it is that entry's lists that turn it back into an identifier.
+	//The combination's own entry is only the one that was compiled, and with lists in another order or of another
+	// length the same index names a different extension set, uniform or define set than this binary was built with.
+	//A lib binary (no entrypointId) is shared by every entry it links and keeps the compiled entry's identifier.
+
+	const SHEntryRuntime *identifierEntry =
+		linkEntry.entrypointId != U16_MAX ? &file->runtimeEntries.ptr[linkEntry.entrypointId] : &runtimeEntry;
+
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr));
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(identifierEntry, currentCombinationId, &binaryIdentifier, e_rr));
 
 	ListBuffer inputs = (ListBuffer) { 0 };
 	gotoIfError3(clean, ListBuffer_createRefConst(&combo->tempResult.binary, 1, &inputs, e_rr));
@@ -304,6 +323,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 			binaryIdentifier.shaderVersion,
 			entry.stage,
 			binaryIdentifier.extensions,
+			job->keepRegisters,
 			job->enableLogging,
 			&tempResult2.binary,
 			alloc
@@ -312,7 +332,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		binaryIdentifier.stageType = entry.stage;
 
 		Bool currGfxOrComp = !(
-			(entry.stage >= EGfxPipelineStage_RtStartExt && entry.stage >= EGfxPipelineStage_RtEndExt) ||
+			(entry.stage >= EGfxPipelineStage_RtStartExt && entry.stage <= EGfxPipelineStage_RtEndExt) ||
 			entry.stage >= EGfxPipelineStage_Count
 		);
 
@@ -342,6 +362,40 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
+	//@variants.hlsli's oxcDisableBinary(): a binary whose specialized code still writes the marker isn't registered, so
+	//its combination has no binary, and one that doesn't loses the marker's register, which nothing ever binds.
+
+	{
+		CompileResult *processed = tempResult2.binary.ptr ? &tempResult2 : &combo->tempResult;
+		Bool disabled = false;
+
+		for (U64 i = 0; i < processed->registers.length; ++i) {
+
+			SHRegisterRuntime *reg = &processed->registers.ptrNonConst[i];
+
+			if (!CharString_equalsCStringSensitive(&reg->name, "_oxcDisableBinary"))
+				continue;
+
+			disabled = (reg->reg.isUsedFlag >> file->binaryType) & 1;
+			SHRegisterRuntime_free(reg, alloc);
+			gotoIfError3(clean, ListSHRegisterRuntime_erase(&processed->registers, i, e_rr));
+			break;
+		}
+
+		if (disabled) {
+
+			if (job->enableLogging)
+				Log_debugLn(
+					alloc, "Disabled after link: %.*s (%s, %" PRIu32 ":%" PRIu32 ")",
+					(int) CharString_length(inputPath), inputPath.ptr,
+					file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
+					(U32) combo->runtimeEntryId, (U32) currentCombinationId
+				);
+
+			goto clean;
+		}
+	}
+
 	//A non-RT lib with no named entrypoint falls back to the Count sentinel, which dxil_link treats as "maintain lib
 	// linking".
 
@@ -370,10 +424,16 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		e_rr
 	));
 
-	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)       //Link runtime entry to binary
-		gotoIfError3(clean, ListU32_pushBack(
-			&file->binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc, e_rr
+	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l) {       //Link runtime entry to binary
+
+		const U16 combination = linkEntry.combinationIds.length ? linkEntry.combinationIds.ptr[l] : linkEntry.combinationId;
+
+		gotoIfError3(clean, ListU64_pushBack(
+			&file->binaryIndices,
+			Compiler_binaryIndex(linkEntry.runtimeEntries.ptr[l], combination, binaryId),
+			alloc, e_rr
 		));
+	}
 
 	SpinLock_unlock(&file->lock);
 	locked = false;
@@ -482,66 +542,72 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		retError(clean, Error_invalidState(2, "Compiler_compileCombinationJob() compile failed"));
 	}
 
-	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, ctx->combinationId, &binaryIdentifier, e_rr));
+	//A combination that reached OXC_DISABLE_COMBINATION (@variants.hlsli) compiled nothing, so it links nothing: no link
+	//entries, no leaves, and its entries get no binary for it.
 
-	//Bracketed by two lines rather than logged once, because getLinkEntries reflects the binary through
-	//SPIRV-Reflect, which can take the process down without saying which shader it was working on.
-	//Both lines come from this job, so a "Reflecting" with no matching "Reflected" names the shader that died,
-	// no matter how the other threads' output interleaves.
-	//Pairing against the "Link"/"Process" lines instead does not work, since those are logged by the leaf jobs,
-	// so their ordering says nothing about this.
-	//The pointer, length and ref bit are here because the only crash we have seen is inside SPIRV-Reflect's read
-	// of this buffer.
-	//Without NO_COPY the only thing it does with our memory is one memcpy of exactly this length.
-	//So a fault there means the length outruns the allocation or the pointer is already dead.
-	//"ref" tells those two apart from a genuinely bad module.
+	if (!ctx->tempResult.isDisabled) {
 
-	if(job->enableLogging)
-		Log_debugLn(
-			alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32", %"PRIu64" bytes @ 0x%"PRIx64"%s)",
-			(int) CharString_length(inputPath), inputPath.ptr,
-			file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
-			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId,
-			Buffer_length(ctx->tempResult.binary), (U64) ctx->tempResult.binary.ptr,
-			Buffer_isRef(ctx->tempResult.binary) ? ", ref" : ""
-		);
+		SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
+		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, ctx->combinationId, &binaryIdentifier, e_rr));
 
-	//Lib files need to be specialized per shader annotation or per entrypoint; non libs loop once.
+		//Bracketed by two lines rather than logged once, because getLinkEntries reflects the binary through
+		//SPIRV-Reflect, which can take the process down without saying which shader it was working on.
+		//Both lines come from this job, so a "Reflecting" with no matching "Reflected" names the shader that died,
+		// no matter how the other threads' output interleaves.
+		//Pairing against the "Link"/"Process" lines instead does not work, since those are logged by the leaf jobs,
+		// so their ordering says nothing about this.
+		//The pointer, length and ref bit are here because the only crash we have seen is inside SPIRV-Reflect's read
+		// of this buffer.
+		//Without NO_COPY the only thing it does with our memory is one memcpy of exactly this length.
+		//So a fault there means the length outruns the allocation or the pointer is already dead.
+		//"ref" tells those two apart from a genuinely bad module.
 
-	gotoIfError3(clean, Compiler_getLinkEntries(
-		compiler,
-		&file->runtimeEntries,
-		&binaryIdentifier,
-		file->binaryType,
-		&ctx->tempResult.binary,
-		&ctx->uniqueEntrypoints,
-		&ctx->linkEntries,
-		alloc,
-		e_rr
-	));
+		if(job->enableLogging)
+			Log_debugLn(
+				alloc, "Reflecting entrypoints: %.*s (%s, %"PRIu32":%"PRIu32", %"PRIu64" bytes @ 0x%"PRIx64"%s)",
+				(int) CharString_length(inputPath), inputPath.ptr,
+				file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
+				(U32) ctx->runtimeEntryId, (U32) ctx->combinationId,
+				Buffer_length(ctx->tempResult.binary), (U64) ctx->tempResult.binary.ptr,
+				Buffer_isRef(ctx->tempResult.binary) ? ", ref" : ""
+			);
 
-	if(job->enableLogging)
-		Log_debugLn(
-			alloc, "Reflected entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
-			(int) CharString_length(inputPath), inputPath.ptr,
-			file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
-			(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
-		);
+		//Lib files need to be specialized per shader annotation or per entrypoint; non libs loop once.
 
-	//A non-annotation ([[oxc::stage]]) entry produces exactly one link entry, hence one leaf.
-	//That leaf reflects and rewrites the shared combo->tempResult in place.
-	//Two such leaves would race that buffer and corrupt the heap.
-	//The invariant holds today because uniforms are rejected on non-annotation entries,
-	// and uniforms are the only thing that fans a stage entry into multiple combinations.
-	//It is enforced here anyway so a future change fails loudly rather than silently reintroducing that race.
-
-	if (!runtimeEntry.isShaderAnnotation && ctx->linkEntries.length > 1)
-		retError(clean, Error_invalidState(
-			0,
-			"Compiler_compileCombinationJob() a non-annotation entry produced multiple link entries, "
-			"which would race the shared compile result"
+		gotoIfError3(clean, Compiler_getLinkEntries(
+			compiler,
+			&file->runtimeEntries,
+			&binaryIdentifier,
+			file->binaryType,
+			&ctx->tempResult.binary,
+			&ctx->uniqueEntrypoints,
+			&ctx->linkEntries,
+			alloc,
+			e_rr
 		));
+
+		if(job->enableLogging)
+			Log_debugLn(
+				alloc, "Reflected entrypoints: %.*s (%s, %"PRIu32":%"PRIu32")",
+				(int) CharString_length(inputPath), inputPath.ptr,
+				file->binaryType == EGfxBinaryType_SPIRV ? "spirv" : "dxil",
+				(U32) ctx->runtimeEntryId, (U32) ctx->combinationId
+			);
+
+		//A non-annotation ([[oxc::stage]]) entry produces exactly one link entry, hence one leaf.
+		//That leaf reflects and rewrites the shared combo->tempResult in place.
+		//Two such leaves would race that buffer and corrupt the heap.
+		//The invariant holds today because uniforms are rejected on non-annotation entries,
+		// and uniforms are the only thing that fans a stage entry into multiple combinations.
+		//It is enforced here anyway so a future change fails loudly rather than silently reintroducing that race.
+
+		if (!runtimeEntry.isShaderAnnotation && ctx->linkEntries.length > 1)
+			retError(clean, Error_invalidState(
+				0,
+				"Compiler_compileCombinationJob() a non-annotation entry produced multiple link entries, "
+				"which would race the shared compile result"
+			));
+	}
 
 	//Activate the combination latch and fan out its leaves.
 	//From here cleanup is via the latch: we hold a self token, fail the file latch on error,
@@ -617,6 +683,8 @@ clean:
 
 //File finalize: runs once every combination has drained and nothing failed.
 //Sorts the binary indices, links entrypoints to binaries and hands the finished SHFile to the job's output slot.
+//The file's binaries are sorted by identifier for reproducibility, but an entry's binaryIds are not.
+//They keep its declaration order (Compiler_binaryIndex), since that order is what binary selection treats as preference.
 //Binaries are appended in whatever order their leaf jobs won the SHFile lock, which is thread scheduling,
 //so two runs over identical sources produce the same oiSH with its binaries in a different order and the
 //file differs byte for byte. -threads 1 is stable, anything else is not.
@@ -636,6 +704,9 @@ Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 
 	if(a->identifier.extensions != b->identifier.extensions)
 		return a->identifier.extensions < b->identifier.extensions;
+
+	if(a->identifier.extensions2 != b->identifier.extensions2)
+		return a->identifier.extensions2 < b->identifier.extensions2;
 
 	const ECompareResult name =
 		CharString_compareSensitive(&a->identifier.entrypoint, &b->identifier.entrypoint);
@@ -662,7 +733,7 @@ Bool Compiler_binaryOrderLess(const SHBinaryInfo *a, const SHBinaryInfo *b) {
 //Reorders the file's binaries into that order and remaps binaryIndices onto it.
 //Insertion sort rather than anything cleverer: a file has tens of binaries, and this runs once.
 
-Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocator *alloc, Error *e_rr) {
+Bool Compiler_sortBinaries(SHFile *shFile, ListU64 *binaryIndices, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Buffer orderBuf = Buffer_createNull();
@@ -707,7 +778,7 @@ Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocat
 
 	for (U64 i = 0; i < binaryIndices->length; ++i) {
 
-		const U32 v = binaryIndices->ptr[i];
+		const U64 v = binaryIndices->ptr[i];
 		const U16 oldId = (U16) v;
 
 		U16 newId = oldId;
@@ -718,7 +789,7 @@ Bool Compiler_sortBinaries(SHFile *shFile, ListU32 *binaryIndices, const Allocat
 				break;
 			}
 
-		binaryIndices->ptrNonConst[i] = (v & 0xFFFF0000u) | newId;
+		binaryIndices->ptrNonConst[i] = (v & ~(U64) 0xFFFF) | newId;
 	}
 
 clean:
@@ -745,7 +816,7 @@ Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 	if(!Compiler_sortBinaries(&ctx->shFile, &ctx->binaryIndices, alloc, &errTmp))
 		s_uccess = false;
 
-	else if(!ListU32_sort(ctx->binaryIndices))
+	else if(!ListU64_sort(ctx->binaryIndices))
 		s_uccess = false;
 
 	else if(!Compiler_registerShaderEntries(&ctx->shFile, &ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))
@@ -1045,7 +1116,7 @@ clean:
 Bool Compiler_registerShaderEntries(
 	SHFile *shFile,
 	const ListSHEntryRuntime *entries,
-	ListU32 binaryIndices,
+	ListU64 binaryIndices,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -1057,26 +1128,28 @@ Bool Compiler_registerShaderEntries(
 
 		SHEntryRuntime *runtime = &entries->ptrNonConst[j];
 
-		U32 l = SHEntryRuntime_getCombinations(runtime);
-
-		//Skip missing binaries
+		//An entry's binaries are the run of indices that name it, one a combination it has a binary for: at most its
+		//cross product, fewer where @variants.hlsli disabled some. An entry with none (every combination disabled, or
+		//none for this backend) isn't added.
 
 		if (k == binaryIndices.length)
 			break;
 
-		if ((binaryIndices.ptr[k] >> 16) != j)
+		if ((binaryIndices.ptr[k] >> 32) != j)
 			continue;
 
-		//Validate that [k, k + l> is valid (points to same binary)
+		U64 end = k;
 
-		if(k + l > binaryIndices.length)
+		while (end < binaryIndices.length && (binaryIndices.ptr[end] >> 32) == j)
+			++end;
+
+		const U64 l = end - k;
+
+		if(l > SHEntryRuntime_getCombinations(runtime))
 			retError(clean, Error_outOfBounds(
-				0, k + l, binaryIndices.length,
-				"CLI_compileShader() runtime accessed binaryIndices out of bounds"
+				0, l, SHEntryRuntime_getCombinations(runtime),
+				"Compiler_registerShaderEntries() an entry has more binaries than combinations"
 			));
-
-		if((binaryIndices.ptr[k + l - 1] >> 16) != j)
-			retError(clean, Error_invalidState(0, "CLI_compileShader() has missing binaries for index j"));
 
 		if(runtime->entry.binaryIds.length)
 			retError(clean, Error_invalidOperation(
@@ -1224,6 +1297,16 @@ Bool Compiler_compileShaders(
 		if(errorInPrevious) {
 			if(enableLogging)
 				Log_warnLn(alloc, "One of the previous oiSH compilations failed, not producing a binary");
+		}
+
+		//Every entrypoint skipped for the requested binary types leaves nothing to write, which isn't an error.
+
+		else if (previous.entries.ptr && !previous.entries.length) {
+			if(enableLogging)
+				Log_warnLn(
+					alloc, "No oiSH written for %.*s: no entrypoint targets the requested binary types",
+					(int) CharString_length(allOutputs->ptr[i]), allOutputs->ptr[i].ptr
+				);
 		}
 
 		else if (previous.entries.ptr) {

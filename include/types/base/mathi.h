@@ -21,7 +21,13 @@
 //types/base/mathi.h
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "types/base/math_common.h"
+#include "types/base/constants.h"
+
+#if _COMPILER == COMPILER_MSVC
+	#include <intrin0.h>        //_BitScan*64 and __popcnt64
+#endif
 
 #ifdef __cplusplus
 	extern "C" {
@@ -90,6 +96,66 @@ UINT_OP(U64);
 UINT_OP(U32);
 UINT_OP(U16);
 UINT_OP(U8);
+
+//The index of the highest set bit (bitScan) and of the lowest (bitScanReverse), U8_MAX when none is set,
+// and how many are set (bitCount): HLSL's firstbithigh, firstbitlow and countbits.
+//MSVC uses its intrinsics, every other compiler (clang-cl too) the GNU builtins.
+//__popcnt64 needs POPCNT: always there on arm64, and on x64 only in SIMD builds, through their SSE4.2 baseline.
+
+static inline U8 U64_bitCount(U64 v) {
+#if _COMPILER != COMPILER_MSVC
+	return (U8) __builtin_popcountll(v);
+#elif _ARCH == ARCH_ARM64 || _SIMD == SIMD_SSE
+	return (U8) __popcnt64(v);
+#else
+	v = v - ((v >> 1) & 0x5555555555555555);
+	v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333);
+	v = (v + (v >> 4)) & 0x0F0F0F0F0F0F0F0F;
+	return (U8) ((v * 0x0101010101010101) >> 56);
+#endif
+}
+
+static inline U8 U64_bitScan(U64 v) {
+
+	if(!v)
+		return U8_MAX;
+
+#if _COMPILER != COMPILER_MSVC
+	return (U8) (63 - __builtin_clzll(v));
+#else
+	unsigned long i = 0;
+	_BitScanReverse64(&i, v);
+	return (U8) i;
+#endif
+}
+
+static inline U8 U64_bitScanReverse(U64 v) {
+
+	if(!v)
+		return U8_MAX;
+
+#if _COMPILER != COMPILER_MSVC
+	return (U8) __builtin_ctzll(v);
+#else
+	unsigned long i = 0;
+	_BitScanForward64(&i, v);
+	return (U8) i;
+#endif
+}
+
+//The narrower types widen without changing any bit's index.
+
+static inline U8 U32_bitCount(U32 v) { return U64_bitCount(v); }
+static inline U8 U16_bitCount(U16 v) { return U64_bitCount(v); }
+static inline U8 U8_bitCount(U8 v) { return U64_bitCount(v); }
+
+static inline U8 U32_bitScan(U32 v) { return U64_bitScan(v); }
+static inline U8 U16_bitScan(U16 v) { return U64_bitScan(v); }
+static inline U8 U8_bitScan(U8 v) { return U64_bitScan(v); }
+
+static inline U8 U32_bitScanReverse(U32 v) { return U64_bitScanReverse(v); }
+static inline U8 U16_bitScanReverse(U16 v) { return U64_bitScanReverse(v); }
+static inline U8 U8_bitScanReverse(U8 v) { return U64_bitScanReverse(v); }
 
 //Int
 

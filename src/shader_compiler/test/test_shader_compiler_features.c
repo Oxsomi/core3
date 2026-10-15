@@ -100,6 +100,54 @@ clean:
 	return found;
 }
 
+//Whether disasm holds number between prefix and suffix, and, with an empty suffix, no digit after it, so 7 doesn't
+//match 70000.
+
+static Bool Test_disasmHasNumber(
+	const CharString *disasm, const C8 *prefix, I64 number, const C8 *suffix, const Allocator *alloc
+) {
+
+	CharString needle = CharString_createNull();
+	Bool found = false;
+
+	if (!CharString_format(alloc, &needle, NULL, "%s%" PRIi64 "%s", prefix, number, suffix))
+		return false;
+
+	for (U64 at = 0; !found; ++at) {
+
+		at = CharString_findFirstStringSensitive(disasm, &needle, at, 0);
+
+		if (at == U64_MAX)
+			break;
+
+		const U64 end = at + CharString_length(needle);
+		found = *suffix || end >= CharString_length(*disasm) || !C8_isDec(disasm->ptr[end]);
+	}
+
+	CharString_free(&needle, alloc);
+	return found;
+}
+
+//Whether disasm holds token with neither a digit nor a decimal point after it, so 1.5 doesn't match 1.55.
+
+static Bool Test_disasmHasToken(const CharString *disasm, const C8 *token) {
+
+	const CharString needle = CharString_createRefCStrConst(token);
+
+	for (U64 at = 0; ; ++at) {
+
+		at = CharString_findFirstStringSensitive(disasm, &needle, at, 0);
+
+		if (at == U64_MAX)
+			return false;
+
+		const U64 end = at + CharString_length(needle);
+
+		if (end >= CharString_length(*disasm) || (!C8_isDec(disasm->ptr[end]) && disasm->ptr[end] != '.'))
+			return true;
+	}
+}
+
 void Test_shaderCompilerFeatures(Test *t) {
 
 	Test_setModule(t, "Compiler features");
@@ -136,10 +184,8 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//natively detected on SPIRV (see SHEntryRuntime_getSupportedBinaryTypes).
 		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       B_BOTH },
 
-		//SM6.6 dynamic resources (full bindless): native on DXIL, lowered to SPV_EXT_descriptor_heap on SPIRV.
-		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_BOTH },
-
 		//DXIL-only: DXC's SPIR-V backend genuinely fails to compile these (verified: SPIRV compile error)
+		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_DXIL },
 		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   B_DXIL },
 		{ "features/paq.hlsl",                 ESHExtension_PAQ,                B_DXIL },
 		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     B_DXIL },
@@ -200,7 +246,12 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//FP8 (e4m3) cooperative-matrix GEMM (F16 accumulate): DXIL Matrix<F8_E4M3FN,Wave>; SPIRV SPV_EXT_float8 +
 		// Float8CooperativeMatrixEXT (an inline FP8 OpTypeFloat).
 		//Gated behind CoopFP8.
-		{ "features/coop_mat_fp8.hlsl",         ESHExtension_CoopFP8,            B_BOTH }
+		{ "features/coop_mat_fp8.hlsl",         ESHExtension_CoopFP8,            B_BOTH },
+
+		//An unsafe experiment (a used NonSemantic instruction, SPIRV only) and extensions OxC3 doesn't recognize (a
+		// rasterizer ordered view, both backends). Their twins without the marker are refused below.
+		{ "features/unsafe_experiment.hlsl",    ESHExtension_UnsafeExperimentExecution, B_SPV },
+		{ "features/unsafe_extension.hlsl",     ESHExtension_UnsafeExtensionExecution,  B_BOTH }
 	};
 
 	static const struct { U8 mode; const C8 *name; } backends[] = {
@@ -250,11 +301,9 @@ void Test_shaderCompilerFeatures(Test *t) {
 	#undef B_DXIL
 	#undef B_BOTH
 
-	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on both backends ---
-	//The table above already asserts the used shader reflects the bit; this block additionally asserts
-	// 1) using the heaps does NOT mark the extension dormant (native detection sees the usage),
-	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
-	// 3) declaring the extension without using it DOES mark it dormant (native detection on both backends).
+	//An experiment tier, ESHExtension2's, on both backends: the line declaring it yields a binary carrying it in the
+	// second mask alone, the other line one without, and their code differs because only the first compile saw
+	// __OXC_EXT_EXPERIMENTTIER1.
 
 	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
 
@@ -262,10 +311,125 @@ void Test_shaderCompilerFeatures(Test *t) {
 		SHFile shFile = (SHFile) { 0 };
 		CharString label = CharString_createNull();
 
+		const C8 *file = "features/experiment_tier.hlsl";
+		const Bool compiled = compileFileShader(alloc, file, backends[b].mode, true, false, &out, &err);
+		const Bool read = compiled && out.length == 1 && readOiSH(alloc, out.ptr[0], &shFile, &err);
+
+		const SHBinaryInfo *tier = NULL, *plain = NULL;
+
+		for(U64 i = 0; read && i < shFile.binaries.length; ++i) {
+
+			const SHBinaryInfo *bin = &shFile.binaries.ptr[i];
+
+			if(!bin->identifier.extensions && bin->identifier.extensions2 == ESHExtension2_ExperimentTier1)
+				tier = bin;
+
+			else if(!bin->identifier.extensions && !bin->identifier.extensions2)
+				plain = bin;
+		}
+
+		const Bool separate =
+			tier && plain && shFile.binaries.length == 2 &&
+			Buffer_neq(tier->binaries[backends[b].mode], plain->binaries[backends[b].mode]) &&
+			oiSHRoundtrips(alloc, out.ptr[0], &err);
+
+		if (!separate)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		if (!CharString_format(alloc, &label, &err, "%s (%s)", file, backends[b].name))
+			label = CharString_createRefCStrConst(file);
+
+		Test_assert(t, label.ptr, separate);
+
+		CharString_free(&label, alloc);
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//The experiment's instruction survives to the binary: a pass that stripped its set would leave a module that
+	// compiles and validates nothing, so only the disassembly can tell.
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		Compiler comp = (Compiler) { 0 };
+		CharString disasm = CharString_createNull();
+		Bool created = false;
+
+		Bool ok =
+			compileFileShader(alloc, "features/unsafe_experiment.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) &&
+			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 1 &&
+			Compiler_create(alloc, &comp, &err);
+
+		created = ok;
+
+		ok = ok && Compiler_disassemble(
+			&comp, EGfxBinaryType_SPIRV, shFile.binaries.ptr[0].binaries[EGfxBinaryType_SPIRV], alloc, &disasm, &err
+		);
+
+		const CharString import = CharString_createRefCStrConst("OpExtInstImport \"NonSemantic.OxC3.Experiment\"");
+		const CharString use = CharString_createRefCStrConst("OpExtInst %uint");
+
+		const Bool kept =
+			ok &&
+			CharString_containsStringSensitive(&disasm, &import, 0, CharString_length(disasm)) &&
+			CharString_containsStringSensitive(&disasm, &use, 0, CharString_length(disasm));
+
+		if (!kept && CharString_length(disasm))
+			Log_debugLn(alloc, "%.*s", (int) CharString_length(disasm), disasm.ptr);
+
+		Test_assert(t, "features/unsafe_experiment.hlsl (spirv) keeps its instruction", kept);
+
+		CharString_free(&disasm, alloc);
+
+		if (created)
+			Compiler_free(&comp, alloc);
+
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//The same shaders without their markers: the validator refuses the NonSemantic result's use, and oiSH the
+	// extensions it doesn't recognize, which only UnsafeExperimentExecution and UnsafeExtensionExecution let through.
+	//coop_vec_undeclared.hlsl uses linear algebra without declaring CoopVec or CoopMat, which DXIL reports.
+
+	static const struct { const C8 *file; U8 mode; const C8 *label; } refused[] = {
+		{ "features/unsafe_experiment_refused.hlsl", EGfxBinaryType_SPIRV, "unsafe_experiment_refused.hlsl (spirv)" },
+		{ "features/unsafe_extension_refused.hlsl",  EGfxBinaryType_SPIRV, "unsafe_extension_refused.hlsl (spirv)" },
+		{ "features/unsafe_extension_refused.hlsl",  EGfxBinaryType_DXIL,  "unsafe_extension_refused.hlsl (dxil)" },
+		{ "features/coop_vec_undeclared.hlsl",       EGfxBinaryType_DXIL,  "coop_vec_undeclared.hlsl (dxil)" }
+	};
+
+	for (U64 i = 0; i < sizeof(refused) / sizeof(refused[0]); ++i) {
+
+		ListBuffer out = (ListBuffer) { 0 };
+
+		const Bool compiled = compileFileShader(alloc, refused[i].file, refused[i].mode, false, false, &out, &err);
+
+		Test_assert(t, refused[i].label, !compiled || out.length != 1 || !Buffer_length(out.ptr[0]));
+
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on DXIL ---
+	//The table above already asserts the used shader reflects the bit; this block additionally asserts
+	// 1) using the heaps does NOT mark the extension dormant (native detection sees the usage),
+	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
+	// 3) declaring the extension without using it DOES mark it dormant (no requires flags emitted).
+	//DescriptorHeap is in ESHExtension_NoSpirvCompile, so compiling it for SPIRV alone succeeds and writes nothing.
+
+	{
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+
 		//Used: active extension; the only register is the normally bound output UAV (heap accesses create none)
 
-		Bool usedOk =
-			compileFileShader(alloc, "features/descriptor_heap.hlsl", backends[b].mode, true, false, &out, &err) &&
+		const Bool usedOk =
+			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_DXIL, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
 			(shFile.binaries.ptr[0].identifier.extensions & ESHExtension_DescriptorHeap) &&
@@ -275,39 +439,37 @@ void Test_shaderCompilerFeatures(Test *t) {
 		if (!usedOk)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		if (!CharString_format(alloc, &label, &err, "descriptor heap used stays active (%s)", backends[b].name))
-			label = CharString_createRefCStrConst("descriptor heap used stays active");
+		Test_assert(t, "descriptor heap used stays active (dxil)", usedOk);
 
-		Test_assert(t, label.ptr, usedOk);
-
-		CharString_free(&label, alloc);
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 
-		//Declared but unused: demoted to dormant by native detection on DXIL (no requires flags emitted).
-		//On SPIRV the heap mode declares the DescriptorHeapEXT capability even without a heap access,
-		// so the binary genuinely requires the feature and the extension stays active there.
-
-		Bool expectDormant = backends[b].mode == EGfxBinaryType_DXIL;
-
-		Bool unusedOk =
-			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", backends[b].mode, true, false, &out, &err) &&
+		const Bool unusedOk =
+			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", EGfxBinaryType_DXIL, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
 			(shFile.binaries.ptr[0].identifier.extensions & ESHExtension_DescriptorHeap) &&
-			!(shFile.binaries.ptr[0].dormantExtensions & ESHExtension_DescriptorHeap) == !expectDormant;
+			(shFile.binaries.ptr[0].dormantExtensions & ESHExtension_DescriptorHeap);
 
 		if (!unusedOk)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		if (!CharString_format(alloc, &label, &err, "descriptor heap unused goes dormant (%s)", backends[b].name))
-			label = CharString_createRefCStrConst("descriptor heap unused goes dormant");
+		Test_assert(t, "descriptor heap unused goes dormant (dxil)", unusedOk);
 
-		Test_assert(t, label.ptr, unusedOk);
-
-		CharString_free(&label, alloc);
 		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+
+		const Bool spirvSkipped =
+			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
+			(!out.length || !Buffer_length(out.ptr[0]));
+
+		if (!spirvSkipped)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		Test_assert(t, "descriptor heap skips spirv", spirvSkipped);
+
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 	}
@@ -428,6 +590,162 @@ void Test_shaderCompilerFeatures(Test *t) {
 		err = Error_none();
 	}
 
+	//--- Under --keep-registers, a register only a uniform-dead branch reads stays listed in every binary ---
+
+	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+		ListBuffer out = (ListBuffer) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		CharString label = CharString_createNull();
+
+		Bool ok =
+			compileFileShader(alloc, "features/dead_uniform_register.hlsl", backends[b].mode, true, true, &out, &err) &&
+			out.length == 1 && Buffer_length(out.ptr[0]) &&
+			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2;
+
+		for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+			const SHBinaryInfo *bin = &shFile.binaries.ptr[j];
+			const SHBinaryIdentifier *id = &bin->identifier;
+
+			if (id->uniforms.length != 1) {
+				ok = false;
+				break;
+			}
+
+			Bool readExtra = id->uniformData.ptr[id->uniforms.ptr[0].dataOffset] != 0;
+			Bool listed = false, used = false;
+
+			for (U64 i = 0; i < bin->registers.length; ++i)
+				if (CharString_equalsCStringSensitive(&bin->registers.ptr[i].name, "deadRead")) {
+					listed = true;
+					used = (bin->registers.ptr[i].reg.isUsedFlag >> backends[b].mode) & 1;
+				}
+
+			ok &= listed && used == readExtra;
+		}
+
+		if (!ok)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		if (!CharString_format(alloc, &label, &err, "uniform-dead register kept by keep registers (%s)", backends[b].name))
+			label = CharString_createRefCStrConst("uniform-dead register kept by keep registers");
+
+		Test_assert(t, label.ptr, ok);
+
+		CharString_free(&label, alloc);
+		SHFile_free(&shFile, alloc);
+		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//--- Every scalar uniform type keeps its value: as stored in the oiSH, and as the constant its binary holds ---
+	//Each uniform is stored back as a word (features/uniform_values.hlsl), so the constant is that word: DXIL prints it
+	//as a signed i32 store operand, the undef after it the store's unused lanes, and SPIRV as a uint or int constant,
+	//whichever the optimizer folded it to, or for a float as the float a bitcast it didn't fold reads.
+
+	{
+		static const struct { const C8 *name; const C8 *value; U32 word; const C8 *spirvFloat; } values[] = {
+			{ "big", "300",         300,        NULL },
+			{ "neg", "-70000",      0xFFFEEE90, NULL },
+			{ "f",   "0.123456789", 0x3DFCD6EA, "OpConstant %float 0.123456791" },
+			{ "s16", "-2",          0xFFFFFFFE, NULL },
+			{ "s8",  "-1",          0xFFFFFFFF, NULL },
+			{ "h",   "1.5",         0x3FC00000, "OpConstant %float 1.5" },
+			{ "u16", "65535",       65535,      NULL },
+			{ "u8",  "255",         255,        NULL },
+			{ "b",   "true",        7,          NULL }
+		};
+
+		for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			Compiler comp = (Compiler) { 0 };
+			CharString disasm = CharString_createNull();
+			CharString label = CharString_createNull();
+			Bool created = false;
+
+			//One binary for each extension line: SPIRV builds its spec constants with and without 16 bit types.
+
+			Bool ok =
+				compileFileShader(alloc, "features/uniform_values.hlsl", backends[b].mode, true, false, &out, &err) &&
+				out.length == 1 && Buffer_length(out.ptr[0]) &&
+				readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2 &&
+				(created = Compiler_create(alloc, &comp, &err));
+
+			for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
+
+				const SHBinaryInfo *bin = &shFile.binaries.ptr[j];
+				const SHBinaryIdentifier *id = &bin->identifier;
+
+				ok = id->uniforms.length == sizeof(values) / sizeof(values[0]) &&
+					Compiler_disassemble(&comp, backends[b].mode, bin->binaries[backends[b].mode], alloc, &disasm, &err);
+
+				for (U64 v = 0; ok && v < sizeof(values) / sizeof(values[0]); ++v) {
+
+					U64 u = 0;
+
+					for (; u < id->uniforms.length; ++u)
+						if (CharString_equalsCStringSensitive(&id->uniforms.ptr[u].name, values[v].name))
+							break;
+
+					if (u == id->uniforms.length) {
+						ok = false;
+						break;
+					}
+
+					const TypeId typeId = ETypeId_arr[id->uniforms.ptr[u].typeIdShort];
+					const U64 len = ETypeId_getBytes(typeId);
+					const U16 at = id->uniforms.ptr[u].dataOffset;
+					SHValue stored = (SHValue) { 0 }, expected = (SHValue) { 0 };
+
+					ok = (U64) at + len <= id->uniformData.length &&
+						SHValue_parse(CharString_createRefCStrConst(values[v].value), typeId, &expected, &err);
+
+					if (ok)
+						Buffer_memcpy(
+							Buffer_createRef(&stored, sizeof(stored)), Buffer_createRefConst(id->uniformData.ptr + at, len)
+						);
+
+					ok = ok && SHValue_equals(&stored, &expected, typeId);
+
+					if (backends[b].mode == EGfxBinaryType_DXIL)
+						ok = ok && Test_disasmHasNumber(&disasm, "i32 ", (I32) values[v].word, ", i32 undef", alloc);
+
+					else ok = ok && (
+						Test_disasmHasNumber(&disasm, "OpConstant %uint ", values[v].word, "", alloc) ||
+						Test_disasmHasNumber(&disasm, "OpConstant %int ", (I32) values[v].word, "", alloc) ||
+						(values[v].spirvFloat && Test_disasmHasToken(&disasm, values[v].spirvFloat))
+					);
+
+					if (!ok)
+						Log_debugLn(alloc, "uniform %s = %s isn't kept in binary %" PRIu64, values[v].name, values[v].value, j);
+				}
+
+				CharString_free(&disasm, alloc);
+			}
+
+			if (!ok)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "uniform values kept (%s)", backends[b].name))
+				label = CharString_createRefCStrConst("uniform values kept");
+
+			Test_assert(t, label.ptr, ok);
+
+			CharString_free(&label, alloc);
+			CharString_free(&disasm, alloc);
+
+			if (created)
+				Compiler_free(&comp, alloc);
+
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
+		}
+	}
+
 	//--- Disassembly: a compiled SPIRV binary round-trips to non-empty, plausible SPIRV text ---
 
 	{
@@ -508,6 +826,55 @@ void Test_shaderCompilerFeatures(Test *t) {
 
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
+		err = Error_none();
+	}
+
+	//[WaveSize] in both forms, read off the source by the parse: the SPIR-V entry carries it as the DXIL one does, though
+	// SPIR-V can't hold it (a Vulkan pipeline asks for it), so a package of SPIR-V alone keeps it, and the two combine.
+
+	static const struct { const C8 *file; U16 waveSize; } waves[] = {
+		{ "features/wave_size.hlsl",            0x0006 },   //32 lanes required
+		{ "features/wave_size_range.hlsl",      0x6750 },   //16 to 64 lanes, preferring 32
+		{ "features/wave_size_expression.hlsl", 0x6750 }    //the same, from an enum, a constant and a macro
+	};
+
+	for (U64 i = 0; i < sizeof(waves) / sizeof(waves[0]); ++i) {
+
+		ListBuffer dxil = (ListBuffer) { 0 }, spirv = (ListBuffer) { 0 };
+		SHFile dxilFile = (SHFile) { 0 }, spirvFile = (SHFile) { 0 }, combined = (SHFile) { 0 };
+		Buffer written = Buffer_createNull();
+		CharString label = CharString_createNull();
+
+		const Bool ok =
+			compileFileShader(alloc, waves[i].file, EGfxBinaryType_DXIL, true, false, &dxil, &err) &&
+			compileFileShader(alloc, waves[i].file, EGfxBinaryType_SPIRV, true, false, &spirv, &err) &&
+			dxil.length == 1 && spirv.length == 1 &&
+			readOiSH(alloc, dxil.ptr[0], &dxilFile, &err) && readOiSH(alloc, spirv.ptr[0], &spirvFile, &err) &&
+			dxilFile.entries.length == 1 && spirvFile.entries.length == 1 &&
+			SHFile_combine(&dxilFile, &spirvFile, alloc, &combined, &err) && combined.entries.length == 1 &&
+			writeOiSH(alloc, &combined, &written, &err) && oiSHRoundtrips(alloc, written, &err);
+
+		if (!ok)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		const Bool reflected =
+			ok &&
+			dxilFile.entries.ptr[0].waveSize == waves[i].waveSize &&
+			spirvFile.entries.ptr[0].waveSize == waves[i].waveSize &&
+			combined.entries.ptr[0].waveSize == waves[i].waveSize;
+
+		if (!CharString_format(alloc, &label, &err, "%s (dxil, spirv, combined)", waves[i].file))
+			label = CharString_createRefCStrConst(waves[i].file);
+
+		Test_assert(t, label.ptr, reflected);
+
+		CharString_free(&label, alloc);
+		Buffer_free(&written, alloc);
+		SHFile_free(&combined, alloc);
+		SHFile_free(&spirvFile, alloc);
+		SHFile_free(&dxilFile, alloc);
+		ListBuffer_freeUnderlying(&spirv, alloc);
+		ListBuffer_freeUnderlying(&dxil, alloc);
 		err = Error_none();
 	}
 

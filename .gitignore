@@ -82,3 +82,5 @@ __pycache__/
 /radeon_gpu_analyzer/
 /nvapi/
 /DirectXShaderCompiler/
+# Scratch folders SpvISA_disassemble makes beside the corpus while amdllpc runs
+.oxc3_isa_*/

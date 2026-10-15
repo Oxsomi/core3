@@ -99,6 +99,16 @@ Bool SHValue_stringifyHLSL(
 	Error *e_rr
 );
 
+//A scalar value from text, as an annotation or a uniform lookup writes it: true or false for B1, a decimal integer with
+//an optional sign for the integer types, and any number for the float types, rounded to the type.
+//Refused where it doesn't fit the type or isn't finite in it.
+
+Bool SHValue_parse(CharString str, TypeId typeId, SHValue *value, Error *e_rr);
+
+//Whether two values of one scalar type are the same: by value for integers and B1, by bits for floats.
+
+Bool SHValue_equals(const SHValue *a, const SHValue *b, TypeId typeId);
+
 typedef struct SHFile {
 
 	ListSHBinaryInfo binaries;
@@ -110,6 +120,7 @@ typedef struct SHFile {
 	U32 compilerVersion;        //OxC3 compiler version
 
 	U32 sourceHash;             //CRC32C of sources
+	U32 padding;
 
 } SHFile;
 

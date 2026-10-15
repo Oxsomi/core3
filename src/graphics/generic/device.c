@@ -1080,6 +1080,22 @@ Bool GraphicsDeviceRef_create(
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
 		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
 
+	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
+		Log_warnLnx(
+			"GraphicsDeviceRef_create() EGraphicsDeviceFlags_AllowUnsafeExtensionExecution: binaries marked "
+			"UnsafeExtensionExecution may use extensions OxC3 doesn't recognize, which the device isn't checked for. "
+			"Be certain the device supports them (%s)",
+			device->info.name
+		);
+
+	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExperimentExecution)
+		Log_warnLnx(
+			"GraphicsDeviceRef_create() EGraphicsDeviceFlags_AllowUnsafeExperimentExecution: binaries marked "
+			"UnsafeExperimentExecution run unvalidated and without feature checks. The device cannot be asked which "
+			"instructions it executes, so be certain of what runs on it (%s)",
+			device->info.name
+		);
+
 	gotoIfError3(clean, RefPtr_inc(instanceRef));
 	device->instance = instanceRef;
 
@@ -1557,6 +1573,32 @@ clean:
 	return s_uccess;
 }
 
+U8 GraphicsDeviceCapabilities_pickWaveSize(const GraphicsDeviceCapabilities *caps, U16 waveSize, U8 defaultLanes) {
+
+	if(!caps || !waveSize || !SHEntry_isValidWaveSize(waveSize))
+		return 0;
+
+	const U8 required = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Required);
+
+	if(required)
+		return required >= caps->waveSizeMin && required <= caps->waveSizeMax ? required : 0;
+
+	const U8 low = U8_max(SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Min), caps->waveSizeMin);
+	const U8 high = U8_min(SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Max), caps->waveSizeMax);
+
+	if(low > high)
+		return 0;
+
+	const U8 preferred = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Preferred);
+
+	if(preferred >= low && preferred <= high)
+		return preferred;
+
+	//Every bound is a power of two, so the clamp is one too.
+
+	return U8_clamp(defaultLanes, low, high);
+}
+
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *deviceRef, const SHBinaryInfo *bin, const SHEntry *entry, Error *e_rr
 ) {
@@ -1574,6 +1616,11 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	ESHExtension extensions = (bin->identifier.extensions &~ bin->dormantExtensions) & ESHExtension_All;
+
+	//The unsafe markers and the tiers are declarations, so a binary's dormant bits never excuse them.
+
+	const ESHExtension declared = bin->identifier.extensions;
+	const ESHExtension2 declared2 = bin->identifier.extensions2;
 
 	EGraphicsFeatures features = EGraphicsFeatures_None;
 	EGraphicsFeatures2 features2 = EGraphicsFeatures2_None;
@@ -1629,6 +1676,48 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 		GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Direct3D12 ?
 		EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 
+	//An unsafe experiment runs only on a device made to take one, and there its author vouches for what it
+	// declares, so its features are not held against the device.
+	//What is not a matter of support stays checked: the bindless layout, the vendor and a blob for this api.
+
+	const Bool isUnsafe = !!(declared & ESHExtension_UnsafeExperimentExecution);
+
+	if(isUnsafe && !(device->flags & EGraphicsDeviceFlags_AllowUnsafeExperimentExecution))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary is an unsafe experiment (UnsafeExperimentExecution), which "
+			"only a device created with EGraphicsDeviceFlags_AllowUnsafeExperimentExecution takes"
+		));
+
+	//Extensions OxC3 doesn't recognize were never reflected, so nothing below can check them: the device has to have
+	// been made to take that on trust.
+
+	if(
+		(declared & ESHExtension_UnsafeExtensionExecution) &&
+		!(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
+	)
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary uses extensions OxC3 doesn't recognize "
+			"(UnsafeExtensionExecution), which only a device created with "
+			"EGraphicsDeviceFlags_AllowUnsafeExtensionExecution takes"
+		));
+
+	//A tier is held against every device, an experiment's included: whether the driver claims it is the one thing an
+	// experiment can be checked for.
+
+	EGraphicsFeatures2 tiers = EGraphicsFeatures2_None;
+
+	if(declared2 & ESHExtension2_ExperimentTier1)           tiers |= EGraphicsFeatures2_ExperimentTier1;
+	if(declared2 & ESHExtension2_ExperimentTier2)           tiers |= EGraphicsFeatures2_ExperimentTier2;
+
+	if((device->info.capabilities.features2 & tiers) != tiers)
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary declares an experiment tier (ExperimentTier1 or "
+			"ExperimentTier2) that the device's driver doesn't claim"
+		));
+
 	//Bindless is the one feature a caller can take away from a device that has it,
 	// so it says as much instead of leaving it to the generic message below.
 
@@ -1639,13 +1728,13 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 			"(unsupported or turned off with EGraphicsDeviceFlags_DisableBindless)"
 		));
 
-	if((device->info.capabilities.features & features) != features)
+	if(!isUnsafe && (device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
 
-	if((device->info.capabilities.features2 & features2) != features2)
+	if(!isUnsafe && (device->info.capabilities.features2 & features2) != features2)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features2 is missing"));
 
-	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
+	if(!isUnsafe && (device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
 	//Reading an oiSH widens a was-everything mask to today's everything, so this comparison stays exact
@@ -1672,6 +1761,16 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	else if(!Buffer_length(bin->binaries[EGfxBinaryType_SPIRV]))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"));
+
+	//A wave size outside the device's range is refused here rather than by the pipeline, as D3D12 would refuse it.
+	//It counts for an unsafe experiment too, since it is no feature the author could vouch for.
+
+	if(entry->waveSize && !GraphicsDeviceCapabilities_pickWaveSize(&device->info.capabilities, entry->waveSize, 0))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() entry's WaveSize names no wave size the device runs "
+			"(GraphicsDeviceCapabilities::waveSizeMin to waveSizeMax)"
+		));
 
 	//A sampler ARRAY only resolves against the bindless _samplers[] binding, which the device only declares
 	// when it was created with EnableDynamicSamplers.
@@ -1774,6 +1873,21 @@ clean:
 }
 
 static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef);
+static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef);
+
+//What a ring's frame region holds right now, the blocks still allocated
+
+static U64 GraphicsDevice_allocatedBytes(const AllocationBuffer *allocations) {
+
+	const ListAllocationBufferBlock *entries = &allocations->allocations;
+	U64 used = 0;
+
+	for(U64 i = 0; i < entries->length; ++i)
+		if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
+			used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
+
+	return used;
+}
 
 Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr) {
 
@@ -1803,13 +1917,7 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 	//Release all allocations of buffer that was in flight, after noting how much of it the frame used
 
 	{
-		const ListAllocationBufferBlock *entries = &device->stagingAllocations[device->fifId].allocations;
-		U64 used = 0;
-
-		for(U64 i = 0; i < entries->length; ++i)
-			if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
-				used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
-
+		const U64 used = GraphicsDevice_allocatedBytes(&device->stagingAllocations[device->fifId]);
 		device->stagingPeakKiB = (U32) U64_max(device->stagingPeakKiB, (used + KIBI - 1) / KIBI);
 		++device->stagingQuietFrames;
 	}
@@ -1818,9 +1926,22 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 	GraphicsDevice_shrinkStaging(deviceRef);
 
+	//The readback buffer's use by the same frame, counted before its pulls complete and free it
+
+	if (device->stagingReadback) {
+
+		const U64 used = GraphicsDevice_allocatedBytes(&device->stagingReadbackAllocations[device->fifId]);
+		const U64 peakKiB = U64_max(device->stagingReadbackPeakKiB, (used + KIBI - 1) / KIBI);
+
+		device->stagingReadbackPeakKiB = (U32) U64_min(U32_MAX, peakKiB);
+		++device->stagingReadbackQuietFrames;
+	}
+
 	//This frame in flight provably completed, so its readbacks can land in cpuData and report
 
 	GraphicsDevice_completePulls(device, device->fifId);
+
+	GraphicsDevice_shrinkStagingReadback(deviceRef);
 
 	//Update buffer data
 
@@ -2051,7 +2172,7 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_reserveReadback() couldn't acquire device lock"));
 
-	//Only ever grow; a live ring may hold recorded pulls sized for the current buffer
+	//A reservation only grows the buffer, and stays the floor the automatic shrink keeps to
 
 	if(
 		!device->stagingReadback ||
@@ -2059,12 +2180,44 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 	)
 		gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, sizePerFrame * 3, e_rr));
 
+	device->stagingReadbackFloor = U64_max(device->stagingReadbackFloor, sizePerFrame);
+
 clean:
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
+}
+
+//A large pull grows the readback buffer, after which a frame reads back little. Once that has held for 64 frames it
+// shrinks as the staging buffer does, to three regions of 4 MiB doubled until they hold twice the peak, and never
+// below the most reserveReadback asked for a frame. A pull still in flight holds the buffer it was recorded into, so
+// swapping it here is safe. Optional, so a failure keeps the old buffer.
+
+static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->stagingReadbackQuietFrames < 64 || !device->stagingReadback)
+		return;
+
+	const U64 region = DeviceBufferRef_ptr(device->stagingReadback)->resource.size / 3;
+	const U64 peak = (U64) device->stagingReadbackPeakKiB * KIBI;
+
+	device->stagingReadbackQuietFrames = 0;
+	device->stagingReadbackPeakKiB = 0;
+
+	U64 target = 4 * MIBI;
+
+	while(target < peak * 2 || target < device->stagingReadbackFloor)
+		target <<= 1;
+
+	if(peak * 4 > region || target >= region)
+		return;
+
+	if(!GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, target * 3, NULL))
+		Log_warnLnx("GraphicsDevice_shrinkStagingReadback() couldn't shrink the readback buffer, it keeps its size");
 }
 
 //Row measures of a pull region for any pullable texture type, in block rows for compressed formats.

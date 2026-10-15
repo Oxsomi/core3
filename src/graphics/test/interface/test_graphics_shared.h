@@ -56,6 +56,8 @@ void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessSampler(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsUnsafeExecution(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsExperimentTiers(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsStaticSamplerDevice(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef);
@@ -198,6 +200,7 @@ Bool TestShaders_checkPixels(
 );
 
 void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsWaveSize(Test *t, GraphicsDeviceRef *deviceRef);
 
 //Config variants build their own devices from the flags under test, so this one takes the instance and the
 //adapter rather than a device the suite already created.
