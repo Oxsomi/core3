@@ -182,19 +182,19 @@ Bool Compiler_getUniqueCompiles(
 		if(i >> 15)
 			retError(clean, Error_overflow(0, i, 1 << 15, "Compiler_getUniqueCompiles() i out of bounds"));
 
-		SHEntryRuntime runtime = runtimeEntries->ptr[i];
+		const SHEntryRuntime *runtime = &runtimeEntries->ptr[i];
 
 		//Note: Since compiled combinations excludes uniforms, it'll "compile" for uniformId 0 which will later be
 		//        explicitly linked for the real uniform information.
 		//This means the compiler will only do 1 compile step, but multiple linking steps for the uniforms.
 
-		for (U64 j = 0; j < SHEntryRuntime_getCombinationsCompiled(&runtime); ++j) {
+		for (U64 j = 0; j < SHEntryRuntime_getCombinationsCompiled(runtime); ++j) {
 
 			if(j >> 15)
 				retError(clean, Error_overflow(1, j, 1 << 15, "Compiler_getUniqueCompiles() j out of bounds"));
 
 			SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtime, (U16) j, &binaryIdentifier, e_rr));
+			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, (U16) j, &binaryIdentifier, e_rr));
 
 			//The compile never sees a uniform's value, each row being a link of it, so entries whose rows differ share
 			//one compile. Told apart by their first row, they got one compile each, and each compile linked every entry
@@ -227,7 +227,7 @@ Bool Compiler_getUniqueCompiles(
 			if(compileCombinations) {
 
 				Bool isRt =
-					runtime.entry.stage >= EGfxPipelineStage_RtStartExt && runtime.entry.stage <= EGfxPipelineStage_RtEndExt;
+					runtime->entry.stage >= EGfxPipelineStage_RtStartExt && runtime->entry.stage <= EGfxPipelineStage_RtEndExt;
 
 				if (isRt)
 					compileCombinations->ptrNonConst[k] |= 1 << 15;
