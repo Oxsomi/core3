@@ -19,15 +19,15 @@ const state = {
   pipeline: { sp: null, refused: null, pick: {} },   // SPDocument derived from the compiled doc (or the loaded oiSP)
   isa: { asic: "gfx1100", entrypoint: null, result: null, error: null, targets: [], stateOpen: false },
   caps: { host: "browser", liveIsa: false, offlineIsa: true },   // OxAPI.capabilities(): what the host can really run
-  oishDocs: M.seedOishDocs(),            // name -> SHDocument (Inspect mode)
-  oisrDocs: window.OxMockFormats.seedOisrDocs(),   // name -> SRDocument (Inspect mode examples)
-  oispDocs: window.OxMockFormats.seedOispDocs(),   // name -> SPDocument
+  oishDocs: {},                          // name -> SHDocument (Inspect mode); seeded after init, see seedRecordedDocs
+  oisrDocs: {},                          // name -> SRDocument (Inspect mode examples)
+  oispDocs: {},                          // name -> SPDocument
   inspected: null,                       // name of the doc open in Inspect mode
   inspectedKind: "oish",                 // oish | oisr | oisp
-  standalone: M.sampleStandaloneBins(),  // name -> {type, bytes, text?, origin?, doc?}; doc = reflected one-binary SHDocument
+  standalone: {},                        // name -> {type, bytes, text?, origin?, doc?}; doc = reflected one-binary SHDocument
   binActive: null,                       // name of the standalone binary open in SPV / DXIL mode
   binRowsArr: [],                        // rows currently in #binSel
-  builtins: { ...M.BUILTINS },           // "@name" -> source; the module serves the real ones once it loads
+  builtins: {},                          // "@name" -> source; recorded or served by the module, both after init
   symOpts: { verbose: false, builtins: false, hlslTypes: false },  // Symbols display switches, kept across re-reflects
   diagEpoch: 0,                          // bumped whenever a compile draws its diagnostics, see refreshSymbols
   parsed: null,                          // {name, entries}: the active file's parse-only entrypoint listing
@@ -600,6 +600,17 @@ document.querySelectorAll("#outTabs [data-bs-toggle=\"tab\"]").forEach(
  * recorded, which is the same output with no bytes behind it. */
 let examplesSeeded = false;
 
+/* The recorded documents and builtin sources, read back out of js/mock_data.js: what a real run produced
+ * over the sample project. Called once the recording is there, never at load, which is what lets a page
+ * whose module compiles its own examples skip fetching it at all. */
+function seedRecordedDocs() {
+  state.oishDocs = M.seedOishDocs();
+  state.oisrDocs = window.OxMockFormats.seedOisrDocs();
+  state.oispDocs = window.OxMockFormats.seedOispDocs();
+  state.standalone = M.sampleStandaloneBins();
+  state.builtins = { ...M.BUILTINS };
+}
+
 async function ensureExamples() {
   if (examplesSeeded) return;
   examplesSeeded = true;
@@ -613,7 +624,15 @@ async function ensureExamples() {
   try { seeded = await window.OxAPI.seedExamples(M.SAMPLE_FILES); }
   catch (err) { toast(`<b>Couldn't build the examples:</b> ${esc(err.message)}`, "warning"); }
   $("#stCompiled").innerHTML = status;
-  if (!seeded) return;
+
+  if (!seeded) {
+
+    /* The compiles failed, so the recorded run stands in; this is the one wasm path that reads it */
+
+    await M.loadRecording();
+    seedRecordedDocs();
+    return;
+  }
   if (Object.keys(seeded.oish).length) { state.oishDocs = seeded.oish; state.inspected = null; }
   if (Object.keys(seeded.oisr).length) state.oisrDocs = seeded.oisr;
   if (Object.keys(seeded.oisp).length) state.oispDocs = seeded.oisp;
@@ -2000,6 +2019,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderVersionPicker();
   renderMockBanner();
 
+  /* Without a module the recorded documents are the content, and init just fetched the recording they
+   * come from; with one, ensureExamples compiles the real thing on demand instead. */
+
+  if (window.OxAPI.backend !== "wasm") seedRecordedDocs();
+
   /* The syntax reference's vocabularies come off the compiler itself (live module, or the recording
    * gen_mock_data took from it), so they can't silently drift again: extensions and vendors from the
    * oiSH enums, the type aliases scraped from the builtin headers' own typedefs. */
@@ -2012,7 +2036,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       $("#extList").innerHTML = enums.extensions.map(e => `<span class="tok">${esc(e)}</span>`).join("");
     if (enums.vendors.length)
       $("#vendorList").textContent = enums.vendors.join(" · ");
-    renderTypeAliases();
   }
   state.caps = await window.OxAPI.capabilities();
   state.isa.targets = await window.OxAPI.isaTargets();
@@ -2022,6 +2045,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const builtins = await window.OxAPI.builtinIncludes();
   if (builtins && builtins.length)
     state.builtins = Object.fromEntries(builtins.map(b => ["@" + b.name, b.src]));
+
+  /* Scraped out of state.builtins, so it renders once those are settled: the module's own copies here,
+   * the recorded ones a few lines up when there is no module. */
+
+  renderTypeAliases();
 
   if (state.caps.host !== "browser") document.querySelector(".navbar-brand").insertAdjacentHTML("beforeend", ` <span class="badge text-bg-info">${esc(state.caps.host)} host</span>`);
   window.OxEditor.init();

@@ -53,7 +53,7 @@ window.prompt = () => null;
 /* editor.js drives cm via closure; our stub's setValue fires change: mimic real enough.
  * But editor.open() suppresses the callback itself, so that's fine. */
 
-for (const f of ["js/util.js", "js/workspace.js", "js/theme.js", "js/mock_data.js", "js/intrinsics_data.js", "js/mock.js", "js/mock_formats.js", "js/wasm.js", "js/wasm_rpc.js",
+for (const f of ["js/util.js", "js/workspace.js", "js/theme.js", "js/mock_samples.js", "js/mock_data.js", "js/intrinsics_data.js", "js/mock.js", "js/mock_formats.js", "js/wasm.js", "js/wasm_rpc.js",
   "js/api.js", "js/editor.js", "js/intellisense.js", "js/asmmap.js",
   "js/tools/compile.js", "js/tools/inspect.js", "js/tools/symbols.js", "js/tools/pipeline.js", "js/tools/isa.js",
   "js/tools/diff.js", "js/tools/binary.js", "js/app.js"]) {

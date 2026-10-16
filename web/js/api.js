@@ -103,9 +103,9 @@ const wasm = () => window.OxAPI.backend === "wasm";
 /* Without the module there is nothing real to answer with, and a fabricated answer is impossible to
  * tell from a real one once it is on screen. So every call that would have to invent refuses, and the
  * page switches the features that need one off rather than showing something made up.
- * What survives is what js/mock_data.js recorded from a real run: the sample sources, the builtin
- * includes, the vocabularies and the example documents. That is real output, just not of anything the
- * visitor typed. */
+ * What survives is what a real run recorded: the sample sources (js/mock_samples.js, loaded with the
+ * page) and the builtin includes, vocabularies and example documents (js/mock_data.js, fetched the
+ * first time something answers from it). That is real output, just not of anything the visitor typed. */
 function noModule(what) {
   throw new Error(what + " needs the compiler module, which isn't running");
 }
@@ -191,6 +191,11 @@ window.OxAPI = {
     } catch (e) {
       this.backend = "mock";
       this.loadError = e.message;
+
+      /* Everything answers from the recording now, so it is worth waiting for here rather than at each
+         call. On the wasm path only the stubs below need it, and they ask for themselves. */
+
+      await M().loadRecording();
     }
     this.ready = true;
     return { backend: this.backend, version: this.version, error: this.loadError };
@@ -315,6 +320,7 @@ window.OxAPI = {
     // be a standalone binary, never an oiSH: no annotations processed, nothing reflected into an
     // identifier. Until then every result carries `mock` and the views render the warning.
     await fakeLatency(200, 500);
+    await M().loadRecording();        //The fallback answers from the recording, so it is needed before the mock runs
     return markMock(M().compileRaw(argv, name, project), "this binary was not produced by DXC");
   },
 
@@ -327,6 +333,7 @@ window.OxAPI = {
     // Compiler_process does exactly this, but only inside a compile, since it checks the result
     // against the entry's runtime reflection; no call takes a binary on its own.
     void origin;
+    await M().loadRecording();
     return markMock(M().reflectBinary(name, type, bytes, origin), "this reflection was not read from the binary");
   },
 
@@ -335,6 +342,7 @@ window.OxAPI = {
     // identifier you typed, with the module loaded as much as without it.
     // What it needs: `shader assemble` producing a real SHFile (a binary plus the identifier its
     // source would have declared) rather than a bare .spv, so a pipeline can be derived from it.
+    await M().loadRecording();
     return markMock(M().assembleOiSH(doc, identifier), "this oiSH was not assembled by the compiler");
   },
 
@@ -548,6 +556,8 @@ window.OxAPI = {
   async annotationEnums() {
     if (wasm()) {
       try { return await W().annotationEnums(); } catch (e) { /* fall through to the recording */ }
+
+      await M().loadRecording();
     }
     return (window.OxMockData && window.OxMockData.enums) || { extensions: [], vendors: [] };
   },
@@ -557,6 +567,8 @@ window.OxAPI = {
   async spFieldVocab() {
     if (wasm()) {
       try { return await W().spFieldVocab(); } catch (e) { /* fall through to the recording */ }
+
+      await M().loadRecording();
     }
     return (window.OxMockData && window.OxMockData.spVocab) || {};
   },

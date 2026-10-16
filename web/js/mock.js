@@ -16,14 +16,56 @@ const U = window.OxUtil;
 /* Every compiler fact the mock reasons with comes from the recording gen_mock_data.js took off the module's
  * own vocabularies (js/mock_data.js), never from a copy kept here: the version stamp, the stages with their
  * library flag and DXC profile prefix, and which extensions only one backend compiles. */
-const ENUMS = (window.OxMockData && window.OxMockData.enums) || {};
-const VERSION = ENUMS.version || { major: 0, minor: 0, patch: 0 };
-const STAGES = (ENUMS.stages || []).map(s => s.name);
-const LIB_STAGES = new Set((ENUMS.stages || []).filter(s => s.lib).map(s => s.name));
-const STAGE_PROFILE = Object.fromEntries((ENUMS.stages || []).filter(s => !s.lib).map(s => [s.name, s.profile]));
+/* The recording arrives late: everything below it answers for a module that isn't there, so js/mock_data.js
+   is fetched when that turns out to be the case rather than on every visit. These are rebound by
+   bindRecording() the moment it lands, and read through getters on the export so a caller never holds a
+   stale copy of one. */
 
-const EXT_SPV_ONLY  = new Set(ENUMS.extensionsNoDxil || []);
-const EXT_DXIL_ONLY = new Set(ENUMS.extensionsNoSpirv || []);
+let ENUMS = {};
+let VERSION = { major: 0, minor: 0, patch: 0 };
+let STAGES = [];
+let LIB_STAGES = new Set();
+let STAGE_PROFILE = {};
+let EXT_SPV_ONLY = new Set();
+let EXT_DXIL_ONLY = new Set();
+let BUILTINS = {};
+let MIN_MODEL = "6.5";
+let recording = null;
+
+function bindRecording() {
+
+  ENUMS = (window.OxMockData && window.OxMockData.enums) || {};
+  VERSION = ENUMS.version || { major: 0, minor: 0, patch: 0 };
+  STAGES = (ENUMS.stages || []).map(s => s.name);
+  LIB_STAGES = new Set((ENUMS.stages || []).filter(s => s.lib).map(s => s.name));
+  STAGE_PROFILE = Object.fromEntries((ENUMS.stages || []).filter(s => !s.lib).map(s => [s.name, s.profile]));
+  EXT_SPV_ONLY = new Set(ENUMS.extensionsNoDxil || []);
+  EXT_DXIL_ONLY = new Set(ENUMS.extensionsNoSpirv || []);
+  BUILTINS = (window.OxMockData && window.OxMockData.builtins) || {};
+  MIN_MODEL = (ENUMS.shaderModels && ENUMS.shaderModels.min) || "6.5";
+}
+
+/* Fetches the recording once, and is safe to await from anywhere: a page that already has it (the dev
+   harnesses load it outright) binds and returns. A failure to load is not fatal, since the mock still has
+   the sample project; it just answers with less. */
+
+function loadRecording() {
+
+  if (recording) return recording;
+
+  if (window.OxMockData) { bindRecording(); return (recording = Promise.resolve()); }
+
+  recording = new Promise(resolve => {
+    const el = document.createElement("script");
+    el.src = "js/mock_data.js";
+    el.onload = el.onerror = () => { bindRecording(); resolve(); };
+    document.head.appendChild(el);
+  });
+
+  return recording;
+}
+
+bindRecording();        //The harnesses load the recording before this file, so it is already here for them
 
 /* ------------------------------------------------------------------ builtin includes (@…) */
 /* The compiler embeds these and serves them through Compiler_builtInIncludeAt, so they are recorded
@@ -32,13 +74,11 @@ const EXT_DXIL_ONLY = new Set(ENUMS.extensionsNoSpirv || []);
  * types.hlsli, buffer and appdata out of resources.hlsli, and the umbrellas include them so a shader
  * that only says @types.hlsli still sees everything. */
 
-const BUILTINS = (window.OxMockData && window.OxMockData.builtins) || {};
-
 /* ------------------------------------------------------------------ sample project */
 
 /* The sources live as real files in web/samples/ (the single source of truth: the desktop test suite
- * compiles every one of them) and reach the page through the generated mock_data.js, so the project is
- * there at first paint without waiting for the module. The diags below are the mock tier's fabricated
+ * compiles every one of them) and reach the page through the generated mock_samples.js, so the project
+ * is there at first paint without waiting for the module or the recording. The diags below are the mock tier's fabricated
  * compile results for the two files that have any; the real backend produces its own. */
 
 const SAMPLE_DIAGS = {
@@ -47,7 +87,7 @@ const SAMPLE_DIAGS = {
 };
 
 const SAMPLE_FILES = Object.fromEntries(
-  Object.entries((window.OxMockData && window.OxMockData.samples) || {})
+  Object.entries(window.OxMockSamples || {})
     .map(([name, src]) => [name, { src, diags: SAMPLE_DIAGS[name] || [] }])
 );
 
@@ -163,7 +203,7 @@ function resolveIncludes(rootName, project) {
 
 /* ------------------------------------------------------------------ the analyzer */
 
-const MIN_MODEL = (ENUMS.shaderModels && ENUMS.shaderModels.min) || "6.5";
+
 function modelNum(m) { const [a, b] = m.split("."); return (+a) * 100 + (+b); }
 function minModelFor(stage, exts, wave) {
   let min = MIN_MODEL;
@@ -713,7 +753,17 @@ function assembleOiSH(doc, ident) {
   return out;
 }
 
-window.OxMock = { VERSION, MIN_MODEL, STAGES, LIB_STAGES, STAGE_PROFILE, BUILTINS,
+/* The recording-fed values are getters: rebinding them after a late load has to reach a caller that took
+   the export earlier. */
+
+window.OxMock = {
+  get VERSION() { return VERSION; },
+  get MIN_MODEL() { return MIN_MODEL; },
+  get STAGES() { return STAGES; },
+  get LIB_STAGES() { return LIB_STAGES; },
+  get STAGE_PROFILE() { return STAGE_PROFILE; },
+  get BUILTINS() { return BUILTINS; },
+  loadRecording,
   SAMPLE_FILES, analyze, compileFile, seedOishDocs, parseOiSHBytes, disasm, oishBytes, binBytes,
   sampleStandaloneBins, lightingVariantProject, spvEnvFor, backendsFor, parseStructs, normTypeExport: normType,
   parseDxcArgv, compileRaw, reflectBinary, assembleOiSH };

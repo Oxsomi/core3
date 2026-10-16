@@ -34,10 +34,22 @@ global.location = { protocol: "https:" };
 global.Worker = function () {};
 
 for (const f of ["js/util.js", "js/wasmload.js", "js/workspace.js", "js/intrinsics_data.js", "js/editor.js",
-  "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js", "js/tools/inspect.js"])
+  "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js", "js/tools/inspect.js", "js/mock.js", "js/api.js"])
   new Function(fs.readFileSync(path.join(ROOT, f), "utf8")).call(global);
 
 let failures = 0;
+let finished = false;
+
+/* An await that never settles ends the run early, and node exits 0 for it, which reads as a pass. This is
+   what makes that loud instead. */
+
+process.on("exit", code => {
+  if (!finished && !code) {
+    console.log("FAIL the run ended before its last check (an await that never settled?)");
+    process.exitCode = 1;
+  }
+});
+
 function check(name, cond, extra) {
   console.log((cond ? "  ok " : "FAIL ") + name + (cond ? "" : "  " + (extra || "")));
   if (!cond) failures++;
@@ -830,6 +842,83 @@ const IS = window.OxIntelliSense;
     U2.highlightPipeline("blend.enable = derived").indexOf('class="prov-derived"') !== -1);
   check("highlight: pipeline text escapes markup too",
     U2.highlightPipeline('"<b>"').indexOf("<b>") === -1);
+
+  /* ---- the recording arrives late ----------------------------------------------------------- */
+
+  /* js/mock_data.js is fetched when something actually needs it, so the mock starts with nothing to say
+     and has to pick the vocabularies up afterwards. A caller that took the export before the load must
+     see the new values, which is what the getters are for. */
+
+  {
+    const M = window.OxMock;
+
+    check("mock: before the recording the vocabularies are empty",
+      M.STAGES.length === 0 && M.MIN_MODEL === "6.5" && Object.keys(M.BUILTINS).length === 0);
+
+    const early = M;        //Taken before the load, the way api.js holds it
+
+    let appends = 0, asked = null;
+    const el = {};
+
+    global.document.createElement = () => el;
+    global.document.head = { appendChild() { ++appends; asked = el.src; } };
+
+    /* Two callers before it lands, which is what the page does: init and whatever the visitor clicked. */
+
+    const first = M.loadRecording();
+    const second = M.loadRecording();
+
+    window.OxMockData = {
+      enums: {
+        stages: [{ name: "compute", lib: false, profile: "cs" }],
+        shaderModels: { min: "6.7" },
+        extensionsNoDxil: ["RayQuery"]
+      },
+      builtins: { "@types.hlsli": "//x" }
+    };
+
+    el.onload();
+    await Promise.all([first, second]);
+
+    check("mock: loading it fetches the recording", asked === "js/mock_data.js");
+    check("mock: racing callers fetch it once", appends === 1);
+    check("mock: the vocabularies rebind", M.STAGES.length === 1 && M.MIN_MODEL === "6.7");
+    check("mock: the builtins do too", Object.keys(M.BUILTINS).length === 1);
+    check("mock: an export taken before the load sees them", early.MIN_MODEL === "6.7");
+
+    await M.loadRecording();
+    check("mock: and a later call doesn't fetch again", appends === 1);
+  }
+
+  finished = true;
+  /* ---- the vocab fallbacks ask for the recording before reading it --------------------------- */
+
+  /* A module old enough to predate the exports is the stated reason those fallbacks exist, so the
+     backend is wasm here and the recording is only reachable through loadRecording. The spy is what
+     makes the check discriminate: the data alone can't, since the earlier block already loaded it. */
+
+  {
+    global.window.OxWasm = {
+      load: async () => {},
+      version: "test",
+      annotationEnums: async () => { throw new Error("not exported"); },
+      spFieldVocab: async () => { throw new Error("not exported"); }
+    };
+
+    await window.OxAPI.init();
+    check("api: the stub module loads as the wasm backend", window.OxAPI.backend === "wasm");
+
+    const real = window.OxMock.loadRecording;
+    let asked = 0;
+    window.OxMock.loadRecording = () => { ++asked; return real(); };
+
+    const enums = await window.OxAPI.annotationEnums();
+    const vocab = await window.OxAPI.spFieldVocab();
+    window.OxMock.loadRecording = real;
+
+    check("api: both fallbacks fetch the recording first", asked === 2, asked);
+    check("api: and answer from it", enums.stages.length === 1 && !!vocab && typeof vocab === "object");
+  }
 
   console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS");
   process.exit(failures ? 1 : 0);

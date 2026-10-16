@@ -23,6 +23,7 @@
 #include "test_oiSR_shared.h"
 #include "formats/oiSR/sr_file.h"
 #include "formats/json/json_writer.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/string.h"
 #include "types/base/string_read_helper.h"
 
@@ -114,5 +115,142 @@ void Test_SRFileWriteJson(Test *t) {
 clean:
 	CharString_free(&whole, t->alloc);
 	CharString_free(&wrapped, t->alloc);
+	SRFile_free(&sr, t->alloc);
+}
+
+//What belongs to each node, answered without searching for it. The sample tree pins the shapes; the wide tree
+//pins the grouping, which is where an off by one would put a node's children under its neighbour.
+
+void Test_SRNodeIndex(Test *t) {
+
+	Test_setModule(t, "SRFile: the node index");
+
+	SRFile sr = (SRFile) { 0 };
+	SRNodeIndex index = (SRNodeIndex) { 0 };
+
+	if(!Test_assert(t, "build", Test_SRBuildSample(t, &sr)))
+		goto clean;
+
+	if(!Test_assert(t, "index", SRFile_createNodeIndex(&sr, t->alloc, &index, &t->err)))
+		goto clean;
+
+	Test_assert(t, "it covers every node",
+		index.typeAt.length == sr.nodes.length && index.childOffset.length == sr.nodes.length + 1
+	);
+
+	//Six nodes, two of them roots, so exactly four child slots: an out of range parent never counts
+
+	Test_assert(t, "the children list is exactly the child total",
+		index.children.length == sr.nodes.length - 2 &&
+		index.children.length == index.childOffset.ptr[sr.nodes.length]
+	);
+
+	Test_assert(t, "the interface list is empty rather than zero filled", !index.interfaces.length);
+
+	//Namespace MyNS holds Light, which holds pos and color; main holds uv
+
+	Test_assert(t, "the namespace has one child",
+		index.childOffset.ptr[1] - index.childOffset.ptr[0] == 1 &&
+		index.children.ptr[index.childOffset.ptr[0]] == 1
+	);
+
+	Test_assert(t, "the struct has both of its members, in order",
+		index.childOffset.ptr[2] - index.childOffset.ptr[1] == 2 &&
+		index.children.ptr[index.childOffset.ptr[1]] == 2 &&
+		index.children.ptr[index.childOffset.ptr[1] + 1] == 3
+	);
+
+	Test_assert(t, "a leaf has none", index.childOffset.ptr[3] == index.childOffset.ptr[2]);
+
+	Test_assert(t, "the function has its parameter",
+		index.childOffset.ptr[5] - index.childOffset.ptr[4] == 1 &&
+		index.children.ptr[index.childOffset.ptr[4]] == 5
+	);
+
+	//The one type record names node 2, and nothing else has a satellite
+
+	Test_assert(t, "the typed node finds its type", index.typeAt.ptr[2] == 0);
+	Test_assert(t, "an untyped node has none", index.typeAt.ptr[0] == U32_MAX && index.typeAt.ptr[5] == U32_MAX);
+
+	Test_assert(t, "no node has a register or an enum value",
+		index.registerAt.ptr[2] == U32_MAX && index.enumValueAt.ptr[2] == U32_MAX);
+
+	Test_assert(t, "and none implements an interface", index.interfaceOffset.ptr[sr.nodes.length] == 0);
+
+	Test_assert(t, "indexing an already built index is refused", !SRFile_createNodeIndex(&sr, t->alloc, &index, NULL));
+
+	Test_assert(t, "and leaves the index it refused untouched",
+		index.typeAt.length == sr.nodes.length && index.typeAt.ptr[2] == 0 &&
+		index.children.ptr && index.children.ptr[index.childOffset.ptr[0]] == 1
+	);
+
+	//Two records naming one node is what a scan resolves by stopping at the first, so the index does the same
+
+	SRNodeIndex duplicated = (SRNodeIndex) { 0 };
+	SRType second = sr.types.ptr[0];
+	second.rows = 9;
+
+	if (Test_assert(t, "a second record for the same node", ListSRType_pushBack(&sr.types, second, t->alloc, &t->err))) {
+
+		Test_assert(t, "reindex", SRFile_createNodeIndex(&sr, t->alloc, &duplicated, &t->err));
+		Test_assert(t, "the first record still wins", duplicated.typeAt.ptr[2] == 0);
+		SRNodeIndex_free(&duplicated, t->alloc);
+	}
+
+clean:
+	SRNodeIndex_free(&index, t->alloc);
+	SRFile_free(&sr, t->alloc);
+}
+
+//A parent with many children, which is the case the grouping has to get right
+
+void Test_SRNodeIndexWide(Test *t) {
+
+	Test_setModule(t, "SRFile: the node index over a wide tree");
+
+	SRFile sr = (SRFile) { 0 };
+	SRNodeIndex index = (SRNodeIndex) { 0 };
+	const U32 count = 256;
+
+	if(!Test_assert(t, "create", SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, &t->err)))
+		goto clean;
+
+	//One root, then every other node hanging off it, so a wrong offset shows up as a missing or shared child
+
+	for (U32 i = 0; i < count; ++i) {
+
+		const SRNode node = (SRNode) {
+			.nameId = U32_MAX, .semanticId = U32_MAX, .localId = U32_MAX,
+			.parent = i ? 0 : U32_MAX, .fwdBckDeclareNode = U32_MAX,
+			.childCount = i ? 0 : count - 1, .annotationStart = U32_MAX,
+			.type = i ? ESRNodeType_Variable : ESRNodeType_Namespace
+		};
+
+		if(!Test_assert(t, "node", ListSRNode_pushBack(&sr.nodes, node, t->alloc, &t->err)))
+			goto clean;
+	}
+
+	if(!Test_assert(t, "index", SRFile_createNodeIndex(&sr, t->alloc, &index, &t->err)))
+		goto clean;
+
+	Test_assert(t, "the root owns every other node", index.childOffset.ptr[1] - index.childOffset.ptr[0] == count - 1);
+	Test_assert(t, "and the list is exactly that long", index.children.length == count - 1);
+
+	Bool ordered = true;
+
+	for (U32 i = 0; i < count - 1 && ordered; ++i)
+		ordered = index.children.ptr[i] == i + 1;
+
+	Test_assert(t, "in ascending order", ordered);
+
+	Bool leaves = true;
+
+	for (U32 i = 1; i < count && leaves; ++i)
+		leaves = index.childOffset.ptr[i] == index.childOffset.ptr[i + 1];
+
+	Test_assert(t, "and none of them owns anything", leaves);
+
+clean:
+	SRNodeIndex_free(&index, t->alloc);
 	SRFile_free(&sr, t->alloc);
 }

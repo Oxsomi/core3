@@ -70,8 +70,9 @@ them: it reports the compiler as running, which it is.
 
 Without a module at all nothing is fabricated either. Every call that would have to invent refuses,
 the Compile button and editor intelligence are switched off, and what is left is what
-`dev/gen_mock_data.js` recorded from a real run: the sample sources, the built-in includes, the
-vocabularies and the example oiSH / oiSR / oiSP documents.
+`dev/gen_mock_data.js` recorded from a real run: the sample sources (`js/mock_samples.js`, loaded with
+the page) and the built-in includes, vocabularies and example oiSH / oiSR / oiSP documents
+(`js/mock_data.js`, fetched the first time something answers from it).
 
 ## License
 
@@ -226,8 +227,10 @@ js/wasm_rpc.js         proxy that hosts the module in a Web Worker on http(s), s
                        reflects never block typing; js/wasm_worker.js is the worker side
 js/wasm.js             THE MODULE BOUNDARY: the call frame every export answers with, wasm64 pointer
                        marshalling, the project tree #includes resolve against, diagnostics out of the log
+js/mock_samples.js     GENERATED (dev/gen_mock_data.js): the sample project's sources, loaded with the
+                       page since they are the project it opens with
 js/mock_data.js        GENERATED (dev/gen_mock_data.js): real builtin sources and real oiSH/oiSR/oiSP
-                       documents, recorded so the no-module fallback shows something faithful
+                       documents for the no-module fallback, fetched only when something answers from it
 js/intrinsics_data.js  GENERATED (dev/gen_intrinsics.py, off the dxc conan package): the HLSL builtin
                        intrinsics with signatures and short docs. The intrinsic file is parsed by the
                        fork's OWN loader (hctdb.py) and the object names come out of SemaHLSL.cpp, so
@@ -235,7 +238,8 @@ js/intrinsics_data.js  GENERATED (dev/gen_intrinsics.py, off the dxc conan packa
                        against the pinned fork commit and fails when the committed copy differs
 samples/               THE SAMPLE PROJECT: real .hlsl files, the single source of truth. Edit them here,
                        then `build_web.py --frontend` (or `node dev/gen_mock_data.js` by hand) embeds
-                       them, plus fresh recordings, into js/mock_data.js so the page has them at first paint. The desktop suite compiles
+                       them into js/mock_samples.js (the page's first paint) and fresh recordings into
+                       js/mock_data.js. The desktop suite compiles
                        every one of them for both backends (OxC3_web_samples_test), so a sample that
                        breaks fails CI rather than the demo.
 js/mock.js             THE FALLBACK, part 1: heuristic HLSL analyzer producing SHDocument,
@@ -489,14 +493,20 @@ indent the next line by, which is the decision behind every Enter in the editor.
 directly: CodeMirror measures character widths to lay a document out and jsdom cannot answer that.
 
 `dev/smoke.js` (same dev deps, run with `node dev/smoke.js`) boots the page headless against the
-mocks, compiles, walks all three modes and the Symbols / Pipeline / ISA tabs. It covers the
+staged module, compiles, walks all three modes and the Symbols / Pipeline / ISA tabs. It covers the
 rendering, which the other suites deliberately don't touch.
 
-`build_web.py --frontend` regenerates `js/mock_data.js` from the module it just built, so the recording
-follows the sample project, the built-in includes and the three document contracts on its own;
-`node dev/gen_mock_data.js` does the same by hand. The recording stays committed, since the page's first
-paint and the module free tests read it without a build; the release job regenerates it and fails when
-the committed copy differs, and then runs every test here through `build_web.py --run_frontend_tests`.
+`dev/lazy_smoke.js` boots the same page with no module and no preloaded recording, which is the one
+load the other suites structurally cannot see: it checks the page fetches `js/mock_data.js` itself,
+exactly once, and that the recorded documents, builtin includes and vocabularies all arrive through
+that late load.
+
+`build_web.py --frontend` regenerates `js/mock_samples.js` and `js/mock_data.js` from the module it
+just built, so the recording follows the sample project, the built-in includes and the three document
+contracts on its own; `node dev/gen_mock_data.js` does the same by hand. Both halves stay committed:
+the samples are the page's first paint and the module free tests read the recording without a build.
+The release job regenerates them and fails when a committed copy differs, and then runs every test here
+through `build_web.py --run_frontend_tests`.
 
 `js/intrinsics_data.js` gets the same discipline from the other direction: it is generated from the DXC
 fork's sources rather than from the module, so `--run_frontend_tests` regenerates it and fails when the

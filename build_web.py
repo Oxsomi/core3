@@ -681,7 +681,7 @@ def runFrontendTests(mode, dxcSource=None):
 			print("-- npm ci for the frontend tests FAILED", file=sys.stderr)
 			sys.exit(result.returncode)
 
-	for script in ("frontend_unit.js", "editor_test.js", "smoke.js"):
+	for script in ("frontend_unit.js", "editor_test.js", "smoke.js", "lazy_smoke.js"):
 		result = subprocess.run(f"\"{node}\" \"{os.path.join('dev', script)}\"", shell=True, cwd=webDir)
 		if result.returncode:
 			print("-- Frontend tests FAILED", file=sys.stderr)
