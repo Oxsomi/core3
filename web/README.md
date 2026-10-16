@@ -183,7 +183,22 @@ styles and scripts, the way `--vendor` does for the third party. That matters mo
 page's own files are ~840 KB raw and ~155 KB brotli, so serving them uncompressed costs more than the
 compressed module does. `--serve` prefers the siblings exactly like a real host should: brotli first,
 then gzip, and a sibling older than the file it came from is ignored, so an edit is never hidden
-behind a stale one. `Content-Encoding` is set with the original content type, and
+behind a stale one.
+
+How a host should cache it is two rules, shipped as `web/_headers` (Cloudflare Pages / Netlify syntax)
+and sent by `--serve` through the same `cacheControlFor`, so local behaviour matches the deployed site.
+Everything revalidates (`no-cache`: a repeat visit is a 304 until the bytes change) except the
+`wasm/<version>/` folders, which are immutable for a year, since a version's files never change under
+that path. Nothing else is safe to pin: the vendored third party keeps its filenames when a pin bumps,
+and the current module at `wasm/OxC3_wasm.wasm` is overwritten by every build, so `immutable` there
+would strand a visitor on a stale compiler. The nginx spelling:
+
+```
+location ~ ^/wasm/[^/]+/ { add_header Cache-Control "public, max-age=31536000, immutable"; }
+location /               { add_header Cache-Control "no-cache"; }
+```
+
+`dev/hosting_test.py` replays `web/_headers` against the rule, so the two cannot drift apart. `Content-Encoding` is set with the original content type, and
 `application/wasm` on the `.wasm` so `instantiateStreaming` kicks in. Any static host reproduces
 this with its precompressed-asset setting (nginx `brotli_static on;`); a host that re-compresses on
 the fly at a low quality wastes most of the win, which is why the siblings are written at build
