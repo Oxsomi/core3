@@ -295,23 +295,8 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
 	ELockAcquire acq = ELockAcquire_Invalid;
-	Bool isInFlight = false;
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
+	const Bool isInFlight = GraphicsDevice_isInAnyFlight(device, pending);
 	DeviceBufferRef *tempStagingResource = NULL;
-
-	for(U64 j = 0; j < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++j) {
-
-		ListRefPtr inFlight = device->resourcesInFlight[j];
-
-		for(U64 i = 0; i < inFlight.length; ++i)
-			if (inFlight.ptr[i] == pending) {
-				isInFlight = true;
-				break;
-			}
-
-		if(isInFlight)
-			break;
-	}
 
 	if(!isInFlight && buffer->resource.mappedMemoryExt) {
 
@@ -478,7 +463,11 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 
 			//When staging resource is committed to current in flight then we can relinquish ownership.
 
-			gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tempStagingResource, alloc, e_rr));
+			if(GraphicsDevice_isInFlight(device, tempStagingResource))
+				RefPtr_dec(&tempStagingResource);
+
+			else gotoIfError3(clean, GraphicsDevice_addInFlight(device, tempStagingResource, alloc, e_rr));
+
 			tempStagingResource = NULL;
 		}
 
@@ -590,7 +579,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
-			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
+			if(!GraphicsDevice_isInFlight(device, device->staging)) {
 
 				gotoIfError3(clean, VkDeviceBuffer_transition(                        //Ensure resource is transitioned
 					stagingExt,
@@ -604,7 +593,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				));
 
 				RefPtr_inc(device->staging);
-				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight
+				gotoIfError3(clean, GraphicsDevice_addInFlight(device, device->staging, alloc, e_rr));        //Add to in flight
 			}
 
 			if(dependency.bufferMemoryBarrierCount)
@@ -626,8 +615,8 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
 	gotoIfError3(clean, ListDevicePendingRange_clear(&buffer->pendingChanges, e_rr));
 
-	if(RefPtr_inc(pending))
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
+	if(!GraphicsDevice_isInFlight(device, pending) && RefPtr_inc(pending))
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, pending, alloc, e_rr));
 
 	if (device->pendingBytes >= device->flushThreshold)
 		gotoIfError3(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));

@@ -182,6 +182,20 @@ Bool Name##_insertAll(Name *l, const Name other, U64 offset, const Allocator *al
 Bool Name##_clear(Name *l, Error *e_rr);                                                                                    \
 void Name##_free(Name *l, const Allocator *allocator);                                                                      \
 																															\
+/* Makes room for one more element, taking the headroom pushBack would have taken for itself, so the */                     \
+/* push that follows it cannot fail. Name##_reserve takes an ABSOLUTE capacity and leaves no headroom */                    \
+/* of its own, so asking it for length + 1 on every push reallocates the whole list every time. This */                     \
+/* is what a two phase mutation wants, where the committing half may not be able to fail: see the */                        \
+/* protocol in types/container/hash_index.h. */                                                                             \
+																															\
+TListFn Bool Name##_reserveForPush(Name *l, const Allocator *allocator, Error *e_rr) {                                      \
+																															\
+	if(l && l->length + 1 <= GenericList_capacity(Name##_toList(*l)))                                                       \
+		return true;                                                                                                        \
+																															\
+	return Name##_reserve(l, l ? (l->length + 1) * 3 / 2 : 1, allocator, e_rr);                                             \
+}                                                                                                                           \
+																															\
 TListX(Name)
 
 #define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name)

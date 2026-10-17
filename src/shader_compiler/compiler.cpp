@@ -37,6 +37,7 @@
 #include "platforms/file.h"
 #include "types/container/file_base.h"
 #include "platforms/platform.h"
+#include "types/container/hash_index.h"
 #include "shader_compiler/compiler.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -72,6 +73,7 @@ extern "C" {
 
 		void Compiler_setPlatform(Platform *instance) {
 			Platform_instance = instance;
+			HashIndex_initSeed(instance->hashSeed);        //This module's own copy, see Platform.hashSeed
 		}
 
 	#endif

@@ -152,7 +152,7 @@ InputHandle InputDevice_getHandle(const InputDevice *d, CharString name) {
 	if(!d || d->type == EInputDeviceType_Undefined)
 		return InputDevice_invalidHandle();
 
-	//TODO: We probably want to optimize this at some point like use a hashmap
+	//Stays a scan: a handful of names, built once and read rarely.
 
 	for(U16 i = 0; i < d->buttons; ++i) {
 

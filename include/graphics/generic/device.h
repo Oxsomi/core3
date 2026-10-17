@@ -27,6 +27,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/hash_index.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
@@ -166,7 +167,8 @@ typedef struct GraphicsDevice {
 
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
-	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight, TODO: HashMap
+	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight
+	HashIndex resourcesInFlightIndex[MAX_FRAMES_IN_FLIGHT]; //Identity set per frame, see the functions below
 
 	//Compacted size slots, handed out per BLAS built with AllowCompaction and returned when the compaction
 	//that reads one consumes it. Only the storage differs per backend, a query pool on Vulkan and a pair of
@@ -384,6 +386,23 @@ Bool GraphicsDevice_resolveTimings(
 //True exactly once per device per message, so the caller logs on true and stays silent forever after.
 
 Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
+
+//A frame holds one entry and one reference per resource until it completes, so a caller adds a resource once
+// and takes or hands over exactly one reference for it.
+//These are the only way to read or extend that set; a push straight to resourcesInFlight leaves the index
+// beside it behind.
+
+Bool GraphicsDevice_isInFlight(const GraphicsDevice *device, RefPtr *resource);
+Bool GraphicsDevice_isInAnyFlight(const GraphicsDevice *device, RefPtr *resource);        //Any frame, not just this one
+
+Bool GraphicsDevice_addInFlight(GraphicsDevice *device, RefPtr *resource, const Allocator *alloc, Error *e_rr);
+
+//Makes room for one more, so the add that follows cannot fail: that is what lets a backend record a command
+// first and retire what it reads afterwards, with no undo needed.
+
+Bool GraphicsDevice_reserveInFlight(GraphicsDevice *device, const Allocator *alloc, Error *e_rr);
+
+Bool GraphicsDevice_clearInFlight(GraphicsDevice *device, U8 fifId, Error *e_rr);        //Gives every reference back
 
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory

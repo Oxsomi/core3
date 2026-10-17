@@ -21,6 +21,8 @@
 //formats/oiSH/test/test_oiSH_registers.c
 
 #include "test_oiSH_shared.h"
+#include "types/base/string_read_helper.h"
+#include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
 
 static inline GfxBindings makeSPIRVBinding(U32 set, U32 binding) {
@@ -574,4 +576,104 @@ void Test_SHFileRegisterConstantBufferSizeLimit(Test *t) {
 	Test_assert(t, "count still 0", info.registers.length == 0);
 	SBFile_free(&bigCB, t->alloc);
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
+//fnv1a's step (state ^ word) * prime is a bijection in the word, so the array dimensions landing a register on
+// any chosen hash are solved for, not searched for.
+
+static U64 SHTest_modInverse(U64 v) {
+
+	U64 x = v;        //Correct to 3 bits for odd v, and Newton doubles that every step
+
+	for(U8 i = 0; i < 5; ++i)
+		x *= 2 - v * x;
+
+	return x;
+}
+
+static Bool SHTest_setArrays(ListU32 *arrays, U32 a, U32 b, Test *t) {
+	ListU32_free(arrays, t->alloc);
+	return
+		ListU32_pushBack(arrays, a, t->alloc, &t->err) &&
+		ListU32_pushBack(arrays, b, t->alloc, &t->err);
+}
+
+void Test_SHFileRegisterHashCollisionKeepsBoth(Test *t) {
+
+	Test_setModule(t, "SHFile register: a constructed hash collision is not a duplicate");
+
+	SHBinaryInfo probe = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
+	SHBinaryInfo info  = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
+
+	ListU32 arrays = (ListU32) { 0 };
+	CharString name = CharString_createNull();
+
+	Bool ok = SHTest_setArrays(&arrays, 2, 3, t);
+	name = CharString_createRefCStrConst("first");
+
+	ok &= ListSHRegisterRuntime_addSampler(
+		&info.registers, 0x1, false, &name, &arrays, makeSPIRVBinding(0, 0), t->alloc, &t->err
+	);
+
+	Test_assert(t, "first register added", ok && info.registers.length == 1);
+
+	const U64 target = info.registers.ptr[0].hash;
+
+	//A zeroed dimension pair exposes the state the last step folds into: state * prime.
+
+	ok &= SHTest_setArrays(&arrays, 0, 0, t);
+	name = CharString_createRefCStrConst("second");
+
+	ok &= ListSHRegisterRuntime_addSampler(
+		&probe.registers, 0x1, false, &name, &arrays, makeSPIRVBinding(0, 1), t->alloc, &t->err
+	);
+
+	Test_assert(t, "probe register added", ok && probe.registers.length == 1);
+
+	//Solve the last step: (state ^ word) * prime == target, so word = (zeroed ^ target) * prime inverse.
+
+	const U64 inverse = SHTest_modInverse(Buffer_fnv1a64Prime);
+	const U64 solved  = (probe.registers.ptr[0].hash * inverse) ^ (target * inverse);
+
+	ok &= SHTest_setArrays(&arrays, (U32) solved, (U32)(solved >> 32), t);
+	name = CharString_createRefCStrConst("second");
+
+	ok &= ListSHRegisterRuntime_addSampler(
+		&info.registers, 0x1, false, &name, &arrays, makeSPIRVBinding(0, 1), t->alloc, &t->err
+	);
+
+	Test_assert(t, "second register added", ok);
+
+	Test_assert(t, "the colliding register is kept rather than swallowed", info.registers.length == 2);
+
+	Test_assert(t, "the two registers really do hash the same",
+		info.registers.length == 2 && info.registers.ptr[1].hash == target
+	);
+
+	Test_assert(t, "and it is a different register",
+		!SHRegisterRuntime_equals(&info.registers.ptr[0], &info.registers.ptr[1])
+	);
+
+	CharString firstName  = CharString_createRefCStrConst("first");
+	CharString secondName = CharString_createRefCStrConst("second");
+
+	Test_assert(t, "each keeps its own name and binding", (
+		CharString_equalsStringSensitive(&info.registers.ptr[0].name, &firstName) &&
+		CharString_equalsStringSensitive(&info.registers.ptr[1].name, &secondName) &&
+		info.registers.ptr[0].reg.bindings.arr[EGfxBinaryType_SPIRV].binding == 0 &&
+		info.registers.ptr[1].reg.bindings.arr[EGfxBinaryType_SPIRV].binding == 1
+	));
+
+	ok = SHTest_setArrays(&arrays, 2, 3, t);
+	name = CharString_createRefCStrConst("first");
+
+	ok &= ListSHRegisterRuntime_addSampler(
+		&info.registers, 0x1, false, &name, &arrays, makeSPIRVBinding(0, 0), t->alloc, &t->err
+	);
+
+	Test_assert(t, "an actually identical register is still deduplicated", ok && info.registers.length == 2);
+
+	ListU32_free(&arrays, t->alloc);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+	ListSHRegisterRuntime_freeUnderlying(&probe.registers, t->alloc);
 }

@@ -98,6 +98,9 @@ Bool SHRegisterRuntime_hash(
 	const SHRegister *reg, const CharString *name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr
 );
 
+//Whether two registers are identical, comparing everything the hash was built from; equal hashes don't imply it.
+Bool SHRegisterRuntime_equals(const SHRegisterRuntime *a, const SHRegisterRuntime *b);
+
 Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator *alloc, SHRegisterRuntime *res, Error *e_rr);
 
 Bool ListSHRegisterRuntime_createCopyUnderlying(

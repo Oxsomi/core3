@@ -190,6 +190,14 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 		Test_assert(t, "end", commandList.end(e_rr));
 		Test_assert(t, "resourceTracked", ptr->resources.length == 1);
 		Test_assert(t, "resourceIsTarget", ptr->resources.length && ptr->resources.ptr[0] == target.handle());
+
+		//The sets beside those lists are what the dedup and the scope id check read, so a drift would make
+		//either answer for an entry that is not there.
+
+		Test_assert(t, "indicesAgreeWithLists", (
+			ptr->resourceIndex.count == ptr->resources.length &&
+			ptr->scopeIndex.count == ptr->activeScopes.length
+		));
 	}
 
 	//A command outside a scope has nothing to be ordered against
@@ -238,6 +246,13 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 
 		CommandScope duplicate = commandList.scope({}, 2);
 		Test_assert(t, "duplicateId", !duplicate);
+
+		//A refused scope leaves nothing behind in either half.
+
+		Test_assert(t, "duplicateLeftNothing", (
+			commandList.data()->activeScopes.length == 1 &&
+			commandList.data()->scopeIndex.count == 1
+		));
 	}
 
 	//Dependencies are resolved against the scopes that survived, which is what makes a hidden one interesting

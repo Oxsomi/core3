@@ -312,8 +312,57 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		//Twice, so the second replay starts from state the first one left behind
 
 		Test_assert(t, "submit", dev.submit({ &commandList }, {}, 0, 0, e_rr));
+
+		//A frame that let go of a resource the GPU is still reading is the bug a drift between the list and
+		//the set beside it would cause, and this is the first submit in the suite whose recording touched
+		//anything at all.
+
+		{
+			c::GraphicsDevice *device = c::deviceOf(deviceRef);
+			c::Bool agrees = true, held = false;
+
+			for (c::U64 i = 0; i < device->framesInFlight; ++i) {
+
+				const c::ListRefPtr inFlight = device->resourcesInFlight[i];
+				held |= !!inFlight.length;
+
+				if(device->resourcesInFlightIndex[i].count != inFlight.length)
+					agrees = false;
+
+				for(c::U64 j = 0; j < inFlight.length; ++j)
+					if(!c::GraphicsDevice_isInAnyFlight(device, inFlight.ptr[j]))
+						agrees = false;
+			}
+
+			Test_assert(t, "submitPutResourcesInFlight", held);
+			Test_assert(t, "inFlightIndexAgreesWithList", agrees);
+			Test_assert(t, "targetInFlight", c::GraphicsDevice_isInAnyFlight(device, target.handle()));
+
+			Test_assert(t, "commandListNotInFlight",
+				!c::GraphicsDevice_isInAnyFlight(device, commandList.handle())
+			);
+
+			Test_assert(t, "inFlightNullGuards", (
+				!c::GraphicsDevice_isInFlight(device, nullptr) &&
+				!c::GraphicsDevice_isInAnyFlight(nullptr, commandList.handle())
+			));
+		}
+
 		Test_assert(t, "submitAgain", dev.submit({ &commandList }, {}, 0, 0, e_rr));
 		Test_assert(t, "wait", dev.wait(e_rr));
+
+		//Waiting proves every frame completed, so every one emptied both halves.
+
+		{
+			c::GraphicsDevice *device = c::deviceOf(deviceRef);
+			c::Bool emptied = true;
+
+			for (c::U64 i = 0; i < device->framesInFlight; ++i)
+				if(device->resourcesInFlight[i].length || device->resourcesInFlightIndex[i].count)
+					emptied = false;
+
+			Test_assert(t, "waitEmptiedEveryFrame", emptied);
+		}
 
 		//Read the results back: the copied texture has to hold the clear color and the pattern buffer its bytes.
 		//The buffer's cpuData is scribbled over first, so only a real GPU to CPU copy can make the assert pass.

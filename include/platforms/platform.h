@@ -112,6 +112,8 @@ typedef struct Platform {
 	void *data1;                        //If present can contain the executable file
 	U64 size1;
 
+	U64 hashSeed;                       //HashIndex seed, adopted by modules that link their own types/container
+
 } Platform;
 
 extern Platform *Platform_instance;     //DLLs that call this need to also call Platform_create or get the same pointer passed.

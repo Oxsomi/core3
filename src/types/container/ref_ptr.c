@@ -21,10 +21,21 @@
 //types/container/ref_ptr.c
 
 #include "types/container/list_impl.h"
+#include "types/container/hash_set_impl.h"
 #include "types/container/ref_ptr.h"
+#include "types/base/mathi.h"
 
 TListNamedImpl(ListRefPtr);
 TListNamedImpl(ListWeakRefPtr);
+
+static const HashIndexInfo HashSetRefPtr_indexInfo = {
+	.hash = U64_hash,
+	.compare = U64_compare,
+	.stride = sizeof(RefPtr*),
+	.smallLimit = 32
+};
+
+THashSetNamedImpl(ListRefPtr, HashSetRefPtr, &HashSetRefPtr_indexInfo);
 
 Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 

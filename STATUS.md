@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-08-04 (v3.2.105). Update this table in the same PR as the feature.
+Last updated: 2026-09-19 (v3.2.105). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -21,7 +21,7 @@ Last updated: 2026-08-04 (v3.2.105). Update this table in the same PR as the fea
 | AllocationBuffer (GPU suballocator) | ✅ | Non-linear alignment supported |
 | JobQueue | ✅ | Deterministic single-thread mode |
 | Compression (Brotli) | 📄 | oiXX headers reserve flags; implementation is a disabled WIP. Readers must reject compressed files |
-| Generic hash map | ❌→🚧 | Wanted by debug allocator, command-list dedup, compiler caches (TODOs in tree) |
+| HashIndex (open addressed index beside a list) | ✅ | Robin Hood, seeded, displacement bounded; laid beside the caller's list rather than owning it. Consumed by the tracked allocator; the graphics and format sites are still linear |
 
 ## Formats
 

@@ -991,8 +991,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	DxCommandBuffer *commandBuffer = NULL;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
@@ -1280,8 +1278,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				));
 			}
 
-			if(RefPtr_inc(swapchainRef))
-				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
+			if(!GraphicsDevice_isInFlight(device, swapchainRef) && RefPtr_inc(swapchainRef))
+				gotoIfError3(clean, GraphicsDevice_addInFlight(device, swapchainRef, alloc, e_rr));
 		}
 
 		if(dependency.NumBarriers)

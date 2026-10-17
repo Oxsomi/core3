@@ -85,7 +85,9 @@ int main() {
 	Error err = Error_none();
 
 	const CharString outputCsv = CharString_createRefCStrConst("test.csv");
+	const CharString hashCsv = CharString_createRefCStrConst("hash_index.csv");
 
+	gotoIfError3(clean, Perf_hashIndex(&alloc, &hashCsv, true, &err));
 	gotoIfError3(clean, Perf_aesThroughput(&alloc, &outputCsv, true, &err));
 
 clean:

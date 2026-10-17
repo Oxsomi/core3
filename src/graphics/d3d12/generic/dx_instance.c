@@ -100,6 +100,7 @@ static_assert(
 
 		Platform_instance = instance;
 		GraphicsInterface_instance = interf;
+		HashIndex_initSeed(instance->hashSeed);        //This module's own copy, see Platform.hashSeed
 
 		return (GraphicsInterfaceTable) {
 

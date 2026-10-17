@@ -376,3 +376,15 @@ U64 Buffer_fnv1a64(const Buffer buf, U64 hash) {
 
 	return hash;
 }
+
+//The seed xors into the fnv1a state, which costs no step and still moves every key.
+
+U64 U32_hash(const void *key, U64 seed, void *context) {
+	(void) context;
+	return Buffer_fnv1a64Single(*(const U32*) key, seed ^ Buffer_fnv1a64Offset);
+}
+
+U64 U64_hash(const void *key, U64 seed, void *context) {
+	(void) context;
+	return Buffer_fnv1a64Single(*(const U64*) key, seed ^ Buffer_fnv1a64Offset);
+}

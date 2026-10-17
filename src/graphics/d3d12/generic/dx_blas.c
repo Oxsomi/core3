@@ -340,15 +340,13 @@ Bool DX_WRAP_FUNC(BLASRef_compact)(
 
 	BLAS *blas = BLASRef_ptr(blasRef);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if(!blas->base.pendingCompactBuffer)
 		retError(clean, Error_invalidState(0, "D3D12BLASRef_compact() nothing was prepared for this structure"));
 
 	//Reserved before the copy is recorded, because once it is in the command buffer the structure it reads
 	// cannot be released and a failed retirement would have no undo.
 
-	gotoIfError3(clean, ListRefPtr_reserve(currentFlight, currentFlight->length + 1, alloc, e_rr));
+	gotoIfError3(clean, GraphicsDevice_reserveInFlight(device, alloc, e_rr));
 
 	commandBuffer->buffer->lpVtbl->CopyRaytracingAccelerationStructure(
 		commandBuffer->buffer,
@@ -360,7 +358,10 @@ Bool DX_WRAP_FUNC(BLASRef_compact)(
 	//The structure being replaced cannot go back yet: the copy that reads it has only been recorded. Its
 	// reference MOVES to the flight list, which releases it once this submit completes.
 
-	ListRefPtr_pushBack(currentFlight, blas->base.asBuffer, alloc, NULL);
+	if(GraphicsDevice_isInFlight(device, blas->base.asBuffer))
+		RefPtr_dec(&blas->base.asBuffer);
+
+	else GraphicsDevice_addInFlight(device, blas->base.asBuffer, alloc, NULL);
 
 	blas->base.asBuffer = blas->base.pendingCompactBuffer;
 	blas->base.isCompacted = true;
@@ -385,8 +386,6 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
-
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	BLAS *blas = BLASRef_ptr(pending);
 	DxBLAS *blasExt = BLAS_ext(blas, Dx);
@@ -535,8 +534,8 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 	device->pendingPrimitives += blasExt->primitives;
 
-	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
+	if(!GraphicsDevice_isInFlight(device, pending)) {
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
 
@@ -544,9 +543,9 @@ Bool DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	// and losing the reference from our object.
 	//However that's only if allow update is false.
 
-	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
+	if(!GraphicsDevice_isInFlight(device, blas->base.tempScratchBuffer)) {
 
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, blas->base.tempScratchBuffer, alloc, e_rr));
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, blas->base.tempScratchBuffer, alloc, e_rr));
 
 		if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
 			blas->base.tempScratchBuffer = NULL;

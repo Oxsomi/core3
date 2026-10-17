@@ -21,14 +21,19 @@
 //platforms/generic/platform.c
 
 #include "types/container/list_impl.h"
+#include "types/container/hash_index.h"
+#include "types/container/buffer.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "formats/oiCA/ca_file.h"
 #include "types/base/allocator.h"
 #include "types/base/thread.h"
+#include "types/base/time.h"
 #include "types/base/constants.h"
+#include "types/base/mathi.h"
 
 #include <signal.h>
+#include <stddef.h>
 #include <stdlib.h>
 
 TListImpl(VirtualSection);
@@ -83,8 +88,30 @@ TListImpl(DebugAllocation);
 
 Allocator Allocator_allocationsAllocator;
 Allocator Allocator_trackedAllocator;
-ListDebugAllocation Allocator_allocations;            //TODO: Use hashmap here!
+ListDebugAllocation Allocator_allocations;
 SpinLock Allocator_lock;                              //Multi threading safety
+
+//A lookup by address beside the list, which stays what the leak report walks and what cleanup frees.
+//Both are statically zeroed and the tracker is live from the first allocation onwards, so the index has to be
+// usable before anything created it.
+//It is fed Allocator_allocationsAllocator like the list is, which keeps growing it from recursing back into
+// the tracker. That is not a deadlock concern but the absence of one: SpinLock_lock hands the owning thread
+// ELockAcquire_AlreadyLocked, which is >= ELockAcquire_Success, so a nested allocation would sail past the
+// guard and mutate the list mid realloc.
+
+static HashIndex Allocator_allocationIndex;
+
+#ifndef NDEBUG
+
+	static const HashIndexInfo Allocator_allocationIndexInfo = {
+		.hash = U64_hash,
+		.compare = U64_compare,
+		.stride = sizeof(DebugAllocation),
+		.keyOffset = offsetof(DebugAllocation, location),
+		.smallLimit = 32
+	};
+
+#endif
 
 #if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
 
@@ -238,7 +265,35 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 		if(acq < ELockAcquire_Success)        //Should never happen
 			retError(clean, Error_invalidState(0, "Platform_onAllocate() allocator lock failed to acquire"));
 
-		gotoIfError3(clean, ListDebugAllocation_pushBack(
+		gotoIfError3(clean, HashIndex_reserve(
+			&Allocator_allocationIndex, &Allocator_allocationIndexInfo, Allocator_allocations.ptr,
+			Allocator_allocations.length + 1, &Allocator_allocationsAllocator, e_rr
+		));
+
+		gotoIfError3(clean, ListDebugAllocation_reserveForPush(
+			&Allocator_allocations, &Allocator_allocationsAllocator, e_rr
+		));
+
+		U64 existing = 0;
+
+		gotoIfError3(clean, HashIndex_insert(
+			&Allocator_allocationIndex, &Allocator_allocationIndexInfo, Allocator_allocations.ptr,
+			&captured.location, Allocator_allocations.length, &existing, &Allocator_allocationsAllocator, e_rr
+		));
+
+		//An address already tracked means a previous free went unseen, which the free path reports on its own.
+		//Overwrite rather than adding a second record the next free could never reach.
+
+		if (existing != U64_MAX) {
+
+			#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
+				Platform_disownStackTrace(&Allocator_allocations.ptrNonConst[existing]);
+			#endif
+
+			Allocator_allocations.ptrNonConst[existing] = captured;
+		}
+
+		else gotoIfError3(clean, ListDebugAllocation_pushBack(
 			&Allocator_allocations, captured, &Allocator_allocationsAllocator, e_rr
 		));
 
@@ -248,8 +303,8 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 
 clean:
 
-	//The list owns the copied callstack text from the push onwards, and Platform_onFree frees it together
-	// with the record.
+	//The list owns the copied callstack text once the record lands in it, whether that was a push or an
+	// overwrite, and Platform_onFree frees it together with the record.
 	//A record that never got that far still owns it here.
 
 	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
@@ -285,40 +340,17 @@ Bool Platform_onFree(void *ptr, U64 len) {
 			retError(clean, Error_invalidState(0, "Platform_onFree() allocator lock failed to acquire"));
 		}
 
-		U64 i = 0;
+		//An exact match lookup cannot see a free landing INSIDE another live allocation, so that case is
+		//deliberately not diagnosed here: ASan reports it with the offending access attached, and the
+		//sanitizer builds are what CI runs.
 
-		for (; i < Allocator_allocations.length; ++i) {
+		const U64 key = (U64) ptr;
 
-			const DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
+		const U64 i = HashIndex_find(
+			&Allocator_allocationIndex, &Allocator_allocationIndexInfo, Allocator_allocations.ptr, &key
+		);
 
-			if (captured->location == (U64)ptr) {
-
-				if(len != captured->length) {
-
-					Log_errorLn(
-						&Allocator_allocationsAllocator,
-						"Allocation at %p was allocated with length %"PRIu64" but freed with length %"PRIu64"!",
-						ptr, captured->length, len
-					);
-
-					break;        //Still erase it, but reluctantly
-				}
-
-				break;
-			}
-
-			//Overlapping range, but likely by accident!
-			//Log it, but refuse to track it.
-
-			else if ((U64)ptr >= captured->location && (U64)ptr < captured->location + captured->length)
-				Log_errorLn(
-					&Allocator_allocationsAllocator,
-					"Allocation at %p with length %"PRIu64" collides with free at %p with length %"PRIu64" this is invalid!",
-					captured->location, captured->length, ptr, len
-				);
-		}
-
-		if(i == Allocator_allocations.length) {
+		if(i == U64_MAX) {
 
 			Log_errorLn(
 				&Allocator_allocationsAllocator,
@@ -330,11 +362,31 @@ Bool Platform_onFree(void *ptr, U64 len) {
 			goto clean;
 		}
 
+		if(len != Allocator_allocations.ptr[i].length)        //Still erase it, but reluctantly
+			Log_errorLn(
+				&Allocator_allocationsAllocator,
+				"Allocation at %p was allocated with length %"PRIu64" but freed with length %"PRIu64"!",
+				ptr, Allocator_allocations.ptr[i].length, len
+			);
+
+		//The index reads the key of this record and of the last one, so it goes first and the list moves after.
+		//Swapping is what keeps a free O(1); an ordered erase would memmove the whole tail on every one.
+
+		if(!HashIndex_eraseSwap(
+			&Allocator_allocationIndex, &Allocator_allocationIndexInfo, Allocator_allocations.ptr, i, NULL
+		)) {
+
+			Log_errorLn(&Allocator_allocationsAllocator, "Platform_onFree allocation index and list disagree");
+			s_uccess = false;
+			goto clean;
+		}
+
 		#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(NDEBUG)
 			Platform_disownStackTrace(&Allocator_allocations.ptrNonConst[i]);
 		#endif
 
-		ListDebugAllocation_erase(&Allocator_allocations, i, NULL);
+		Allocator_allocations.ptrNonConst[i] = Allocator_allocations.ptr[Allocator_allocations.length - 1];
+		ListDebugAllocation_popBack(&Allocator_allocations, NULL, NULL);
 
 		if (acq == ELockAcquire_Acquired) {
 			SpinLock_unlock(&Allocator_lock);
@@ -518,8 +570,26 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 		.free = Platform_freeTracked
 	};
 
+	//Seeded before anything builds a slot array, because a table captures the seed once and keeps it.
+	//Buffer_csprng can fail where there is no entropy source, and a table with a predictable seed is a weaker
+	// one rather than a broken one, so the fallback only has to differ between runs.
+
+	U64 hashSeed = 0;
+
+	if(!Buffer_csprng(Buffer_createRef(&hashSeed, sizeof(hashSeed))))
+		hashSeed = (U64) Time_now() ^ (U64) (const void*) &hashSeed;
+
+	HashIndex_initSeed(hashSeed);
+
 	#ifndef NDEBUG
+
 		gotoIfError3(clean, ListDebugAllocation_reserve(&Allocator_allocations, 256, &Allocator_allocationsAllocator, e_rr));
+
+		gotoIfError3(clean, HashIndex_reserve(
+			&Allocator_allocationIndex, &Allocator_allocationIndexInfo, Allocator_allocations.ptr, 256,
+			&Allocator_allocationsAllocator, e_rr
+		));
+
 	#endif
 
 	Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
@@ -529,7 +599,8 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 		.platformType = _PLATFORM_TYPE,
 		.cpuFeatures = Platform_detectCPUFeatures(),
 		.data = data,
-		.alloc = &Allocator_trackedAllocator
+		.alloc = &Allocator_trackedAllocator,
+		.hashSeed = hashSeed
 	};
 
 	Platform_detectCPUInfo(&Platform_instance->cpuInfo);
@@ -598,6 +669,7 @@ void Platform_cleanup() {
 	#endif
 
 	ListDebugAllocation_free(&Allocator_allocations, &Allocator_allocationsAllocator);
+	HashIndex_free(&Allocator_allocationIndex, &Allocator_allocationsAllocator);
 
 	Platform_cleanupExt();
 

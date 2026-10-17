@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/base/math_common.h"
+#include "types/base/algorithm.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -64,7 +65,14 @@ static inline T T##_exp2(T v) {                                                 
 	return (TUint)v >= (T)(sizeof(T) * 8 - TSigned) ? (T)-1 : (T) ((U64)1 << v);                        \
 }                                                                                                       \
 																										\
-static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
+static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }                                    \
+																										\
+/* The arguments point at the values. */                                                                \
+static inline ECompareResult T##_compare(const void *a, const void *b, void *context) {                 \
+	const T x = *(const T*) a, y = *(const T*) b;                                                       \
+	(void) context;                                                                                     \
+	return x < y ? ECompareResult_Lt : (x > y ? ECompareResult_Gt : ECompareResult_Eq);                 \
+}
 
 //rol/ror below mask the second shift as well as the first.
 //With bits == 0 the complement is the full width, and shifting a T by sizeof(T) * 8 is undefined.

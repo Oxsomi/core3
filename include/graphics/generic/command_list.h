@@ -27,6 +27,7 @@
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
+#include "types/container/hash_index.h"
 #include "types/base/lock.h"
 
 #ifdef __cplusplus
@@ -44,10 +45,15 @@ typedef struct CommandList {
 
 	Buffer data;                                       //Data for all commands
 	ListCommandOpInfo commandOps;
-	ListRefPtr resources;                              //Resources used by this command list (TODO: HashSet<RefPtr*>)
+	ListRefPtr resources;                              //Resources used by this command list
+	HashIndex resourceIndex;                           //Identity set over resources
 
 	ListTransitionInternal transitions;                //Transitions that are pending
 	ListCommandScope activeScopes;                     //Scopes that were successfully inserted
+	HashIndex scopeIndex;                              //scopeId set over activeScopes
+
+	//Neither index erases: a recording only appends and clear empties both, so the order submit walks
+	// activeScopes in, against the command ops, is never disturbed.
 
 	U8 padding0[3];
 	Bool allowResize;

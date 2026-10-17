@@ -243,6 +243,28 @@ clean:
 	return s_uccess;
 }
 
+Bool SHRegisterRuntime_equals(const SHRegisterRuntime *a, const SHRegisterRuntime *b) {
+
+	if(!a || !b)
+		return a == b;
+
+	if(a == b)
+		return true;
+
+	//SHRegister is a padding free U64[N + 1] (static_assert in SHRegisterRuntime_hash), so comparing bytes is exact.
+
+	if(!Buffer_eq(
+		Buffer_createRefConst(&a->reg, sizeof(a->reg)),
+		Buffer_createRefConst(&b->reg, sizeof(b->reg))
+	))
+		return false;
+
+	return
+		CharString_equalsStringSensitive(&a->name, &b->name) &&
+		ListU32_eq(a->arrays, b->arrays) &&
+		SBFile_equals(&a->shaderBuffer, &b->shaderBuffer);
+}
+
 Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator *alloc, SHRegisterRuntime *res, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -287,9 +309,21 @@ Bool SHBinaryInfo_addRegisterBase(
 	//The caller hands over the buffer either way, so a duplicate has to consume it too rather than leave it
 	//for the caller to trip over: two entrypoints declaring the same push constant block hash identically,
 	//and the second one's SBFile_create then refuses a buffer that still holds the first one's variables.
+	//Only an equal register is a duplicate: the hash is built from file words, so a colliding pair is cheap to
+	// construct, and dropping one would desync the reflected bindings from the shader.
+
+	SHRegisterRuntime candidate = (SHRegisterRuntime) { 0 };
+	candidate.reg = registr;
+	candidate.name = *name;
+
+	if(arrays)
+		candidate.arrays = *arrays;
+
+	if(sbFile)
+		candidate.shaderBuffer = *sbFile;
 
 	for(U64 i = 0; i < registers->length; ++i)
-		if(registers->ptr[i].hash == hash) {
+		if(registers->ptr[i].hash == hash && SHRegisterRuntime_equals(&registers->ptr[i], &candidate)) {
 
 			if(sbFile) {
 				SBFile_free(sbFile, alloc);

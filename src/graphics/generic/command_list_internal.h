@@ -58,6 +58,11 @@ typedef RefPtr RTASRef;
 
 Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32 extraSkipStacktrace, Error *e_rr);
 
+//Adds a resource to the set the command list keeps alive, taking a reference the first time it is seen.
+//One whose refcount cannot be raised is left untracked.
+
+Bool CommandList_trackResource(CommandList *commandList, RefPtr *resource, const Allocator *alloc, Error *e_rr);
+
 Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, ResourceRange range, TransitionInternal **found);
 
 Bool CommandListRef_transitionBuffer(

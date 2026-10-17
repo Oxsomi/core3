@@ -41,6 +41,8 @@
 #include "types/base/constants.h"
 #include "command_list_internal.h"
 
+#include <stddef.h>
+
 TListImpl(CommandOpInfo);
 TListImpl(TransitionInternal);
 TListImpl(CommandScope);
@@ -49,6 +51,62 @@ TListImpl(CommandScopeDependency);
 TListImpl(ClearImageCmd);
 TListImpl(AttachmentInfo);
 TListImpl(CopyImageRegion);
+
+static const HashIndexInfo CommandList_resourceIndexInfo = {
+	.hash = U64_hash,
+	.compare = U64_compare,
+	.stride = sizeof(RefPtr*),
+	.smallLimit = 32
+};
+
+static const HashIndexInfo CommandList_scopeIndexInfo = {
+	.hash = U32_hash,
+	.compare = U32_compare,
+	.stride = sizeof(CommandScope),
+	.keyOffset = offsetof(CommandScope, scopeId),
+	.smallLimit = 32
+};
+
+//A resource whose refcount cannot be raised is left untracked, which is why the lookup is separate from the
+// get-or-add: an entry already claimed could not be taken back, since its key would have to be read out of a
+// list it never joined.
+
+Bool CommandList_trackResource(CommandList *commandList, RefPtr *resource, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 existing = 0;
+
+	const U64 found = HashIndex_find(
+		&commandList->resourceIndex, &CommandList_resourceIndexInfo, commandList->resources.ptr, &resource
+	);
+
+	if(found != U64_MAX)
+		goto clean;
+
+	gotoIfError3(clean, ListRefPtr_reserveForPush(&commandList->resources, alloc, e_rr));
+
+	gotoIfError3(clean, HashIndex_reserve(
+		&commandList->resourceIndex, &CommandList_resourceIndexInfo, commandList->resources.ptr,
+		commandList->resources.length + 1, alloc, e_rr
+	));
+
+	if(!RefPtr_inc(resource))        //CommandList will keep resource alive.
+		goto clean;
+
+	if (!HashIndex_insert(
+		&commandList->resourceIndex, &CommandList_resourceIndexInfo, commandList->resources.ptr,
+		&resource, commandList->resources.length, &existing, alloc, e_rr
+	)) {
+		RefPtr_dec(&resource);        //The reference was taken for an entry that never landed
+		s_uccess = false;
+		goto clean;
+	}
+
+	gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, resource, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
 
 //Clear, append, begin and end
 
@@ -63,8 +121,10 @@ Bool CommandListRef_clear(CommandListRef *commandListRef, Error *e_rr) {
 
 	gotoIfError3(clean, ListCommandOpInfo_clear(&commandList->commandOps, e_rr));
 	gotoIfError3(clean, ListRefPtr_clear(&commandList->resources, e_rr));
+	gotoIfError3(clean, HashIndex_clear(&commandList->resourceIndex, e_rr));
 	gotoIfError3(clean, ListTransitionInternal_clear(&commandList->transitions, e_rr));
 	gotoIfError3(clean, ListCommandScope_clear(&commandList->activeScopes, e_rr));
+	gotoIfError3(clean, HashIndex_clear(&commandList->scopeIndex, e_rr));
 
 	gotoIfError3(clean, ListDeviceResourceVersion_clear(&commandList->activeSwapchains, e_rr));
 
@@ -158,18 +218,20 @@ Bool CommandListRef_end(CommandListRef *commandListRef, Error *e_rr) {
 	if (commandList->tempStateFlags & ECommandStateFlags_InvalidState)
 		retError(clean, Error_invalidState(1, "CommandListRef_end() can't close a recording that was invalidated"));
 
+	//Every transition contributes at most one resource, so this hoists the fallible half out of the loop even
+	// though CommandList_trackResource would grow both on its own.
+
 	gotoIfError3(clean, ListRefPtr_reserve(&commandList->resources, commandList->transitions.length, alloc, e_rr));
 
-	for (U64 i = 0; i < commandList->transitions.length; ++i) {
+	gotoIfError3(clean, HashIndex_reserve(
+		&commandList->resourceIndex, &CommandList_resourceIndexInfo, commandList->resources.ptr,
+		commandList->transitions.length, alloc, e_rr
+	));
 
-		const TransitionInternal *transitions = &commandList->transitions.ptrNonConst[i];
-
-		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0, NULL)) {                //TODO: hashSet
-
-			if(RefPtr_inc(transitions->resource))        //CommandList will keep resource alive.
-				gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, transitions->resource, alloc, e_rr));
-		}
-	}
+	for (U64 i = 0; i < commandList->transitions.length; ++i)
+		gotoIfError3(clean, CommandList_trackResource(
+			commandList, commandList->transitions.ptrNonConst[i].resource, alloc, e_rr
+		));
 
 	commandList->state = ECommandListState_Closed;
 
@@ -810,13 +872,12 @@ Bool CommandListRef_startScope(
 
 	//Scope has to be unique
 
-	for (U64 i = 0; i < commandList->activeScopes.length; ++i) {
+	const U64 duplicate = HashIndex_find(
+		&commandList->scopeIndex, &CommandList_scopeIndexInfo, commandList->activeScopes.ptr, &id
+	);
 
-		CommandScope scope = commandList->activeScopes.ptr[i];
-
-		if(scope.scopeId == id)
-			retError(clean, Error_alreadyDefined(0, "CommandListRef_startScope()::id should be unique"));
-	}
+	if(duplicate != U64_MAX)
+		retError(clean, Error_alreadyDefined(0, "CommandListRef_startScope()::id should be unique"));
 
 	//Find deps
 
@@ -827,22 +888,12 @@ Bool CommandListRef_startScope(
 		if(dep.type == ECommandScopeDependencyType_Unconditional)        //Don't care
 			continue;
 
-		Bool found = false;
+		const U64 found = HashIndex_find(
+			&commandList->scopeIndex, &CommandList_scopeIndexInfo, commandList->activeScopes.ptr, &dep.id
+		);
 
-		for (U64 i = 0; i < commandList->activeScopes.length; ++i) {    //TODO: HashSet
-
-			CommandScope scope = commandList->activeScopes.ptr[i];
-
-			if (scope.scopeId == dep.id) {
-				found = true;
-				break;
-			}
-		}
-
-		if(found)
-			continue;
-
-		retError(clean, Error_notFound(0, 0, "CommandListRef_startScope()::deps[j] not found"));
+		if(found == U64_MAX)
+			retError(clean, Error_notFound(0, 0, "CommandListRef_startScope()::deps[j] not found"));
 	}
 
 	//TODO: Append deps to array so runtime can use it (U32 only)
@@ -995,6 +1046,27 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 			(commandList->lastScopePredicated ? ECommandScopeInternalFlags_Predicated : 0)
 	};
 
+	gotoIfError3(clean, ListCommandScope_reserveForPush(&commandList->activeScopes, alloc, e_rr));
+
+	gotoIfError3(clean, HashIndex_reserve(
+		&commandList->scopeIndex, &CommandList_scopeIndexInfo, commandList->activeScopes.ptr,
+		commandList->activeScopes.length + 1, alloc, e_rr
+	));
+
+	{
+		U64 existing = 0;
+
+		gotoIfError3(clean, HashIndex_insert(
+			&commandList->scopeIndex, &CommandList_scopeIndexInfo, commandList->activeScopes.ptr,
+			&scope.scopeId, commandList->activeScopes.length, &existing, alloc, e_rr
+		));
+
+		//startScope already refused a duplicate id, and nothing between there and here can add one.
+
+		if(existing != U64_MAX)
+			retError(clean, Error_alreadyDefined(1, "CommandListRef_endScope() scope id was already recorded"));
+	}
+
 	gotoIfError3(clean, ListCommandScope_pushBack(&commandList->activeScopes, scope, alloc, e_rr));
 
 clean:
@@ -1045,7 +1117,9 @@ void CommandList_free(void *cmdGeneric, const Allocator *alloc) {
 
 	ListCommandOpInfo_free(&cmd->commandOps, alloc);
 	ListRefPtr_free(&cmd->resources, alloc);
+	HashIndex_free(&cmd->resourceIndex, alloc);
 	ListCommandScope_free(&cmd->activeScopes, alloc);
+	HashIndex_free(&cmd->scopeIndex, alloc);
 	ListTransitionInternal_free(&cmd->transitions, alloc);
 	ListTransitionInternal_free(&cmd->pendingTransitions, alloc);
 	ListDeviceResourceVersion_free(&cmd->activeSwapchains, alloc);
@@ -1082,6 +1156,11 @@ Bool GraphicsDeviceRef_createCommandList(
 	gotoIfError3(clean, ListCommandOpInfo_reserve(&commandList->commandOps, estimatedCommandCount, alloc, e_rr));
 	gotoIfError3(clean, ListRefPtr_reserve(&commandList->resources, estimatedResources, alloc, e_rr));
 	gotoIfError3(clean, ListCommandScope_reserve(&commandList->activeScopes, 16, alloc, e_rr));
+
+	gotoIfError3(clean, HashIndex_reserve(
+		&commandList->resourceIndex, &CommandList_resourceIndexInfo, commandList->resources.ptr,
+		estimatedResources, alloc, e_rr
+	));
 	gotoIfError3(clean, ListTransitionInternal_reserve(&commandList->transitions, estimatedResources, alloc, e_rr));
 	gotoIfError3(clean, ListTransitionInternal_reserve(&commandList->pendingTransitions, 32, alloc, e_rr));
 

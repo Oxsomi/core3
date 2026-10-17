@@ -173,8 +173,6 @@ Bool DX_WRAP_FUNC(OpacityMicromapRef_flush)(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	OpacityMicromap *micromap = OpacityMicromapRef_ptr(pending);
 	DxOpacityMicromap *micromapExt = OpacityMicromap_ext(micromap, Dx);
 
@@ -195,16 +193,16 @@ Bool DX_WRAP_FUNC(OpacityMicromapRef_flush)(
 	//Keep the object alive for the frame; the scratch is never needed again after the build, so the flight
 	// takes the reference the object held, exactly like a non updatable BLAS.
 
-	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
+	if(!GraphicsDevice_isInFlight(device, pending)) {
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
 
 	if(
 		micromap->base.tempScratchBuffer &&
-		!ListRefPtr_contains(*currentFlight, micromap->base.tempScratchBuffer, 0, NULL)
+		!GraphicsDevice_isInFlight(device, micromap->base.tempScratchBuffer)
 	) {
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, micromap->base.tempScratchBuffer, alloc, e_rr));
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, micromap->base.tempScratchBuffer, alloc, e_rr));
 		micromap->base.tempScratchBuffer = NULL;
 	}
 

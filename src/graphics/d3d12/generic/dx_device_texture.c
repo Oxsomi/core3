@@ -49,7 +49,6 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 	DeviceTexture *texture = DeviceTextureRef_ptr(pending);
 	DxUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(pending, Dx, 0);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
@@ -243,7 +242,11 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 
 		//When staging resource is committed to current in flight then we can relinquish ownership.
 
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tempStagingResource, alloc, e_rr));
+		if(GraphicsDevice_isInFlight(device, tempStagingResource))
+			RefPtr_dec(&tempStagingResource);
+
+		else gotoIfError3(clean, GraphicsDevice_addInFlight(device, tempStagingResource, alloc, e_rr));
+
 		tempStagingResource = NULL;
 	}
 
@@ -352,7 +355,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				}
 			}
 
-			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
+			if(!GraphicsDevice_isInFlight(device, device->staging)) {
 
 				gotoIfError3(clean, DxDeviceBuffer_transition(                        //Ensure resource is transitioned
 					stagingExt,
@@ -362,7 +365,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 					&bufDep, alloc, e_rr));
 
 				RefPtr_inc(device->staging);
-				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight
+				gotoIfError3(clean, GraphicsDevice_addInFlight(device, device->staging, alloc, e_rr));        //Add to in flight
 			}
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
@@ -446,8 +449,8 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 	texture->isFirstFrame = texture->isPending = texture->isPendingFullCopy = false;
 	gotoIfError3(clean, ListDevicePendingRange_clear(&texture->pendingChanges, e_rr));
 
-	if(RefPtr_inc(pending))
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
+	if(!GraphicsDevice_isInFlight(device, pending) && RefPtr_inc(pending))
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, pending, alloc, e_rr));
 
 	if (device->pendingBytes >= device->flushThreshold)
 		gotoIfError3(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));

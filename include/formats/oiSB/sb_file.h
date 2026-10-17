@@ -74,6 +74,9 @@ Bool SBFile_createCopy(
 
 void SBFile_free(SBFile *shFile, const Allocator *alloc);
 
+//Whether two shader buffers are identical, names included; equal hashes don't imply it.
+Bool SBFile_equals(const SBFile *a, const SBFile *b);
+
 Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const Allocator *alloc, Error *e_rr);
 
 Bool SBFile_addVariableAsType(

@@ -382,6 +382,11 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction func, void *contex
 
 Bool GenericList_sortString(GenericList list, EStringCase stringCase);
 
+//CompareFunction shaped, the arguments point at a CharString.
+
+ECompareResult GenericList_compareString(const void *aRaw, const void *bRaw, void *context);
+ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void *bRaw, void *context);
+
 static inline Bool GenericList_sortStringSensitive(GenericList list) {
 	return GenericList_sortString(list, EStringCase_Sensitive);
 }

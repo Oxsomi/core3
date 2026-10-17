@@ -463,10 +463,7 @@ Bool CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pip
 		commandList, op, Buffer_createRefConst(commandOp, sizeof(commandOp)), 0, e_rr
 	));
 
-	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {                        //TODO: hashSet
-		RefPtr_inc(pipelineRef);        //CommandList will keep resource alive.
-		gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, pipelineRef, alloc, e_rr));
-	}
+	gotoIfError3(clean, CommandList_trackResource(commandList, pipelineRef, alloc, e_rr));
 
 	commandList->pipeline[type] = pipelineRef;
 

@@ -37,6 +37,8 @@
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
 
+#include <stddef.h>
+
 TListImpl(TextureDescriptorRange);
 TListImpl(BufferDescriptorRange);
 TListImpl(DescriptorTableBinding);
@@ -169,6 +171,7 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 		RefPtr_dec(&table->resources.ptrNonConst[i].resource);
 
 	ListDescriptorTableResourceRef_free(&table->resources, alloc);
+	HashIndex_free(&table->resourceIndex, alloc);
 
 	if(!(table->flags & EDescriptorTableFlags_InternalWeakDeviceRef))
 		RefPtr_dec(&table->parent);
@@ -339,6 +342,17 @@ U32 Descriptor_counterOffset(const Descriptor *d) {
 		((U32)d->buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
 }
 
+//The one site in graphics that erases constantly, and nothing reads the list in order: only
+// DescriptorTable_free walks it, to give the references back.
+
+static const HashIndexInfo DescriptorTable_resourceIndexInfo = {
+	.hash = U64_hash,
+	.compare = U64_compare,
+	.stride = sizeof(DescriptorTableResourceRef),
+	.keyOffset = offsetof(DescriptorTableResourceRef, resource),
+	.smallLimit = 32
+};
+
 Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -352,16 +366,28 @@ Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_timedOut(0, 1 * SECOND, "DescriptorTable_loseRef() couldn't acquire descriptor range"));
 
-	for(U64 i = 0; i < table->resources.length; ++i)
-		if (table->resources.ptr[i].resource == ref) {
+	{
+		const U64 i = HashIndex_find(
+			&table->resourceIndex, &DescriptorTable_resourceIndexInfo, table->resources.ptr, &ref
+		);
 
-			if (!--table->resources.ptrNonConst[i].count) {        //Decrease refCount and decrease ref if last ref
-				RefPtr_dec(&ref);
-				gotoIfError3(clean, ListDescriptorTableResourceRef_erase(&table->resources, i, e_rr));
-			}
+		//Decrease refCount and decrease ref if last ref.
+		//The index reads the key of this entry and of the last one, so it goes first and the list moves after.
+		//Both happen before the reference is given back, because that release can run the resource's own free
+		// and the table is half erased until the pop.
 
-			break;
+		if (i != U64_MAX && !--table->resources.ptrNonConst[i].count) {
+
+			gotoIfError3(clean, HashIndex_eraseSwap(
+				&table->resourceIndex, &DescriptorTable_resourceIndexInfo, table->resources.ptr, i, e_rr
+			));
+
+			table->resources.ptrNonConst[i] = table->resources.ptr[table->resources.length - 1];
+			gotoIfError3(clean, ListDescriptorTableResourceRef_popBack(&table->resources, NULL, e_rr));
+
+			RefPtr_dec(&ref);
 		}
+	}
 
 clean:
 
@@ -386,11 +412,25 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_timedOut(0, 1 * SECOND, "DescriptorTable_loseRef() couldn't acquire descriptor range"));
 
-	for(U64 i = 0; i < table->resources.length; ++i)
-		if (table->resources.ptr[i].resource == ref) {
+	{
+		const U64 i = HashIndex_find(
+			&table->resourceIndex, &DescriptorTable_resourceIndexInfo, table->resources.ptr, &ref
+		);
+
+		if (i != U64_MAX) {
 			++table->resources.ptrNonConst[i].count;
 			goto clean;
 		}
+	}
+
+	//Both first, so the reference below is taken only once nothing left can fail.
+
+	gotoIfError3(clean, ListDescriptorTableResourceRef_reserveForPush(&table->resources, alloc, e_rr));
+
+	gotoIfError3(clean, HashIndex_reserve(
+		&table->resourceIndex, &DescriptorTable_resourceIndexInfo, table->resources.ptr,
+		table->resources.length + 1, alloc, e_rr
+	));
 
 	//The table is what keeps the resource alive while a descriptor points at it, so the first descriptor has to
 	// take a reference here.
@@ -402,6 +442,15 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 		retError(clean, Error_invalidState(0, "DescriptorTable_addRef() couldn't reference the resource"));
 
 	referenced = true;
+
+	{
+		U64 existing = 0;
+
+		gotoIfError3(clean, HashIndex_insert(
+			&table->resourceIndex, &DescriptorTable_resourceIndexInfo, table->resources.ptr,
+			&ref, table->resources.length, &existing, alloc, e_rr
+		));
+	}
 
 	gotoIfError3(clean, ListDescriptorTableResourceRef_pushBack(
 		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }, alloc, e_rr

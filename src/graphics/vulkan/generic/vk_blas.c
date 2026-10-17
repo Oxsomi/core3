@@ -341,8 +341,6 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	BLAS *blas = BLASRef_ptr(pending);
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
@@ -446,8 +444,8 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 	device->pendingPrimitives += blasExt->range.primitiveCount;
 
-	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
+	if(!GraphicsDevice_isInFlight(device, pending)) {
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
 
@@ -455,9 +453,9 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	// and losing the reference from our object.
 	//However that's only if allow update is false.
 
-	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
+	if(!GraphicsDevice_isInFlight(device, blas->base.tempScratchBuffer)) {
 
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, blas->base.tempScratchBuffer, alloc, e_rr));
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, blas->base.tempScratchBuffer, alloc, e_rr));
 
 		if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
 			blas->base.tempScratchBuffer = NULL;
@@ -598,8 +596,6 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 	BLAS *blas = BLASRef_ptr(blasRef);
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if(!blasExt->pendingAs || !blas->base.pendingCompactBuffer)
 		retError(clean, Error_invalidState(0, "VkBLASRef_compact() nothing was prepared for this structure"));
 
@@ -616,7 +612,7 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 
 	ListVkAccelerationStructureKHR *retired = &deviceExt->retiredAs[device->fifId];
 
-	gotoIfError3(clean, ListRefPtr_reserve(currentFlight, currentFlight->length + 1, alloc, e_rr));
+	gotoIfError3(clean, GraphicsDevice_reserveInFlight(device, alloc, e_rr));
 	gotoIfError3(clean, ListVkAccelerationStructureKHR_reserve(retired, retired->length + 1, alloc, e_rr));
 
 	deviceExt->copyAccelerationStructure(commandBuffer->buffer, &copyInfo);
@@ -625,7 +621,11 @@ Bool VK_WRAP_FUNC(BLASRef_compact)(
 	// being dropped, so the memory outlives the copy reading it.
 
 	ListVkAccelerationStructureKHR_pushBack(retired, blasExt->as, alloc, NULL);
-	ListRefPtr_pushBack(currentFlight, blas->base.asBuffer, alloc, NULL);
+
+	if(GraphicsDevice_isInFlight(device, blas->base.asBuffer))
+		RefPtr_dec(&blas->base.asBuffer);
+
+	else GraphicsDevice_addInFlight(device, blas->base.asBuffer, alloc, NULL);
 
 	blasExt->as = blasExt->pendingAs;
 	blasExt->geometries.dstAccelerationStructure = blasExt->pendingAs;

@@ -389,7 +389,9 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			if((detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors) && count == 1 && !isSampler)
 				isPushDescriptor = true;
 
-			else for(U64 k = 0; k < (!pushDescriptors ? 0 : pushDescriptors->length); ++k)        //TODO: Hash
+			//Stays a scan: the set is the caller's, at most OXC3_MAX_PUSH_DESCRIPTORS; the oiSH name only probes.
+
+			else for(U64 k = 0; k < (!pushDescriptors ? 0 : pushDescriptors->length); ++k)
 				if (CharString_equalsString(&reg->name, &pushDescriptors->ptr[k], EStringCase_Sensitive)) {
 
 					if(isSampler)

@@ -25,6 +25,7 @@
 #include "types/base/lock.h"
 #include "types/container/ref_ptr.h"
 #include "graphics/generic/resource.h"
+#include "types/container/hash_index.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -162,6 +163,7 @@ typedef struct DescriptorTable {
 	U8 padding[3];
 
 	ListDescriptorTableResourceRef resources;        //All resources that are bound by the table
+	HashIndex resourceIndex;                         //Identity map over resources, so a bind or unbind is O(1)
 	ListDescriptorTableBinding bindings;
 
 	SpinLock lock;                                   //To access resources

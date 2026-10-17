@@ -24,6 +24,7 @@
 #include "formats/oiDL/dl_file.h"
 #include "types/container/list_impl.h"
 #include "types/container/log.h"
+#include "types/base/string_read_helper.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/constants.h"
 
@@ -139,6 +140,66 @@ void SBFile_free(SBFile *sbFile, const Allocator *alloc) {
 	ListSBVar_free(&sbFile->vars, alloc);
 	DLFile_free(&sbFile->names, alloc);
 	ListListU32_freeUnderlying(&sbFile->arrays, alloc);
+}
+
+Bool SBFile_equals(const SBFile *a, const SBFile *b) {
+
+	if(!a || !b)
+		return a == b;
+
+	if(a == b)
+		return true;
+
+	//HideMagicNumber is left out of the hash, so equality ignores it too.
+
+	if(
+		(a->flags &~ ESBSettingsFlags_HideMagicNumber) != (b->flags &~ ESBSettingsFlags_HideMagicNumber) ||
+		a->bufferSize != b->bufferSize ||
+		a->structs.length != b->structs.length ||
+		a->vars.length != b->vars.length ||
+		a->arrays.length != b->arrays.length
+	)
+		return false;
+
+	//Names are one DLFile: structs first, then vars.
+
+	const U64 names = a->structs.length + a->vars.length;
+
+	if(a->names.entryStrings.length < names || b->names.entryStrings.length < names)
+		return false;
+
+	for(U64 i = 0; i < a->structs.length; ++i)
+		if(
+			a->structs.ptr[i].stride != b->structs.ptr[i].stride ||
+			!CharString_equalsStringSensitive(&a->names.entryStrings.ptr[i], &b->names.entryStrings.ptr[i])
+		)
+			return false;
+
+	for(U64 i = 0; i < a->vars.length; ++i) {
+
+		const SBVar x = a->vars.ptr[i], y = b->vars.ptr[i];
+
+		if(
+			x.structId != y.structId ||
+			x.arrayDimOrArrayId != y.arrayDimOrArrayId ||
+			x.offset != y.offset ||
+			x.type != y.type ||
+			x.flags != y.flags ||
+			x.parentId != y.parentId
+		)
+			return false;
+
+		const U64 j = a->structs.length + i;
+
+		if(!CharString_equalsStringSensitive(&a->names.entryStrings.ptr[j], &b->names.entryStrings.ptr[j]))
+			return false;
+	}
+
+	for(U64 i = 0; i < a->arrays.length; ++i)
+		if(ListU32_neq(a->arrays.ptr[i], b->arrays.ptr[i]))
+			return false;
+
+	return true;
 }
 
 void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc) {

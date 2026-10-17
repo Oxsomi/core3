@@ -51,6 +51,8 @@ OXC3_TEST_MAIN(types_container) {
 	Test_containerBuffer(&t);
 	Test_filePaths(&t);
 	Test_list(&t);
+	Test_hashIndex(&t);
+	Test_hashSet(&t);
 	Test_jobQueue(&t);
 	Test_hpp(&t);
 	Test_hppWrappers(&t);
