@@ -84,6 +84,7 @@ else()
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
+target_include_directories(${TARGET_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 
 source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 

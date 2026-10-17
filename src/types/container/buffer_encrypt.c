@@ -916,6 +916,7 @@ __forceinline__ static I32x4x5 AESEncryptionContext_blockHashAndGhash4(
 		const Bool isEncrypt,
 		const EBufferEncryptionType encryptionType
 	);
+
 	void AESEncryptionContext_ghashTable2(I32x4 *restrict H);
 	void AESEncryptionContext_ghashTable2_4(I32x4 *restrict H, I32x4 H2, I32x4 H3, I32x4 H4);
 #endif
@@ -933,6 +934,7 @@ __forceinline__ static I32x4x5 AESEncryptionContext_blockHashAndGhash4(
 		const Bool isEncrypt,
 		const EBufferEncryptionType encryptionType
 	);
+
 	void AESEncryptionContext_ghashTable4(I32x4 *restrict H, I32x4 H2, I32x4 H3, I32x4 H4);
 #endif
 

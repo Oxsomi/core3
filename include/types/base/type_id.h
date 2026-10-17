@@ -237,6 +237,8 @@ static inline EDataType ETypeId_getDataType(TypeId id) { return (EDataType)(id &
 static inline EDataTypeStride ETypeId_getDataTypeStride(TypeId id) { return (EDataTypeStride)((id >> 3) & 3); }
 static inline Bool ETypeId_isObject(TypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
 
+//An element's bytes, from its width; the data type only says how its bits are read.
+
 static inline U8 ETypeId_getDataTypeBytes(TypeId id) {
 
 	EDataType type = ETypeId_getDataType(id);
@@ -244,7 +246,7 @@ static inline U8 ETypeId_getDataTypeBytes(TypeId id) {
 	if (type == EDataType_Char || type == EDataType_Bool)
 		return 1;
 
-	return ETypeId_isObject(id) ? 0 : (1 << type);
+	return ETypeId_isObject(id) ? 0 : (U8) (1 << ETypeId_getDataTypeStride(id));
 }
 
 static inline U8 ETypeId_getHeight(TypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 5) & 3) + 1); }

@@ -119,9 +119,7 @@ extern "C" void Test_graphicsBindfulSampler(oxc::c::Test *t, oxc::c::GraphicsDev
 	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Bindful sampler layout", layout, e_rr)))
 		return;
 
-	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
-		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1, .maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Bindful sampler heap", heap, e_rr)))
 		return;
@@ -1017,9 +1015,7 @@ extern "C" void Test_graphicsBindfulSamplerCmp(oxc::c::Test *t, oxc::c::Graphics
 	)))
 		return;
 
-	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
-		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1, .maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1 };
 
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Comparison sampler heap", heap, e_rr)))
 		return;
@@ -1616,11 +1612,11 @@ extern "C" void Test_graphicsBindfulAtomicFloat(oxc::c::Test *t, oxc::c::Graphic
 // set layout as pImmutableSamplers.
 //Nothing writes it into the table, so a correct result is only possible if the layout carried it.
 
-extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+static void Test_bindfulStaticSamplerImpl(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef, oxc::c::Bool byValue) {
 
 	using namespace oxc;
 
-	c::Test_setModule(t, "Bindful/staticSampler");
+	c::Test_setModule(t, byValue ? "Bindful/staticSamplerByValue" : "Bindful/staticSampler");
 
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
@@ -1656,7 +1652,7 @@ extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::Graph
 
 	const c::SamplerInfo samplerInfo = { .filter = c::ESamplerFilterMode_Nearest };
 
-	if(!Test_assert(t, "samplerCreate", dev.createSampler(
+	if(!byValue && !Test_assert(t, "samplerCreate", dev.createSampler(
 		samplerInfo, "Static sampler", sampler, nullptr, true, e_rr
 	)))
 		return;
@@ -1669,16 +1665,56 @@ extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::Graph
 	)))
 		return;
 
+	//Which sampler form the union holds is decided by the add functions, so detect refuses it as an input rather
+	// than overwriting the flags, and refuses an info that already bakes samplers rather than stranding the list.
+
+	if (byValue) {
+
+		gfxtest::OwnedLayoutInfo flagInfo(alloc);
+
+		Test_assert(t, "detectInternalFlagRefused", !dev.detectLayout(
+			file.list, entryId, flagInfo.list, nullptr, nullptr, {}, nullptr,
+			c::EDescriptorLayoutFlags_InternalStaticSamplers, (c::EDetectDescriptorLayoutFlags) 0, nullptr
+		));
+
+		gfxtest::OwnedLayoutInfo reuseInfo(alloc);
+		c::U32 reuseId = 0;
+
+		if (Test_assert(t, "detectReuseAdd", c::DescriptorLayoutInfo_addStaticSampler(
+			&reuseInfo.list, samplerInfo, &reuseId, alloc, e_rr
+		)))
+			Test_assert(t, "detectSamplersRefused", !dev.detectLayout(
+				file.list, entryId, reuseInfo.list, nullptr, nullptr, {}, nullptr,
+				c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, nullptr
+			));
+	}
+
 	//The id is 1 based so a binding naming no sampler can leave the union zeroed.
+
+	//By value the layout creates the sampler itself, which is the form a layout that exists before any sampler
+	// does has to use; the id then carries the static bit until the layout resolves it.
 
 	c::U32 immutableId = 0;
 
-	if(!Test_assert(t, "addImmutableSampler", c::DescriptorLayoutInfo_addImmutableSampler(
-		&layoutInfo.list, sampler.handle(), &immutableId, alloc, e_rr
-	)))
-		return;
+	if(byValue) {
 
-	Test_assert(t, "immutableIdIsOneBased", immutableId == 1);
+		if(!Test_assert(t, "addStaticSampler", c::DescriptorLayoutInfo_addStaticSampler(
+			&layoutInfo.list, samplerInfo, &immutableId, alloc, e_rr
+		)))
+			return;
+
+		Test_assert(t, "staticIdIsOneBasedAndMarked", immutableId == (c::DescriptorLayoutInfo_staticSamplerBit | 1));
+	}
+
+	else {
+
+		if(!Test_assert(t, "addImmutableSampler", c::DescriptorLayoutInfo_addImmutableSampler(
+			&layoutInfo.list, sampler.handle(), &immutableId, alloc, e_rr
+		)))
+			return;
+
+		Test_assert(t, "immutableIdIsOneBased", immutableId == 1);
+	}
 
 	//Reflection named the registers, so the sampler is found by the name the shader gave it.
 
@@ -1702,12 +1738,30 @@ extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::Graph
 	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Static sampler layout", layout, e_rr)))
 		return;
 
-	//maxSamplers is still declared: Vulkan allocates a descriptor for an immutable sampler binding even
-	// though nothing ever writes it, while D3D12 needs none at all.
+	if (byValue) {
 
-	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 1,
-		.maxTextures = 1, .maxBuffersRW = 1, .maxDescriptorTables = 1
-	};
+		const c::DescriptorLayoutInfo &created = RefPtr_data(layout.handle(), c::DescriptorLayout)->info;
+
+		Test_assert(t, "staticSamplerBecameRef",
+			created.immutableSamplers.length == 1 &&
+			!(created.flags & c::EDescriptorLayoutFlags_InternalStaticSamplers)
+		);
+
+		c::Bool resolved = false;
+
+		for (c::U64 i = 0; i < created.bindings.length; ++i)
+			resolved |= c::DescriptorBinding_immutableSamplerId(created.bindings.ptr[i]) == 1;
+
+		Test_assert(t, "staticIdResolvedToRef", resolved);
+	}
+
+	//maxSamplers is still declared: both backends size the heap from the binding even though nothing is ever
+	// written to it, Vulkan because the pool has to cover the descriptor its set layout declares and D3D12
+	// because the table counts every sampler binding.
+
+	//Room for a second table, which holds the texture first and lets it go (below)
+
+	c::DescriptorHeapInfo heapInfo = { .maxSamplers = 2, .maxTextures = 2, .maxBuffersRW = 2, .maxDescriptorTables = 2 };
 
 	if(!Test_assert(t, "heapCreate", dev.createDescriptorHeap(heapInfo, "Static sampler heap", heap, e_rr)))
 		return;
@@ -1749,6 +1803,33 @@ extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::Graph
 
 	//"samp" is deliberately NOT set: if the baked sampler did not reach the shader, the sample below reads
 	// through a descriptor nothing ever wrote.
+	//Setting or clearing it is refused rather than ignored: the binding owns no slot in the table, and D3D12
+	// leaves such a binding out of its descriptor ranges, which would send the write to the table's FIRST
+	// sampler instead of nowhere.
+
+	gfx::Sampler straySampler;
+
+	if (Test_assert(t, "straySamplerCreate", dev.createSampler(
+		samplerInfo, "Stray sampler", straySampler, nullptr, true, e_rr
+	))) {
+
+		const c::Descriptor strayDesc = c::Descriptor_sampler(straySampler.handle());
+
+		Test_assert(t, "bakedSamplerSetRefused", !table.setByName("samp", strayDesc, 0, false, nullptr));
+		Test_assert(t, "bakedSamplerUnsetRefused", !table.unsetByName("samp", 0, 1, nullptr));
+	}
+
+	//A table that held the texture and let it go released the texture's last view on Vulkan, and the next table
+	// asking for the same range was handed that released slot's null view.
+
+	{
+		gfx::DescriptorTable scratch;
+
+		if (Test_assert(t, "scratchTableCreate", heap.createTable(
+			layout, "Static sampler scratch table", scratch, c::EDescriptorTableFlags_None, e_rr
+		)))
+			Test_assert(t, "scratchSetTex", scratch.setByName("tex", texDesc, 0, false, e_rr));
+	}
 
 	Test_assert(t, "setTex", table.setByName("tex", texDesc, 0, false, e_rr));
 	Test_assert(t, "setOutput", table.setByName("output", outputDesc, 0, false, e_rr));
@@ -1807,4 +1888,14 @@ extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::Graph
 
 			Test_assert(t, "staticSamplerResults", match);
 		}
+}
+
+extern "C" void Test_graphicsBindfulStaticSampler(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+	Test_bindfulStaticSamplerImpl(t, deviceRef, false);
+}
+
+//The same test with the sampler given BY VALUE: the layout creates it, and the result has to match all the same.
+
+extern "C" void Test_graphicsBindfulStaticSamplerByValue(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+	Test_bindfulStaticSamplerImpl(t, deviceRef, true);
 }

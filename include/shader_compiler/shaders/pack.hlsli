@@ -46,6 +46,22 @@ U32 packF16(F32 v)              { return f32tof16(v); }
 F32x2 unpackF16x2(U32 v)        { return F32x2(f16tof32(v & 0xFFFF), f16tof32(v >> 16)); }
 U32 packF16x2(F32x2 v)          { return f32tof16(v.x) | (f32tof16(v.y) << 16); }
 
+//---------------------------------------------------------------- unorm8
+
+//Four unorm8 channels as x | y<<8 | z<<16 | w<<24, the byte order an RGBA8 texel is laid out in.
+//Out of range channels SATURATE rather than wrap: every format this packs into clamps, and a wrap would put
+// an overshoot at the opposite end of the range instead of at the end it overshot.
+//The lanes are summed with a dot against ones rather than or'd together, since the shifts leave them disjoint
+// and the vector form keeps all four in one operation.
+
+U32 packUnorm4x8(F32x4 v) {
+	return dot(U32x4(saturate(v) * 255 + 0.5) << U32x4(0, 8, 16, 24), 1.xxxx);
+}
+
+F32x4 unpackUnorm4x8(U32 p) {
+	return F32x4((p.xxxx >> U32x4(0, 8, 16, 24)) & 0xFF) / 255;
+}
+
 //---------------------------------------------------------------- F21, unsigned
 
 //21 bits:
@@ -140,6 +156,20 @@ U32 packRGB9E5(F32x3 v) {
 F32x3 unpackRGB9E5(U32 p) {
 	const F32 scale = exp2((F32)((I32)(p >> 27) - 15 - 9));
 	return F32x3(p & 0x1FF, (p >> 9) & 0x1FF, (p >> 18) & 0x1FF) * scale;
+}
+
+//---------------------------------------------------------------- RGB10A2
+
+//DXGI_FORMAT_R10G10B10A2_UNORM: r | g<<10 | b<<20 | a<<30, unorm10 channels and a unorm2 alpha.
+//Mirrors U32_packRGB10A2 in types/math/pack.h. 0 and 1 are exact.
+
+U32 packRGB10A2(F32x4 v) {
+	const U32x4 q = (U32x4) floor(saturate(v) * F32x4(1023, 1023, 1023, 3) + 0.5);
+	return q.r | (q.g << 10) | (q.b << 20) | (q.a << 30);
+}
+
+F32x4 unpackRGB10A2(U32 p) {
+	return F32x4((p.xxxx >> U32x4(0, 10, 20, 30)) & U32x4(0x3FF, 0x3FF, 0x3FF, 3)) / F32x4(1023, 1023, 1023, 3);
 }
 
 //---------------------------------------------------------------- oct18

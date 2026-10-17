@@ -1064,6 +1064,7 @@ Bool Compiler_linkSPIRV(
 	const CharString *entrypoint,          //Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	EGfxPipelineStage stage,               //Whether or not to be a final executable (EGfxPipelineStage_Count = keep library)
 	ESHExtension exts,
+	Bool keepRegisters,                    //Keep declared but unused resources bound, as the compile did
 	ListCompileError *errors,
 	Buffer *result,                        //Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
 	const Allocator *alloc,
@@ -1113,7 +1114,8 @@ Bool Compiler_link(
 		case EGfxBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_linkSPIRV(
-				compiler, inputs, uniforms, uniformData, entrypoint, stageType, exts, errors, result, alloc, e_rr
+				compiler, inputs, uniforms, uniformData, entrypoint, stageType, exts, keepRegisters, errors, result, alloc,
+				e_rr
 			));
 
 			break;

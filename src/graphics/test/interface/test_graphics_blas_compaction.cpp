@@ -25,6 +25,7 @@
 #include "types/container/log.hpp"
 
 namespace oxc { namespace c {
+	#include "types/base/atomic.h"
 	#include "types/base/string_base.h"
 	#include "types/container/list_basic_types.h"
 	#include "types/test/test.h"
@@ -210,9 +211,11 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 	)))
 		return;
 
-	const c::BLASCreateInfo compactable = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_AllowCompaction, c::EBLASFlag_None,
+	const c::BLASGeometry compactableGeometry = c::BLASGeometry_unindexed(
 		c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
+	);
+
+	const c::BLASCreateInfo compactable = c::BLASCreateInfo_single(c::ERTASBuildFlags_AllowCompaction, &compactableGeometry
 	);
 
 	// -- The happy path, which is also the ONLY ordering that works ----------
@@ -228,6 +231,17 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 		) {
 
 			const c::U64 before = asSize(blas);
+
+			//A driver that can't be asked for the size gets no query at all, and its build is the compaction.
+
+			if (
+				dev.api() == c::EGraphicsApi_Vulkan &&
+				(dev.info().capabilities.featuresExt & c::EVkGraphicsFeatures_NoCompactionQuery)
+			) {
+				c::Test_print(t, "Device can't query compacted sizes, its builds are marked compacted instead");
+				c::Test_assert(t, "noQueryClaimed", blas.data()->base.compactionQuery == c::U32_MAX);
+				c::Test_assert(t, "noQueryBuildMarksCompacted", blas.data()->base.isCompacted);
+			}
 
 			if (compactAndRun(t, dev, blas, "compact")) {
 
@@ -488,10 +502,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 		gfx::Blas blas;
 		gfx::CommandList list;
 
-		const c::BLASCreateInfo plain = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None,
-			c::ETextureFormatId_RGBA32f, 0, 16, positions.region()
-		);
+		const c::BLASGeometry plainGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positions.region());
+
+		const c::BLASCreateInfo plain = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &plainGeometry);
 
 		if (
 			c::Test_assert(t, "createBlasPlain", dev.createBlas(plain, "Plain BLAS", blas, e_rr)) &&
@@ -620,9 +633,9 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 			"Compaction tri", &triData, tri, nullptr, e_rr
 		));
 
-		const c::BLASCreateInfo small = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_AllowCompaction, c::EBLASFlag_None,
-			c::ETextureFormatId_RGBA32f, 0, 16, tri.region()
+		const c::BLASGeometry smallGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, tri.region());
+
+		const c::BLASCreateInfo small = c::BLASCreateInfo_single(c::ERTASBuildFlags_AllowCompaction, &smallGeometry
 		);
 
 		ok = ok &&
@@ -681,6 +694,131 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 						++marked;
 
 				c::Test_assert(t, "chunkCrossingAllMarked", marked == CHUNK_CROSSING_COUNT);
+			}
+		}
+	}
+
+	// -- Builds split by a flush ---------------------------------------------
+
+	//Every build crossing flushThresholdPrimitives splits the submit, so each structure is built, has its size
+	// emitted and copied to the readback in a part that runs while the later builds are still being recorded.
+	//Compaction and a TLAS over the moved structures then have to work exactly as without the splits.
+
+	{
+		constexpr c::U32 SPLIT_COUNT = 3;
+
+		gfx::Blas blases[SPLIT_COUNT];
+		gfx::CommandList list;
+
+		c::GraphicsDevice *device = c::deviceOf(dev.handle());
+
+		c::U8 slot = 0;
+
+		for(c::U64 bit = (c::U64) c::EGraphicsDeviceMessage_SubmitFlushed; bit > 1; bit >>= 1)
+			++slot;
+
+		c::Bool ok =
+			c::Test_assert(t, "createSplitList", dev.createCommandList(c::KIBI, 32, 32, list, true, e_rr)) &&
+			c::Test_assert(t, "beginSplitList", list.begin(true, e_rr));
+
+		if (ok) {
+
+			gfx::CommandScope scope = list.scope({}, 0, {}, e_rr);
+
+			ok = c::Test_assert(t, "scopeSplit", (c::Bool) scope);
+
+			for (c::U32 i = 0; ok && i < SPLIT_COUNT; ++i)
+				ok =
+					c::Test_assert(t, "createSplitBlas", dev.createBlas(compactable, "Split BLAS", blases[i], e_rr)) &&
+					c::Test_assert(t, "updateSplitBlas", scope.updateBlas(blases[i], e_rr));
+		}
+
+		ok = ok && c::Test_assert(t, "endSplitList", list.end(e_rr));
+
+		if (ok) {
+
+			const c::I64 foldedBefore = c::AtomicI64_load(&device->logFolded[slot]);
+			const c::I64 lastBefore = c::AtomicI64_load(&device->logLast[slot]);
+
+			const c::U64 threshold = device->flushThresholdPrimitives;
+			device->flushThresholdPrimitives = 1;
+
+			ok = gfxtest::submitAndWait(t, dev, list);
+
+			device->flushThresholdPrimitives = threshold;
+
+			c::Test_assert(
+				t, "splitBuildsFlushed",
+				c::AtomicI64_load(&device->logFolded[slot]) != foldedBefore ||
+				c::AtomicI64_load(&device->logLast[slot]) != lastBefore
+			);
+		}
+
+		if (ok) {
+
+			c::U64 before[SPLIT_COUNT] = {};
+
+			for (c::U32 i = 0; i < SPLIT_COUNT; ++i)
+				before[i] = asSize(blases[i]);
+
+			gfx::CommandList compactList;
+
+			c::Bool recorded =
+				c::Test_assert(t, "createSplitCompact", dev.createCommandList(c::KIBI, 32, 32, compactList, true, e_rr)) &&
+				c::Test_assert(t, "beginSplitCompact", compactList.begin(true, e_rr));
+
+			if (recorded) {
+
+				gfx::CommandScope scope = compactList.scope({}, 0, {}, e_rr);
+
+				recorded = c::Test_assert(t, "scopeSplitCompact", (c::Bool) scope);
+
+				for (c::U32 i = 0; recorded && i < SPLIT_COUNT; ++i)
+					recorded = c::Test_assert(t, "compactSplitBlas", scope.compactBlas(blases[i], e_rr));
+			}
+
+			if (
+				recorded && c::Test_assert(t, "endSplitCompact", compactList.end(e_rr)) &&
+				gfxtest::submitAndWait(t, dev, compactList)
+			) {
+
+				for (c::U32 i = 0; i < SPLIT_COUNT; ++i) {
+					c::Test_assert(t, "splitCompactMarked", blases[i].data()->base.isCompacted);
+					c::Test_assert(t, "splitCompactNeverGrows", asSize(blases[i]) && asSize(blases[i]) <= before[i]);
+				}
+
+				c::TLASInstance instances[SPLIT_COUNT] = {};
+
+				for (c::U32 i = 0; i < SPLIT_COUNT; ++i)
+					instances[i] = c::TLASInstance {
+						.transform = { { 1, 0, 0, (c::F32) i * 80 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 } },
+						.data = {
+							.instanceId24_mask8 = 0xFFu << 24,
+							.sbtOffset24_flags8 = (c::U32) c::ETLASInstanceFlag_Default << 24,
+							.blasCpu = blases[i].handle()
+						}
+					};
+
+				gfx::Tlas tlas;
+				gfx::CommandList tlasList;
+
+				if (
+					c::Test_assert(t, "createSplitTlas", dev.createTlas(
+						c::ERTASBuildFlags_DefaultTLAS, instances, SPLIT_COUNT, "Split TLAS", tlas, true, e_rr
+					)) &&
+					c::Test_assert(t, "createSplitTlasList", dev.createCommandList(c::KIBI, 32, 32, tlasList, true, e_rr)) &&
+					c::Test_assert(t, "beginSplitTlasList", tlasList.begin(true, e_rr))
+				) {
+					{
+						gfx::CommandScope scope = tlasList.scope({}, 0, {}, e_rr);
+
+						if (c::Test_assert(t, "scopeSplitTlas", (c::Bool) scope))
+							c::Test_assert(t, "updateSplitTlas", scope.updateTlas(tlas, e_rr));
+					}
+
+					if (c::Test_assert(t, "endSplitTlasList", tlasList.end(e_rr)))
+						c::Test_assert(t, "buildSplitTlas", gfxtest::submitAndWait(t, dev, tlasList));
+				}
 			}
 		}
 	}

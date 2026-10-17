@@ -44,6 +44,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 
 	Test_SHEntryRuntimeGetCombinations(&t);
 	Test_SHBinaryIdentifierEquals(&t);
+	Test_SHValueParse(&t);
 
 	Test_SHFileAddIncNullGuards(&t);
 	Test_SHFileAddIncEmptyPathRejected(&t);
@@ -137,6 +138,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRoundTripBasic(&t);
 	Test_SHFileRoundTripInclude(&t);
 	Test_SHFileRoundTripBinaryExtensions(&t);
+	Test_SHFileReadExtension2Count(&t);
 	Test_SHFileRoundTripComputeGroupSize(&t);
 	Test_SHFileRoundTripRTStages(&t);
 	Test_SHFileRoundTripMultipleBinaries(&t);

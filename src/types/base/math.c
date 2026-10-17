@@ -60,7 +60,10 @@ T T##_round(T v) {                                                              
 T T##_ceil(T v) { return ceil##suffix(v); }                                                 \
 T T##_floor(T v) { return floor##suffix(v); }                                               \
 																							\
-T T##_pow(T v, T exp) { return pow##suffix(v, exp); }
+T T##_pow(T v, T exp) { return pow##suffix(v, exp); }                                       \
+																							\
+T T##_expe(T v) { return exp##suffix(v); }                                                  \
+T T##_exp2(T v) { return exp2##suffix(v); }
 
 FLP_OP_IMPL(F32, U32, f);
 FLP_OP_IMPL(F64, U64, );

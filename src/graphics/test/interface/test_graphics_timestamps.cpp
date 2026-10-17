@@ -126,6 +126,7 @@ extern "C" void Test_graphicsTimestamps(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		CommandScope scope = commandList.scope(
 			{ .transitions = { outputWrite }, .id = 42, .flags = c::ECommandScopeFlags_DisableTimestamp }, e_rr
 		);
+
 		c::Test_assert(t, "optOutScope", (c::Bool) scope);
 		c::Test_assert(t, "optOutBind", scope.setComputePipeline(pipelineWrite, e_rr));
 		c::Test_assert(t, "optOutPush", scope.setPushConstants(pushData, e_rr));

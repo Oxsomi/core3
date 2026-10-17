@@ -29,7 +29,7 @@
 
 typedef struct DxSwapchain {
 	IDXGISwapChain1 *swapchain;
-	U64 padding;
+	U64 lastSubmitId;             //Submit that last presented it, 0 if it never did
 } DxSwapchain;
 
 #ifdef __cplusplus

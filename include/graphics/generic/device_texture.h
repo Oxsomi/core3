@@ -41,6 +41,7 @@ typedef struct DeviceTexture {
 	Buffer cpuData;                         //If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
+	U8 pad2[8];
 
 	SpinLock lock;
 
@@ -91,6 +92,17 @@ Bool DeviceTextureRef_pullRegion(
 	U16 x, U16 y, U16 z,
 	U16 w, U16 h, U16 l,
 	DevicePullCallback callback, void *context, Error *e_rr
+);
+
+//Same timing and region semantics, but the region is written to a STREAM at streamOffset as tight rows
+// instead of into cpuData, so the texture needs no CPUBacked and nothing its size has to stay resident.
+//The stream is referenced until the pull completes and has to be writable.
+Bool DeviceTextureRef_pullRegionStream(
+	DeviceTextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
 );
 
 #ifdef __cplusplus

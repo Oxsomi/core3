@@ -34,6 +34,12 @@ void DescriptorHeap_free(void *heapGeneric, const Allocator *alloc) {
 
 	DescriptorHeap_freeExt(heap, alloc);
 
+	if(heap->statsTracked) {
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(heap->device);
+		AtomicI64_add(&device->descriptorHeapBytes, -(I64) heap->gpuBytes);
+		AtomicI64_dec(&device->descriptorHeapCount);
+	}
+
 	if(!(heap->info.flags & EDescriptorHeapFlags_InternalWeakDeviceRef))
 		RefPtr_dec(&heap->device);
 }

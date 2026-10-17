@@ -71,6 +71,12 @@ Bool Name##_create(U64 length, const Allocator *alloc, Name *result, Error *e_rr
 	TListWrapCtor(Name, gotoIfError3(clean, GenericList_create(length, sizeof(Name##_Type), alloc, &list, e_rr)));          \
 }                                                                                                                           \
 																															\
+Bool Name##_createUninitialized(U64 length, const Allocator *alloc, Name *result, Error *e_rr) {                            \
+	TListWrapCtor(Name, gotoIfError3(                                                                                       \
+		clean, GenericList_createUninitialized(length, sizeof(Name##_Type), alloc, &list, e_rr)                             \
+	));                                                                                                                     \
+}                                                                                                                           \
+																															\
 Bool Name##_createCopy(const Name l, const Allocator *alloc, Name *result, Error *e_rr) {                                   \
 	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createCopy(Name##_toList(l), alloc, &list, e_rr)));                 \
 }                                                                                                                           \
@@ -193,6 +199,12 @@ Bool Name##_reserve(Name *l, U64 capacity, const Allocator *allocator, Error *e_
 																															\
 Bool Name##_resize(Name *l, U64 size, const Allocator *allocator, Error *e_rr) {                                            \
 	TListWrapModifying(Name, gotoIfError3(clean, GenericList_resize(&list, size, allocator, e_rr)));                        \
+}                                                                                                                           \
+																															\
+Bool Name##_resizeUninitialized(Name *l, U64 size, const Allocator *allocator, Error *e_rr) {                               \
+	TListWrapModifying(Name, gotoIfError3(                                                                                  \
+		clean, GenericList_resizeUninitialized(&list, size, allocator, e_rr)                                                \
+	));                                                                                                                     \
 }                                                                                                                           \
 																															\
 Bool Name##_shrinkToFit(Name *l, const Allocator *allocator, Error *e_rr) {                                                 \

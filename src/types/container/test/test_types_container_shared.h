@@ -29,6 +29,7 @@ void Test_containerBuffer(Test *test);
 void Test_filePaths(Test *test);    //File_resolve / File_makeRelative
 void Test_list(Test *test);
 void Test_jobQueue(Test *test);
+void Test_jobQueueLanes(Test *test);
 void Test_hpp(Test *test);          //Defined in the C++ TU test_types_container_hpp.cpp
 void Test_hppWrappers(Test *test);  //Defined in the C++ TU test_types_container_hpp_wrappers.cpp
 void Test_bigInt(Test *test);
@@ -39,8 +40,10 @@ void Test_sha256(Test *test);
 void Test_crc32c(Test *test);
 void Test_md5(Test *test);
 void Test_memoryStream(Test *test);
+void Test_rangeStream(Test *test);
 void Test_encryptionStream(Test *test);
 void Test_textureFormat(Test *test);
+void Test_textureCodec(Test *test);
 void Test_allocationBuffer(Test *test);
 void Test_logOOM(Test *test);
 

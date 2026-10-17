@@ -714,6 +714,7 @@ static void LWindow_kbKeymap(
 		lwin->xkbContext, (const C8*)map,
 		XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS
 	);
+
 	munmap(map, size);
 
 	if(!keymap)

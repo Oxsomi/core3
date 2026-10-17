@@ -1,0 +1,103 @@
+; SPIR-V
+; Version: 1.3
+; Generator: Google spiregg; 0
+; Bound: 96
+; Schema: 0
+               OpCapability StorageImageWriteWithoutFormat  ; 0x00000014
+               OpCapability Shader                          ; 0x0000001c
+               OpMemoryModel Logical GLSL450                ; 0x00000024
+               OpEntryPoint GLCompute %1 "mainSingle" %gl_GlobalInvocationID    ; 0x00000030
+               OpExecutionMode %1 LocalSize 16 8 1                              ; 0x0000004c
+
+               ; Annotations
+               OpDecorate %gl_GlobalInvocationID BuiltIn GlobalInvocationId     ; 0x00000064
+               OpDecorate %7 DescriptorSet 0                                    ; 0x00000074
+               OpDecorate %7 Binding 0                                          ; 0x00000084
+               OpDecorate %9 DescriptorSet 0                                    ; 0x00000094
+               OpDecorate %9 Binding 1                                          ; 0x000000a4
+               OpMemberDecorate %_struct_4 0 Offset 0                           ; 0x000000b4
+               OpMemberDecorate %_struct_4 1 Offset 4                           ; 0x000000c8
+               OpMemberDecorate %_struct_4 2 Offset 8                           ; 0x000000dc
+               OpMemberDecorate %_struct_4 3 Offset 16                          ; 0x000000f0
+               OpMemberDecorate %_struct_4 4 Offset 24                          ; 0x00000104
+               OpDecorate %_struct_4 Block                                      ; 0x00000118
+
+               ; Types, variables and constants
+       %bool = OpTypeBool                                                       ; 0x00000124
+       %uint = OpTypeInt 32 0                                                   ; 0x0000012c
+     %uint_0 = OpConstant %uint 0                                               ; 0x0000013c
+    %uint_16 = OpConstant %uint 16                                              ; 0x0000014c
+        %int = OpTypeInt 32 1                                                   ; 0x0000015c
+      %int_2 = OpConstant %int 2                                                ; 0x0000016c
+      %int_3 = OpConstant %int 3                                                ; 0x0000017c
+      %int_4 = OpConstant %int 4                                                ; 0x0000018c
+     %v4uint = OpTypeVector %uint 4                                             ; 0x0000019c
+         %21 = OpConstantComposite %v4uint %uint_0 %uint_16 %uint_0 %uint_16    ; 0x000001ac
+ %uint_65535 = OpConstant %uint 65535                                           ; 0x000001c8
+         %23 = OpConstantComposite %v4uint %uint_65535 %uint_65535 %uint_65535 %uint_65535  ; 0x000001d8
+     %v2uint = OpTypeVector %uint 2                                                         ; 0x000001f4
+  %_struct_4 = OpTypeStruct %uint %uint %v2uint %v2uint %v2uint                             ; 0x00000204, Block
+%_ptr_PushConstant__struct_4 = OpTypePointer PushConstant %_struct_4                        ; 0x00000220
+          %6 = OpTypeImage %uint 2D 2 1 0 1 Unknown                                         ; 0x00000230
+%_ptr_UniformConstant_6 = OpTypePointer UniformConstant %6                                  ; 0x00000254
+          %8 = OpTypeImage %uint 2D 2 1 0 2 Unknown                                         ; 0x00000264
+%_ptr_UniformConstant_8 = OpTypePointer UniformConstant %8                                  ; 0x00000288
+     %v3uint = OpTypeVector %uint 3                                                         ; 0x00000298
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint                                            ; 0x000002a8
+       %void = OpTypeVoid                                                                   ; 0x000002b8
+         %31 = OpTypeFunction %void                                                         ; 0x000002c0
+%_ptr_PushConstant_v2uint = OpTypePointer PushConstant %v2uint                              ; 0x000002cc
+     %v3bool = OpTypeVector %bool 3                                                         ; 0x000002dc
+          %5 = OpVariable %_ptr_PushConstant__struct_4 PushConstant                         ; 0x000002ec
+          %7 = OpVariable %_ptr_UniformConstant_6 UniformConstant                           ; 0x000002fc, DescriptorSet 0, Binding 0
+          %9 = OpVariable %_ptr_UniformConstant_8 UniformConstant                           ; 0x0000030c, DescriptorSet 0, Binding 1
+%gl_GlobalInvocationID = OpVariable %_ptr_Input_v3uint Input                                ; 0x0000031c, BuiltIn GlobalInvocationId
+
+
+               ; Function 1
+          %1 = OpFunction %void None %31                                                    ; 0x0000032c
+
+         %34 = OpLabel                                                                      ; 0x00000340
+         %35 =   OpLoad %v3uint %gl_GlobalInvocationID                                      ; 0x00000348
+                 OpSelectionMerge %36 None                                                  ; 0x00000358
+                 OpSwitch %uint_0 %37                                                       ; 0x00000364
+
+         %37 =     OpLabel                                                                  ; 0x00000370
+         %38 =       OpAccessChain %_ptr_PushConstant_v2uint %5 %int_2                      ; 0x00000378
+         %39 =       OpLoad %v2uint %38                                                     ; 0x0000038c
+         %40 =       OpAccessChain %_ptr_PushConstant_v2uint %5 %int_3                      ; 0x0000039c
+         %41 =       OpLoad %v2uint %40                                                     ; 0x000003b0
+         %42 =       OpAccessChain %_ptr_PushConstant_v2uint %5 %int_4                      ; 0x000003c0
+         %43 =       OpLoad %v2uint %42                                                     ; 0x000003d4
+         %44 =       OpVectorShuffle %v4uint %43 %43 0 0 1 1                                ; 0x000003e4
+         %45 =       OpShiftRightLogical %v4uint %44 %21                                    ; 0x00000408
+         %46 =       OpBitwiseAnd %v4uint %45 %23                                           ; 0x0000041c
+         %47 =       OpVectorShuffle %v3uint %46 %46 0 1 2                                  ; 0x00000430
+         %48 =       OpUGreaterThanEqual %v3bool %35 %47                                    ; 0x00000450
+         %49 =       OpAny %bool %48                                                        ; 0x00000464
+                     OpSelectionMerge %50 None                                              ; 0x00000474
+                     OpBranchConditional %49 %51 %50                                        ; 0x00000480
+
+         %51 =         OpLabel                                                              ; 0x00000490
+                         OpBranch %36                                                       ; 0x00000498
+
+         %50 =     OpLabel                                                                  ; 0x000004a0
+         %52 =       OpVectorShuffle %v4uint %39 %39 0 0 1 1                                ; 0x000004a8
+         %53 =       OpShiftRightLogical %v4uint %52 %21                                    ; 0x000004cc
+         %54 =       OpBitwiseAnd %v4uint %53 %23                                           ; 0x000004e0
+         %55 =       OpVectorShuffle %v3uint %54 %54 0 1 2                                  ; 0x000004f4
+         %56 =       OpIAdd %v3uint %55 %35                                                 ; 0x00000514
+         %57 =       OpVectorShuffle %v4uint %41 %41 0 0 1 1                                ; 0x00000528
+         %58 =       OpShiftRightLogical %v4uint %57 %21                                    ; 0x0000054c
+         %59 =       OpBitwiseAnd %v4uint %58 %23                                           ; 0x00000560
+         %60 =       OpVectorShuffle %v3uint %59 %59 0 1 2                                  ; 0x00000574
+         %61 =       OpIAdd %v3uint %60 %35                                                 ; 0x00000594
+         %93 =       OpLoad %6 %7                                                           ; 0x000005a8
+         %94 =       OpImageFetch %v4uint %93 %56 Lod %uint_0                               ; 0x000005b8
+         %95 =       OpLoad %8 %9                                                           ; 0x000005d4
+                     OpImageWrite %95 %61 %94 None                                          ; 0x000005e4
+                     OpBranch %36                                                           ; 0x000005f8
+
+         %36 = OpLabel                                                                      ; 0x00000600
+                 OpReturn                                                                   ; 0x00000608
+               OpFunctionEnd                                                                ; 0x0000060c

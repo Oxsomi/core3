@@ -31,6 +31,8 @@ typedef struct VkSwapchain {
 	VkSwapchainKHR swapchain;
 	ListVkSemaphore semaphores;
 	VkSurfaceFormatKHR format;
+	U64 lastSubmitId;                //Submit that last presented it, 0 if it never did; picks the retire slot
+	U8 padding[8];
 } VkSwapchain;
 
 impl Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface, Error *e_rr);

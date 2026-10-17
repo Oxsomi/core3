@@ -105,6 +105,43 @@ void Test_mathu(Test *test) {
 
 	Test_assert(test, "U8_safeDiv", U8_safeDiv(200, 4) == 50);
 	Test_assert(test, "U8_safeDiv", U8_safeDiv(200, 0) == 0);
+
+	//Bits, at both ends of every width and in between
+
+	Test_assert(test, "U64_bitCount", U64_bitCount(0) == 0);
+	Test_assert(test, "U64_bitCount", U64_bitCount(1) == 1);
+	Test_assert(test, "U64_bitCount", U64_bitCount(U64_MAX) == 64);
+	Test_assert(test, "U64_bitCount", U64_bitCount(UINT64_C(0x8000000000000001)) == 2);
+	Test_assert(test, "U64_bitCount", U64_bitCount(UINT64_C(0xF0F0F0F0F0F0F0F0)) == 32);
+	Test_assert(test, "U64_bitCount", U64_bitCount(UINT64_C(0xDEADBEEFCAFEBABE)) == 46);
+
+	Test_assert(test, "U64_bitScan none", U64_bitScan(0) == U8_MAX);
+	Test_assert(test, "U64_bitScan", U64_bitScan(1) == 0);
+	Test_assert(test, "U64_bitScan", U64_bitScan(0xF0) == 7);
+	Test_assert(test, "U64_bitScan", U64_bitScan(UINT64_C(0x0000000100000000)) == 32);
+	Test_assert(test, "U64_bitScan", U64_bitScan(UINT64_C(0x8000000000000001)) == 63);
+
+	Test_assert(test, "U64_bitScanReverse none", U64_bitScanReverse(0) == U8_MAX);
+	Test_assert(test, "U64_bitScanReverse", U64_bitScanReverse(1) == 0);
+	Test_assert(test, "U64_bitScanReverse", U64_bitScanReverse(0xF0) == 4);
+	Test_assert(test, "U64_bitScanReverse", U64_bitScanReverse(UINT64_C(0x0000000100000000)) == 32);
+	Test_assert(test, "U64_bitScanReverse", U64_bitScanReverse(UINT64_C(0x8000000000000000)) == 63);
+
+	Test_assert(test, "U32_bitCount", U32_bitCount(U32_MAX) == 32);
+	Test_assert(test, "U32_bitCount", U32_bitCount(0x80000001) == 2);
+	Test_assert(test, "U32_bitScan none", U32_bitScan(0) == U8_MAX);
+	Test_assert(test, "U32_bitScan", U32_bitScan(0x80000001) == 31);
+	Test_assert(test, "U32_bitScanReverse", U32_bitScanReverse(0x80000000) == 31);
+	Test_assert(test, "U32_bitScanReverse", U32_bitScanReverse(0x00010100) == 8);
+
+	Test_assert(test, "U16_bitCount", U16_bitCount(U16_MAX) == 16);
+	Test_assert(test, "U16_bitScan", U16_bitScan(0x8001) == 15);
+	Test_assert(test, "U16_bitScanReverse", U16_bitScanReverse(0x8000) == 15);
+
+	Test_assert(test, "U8_bitCount", U8_bitCount(U8_MAX) == 8);
+	Test_assert(test, "U8_bitScan", U8_bitScan(0x81) == 7);
+	Test_assert(test, "U8_bitScanReverse none", U8_bitScanReverse(0) == U8_MAX);
+	Test_assert(test, "U8_bitScanReverse", U8_bitScanReverse(0x80) == 7);
 }
 
 void Test_mathi(Test *test) {

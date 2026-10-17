@@ -24,12 +24,30 @@
 #include <utility>
 
 //Pre-include system headers used by the C headers below at global scope;
-//they must not be pulled in for the first time inside a namespace.
+//they must not be pulled in for the first time inside a namespace (see lock.hpp for <intrin0.h>).
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
 #include <assert.h>
 #include <atomic>
+
+#ifdef __APPLE__
+	#include <TargetConditionals.h>            //platform_types.h reaches for this on apple
+#endif
+
+//platform_types.h goes into oxc::c first, where its types belong, and its _COMPILER picks the header below.
+
+namespace oxc { namespace c {
+	#include "types/base/platform_types.h"
+} }
+
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#include <intrin0.h>
+#endif
 
 //RAII wrapper around the C RefPtr.
 //The refcount, the allocation and the free callback all stay in the C side; this only automates the

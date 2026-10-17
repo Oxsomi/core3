@@ -38,6 +38,7 @@ void Test_GfxBindingsDummy(Test *t);
 
 void Test_SHEntryRuntimeGetCombinations(Test *t);
 void Test_SHBinaryIdentifierEquals(Test *t);
+void Test_SHValueParse(Test *t);
 
 void Test_SHFileAddIncNullGuards(Test *t);
 void Test_SHFileAddIncEmptyPathRejected(Test *t);
@@ -131,6 +132,7 @@ void Test_SHFileSplitCombineRoundTrip(Test *t);
 void Test_SHFileRoundTripBasic(Test *t);
 void Test_SHFileRoundTripInclude(Test *t);
 void Test_SHFileRoundTripBinaryExtensions(Test *t);
+void Test_SHFileReadExtension2Count(Test *t);
 void Test_SHFileRoundTripComputeGroupSize(Test *t);
 void Test_SHFileRoundTripRTStages(Test *t);
 void Test_SHFileRoundTripMultipleBinaries(Test *t);

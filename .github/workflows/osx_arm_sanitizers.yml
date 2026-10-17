@@ -7,9 +7,8 @@ name: macOS ARM64 Vulkan static (ASan + UBSan)
 # glibc's and than the Windows heap, and it is the only arm64 host that runs the suites under a sanitizer,
 # which is exactly the combination that made a use after free show up on linux arm64 and nowhere else.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 5 * * *'
   workflow_dispatch:
 
 jobs:

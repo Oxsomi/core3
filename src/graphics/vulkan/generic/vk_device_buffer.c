@@ -28,6 +28,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "types/base/buffer_base.h"
 #include "types/base/mathi.h"
@@ -136,29 +137,13 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
-	//The EXT micromap path has its own storage and build input usage bits; a micromap array under the KHR
-	// promotion is an acceleration structure, so there the AS bits below already cover it.
-	//Only legal to request when the EXT extension is actually enabled.
+	//A micromap array is an acceleration structure, so these bits cover its storage and build inputs too
 
-	const Bool ommExt =
-		(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) &&
-		!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR);
-
-	if(buf->usage & EDeviceBufferUsage_ASExt) {
-
+	if(buf->usage & EDeviceBufferUsage_ASExt)
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
 
-		if(ommExt)
-			usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
-	}
-
-	if(buf->usage & EDeviceBufferUsage_ASReadExt) {
-
+	if(buf->usage & EDeviceBufferUsage_ASReadExt)
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-
-		if(ommExt)
-			usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
-	}
 
 	if(buf->usage & EDeviceBufferUsage_SBTExt)
 		usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
@@ -170,7 +155,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = buf->resource.size,
+		.size = DeviceBuffer_allocSize(buf->resource.size),
 		.usage = usage,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
@@ -199,14 +184,21 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if (buf->usage & EDeviceBufferUsage_ScratchExt)
 		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
 
-	//256 rather than 16 when micromaps are on: a micromap build's data and triangleArray addresses must be
-	// 256 aligned (VUID-vkCmdBuildMicromapsEXT-pInfos-07515) and any ASRead buffer may feed one.
+	//128 rather than 16 when micromaps are on: a micromap build's data and triangleArray addresses must be
+	// 128 aligned (VUID-vkCmdBuildAccelerationStructuresKHR-micromap-11552) and any ASRead buffer may feed one.
 
 	if (buf->usage & EDeviceBufferUsage_ASReadExt)
 		requirements.memoryRequirements.alignment = U64_max(
-			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) ? 256 : 16,
+			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) ? 128 : 16,
 			requirements.memoryRequirements.alignment
 		);
+
+	//An acceleration structure created by address needs that address 256 aligned
+	// (VUID-VkAccelerationStructureCreateInfo2KHR-addressRange-11605), which is how micromap arrays are created.
+	//The reported requirement isn't promised to say so, since a buffer created structure only constrains its offset.
+
+	if (buf->usage & EDeviceBufferUsage_ASExt)
+		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
 
 	//A shader binding table's regions are addressed by device address, and each one has to be a multiple of
 	// shaderGroupBaseAlignment (VUID-vkCmdTraceRaysKHR-pRayGenShaderBindingTable-03682 and its miss and hit
@@ -218,10 +210,20 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if (buf->usage & EDeviceBufferUsage_SBTExt)
 		requirements.memoryRequirements.alignment = U64_max(64, requirements.memoryRequirements.alignment);
 
+	VkBlockRequirements blockReq = (VkBlockRequirements) {
+		.memory = requirements.memoryRequirements,
+		.buffer = bufExt->buffer,
+		.flags =
+			(buf->resource.flags & EGraphicsResourceFlag_CPUReadBit ? EVkBlockFlags_Readback : EVkBlockFlags_None) |
+			(dedicatedReq.requiresDedicatedAllocation ? EVkBlockFlags_RequiresDedicated : EVkBlockFlags_None) |
+			(dedicatedReq.prefersDedicatedAllocation ? EVkBlockFlags_PrefersDedicated : EVkBlockFlags_None) |
+			(buf->usage & EDeviceBufferUsage_ASExt ? EVkBlockFlags_HighPriority : EVkBlockFlags_None)
+	};
+
 	DeviceMemoryBlock block;
 	gotoIfError3(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
-		&requirements,
+		(void*) &blockReq,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
 		&buf->resource.blockId,
 		&buf->resource.blockOffset,
@@ -240,6 +242,13 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	if (block.mappedMemoryExt)
 		buf->resource.mappedMemoryExt = block.mappedMemoryExt + buf->resource.blockOffset;
+
+	//New device local memory is committed here, where D3D12 commits a heap, rather than in the first frame that uses
+	// it. Mapping doesn't commit it: ReBAR memory is mapped and still paid in its first frame. Host memory (staging,
+	// every block of an integrated GPU) is left to the CPU writes that fill it.
+
+	if(blockReq.newMemory && (block.allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+		gotoIfError3(clean, VkGraphicsDevice_commitMemory(device, bufExt->buffer, e_rr));
 
 	//Grab GPU location
 
@@ -269,6 +278,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 	}
+
+	//For a lost device to name: by its address where it has one, by its handle where only a binding report does
+
+	gotoIfError3(clean, GraphicsDevice_registerResource(
+		device, (RefPtr*) buf - 1, (U64) bufExt->buffer, name, e_rr
+	));
 
 clean:
 	return s_uccess;
@@ -339,9 +354,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 			U64 len = range.buffer.endRange - range.buffer.startRange;
 
 			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
-			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
-
-			Buffer_memcpy(dst, src);
+			gotoIfError3(clean, DeviceBuffer_readUploadSource(buffer, start, len, dst, alloc, e_rr));
 
 			if(incoherent)
 				deviceExt->mappedMemoryRange.ptrNonConst[j] = (VkMappedMemoryRange) {
@@ -383,6 +396,8 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 
 		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
+			GraphicsDevice_noteStagingBypass(device, allocRange);
+
 			CharString dedicatedStagingName = CharString_createRefCStrConst("Dedicated staging buffer");
 
 			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
@@ -417,10 +432,9 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, len),
-					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
-				);
+				gotoIfError3(clean, DeviceBuffer_readUploadSource(
+					buffer, bufferj.startRange, len, Buffer_createRef(location + allocRange, len), alloc, e_rr
+				));
 
 				gotoIfError3(clean, VkDeviceBuffer_transition(
 					bufferExt,
@@ -552,10 +566,9 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_memcpy(
-					Buffer_createRef(location + allocRange, len),
-					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
-				);
+				gotoIfError3(clean, DeviceBuffer_readUploadSource(
+					buffer, bufferj.startRange, len, Buffer_createRef(location + allocRange, len), alloc, e_rr
+				));
 
 				deviceExt->bufferCopies.ptrNonConst[j] = (VkBufferCopy) {
 					//Relative to the staging resource rather than the frame region, since the copy offset is resource based
@@ -620,8 +633,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 		}
 	}
 
-	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked))
-		Buffer_free(&buffer->cpuData, alloc);
+	DeviceBuffer_releaseUploadSource(buffer, alloc);
 
 	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
 	gotoIfError3(clean, ListDevicePendingRange_clear(&buffer->pendingChanges, e_rr));

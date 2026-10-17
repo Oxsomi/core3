@@ -364,6 +364,63 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		tlasExt->geometries.srcAccelerationStructure = tlasExt->as;
 	}
 
+	//The build reads every BLAS its instances name. CPU instances name them, so each waits on its own build or
+	// compaction; instances in device memory don't, so one global barrier waits for any structure written before.
+	//Then its own structure and scratch, as a BLAS's. All in one barrier.
+
+	{
+		const VkMemoryBarrier2 global = (VkMemoryBarrier2) {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+			.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
+		};
+
+		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+		if(TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)) {
+			dependency.memoryBarrierCount = 1;
+			dependency.pMemoryBarriers = &global;
+		}
+
+		else for(U64 i = 0; i < tlas->cpuInstances.length; ++i) {        //A repeated BLAS is already READ: no barrier
+
+				BLASRef *blas = tlas->cpuInstances.ptr[i].data.blasCpu;
+
+				if(blas)
+					gotoIfError3(clean, VkDeviceBuffer_transition(
+						DeviceBuffer_ext(DeviceBufferRef_ptr(BLASRef_ptr(blas)->base.asBuffer), Vk),
+						VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+						deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+						&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+					));
+			}
+
+		gotoIfError3(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
+				(tlas->base.isCompleted ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR : 0),
+			deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.tempScratchBuffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+			deviceExt->queues[EVkCommandQueue_Graphics].queueId, 0, 0,
+			&deviceExt->bufferTransitions, &dependency, alloc, e_rr
+		));
+
+		if(dependency.bufferMemoryBarrierCount || dependency.memoryBarrierCount)
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+
+		gotoIfError3(clean, ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr));
+	}
+
 	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,

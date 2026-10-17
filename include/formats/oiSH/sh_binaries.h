@@ -98,7 +98,7 @@ typedef enum ESHExtension {
 	//Full bindless: direct descriptor heap indexing from shaders (requires the DescriptorHeap device feature).
 	//DXIL: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap), detected via the
 	// RESOURCE/SAMPLER_DESCRIPTOR_HEAP_INDEXING requires flags.
-	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability).
+	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability), detected but not compiled, see ESHExtension_NoSpirvCompile.
 	ESHExtension_DescriptorHeap              = 1 << 25,
 
 	//Subgroup quad ops: QuadReadAcrossX/Y/Diagonal and QuadReadLaneAt.
@@ -113,9 +113,31 @@ typedef enum ESHExtension {
 	//An ARRAY of samplers, which is only servable by the bindless _samplers[] array and so needs
 	// EGraphicsDeviceFlags_EnableDynamicSamplers on the device.
 	//A singular sampler is a plain binding or a static sampler and requires none of this.
-	//Reflection derived like Bindless, never annotation settable.
+	//Set by the annotation, and reflection also infers it for a binary declaring a sampler array of its own.
 
 	ESHExtension_DynamicSamplers             = 1 << 27,
+
+	//A binary its author vouches for rather than one OxC3 can check, for experiments with instructions no API can
+	// report support for (a private extended instruction set in a patched driver, say).
+	//Nothing is validated for such a binary, so it may hold modules the validator would refuse, such as a NonSemantic
+	// extended instruction whose result is used, the one kind of unknown instruction set SPIRV-Tools passes through
+	// without a grammar; its NonSemantic instructions are kept where other binaries have them stripped.
+	//At runtime only a device created with EGraphicsDeviceFlags_AllowUnsafeExperimentExecution takes it, and that
+	// device then skips its feature checks for it, so the binary also runs where an extension it declares is
+	// unsupported. Whether the device can execute it is the caller's to know; an experiment tier the binary declares
+	// (ESHExtension2_ExperimentTier1) is the one check it still gets.
+	//Annotation only, and SPIR-V only: DXIL has no unvalidated path.
+
+	ESHExtension_UnsafeExperimentExecution   = 1 << 28,
+
+	//A binary that uses extensions OxC3 doesn't recognize: SPIR-V capabilities oiSH has no extension for, any SPIR-V
+	// extension DXC knows (no allow list is passed), and DXIL requirement flags oiSH has no extension for. Those pass
+	// and map to nothing, while the extensions OxC3 does recognize are reflected and checked as for any binary.
+	//At runtime only a device created with EGraphicsDeviceFlags_AllowUnsafeExtensionExecution takes it, as the device
+	// cannot check what it doesn't know of.
+	//Annotation only.
+
+	ESHExtension_UnsafeExtensionExecution    = 1 << 29,
 
 	//Barycentrics is native on BOTH backends:
 	// D3D_SHADER_REQUIRES_BARYCENTRICS and BaryCoordKHR both map to it,
@@ -180,12 +202,21 @@ typedef enum ESHExtension {
 
 	ESHExtension_NoDxilCompile =                              //SPIRV-only to compile: no DXIL intrinsic exists
 		ESHExtension_AtomicF32 |
-		ESHExtension_AtomicF64,
+		ESHExtension_AtomicF64 |
+		ESHExtension_UnsafeExperimentExecution,
 
-	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
-		ESHExtension_MeshTaskTexDeriv,
+	//DXIL-only to compile. PAQ and WriteMSTexture have SPIR-V forms, but DXC's SPIR-V backend refuses both.
+	//DescriptorHeap has one too, but DXC leaves the heap array without the stride SPV_EXT_descriptor_heap requires.
 
-	ESHExtension_Count                       = 28,
+	ESHExtension_NoSpirvCompile =
+		ESHExtension_MeshTaskTexDeriv |
+		ESHExtension_PAQ |
+		ESHExtension_WriteMSTexture |
+		ESHExtension_DescriptorHeap,
+
+	//Full: 1 << ESHExtension_Count has to stay an int, so an extension past these goes in ESHExtension2.
+
+	ESHExtension_Count                       = 30,
 
 	ESHExtension_All                         = (1 << ESHExtension_Count) - 1
 
@@ -193,6 +224,49 @@ typedef enum ESHExtension {
 
 extern const C8 *ESHExtension_defines[ESHExtension_Count];
 extern const C8 *ESHExtension_names[ESHExtension_Count];
+
+//The extensions past ESHExtension. A binary carries a mask of each, and an [[oxc::extension(...)]] annotation names
+// extensions of either (SHExtensionSet).
+
+typedef enum ESHExtension2 {
+
+	ESHExtension2_None                       = 0,
+
+	//An experiment tier the device's driver claims (EGraphicsFeatures2_ExperimentTier1 and ExperimentTier2), held
+	// against the device for every binary that declares one, an UnsafeExperimentExecution binary included.
+	//OxC3 gives the tiers no meaning: what a binary at one may use is between the driver claiming it and the
+	// binary's author. Annotation only, on both backends, though only a Vulkan device ever claims a tier.
+
+	ESHExtension2_ExperimentTier1            = 1 << 0,
+	ESHExtension2_ExperimentTier2            = 1 << 1,
+
+	//What reflection detects, as ESHExtension_DxilNative and ESHExtension_SpirvNative are for the first mask: none
+	// of the above, so none of these is ever dormant.
+
+	ESHExtension2_DxilNative                 = ESHExtension2_None,
+	ESHExtension2_SpirvNative                = ESHExtension2_None,
+
+	ESHExtension2_Count                      = 2,
+
+	ESHExtension2_All                        = (1 << ESHExtension2_Count) - 1
+
+} ESHExtension2;
+
+extern const C8 *ESHExtension2_defines[ESHExtension2_Count];
+extern const C8 *ESHExtension2_names[ESHExtension2_Count];
+
+//The extensions one [[oxc::extension(...)]] line names, across both masks.
+
+typedef struct SHExtensionSet {
+	ESHExtension extensions;
+	ESHExtension2 extensions2;
+} SHExtensionSet;
+
+TList(SHExtensionSet);
+
+//Logs the names of the extensions in set as an annotation lists them, quoted and comma separated, without a newline.
+
+void SHExtensionSet_logNames(SHExtensionSet set, const Allocator *alloc);
 
 typedef enum ESHVendor {
 	ESHVendor_NV,
@@ -291,6 +365,9 @@ typedef struct SHBinaryIdentifier {
 	U16 shaderVersion;             //U8 maj, minor (need 4-byte alignment, is compared together with stageType)
 	U16 stageType;                 //EGfxPipelineStage
 
+	ESHExtension2 extensions2;     //Not part of the U64 above, so copied and compared beside it
+	U32 padding;
+
 } SHBinaryIdentifier;
 
 typedef struct SHBinaryInfo {
@@ -300,9 +377,11 @@ typedef struct SHBinaryInfo {
 	ListSHRegisterRuntime registers;
 
 	ESHExtension dormantExtensions;
+	ESHExtension2 dormantExtensions2;
+
 	U16 vendorMask;
 	Bool hasShaderAnnotation;      //If [shader("")] is used rather than [[oxc::stage("")]]
-	U8 padding[1];
+	U8 padding[5];
 
 	Buffer binaries[EGfxBinaryType_Count];
 

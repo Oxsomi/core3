@@ -24,6 +24,7 @@
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "types/container/memory_stream.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/interface.h"
@@ -138,6 +139,7 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 			"Timestamps: %"PRIu64" query slots this frame exceed the %u ceiling, timing skipped for the frame",
 			total, (U32) GRAPHICS_TIMESTAMP_QUERIES_MAX
 		);
+
 		return 0;
 	}
 
@@ -345,6 +347,24 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 	if(!device)
 		return;
 
+	//Nothing below may run while the GPU works: the decs can destroy what a recorded command buffer names, and
+	//destroying a device wants every queue idle whatever the reference counts say. Counting keeps objects alive,
+	//it cannot stop the GPU. The PUBLIC wait is the one to call: it also drains the frames in flight, which has
+	//to happen here rather than below, since below is past the backend device those references destroy against.
+	//RefPtr_data puts the data after the header, so the ref precedes it.
+	//
+	//A device that never finished being created has nothing to wait for and no backend to ask.
+
+	GraphicsDeviceRef *deviceRef = ((RefPtr*) deviceGeneric) - 1;
+
+	if(device->framesInFlight) {
+
+		Error err = Error_none();
+
+		if(!GraphicsDeviceRef_wait(deviceRef, &err))
+			Log_errorLnx("GraphicsDevice_free() couldn't wait for the device, freeing regardless");
+	}
+
 	for(U64 i = 0; i < 4; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
@@ -368,6 +388,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].stream);
 		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
 	}
 
@@ -378,6 +399,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 		for(U64 i = 0; i < device->pullsInFlight[j].length; ++i) {
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].resource);
 			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stagingReadback);
+			RefPtr_dec(&device->pullsInFlight[j].ptrNonConst[i].stream);
 			Buffer_free(&device->pullsInFlight[j].ptrNonConst[i].textureData, alloc);
 		}
 
@@ -434,6 +456,9 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 	ListDeviceMemoryBlock_free(&device->allocator.blocks, alloc);
 	ListSpinLockPtr_free(&device->currentLocks, alloc);
 
+	//Empty by now, since the wait at the top drained them. A dec HERE would be past the backend device these
+	//references destroy against, so the warning is the right shape and is now unreachable rather than advisory.
+
 	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
 		if(device->resourcesInFlight[i].length)
@@ -445,6 +470,8 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 		ListRefPtr_free(&device->resourcesInFlight[i], alloc);
 	}
 
+	GraphicsDevice_freeResourceRegistry(device, alloc);
+	ListU64_free(&device->pipelineSizes, alloc);
 	RefPtr_dec(&device->instance);
 }
 
@@ -746,7 +773,10 @@ Bool GraphicsDevice_defaultBindlessLayout(
 			!info ? 0 : 2, "GraphicsDevice_defaultBindlessLayout()::info and result are required"
 		));
 
-	if(result->bindings.ptr || result->bindingNames.ptr)
+	//Samplers too, since this overwrites the whole info: the sampler forms share storage, so the one term covers
+	// either of them, and a list left behind here is both leaked and mislabeled by the flags that come with it.
+
+	if(result->bindings.ptr || result->bindingNames.ptr || result->immutableSamplers.ptr)
 		retError(clean, Error_invalidParameter(
 			2, 0, "GraphicsDevice_defaultBindlessLayout()::result wasn't empty, probably indicates memleak"
 		));
@@ -1013,13 +1043,14 @@ Bool GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayValidation      |
 			EGraphicsFeatures_RayTriPosition
 		);
+
 		device->info.capabilities.features2 &=~ (
 			EGraphicsFeatures2_RayReorderActual         |
 			EGraphicsFeatures2_RayMicromapOpacityActual |
-			EGraphicsFeatures2_RayMicromapOpacityU8     |
 			EGraphicsFeatures2_RayClusterAS             |
 			EGraphicsFeatures2_RayPartitionedTLAS       |
-			EGraphicsFeatures2_RayIndirectASBuild
+			EGraphicsFeatures2_RayIndirectASBuild       |
+			EGraphicsFeatures2_SoftwareRT
 		);
 	}
 
@@ -1039,13 +1070,31 @@ Bool GraphicsDeviceRef_create(
 			0, "GraphicsDeviceRef_create() tried to create debug device but the instance had it disabled"
 		));
 
-	#ifndef NDEBUG
-		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
-			device->flags |= EGraphicsDeviceFlags_IsDebug;
-	#endif
+	//A debug instance makes a debug device in every build, not only without NDEBUG: in a release build the instance
+	// is only debug when the caller asked for it, and a device that ignored the request validated without ever
+	// reporting, since D3D12 forwards its messages to the log through the DEVICE's info queue.
+
+	if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
+		device->flags |= EGraphicsDeviceFlags_IsDebug;
 
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
 		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
+
+	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
+		Log_warnLnx(
+			"GraphicsDeviceRef_create() EGraphicsDeviceFlags_AllowUnsafeExtensionExecution: binaries marked "
+			"UnsafeExtensionExecution may use extensions OxC3 doesn't recognize, which the device isn't checked for. "
+			"Be certain the device supports them (%s)",
+			device->info.name
+		);
+
+	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExperimentExecution)
+		Log_warnLnx(
+			"GraphicsDeviceRef_create() EGraphicsDeviceFlags_AllowUnsafeExperimentExecution: binaries marked "
+			"UnsafeExperimentExecution run unvalidated and without feature checks. The device cannot be asked which "
+			"instructions it executes, so be certain of what runs on it (%s)",
+			device->info.name
+		);
 
 	gotoIfError3(clean, RefPtr_inc(instanceRef));
 	device->instance = instanceRef;
@@ -1088,17 +1137,17 @@ Bool GraphicsDeviceRef_create(
 	//Block sizes based on memory of each device (CPU or GPU):
 	// 0 -  6GB ("4GB"):   64MB
 	// 6 - 12GB ("8GB"):  128MB
-	//12 - 24GB ("16GB"): 256MB
-	//24GB+     ("32GB"): 512MB
-	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would use 512MB chunks
+	//12 GB+    ("16GB"): 256MB
+	//Capped there, as VMA does: a bigger block only holds more that may never be used, and the first blocks of each
+	// kind are smaller still (see the allocators).
 
 	if (!isDistinct) {        //Assume 50/50 split to take a conservative block size approach
 		cpuHeapSize >>= 1;
 		gpuHeapSize >>= 1;
 	}
 
-	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 3);
-	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 3);
+	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 2);
+	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 2);
 
 	//Create in flight resource refs
 
@@ -1136,6 +1185,23 @@ Bool GraphicsDeviceRef_create(
 			gotoIfError3(clean, ListCharString_createCopyUnderlying(
 				&bindlessLayout->bindingNames, alloc, &descLayoutInfo.bindingNames, e_rr
 			));
+
+			//No sampler exists before the device does, so a sampler this layout bakes is only ever given by value.
+
+			if(
+				!(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers) &&
+				bindlessLayout->immutableSamplers.length
+			)
+				retError(clean, Error_invalidParameter(
+					4, 0,
+					"GraphicsDeviceRef_create()::bindlessLayout names sampler refs; a sampler it bakes has to be added "
+					"by value through DescriptorLayoutInfo_addStaticSampler"
+				));
+
+			if(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers)
+				gotoIfError3(clean, ListPLSamplerInfo_createCopy(
+					bindlessLayout->staticSamplers, alloc, &descLayoutInfo.staticSamplers, e_rr
+				));
 		}
 
 		else gotoIfError3(clean, GraphicsDevice_defaultBindlessLayout(
@@ -1507,6 +1573,32 @@ clean:
 	return s_uccess;
 }
 
+U8 GraphicsDeviceCapabilities_pickWaveSize(const GraphicsDeviceCapabilities *caps, U16 waveSize, U8 defaultLanes) {
+
+	if(!caps || !waveSize || !SHEntry_isValidWaveSize(waveSize))
+		return 0;
+
+	const U8 required = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Required);
+
+	if(required)
+		return required >= caps->waveSizeMin && required <= caps->waveSizeMax ? required : 0;
+
+	const U8 low = U8_max(SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Min), caps->waveSizeMin);
+	const U8 high = U8_min(SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Max), caps->waveSizeMax);
+
+	if(low > high)
+		return 0;
+
+	const U8 preferred = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Preferred);
+
+	if(preferred >= low && preferred <= high)
+		return preferred;
+
+	//Every bound is a power of two, so the clamp is one too.
+
+	return U8_clamp(defaultLanes, low, high);
+}
+
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *deviceRef, const SHBinaryInfo *bin, const SHEntry *entry, Error *e_rr
 ) {
@@ -1524,6 +1616,11 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	ESHExtension extensions = (bin->identifier.extensions &~ bin->dormantExtensions) & ESHExtension_All;
+
+	//The unsafe markers and the tiers are declarations, so a binary's dormant bits never excuse them.
+
+	const ESHExtension declared = bin->identifier.extensions;
+	const ESHExtension2 declared2 = bin->identifier.extensions2;
 
 	EGraphicsFeatures features = EGraphicsFeatures_None;
 	EGraphicsFeatures2 features2 = EGraphicsFeatures2_None;
@@ -1579,6 +1676,48 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 		GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Direct3D12 ?
 		EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 
+	//An unsafe experiment runs only on a device made to take one, and there its author vouches for what it
+	// declares, so its features are not held against the device.
+	//What is not a matter of support stays checked: the bindless layout, the vendor and a blob for this api.
+
+	const Bool isUnsafe = !!(declared & ESHExtension_UnsafeExperimentExecution);
+
+	if(isUnsafe && !(device->flags & EGraphicsDeviceFlags_AllowUnsafeExperimentExecution))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary is an unsafe experiment (UnsafeExperimentExecution), which "
+			"only a device created with EGraphicsDeviceFlags_AllowUnsafeExperimentExecution takes"
+		));
+
+	//Extensions OxC3 doesn't recognize were never reflected, so nothing below can check them: the device has to have
+	// been made to take that on trust.
+
+	if(
+		(declared & ESHExtension_UnsafeExtensionExecution) &&
+		!(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
+	)
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary uses extensions OxC3 doesn't recognize "
+			"(UnsafeExtensionExecution), which only a device created with "
+			"EGraphicsDeviceFlags_AllowUnsafeExtensionExecution takes"
+		));
+
+	//A tier is held against every device, an experiment's included: whether the driver claims it is the one thing an
+	// experiment can be checked for.
+
+	EGraphicsFeatures2 tiers = EGraphicsFeatures2_None;
+
+	if(declared2 & ESHExtension2_ExperimentTier1)           tiers |= EGraphicsFeatures2_ExperimentTier1;
+	if(declared2 & ESHExtension2_ExperimentTier2)           tiers |= EGraphicsFeatures2_ExperimentTier2;
+
+	if((device->info.capabilities.features2 & tiers) != tiers)
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() binary declares an experiment tier (ExperimentTier1 or "
+			"ExperimentTier2) that the device's driver doesn't claim"
+		));
+
 	//Bindless is the one feature a caller can take away from a device that has it,
 	// so it says as much instead of leaving it to the generic message below.
 
@@ -1589,13 +1728,13 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 			"(unsupported or turned off with EGraphicsDeviceFlags_DisableBindless)"
 		));
 
-	if((device->info.capabilities.features & features) != features)
+	if(!isUnsafe && (device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
 
-	if((device->info.capabilities.features2 & features2) != features2)
+	if(!isUnsafe && (device->info.capabilities.features2 & features2) != features2)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features2 is missing"));
 
-	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
+	if(!isUnsafe && (device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
 	//Reading an oiSH widens a was-everything mask to today's everything, so this comparison stays exact
@@ -1622,6 +1761,16 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	else if(!Buffer_length(bin->binaries[EGfxBinaryType_SPIRV]))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"));
+
+	//A wave size outside the device's range is refused here rather than by the pipeline, as D3D12 would refuse it.
+	//It counts for an unsafe experiment too, since it is no feature the author could vouch for.
+
+	if(entry->waveSize && !GraphicsDeviceCapabilities_pickWaveSize(&device->info.capabilities, entry->waveSize, 0))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"GraphicsDeviceRef_checkShaderFeatures() entry's WaveSize names no wave size the device runs "
+			"(GraphicsDeviceCapabilities::waveSizeMin to waveSizeMax)"
+		));
 
 	//A sampler ARRAY only resolves against the bindless _samplers[] binding, which the device only declares
 	// when it was created with EnableDynamicSamplers.
@@ -1723,6 +1872,23 @@ clean:
 	return s_uccess;
 }
 
+static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef);
+static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef);
+
+//What a ring's frame region holds right now, the blocks still allocated
+
+static U64 GraphicsDevice_allocatedBytes(const AllocationBuffer *allocations) {
+
+	const ListAllocationBufferBlock *entries = &allocations->allocations;
+	U64 used = 0;
+
+	for(U64 i = 0; i < entries->length; ++i)
+		if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
+			used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
+
+	return used;
+}
+
 Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1748,13 +1914,34 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 	gotoIfError3(clean, ListRefPtr_clear(inFlight, e_rr));
 
-	//Release all allocations of buffer that was in flight
+	//Release all allocations of buffer that was in flight, after noting how much of it the frame used
+
+	{
+		const U64 used = GraphicsDevice_allocatedBytes(&device->stagingAllocations[device->fifId]);
+		device->stagingPeakKiB = (U32) U64_max(device->stagingPeakKiB, (used + KIBI - 1) / KIBI);
+		++device->stagingQuietFrames;
+	}
 
 	AllocationBuffer_freeAll(&device->stagingAllocations[device->fifId]);
+
+	GraphicsDevice_shrinkStaging(deviceRef);
+
+	//The readback buffer's use by the same frame, counted before its pulls complete and free it
+
+	if (device->stagingReadback) {
+
+		const U64 used = GraphicsDevice_allocatedBytes(&device->stagingReadbackAllocations[device->fifId]);
+		const U64 peakKiB = U64_max(device->stagingReadbackPeakKiB, (used + KIBI - 1) / KIBI);
+
+		device->stagingReadbackPeakKiB = (U32) U64_min(U32_MAX, peakKiB);
+		++device->stagingReadbackQuietFrames;
+	}
 
 	//This frame in flight provably completed, so its readbacks can land in cpuData and report
 
 	GraphicsDevice_completePulls(device, device->fifId);
+
+	GraphicsDevice_shrinkStagingReadback(deviceRef);
 
 	//Update buffer data
 
@@ -1785,6 +1972,40 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 clean:
 	return s_uccess;
+}
+
+void GraphicsDevice_noteStagingBypass(GraphicsDevice *device, U64 bytes) {
+	device->stagingPeakKiB = (U32) U64_min(U32_MAX, U64_max(device->stagingPeakKiB, (bytes + KIBI - 1) / KIBI));
+}
+
+//Loading fills the staging buffer, after which a frame only uploads a little. Once that has held for 64 frames, it
+// shrinks to three regions (one per frame in flight) of 4 MiB doubled until they hold twice the peak, which counts
+// uploads that went through a temporary buffer too. A frame that copied from the old buffer holds it in flight until
+// it completes. Optional, so a failure keeps the old buffer.
+
+static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->stagingQuietFrames < 64 || !device->staging)
+		return;
+
+	const U64 region = DeviceBufferRef_ptr(device->staging)->resource.size / 3;
+	const U64 peak = (U64) device->stagingPeakKiB * KIBI;
+
+	device->stagingQuietFrames = 0;
+	device->stagingPeakKiB = 0;
+
+	U64 target = 4 * MIBI;
+
+	while(target < peak * 2)
+		target <<= 1;
+
+	if(peak * 4 > region || target >= region)
+		return;
+
+	if(!GraphicsDeviceRef_resizeStagingBuffer(deviceRef, target * 3, NULL))
+		Log_warnLnx("GraphicsDevice_shrinkStaging() couldn't shrink the staging buffer, it keeps its size");
 }
 
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr) {
@@ -1951,7 +2172,7 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_reserveReadback() couldn't acquire device lock"));
 
-	//Only ever grow; a live ring may hold recorded pulls sized for the current buffer
+	//A reservation only grows the buffer, and stays the floor the automatic shrink keeps to
 
 	if(
 		!device->stagingReadback ||
@@ -1959,12 +2180,44 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 	)
 		gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, sizePerFrame * 3, e_rr));
 
+	device->stagingReadbackFloor = U64_max(device->stagingReadbackFloor, sizePerFrame);
+
 clean:
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
+}
+
+//A large pull grows the readback buffer, after which a frame reads back little. Once that has held for 64 frames it
+// shrinks as the staging buffer does, to three regions of 4 MiB doubled until they hold twice the peak, and never
+// below the most reserveReadback asked for a frame. A pull still in flight holds the buffer it was recorded into, so
+// swapping it here is safe. Optional, so a failure keeps the old buffer.
+
+static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->stagingReadbackQuietFrames < 64 || !device->stagingReadback)
+		return;
+
+	const U64 region = DeviceBufferRef_ptr(device->stagingReadback)->resource.size / 3;
+	const U64 peak = (U64) device->stagingReadbackPeakKiB * KIBI;
+
+	device->stagingReadbackQuietFrames = 0;
+	device->stagingReadbackPeakKiB = 0;
+
+	U64 target = 4 * MIBI;
+
+	while(target < peak * 2 || target < device->stagingReadbackFloor)
+		target <<= 1;
+
+	if(peak * 4 > region || target >= region)
+		return;
+
+	if(!GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, target * 3, NULL))
+		Log_warnLnx("GraphicsDevice_shrinkStagingReadback() couldn't shrink the readback buffer, it keeps its size");
 }
 
 //Row measures of a pull region for any pullable texture type, in block rows for compressed formats.
@@ -2045,8 +2298,25 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 	for (U64 i = 0; i < pulls->length; ++i) {
 
 		DevicePendingPull *pull = &pulls->ptrNonConst[i];
+		Bool ok = true;
 
-		//The union member that's live follows from this: cpuData owners use callback, the rest textureCallback
+		//A lost device wrote nothing, so the pull is dropped rather than handing on whatever the readback held: a
+		// stream hears that it failed, the other callbacks never fire.
+
+		if(AtomicI64_load(&device->lossReported)) {
+
+			if(pull->stream && pull->streamCallback)
+				pull->streamCallback(pull->resource, false, pull->context);
+
+			Buffer_free(&pull->textureData, GraphicsDevice_getAlloc(device));
+			RefPtr_dec(&pull->resource);
+			RefPtr_dec(&pull->stagingReadback);
+			RefPtr_dec(&pull->stream);
+			continue;
+		}
+
+		//The union member that's live follows from the destination: a pull with a stream uses streamCallback,
+		//otherwise cpuData owners use callback and the rest textureCallback
 
 		const TypeId typeId = pull->resource->refPtrType->typeId;
 
@@ -2064,7 +2334,22 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			const U64 start = pull->range.buffer.startRange;
 			const U64 len = pull->range.buffer.endRange - start;
 
-			Buffer_memcpy(
+			//A stream destination takes the region straight out of the readback, so nothing the size of the
+			//resource has to be resident. The write is the only step here that can fail, which is why a
+			// stream pull reports whether it landed and a cpuData pull has nothing to report.
+
+			if (pull->stream) {
+
+				OxStream *stream = RefPtr_data(pull->stream, OxStream);
+				Error err = Error_none();
+
+				ok = stream->write(
+					stream, pull->streamOffset, len, Buffer_createRefConst(src, len),
+					GraphicsDevice_getAlloc(device), &err
+				);
+			}
+
+			else Buffer_memcpy(
 				Buffer_createRef(buffer->cpuData.ptrNonConst + start, len),
 				Buffer_createRefConst(src, len)
 			);
@@ -2082,7 +2367,26 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			//De-pitch the backend's row stride back into the tight full texture rows cpuData uses,
 			// at the region's offsets; all row measures are block rows for compressed formats
 
-			if (ownsCpuData) {
+			if (pull->stream) {
+
+				OxStream *stream = RefPtr_data(pull->stream, OxStream);
+				Error err = Error_none();
+				U64 at = pull->streamOffset;
+
+				for(U64 k = 0; k < TextureRange_length(range) && ok; ++k)
+					for(U64 j = 0; j < rows && ok; ++j) {
+
+						ok = stream->write(
+							stream, at, regionRow,
+							Buffer_createRefConst(src + pull->rowPitch * (j + k * rows), regionRow),
+							GraphicsDevice_getAlloc(device), &err
+						);
+
+						at += regionRow;
+					}
+			}
+
+			else if (ownsCpuData) {
 
 				DeviceTexture *texture = DeviceTextureRef_ptr(pull->resource);
 
@@ -2117,13 +2421,32 @@ static void GraphicsDevice_completePulls(GraphicsDevice *device, U64 fifId) {
 			}
 		}
 
+		//Reported alongside the callback, which is optional, since a readback that quietly wrote nothing is
+		//worse than a loud one.
+
+		if(pull->stream && !ok) {
+
+			const U64 folded = GraphicsDevice_logThrottled(
+				device, EGraphicsDeviceMessage_PullStreamFailed, 1 * SECOND
+			);
+
+			if(folded)
+				Log_errorLnx("A pull could not write to its stream (%"PRIu64" since the last report)", folded);
+		}
+
 		//textureCallback shares the union and already fired inside the render target branch above
 
-		if(ownsCpuData && pull->callback)
+		if(pull->stream) {
+			if(pull->streamCallback)
+				pull->streamCallback(pull->resource, ok, pull->context);
+		}
+
+		else if(ownsCpuData && pull->callback)
 			pull->callback(pull->resource, pull->context);
 
 		RefPtr_dec(&pull->resource);
 		RefPtr_dec(&pull->stagingReadback);
+		RefPtr_dec(&pull->stream);
 	}
 
 	ListDevicePendingPull_clear(pulls, NULL);
@@ -2249,9 +2572,11 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 		gotoIfError3(clean, ListDevicePendingPull_pushBack(&device->pullsInFlight[device->fifId], pull, alloc, e_rr));
 		RefPtr_inc(device->stagingReadback);        //Owned by the in flight entry just pushed
 
-		//Ownership of the ref and the destination buffer moved to the in flight list
+		//Ownership of the refs and the destination buffer moved to the in flight list.
+		//Everything released by the loop under clean has to be cleared here, or it is released twice.
 
 		device->pendingPulls.ptrNonConst[i].resource = NULL;
+		device->pendingPulls.ptrNonConst[i].stream = NULL;
 		device->pendingPulls.ptrNonConst[i].textureData = Buffer_createNull();
 	}
 
@@ -2261,10 +2586,41 @@ clean:
 
 	for(U64 i = 0; i < device->pendingPulls.length; ++i) {
 		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].resource);
+		RefPtr_dec(&device->pendingPulls.ptrNonConst[i].stream);
 		Buffer_free(&device->pendingPulls.ptrNonConst[i].textureData, alloc);
 	}
 
 	ListDevicePendingPull_clear(&device->pendingPulls, NULL);
+	return s_uccess;
+}
+
+//Every exit path clears the queue, the failing ones included: a borrowed queue that outlived this call would
+// be read by a flush after the lender had freed it.
+
+Bool GraphicsDeviceRef_submitCommandsJob(
+	GraphicsDeviceRef *deviceRef,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	F32 deltaTime,
+	F32 time,
+	JobQueue *uploadQueue,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_submitCommandsJob()::deviceRef is required"));
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	device->uploadJobQueue = uploadQueue;
+
+	s_uccess = GraphicsDeviceRef_submitCommands(deviceRef, commandLists, swapchains, deltaTime, time, e_rr);
+
+	device->uploadJobQueue = NULL;
+
+clean:
 	return s_uccess;
 }
 
@@ -2282,6 +2638,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDevice *device = NULL;
 	SpinLock *lockPtr = NULL;
+	Bool frameStarted = false;
 
 	//Validation
 
@@ -2299,6 +2656,12 @@ Bool GraphicsDeviceRef_submitCommands(
 		));
 
 	device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//A lost device runs nothing more, and a driver may not say so again (a lost device's waits can succeed), so the
+	// loss already seen is what refuses the submit.
+
+	if(AtomicI64_load(&device->lossReported))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_submitCommands() the device was lost"));
 
 	lockPtr = &device->lock;
 	ELockAcquire acq = SpinLock_lock(lockPtr, U64_MAX);
@@ -2424,7 +2787,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		for (U64 j = 0; j < (!commandLists ? 0 : commandLists->length); ++j) {
 
-			CommandListRef *cmdRef = commandLists->ptr[i];
+			CommandListRef *cmdRef = commandLists->ptr[j];
 			CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 			for(U64 k = 0; k < cmd->activeSwapchains.length; ++k) {
@@ -2484,6 +2847,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	device->fifId = device->submitId % device->framesInFlight;
 	++device->submitId;
+	frameStarted = true;
 
 	//Fill in the per frame globals
 
@@ -2535,8 +2899,25 @@ Bool GraphicsDeviceRef_submitCommands(
 		device->firstSubmit = device->lastSubmit;
 
 	device->pendingBytes = 0;
+	device->pendingPrimitives = 0;
 
 clean:
+
+	//Any failure, since a loss can surface at any of the waits and calls above; a device that is not lost reports
+	// nothing.
+
+	if(!s_uccess && device)
+		GraphicsDeviceRef_reportLoss(deviceRef);
+
+	//A frame that failed without a loss after its breadcrumbs started is never the one a later loss is blamed on.
+	//breadcrumbSubmit says whether they started: it only names this submit once the backend began the frame.
+
+	if(
+		!s_uccess && frameStarted && device->breadcrumbs &&
+		device->breadcrumbSubmit[device->fifId] == device->submitId &&
+		!AtomicI64_load(&device->lossReported)
+	)
+		device->breadcrumbFailedFrames |= (U64) 1 << device->fifId;
 
 	if(lockPtr)
 		SpinLock_unlock(lockPtr);
@@ -2575,7 +2956,49 @@ Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage messa
 	return !(AtomicI64_or(&device->runtimeMessages, (I64) message) & (I64) message);
 }
 
-Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage message, Ns interval) {
+
+	if(!device)
+		return 0;
+
+	//The state is indexed by the message's BIT POSITION, so anything that is not a single known bit has no
+	// slot and is reported every time rather than silently never.
+
+	U64 bit = (U64) message;
+
+	if(!bit || (bit & (bit - 1)))
+		return 1;
+
+	U8 slot = 0;
+
+	while(bit > 1) {
+		bit >>= 1;
+		++slot;
+	}
+
+	if(slot >= EGraphicsDeviceMessage_Bits)
+		return 1;
+
+	AtomicI64_inc(&device->logFolded[slot]);
+
+	const Ns now = Time_now();
+	const I64 last = AtomicI64_load(&device->logLast[slot]);
+
+	if(last && (Ns) last + interval > now)
+		return 0;
+
+	//Whoever claims the window reports; everyone else folds into the next one.
+
+	if(AtomicI64_cmpStore(&device->logLast[slot], last, (I64) now) != last)
+		return 0;
+
+	return (U64) AtomicI64_store(&device->logFolded[slot], 0);
+}
+
+//midSubmit is the flush that splits a submit still being recorded: submitId already counts that submit, so it is
+// not complete, and its frame in flight (fifId) keeps what it holds until the submit's own fence proves it done.
+
+static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midSubmit, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -2592,19 +3015,66 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired"));
 
-	gotoIfError3(clean, GraphicsDeviceRef_waitExt(deviceRef, e_rr));
+	//A lost device runs nothing more, so what it had in flight is released as if it completed; otherwise every
+	// resource a submit held at the loss leaks at device free. The wait still fails.
 
-	//The device is idle, so every submit recorded so far has finished.
+	if(!GraphicsDeviceRef_waitExt(deviceRef, e_rr)) {
 
-	device->completedSubmitId = device->submitId;
+		s_uccess = false;
+		GraphicsDeviceRef_reportLoss(deviceRef);
+
+		if(!AtomicI64_load(&device->lossReported))
+			goto clean;
+	}
+
+	//The device is idle (or lost), so every submit recorded so far has finished.
+	//Mid submit that excludes the submit being recorded, which only had its commands up to the flush executed.
+
+	device->completedSubmitId = midSubmit && device->submitId ? device->submitId - 1 : device->submitId;
+
+	//What the flush thresholds counted has executed, so they count from zero again; otherwise every upload or build
+	// after the first flush of a submit would flush again.
+
+	if(midSubmit) {
+		device->pendingBytes = 0;
+		device->pendingPrimitives = 0;
+	}
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
+
+		ListRefPtr *inFlight = &device->resourcesInFlight[i];
+
+		//The submit being recorded keeps its references: what it holds can still be in use on the CPU by the caller
+		// that triggered the flush (a pending buffer whose last reference is this list, a BLAS mid build).
+		//Only internal buffers nothing else references can go, which are the temporary staging buffers.
+		//The commands that read them have run, and releasing them is what bounds memory over a long upload.
+		//Its staging ring is reset for the same reason: the copies out of it have executed.
+		//Its readbacks are recorded after every command, so a flush never has any of this submit's to complete.
+
+		if(midSubmit && i == device->fifId) {
+
+			for (U64 j = inFlight->length; j > 0; --j) {
+
+				RefPtr *res = inFlight->ptrNonConst[j - 1];
+
+				if(
+					res->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer ||
+					!(DeviceBufferRef_ptr(res)->resource.flags & EGraphicsResourceFlag_InternalWeakDeviceRef) ||
+					AtomicI64_load(&res->refCount) != 1
+				)
+					continue;
+
+				gotoIfError3(clean, ListRefPtr_erase(inFlight, j - 1, e_rr));
+				RefPtr_dec(&res);
+			}
+
+			AllocationBuffer_freeAll(&device->stagingAllocations[i]);
+			continue;
+		}
 
 		//Release resources that were in flight.
 		//This might cause resource deletions because we might be the last one releasing them.
 		//For example temporary staging resources are released this way.
-
-		ListRefPtr *inFlight = &device->resourcesInFlight[i];
 
 		for (U64 j = 0; j < inFlight->length; ++j)
 			RefPtr_dec(inFlight->ptrNonConst + j);
@@ -2622,10 +3092,21 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 
 clean:
 
+	if(!s_uccess && device)
+		GraphicsDeviceRef_reportLoss(deviceRef);
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	return GraphicsDeviceRef_waitIntern(deviceRef, false, e_rr);
+}
+
+Bool GraphicsDeviceRef_waitFlush(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	return GraphicsDeviceRef_waitIntern(deviceRef, true, e_rr);
 }
 
 const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device) {

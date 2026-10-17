@@ -158,6 +158,17 @@ void Test_audioInterfaceGetDeviceInfos(Test *t) {
 
 		for (U64 i = 0; i < devices.length; ++i)
 			Test_assert(t, "device name non-empty", devices.ptr[i].name[0] != '\0');
+
+		//OpenAL Soft names AL_EXT_FLOAT32 and AL_EXT_DOUBLE on every context, emscripten only the first.
+
+		#if _PLATFORM_TYPE == PLATFORM_WEB
+			const EAudioDeviceFlags floats = EAudioDeviceFlags_HasF32Ext;
+		#else
+			const EAudioDeviceFlags floats = (EAudioDeviceFlags) (EAudioDeviceFlags_HasF32Ext | EAudioDeviceFlags_HasF64Ext);
+		#endif
+
+		for (U64 i = 0; i < devices.length; ++i)
+			Test_assert(t, "float formats reported", (devices.ptr[i].flags & floats) == floats);
 	}
 
 	ListAudioDeviceInfo_free(&devices, t->alloc);
@@ -280,6 +291,7 @@ void Test_audioDeviceInvalidType(Test *t) {
 	Test_assert(t, "create fails on bad typeId",
 		!AudioDeviceRef_create(interf, &info, false, t->alloc, &devType, &device, &err)
 	);
+
 	Test_assert(t, "no allocation on failure", device == NULL);
  
 	RefPtr_dec(&interf);

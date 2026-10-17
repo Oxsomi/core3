@@ -59,7 +59,7 @@ void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
 	Buffer_memcpy(Buffer_createRef(&dat, sizeof(dat)), Buffer_createRefConst(&texture, sizeof(texture)));
 
 	for (U64 viewId = 0; viewId < texExt->views.length; ++viewId)
-		if (texExt->views.ptr[viewId].textureDescU64 == dat) {
+		if (texExt->views.ptr[viewId].view && texExt->views.ptr[viewId].textureDescU64 == dat) {
 
 			U64 refCnt = --texExt->views.ptrNonConst[viewId].refCount;
 
@@ -453,7 +453,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 					buf[i] = (VkDescriptorBufferInfo) {
 						.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
 						.offset = Descriptor_startBuffer(&d),
-						.range = Descriptor_bufferLength(&d)
+						.range = Descriptor_bufferViewLength(&d, type)
 					};
 
 				else buf[i] = (VkDescriptorBufferInfo) { 0 };

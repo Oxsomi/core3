@@ -461,7 +461,7 @@ void SRNodeIndex_free(SRNodeIndex *index, const Allocator *alloc);
 Bool SRFile_writeJson(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
 Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
 
-//File headers (file spec: docs/oiSR.md)
+//File headers (file spec: docs/file/oiSR.md)
 
 typedef enum ESRVersion {
 	ESRVersion_Undefined,

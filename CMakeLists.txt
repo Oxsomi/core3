@@ -425,8 +425,8 @@ endif()
 # Instruction sets the x64 SIMD paths assume.
 # MSVC declares every intrinsic regardless and only wants a codegen baseline (/d2archSSE42),
 # but clang and gcc gate each one behind its own -m flag.
-# Without these, flp.c's _mm_cvtph_ps/_mm_cvtps_ph (F16C) and vec4f_sse.inc.h's __builtin_ia32_vfmaddps
-# (FMA) don't exist as far as the compiler is concerned.
+# Without these, flp.c's _mm_cvtph_ps/_mm_cvtps_ph (F16C) and vec4f_sse.inc.h's FMA builtin
+# don't exist as far as the compiler is concerned.
 # Shared so the clang-cl and gcc/clang branches can't drift apart.
 #
 # Only spellings every driver accepts belong here.
@@ -772,28 +772,37 @@ else()
 	# Here the compiler driver does the link, so the same flag goes to both halves and pulls in its runtime.
 
 	if(EnableASAN)
+
 		add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
 		add_link_options(-fsanitize=address)
 
-		# clang defaults to linking the ASan runtime statically into every executable, and an executable's
-		# symbols outrank LD_PRELOAD in lookup order, so the no_deepbind preload below would never see a
-		# dlopen: the driver's call binds straight to the interceptor in the executable. The shared runtime
-		# restores normal interposition order, which is what gcc (shared libasan by default) already has.
-		# The runtime lives in clang's resource dir, which the loader doesn't search, hence the rpath.
+		# The runtime has to be the SHARED one. Linked statically it lands in the executable, which the dynamic
+		# linker searches before anything in LD_PRELOAD, so the DEEPBIND shim below can never win the dlopen
+		# interception and a driver keeps the private symbol scope a sanitizer cannot see through. The shim then
+		# looks wired up and does nothing. gcc links it shared already, so this is clang's alone.
+		# clang adds no rpath for it, and -print-runtime-dir names a directory the runtimes are not in on every
+		# layout, so the path is taken from the runtime itself.
+		# Linux only, where the shim is built: macOS's ASan runtime is always the dynamic one, and Android and
+		# Emscripten name theirs differently, so on those this .so never exists and there is nothing to force.
 
-		if(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 			execute_process(
 				COMMAND ${CMAKE_C_COMPILER} -print-file-name=libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so
-				OUTPUT_VARIABLE asanSharedRuntime OUTPUT_STRIP_TRAILING_WHITESPACE
+				OUTPUT_VARIABLE asanRuntime
+				OUTPUT_STRIP_TRAILING_WHITESPACE
 			)
 
-			if(NOT EXISTS "${asanSharedRuntime}")
-				message(FATAL_ERROR "clang ASan build needs its shared runtime; -print-file-name gave ${asanSharedRuntime}")
+			if(NOT IS_ABSOLUTE "${asanRuntime}" OR NOT EXISTS "${asanRuntime}")
+				message(FATAL_ERROR
+					"EnableASAN needs the shared runtime libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so, which "
+					"this toolchain doesn't ship. Without it the RTLD_DEEPBIND shim is inert and a sanitized "
+					"run silently covers only the software adapters."
+				)
 			endif()
 
-			get_filename_component(asanSharedRuntimeDir "${asanSharedRuntime}" DIRECTORY)
-			add_link_options(-shared-libasan "-Wl,-rpath,${asanSharedRuntimeDir}")
+			get_filename_component(asanRuntimeDir "${asanRuntime}" DIRECTORY)
+			add_link_options(-shared-libasan "-Wl,-rpath,${asanRuntimeDir}")
 		endif()
 	endif()
 
@@ -1084,6 +1093,10 @@ else()                                            # Multi-config generators (Vis
         set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${oxc3OutRoot}/${config}${oxc3OutTail}/bin")
     endforeach()
 endif()
+
+# The binaries' folder for either kind of generator, for a rule that places files next to them.
+
+set(oxc3BinDir "${oxc3OutRoot}/$<CONFIG>${oxc3OutTail}/bin")
 
 # Enable symbols
 

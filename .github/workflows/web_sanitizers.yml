@@ -12,9 +12,8 @@ name: Web wasm64 (Linux host, ASan + UBSan)
 # Emscripten sizes the ASan shadow region itself, so nothing here or in build_web.py adjusts the module's
 # memory; see the note next to enableASAN in build_web.py.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 10 * * *'
   workflow_dispatch:
 
 jobs:

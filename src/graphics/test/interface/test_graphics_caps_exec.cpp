@@ -122,7 +122,7 @@ typedef struct TestCapabilityWord {
 	c::U32 value;                              //Expected U32 there
 } TestCapabilityWord;
 
-#define TEST_CAPS_MAX_WORDS 4
+#define TEST_CAPS_MAX_WORDS 9
 
 typedef struct TestCapabilityShader {
 
@@ -140,11 +140,34 @@ typedef struct TestCapabilityShader {
 	c::Bool spirvOnly;                         //No DXIL variant exists, so D3D12 has nothing to run
 	c::Bool needsTlas;                         //Wants the shared TLAS handle in push constant slot 1
 
+	//The defines and uniforms the binary is found by, where its file has more than one; such an entry needs no device
+	//bit, its extension lines falling back by themselves.
+	const gfx::ShaderVariant *variant;
+
 } TestCapabilityShader;
 
 //1 + 2 + ... + 64, the total every thread contributing exactly once must produce.
 
 #define TEST_CAPS_SUM_64 2080
+
+//Uniform values at run time (test_uniform_values.hlsl): each row's binary is found by its values spelled otherwise than
+//its annotation writes them, so the lookup has to compare values rather than text.
+
+static const gfx::ShaderVariant testUniformRowA = {
+	c::ESHExtension_None, c::ESHExtension_None, {},
+	{
+		"big", "+300", "neg", "-70000", "f", "0.1234567890", "s16", "-2", "s8", "-1",
+		"h", "1.50", "u16", "65535", "u8", "255", "b", "true"
+	}
+};
+
+static const gfx::ShaderVariant testUniformRowB = {
+	c::ESHExtension_None, c::ESHExtension_None, {},
+	{
+		"big", "4000000000", "neg", "+70000", "f", "-2.50", "s16", "32767", "s8", "-128",
+		"h", "-0.25", "u16", "0", "u8", "1", "b", "false"
+	}
+};
 
 static const TestCapabilityShader testCapabilityShaders[] = {
 
@@ -162,7 +185,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//It stays gated on AtomicI64 because the entrypoint declares that extension, so the lookup needs it.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_atomics.oiSH", "atomicI64",
-		(c::EGraphicsFeatures) (0), (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_AtomicI64), c::ESHExtension_AtomicI64,
+		c::EGraphicsFeatures_None, (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_AtomicI64), c::ESHExtension_AtomicI64,
 		{ { 0, TEST_CAPS_SUM_64 }, { 8, 0xFFFFFFFEu }, { 12, 0x00000001u } }, 3,
 		false, false
 	},
@@ -171,7 +194,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// atomic, which the entry above skips entirely.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_i64.oiSH", "i64",
-		(c::EGraphicsFeatures) (0), (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_I64), c::ESHExtension_I64,
+		c::EGraphicsFeatures_None, (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_I64), c::ESHExtension_I64,
 		{ { 0, TEST_CAPS_SUM_64 } }, 1,
 		false, false
 	},
@@ -182,7 +205,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// the module genuinely uses Int64 and has to declare it.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_f64.oiSH", "f64",
-		(c::EGraphicsFeatures) (0),
+		c::EGraphicsFeatures_None,
 		(c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F64 | c::EGraphicsDataTypes_I64), c::ESHExtension_F64,
 		{ { 0, TEST_CAPS_SUM_64 } }, 1,
 		false, false
@@ -191,7 +214,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//Halves: three predicates bracket the significand from both sides without depending on a rounding mode.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_f16.oiSH", "f16",
-		(c::EGraphicsFeatures) (0), (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F16), c::ESHExtension_16BitTypes,
+		c::EGraphicsFeatures_None, (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F16), c::ESHExtension_16BitTypes,
 		{ { 0, TEST_CAPS_SUM_64 }, { 4, 64 }, { 8, 64 } }, 3,
 		false, false
 	},
@@ -201,7 +224,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//Both map to this same extension, so either would be accepted, but the quad path is the one worth exercising.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_computederiv.oiSH", "computeDeriv",
-		(c::EGraphicsFeatures) (c::EGraphicsFeatures_ComputeDeriv), (c::EGraphicsDataTypes) (0),
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_ComputeDeriv), c::EGraphicsDataTypes_None,
 		c::ESHExtension_ComputeDeriv,
 		{ { 0, 4 } }, 1,
 		false, false
@@ -214,7 +237,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	{
 		"//OxC3_gtest/test_shaders/test_caps_subgroup_shuffle.oiSH", "subgroupShuffle",
 		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupShuffle | c::EGraphicsFeatures_SubgroupOperations),
-		(c::EGraphicsDataTypes) (0),
+		c::EGraphicsDataTypes_None,
 		c::ESHExtension_SubgroupShuffle,
 		{ { 0, 128 } }, 1,
 		false, false
@@ -230,7 +253,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	{
 		"//OxC3_gtest/test_shaders/test_caps_subgroup.oiSH", "subgroupArithmetic",
 		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupArithmetic | c::EGraphicsFeatures_SubgroupOperations),
-		(c::EGraphicsDataTypes) (0),
+		c::EGraphicsDataTypes_None,
 		c::ESHExtension_SubgroupArithmetic,
 		{ { 0, TEST_CAPS_SUM_64 } }, 1,
 		false, false
@@ -240,7 +263,7 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	//Every lane is active, so the counts sum to the thread count rather than the wave count.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_subgroup_ops.oiSH", "subgroupOperations",
-		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupOperations), (c::EGraphicsDataTypes) (0),
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_SubgroupOperations), c::EGraphicsDataTypes_None,
 		c::ESHExtension_SubgroupOperations,
 		{ { 0, 64 } }, 1,
 		false, false
@@ -251,23 +274,47 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 	// reference into instance 0's slot, which left instance 1 unreachable.
 	{
 		"//OxC3_gtest/test_shaders/test_caps_rayquery.oiSH", "rayQuery",
-		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery), (c::EGraphicsDataTypes) (0),
+		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery), c::EGraphicsDataTypes_None,
 		c::ESHExtension_RayQuery,
 		{ { 0, 1 }, { 4, 1 }, { 8, 0 } }, 3,
 		false, true
 	},
 
-	//Triangle vertex position fetch: both threads must read back the exact object space vertices the BLAS was built from.
+	//Triangle vertex position fetch: every thread must read back the exact object space vertices the BLAS was built from.
 	//Bit exact comparison is legitimate for once, since this is stored data rather than a computed quantity.
 	//Thread 1 traces the TRANSLATED instance and still has to see the untranslated positions, which is what
 	// separates object space from world space.
+	//Thread 2 hits the BLAS's second geometry, which has to hand back its own triangle (see
+	// Test_buildCapabilityTlas).
 	{
 		"//OxC3_gtest/test_shaders/test_caps_raytriposition.oiSH", "rayTriPosition",
 		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition),
-		(c::EGraphicsDataTypes) (0),
+		c::EGraphicsDataTypes_None,
 		c::ESHExtension_RayTriPosition,
-		{ { 0, 1 }, { 4, 1 } }, 2,
+		{ { 0, 1 }, { 4, 1 }, { 8, 1 } }, 3,
 		false, true
+	},
+
+	//Every scalar uniform type, at values past a byte and sixteen bits, signed ones negative and floats inexact in
+	//decimal, in two rows (test_uniform_values.hlsl).
+	{
+		"//OxC3_gtest/test_shaders/test_uniform_values.oiSH", "uniformValuesA",
+		c::EGraphicsFeatures_None, c::EGraphicsDataTypes_None, c::ESHExtension_None,
+		{
+			{ 0, 300 }, { 4, 0xFFFEEE90u }, { 8, 0x3DFCD6EAu }, { 12, 0xFFFFFFFEu }, { 16, 0xFFFFFFFFu },
+			{ 20, 0x3FC00000u }, { 24, 65535 }, { 28, 255 }, { 32, 7 }
+		}, 9,
+		false, false, &testUniformRowA
+	},
+
+	{
+		"//OxC3_gtest/test_shaders/test_uniform_values.oiSH", "uniformValuesB",
+		c::EGraphicsFeatures_None, c::EGraphicsDataTypes_None, c::ESHExtension_None,
+		{
+			{ 0, 4000000000u }, { 4, 70000 }, { 8, 0xC0200000u }, { 12, 32767 }, { 16, 0xFFFFFF80u },
+			{ 20, 0xBE800000u }, { 24, 0 }, { 28, 1 }, { 32, 9 }
+		}, 9,
+		false, false, &testUniformRowB
 	}
 
 	//AtomicF32 and AtomicF64 have no entry here on purpose, and it is a gap in the engine rather than in the
@@ -284,9 +331,14 @@ static const TestCapabilityShader testCapabilityShaders[] = {
 //Runs one capability shader and compares the first U32 it wrote.
 //Returns whether the shader ran at all, so the caller can tell "verified" apart from "device lacks it".
 
-//Builds the single triangle the tracing entries aim at, and the acceleration structures over it.
-//The geometry matches test_graphics_shaders.c's ray pipeline test on purpose, so an inline trace and a
-// pipeline trace are aiming at the same thing and a disagreement between them means something.
+//Builds the triangles the tracing entries aim at, and the acceleration structures over them.
+//Triangle 0 matches test_graphics_shaders.c's ray pipeline test on purpose, so an inline trace and a pipeline
+// trace are aiming at the same thing and a disagreement between them means something.
+//
+//The BLAS holds TWO geometries, indexed ranges of one shared vertex and index buffer at their own offsets,
+// which is how a mesh split into material runs is built. Position fetch has to return the geometry's own
+// triangle for a hit on geometry 1; returning geometry 0's triangle at the same primitive index, or reading
+// the shared buffers from their start, passes every single geometry test there is.
 //Everything is left NULL on failure, which the caller reads as "no tracing this run".
 
 static void Test_buildCapabilityTlas(
@@ -294,27 +346,43 @@ static void Test_buildCapabilityTlas(
 	gfx::Device &dev,
 	c::Bool forceNoDataAccess,        //Deliberately unflagged BLAS, for the negative RayTriPosition guard test
 	gfx::DeviceBuffer &positions,
+	gfx::DeviceBuffer &indices,
 	gfx::Blas &blas,
 	gfx::Tlas &tlas
 ) {
 
 	c::Error *e_rr = &t->err;
 
-	const c::F32 triangle[12] = {
+	//Triangle 1 sits 2 above triangle 0, clear of every ray the other entries trace.
+
+	const c::F32 vertices[24] = {
 		0, 0, 0, 1,
 		1, 0, 0, 1,
-		0, 1, 0, 1
+		0, 1, 0, 1,
+		0, 2, 0, 1,
+		1, 2, 0, 1,
+		0, 3, 0, 1
 	};
 
-	c::Buffer triData = c::Buffer_createRefConst(triangle, sizeof(triangle));
+	const c::U16 triangleIndices[6] = { 0, 1, 2, 3, 4, 5 };
+
+	c::Buffer vertexData = c::Buffer_createRefConst(vertices, sizeof(vertices));
+	c::Buffer indexData = c::Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
 
 	if(!Test_assert(t, "capPositions", dev.createBufferData(
 		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
-		"Capability trace positions", &triData, positions, nullptr, e_rr
+		"Capability trace positions", &vertexData, positions, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "capIndices", dev.createBufferData(
+		c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
+		"Capability trace indices", &indexData, indices, nullptr, e_rr
 	)))
 		return;
 
 	const c::DeviceData positionData = { .buffer = positions.handle() };
+	const c::U64 triangleBytes = 3 * sizeof(c::U16);
 
 	//Position fetch is a build time opt in: without AllowDataAccess the vertex data simply isn't kept in the
 	// acceleration structure, so the flag rides along whenever the device claims the capability.
@@ -327,9 +395,20 @@ static void Test_buildCapabilityTlas(
 		!forceNoDataAccess
 		? c::ERTASBuildFlags_AllowDataAccessExt : c::ERTASBuildFlags_None;
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		blasFlags, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
-	);
+	c::BLASGeometry geometries[2];
+
+	for(c::U64 g = 0; g < 2; ++g)
+		geometries[g] = c::BLASGeometry_indexed(
+			c::ETextureFormatId_RGBA32f, 0, 4 * sizeof(c::F32), positionData, c::ETextureFormatId_R16u,
+			c::DeviceData { .buffer = indices.handle(), .offset = g * triangleBytes, .len = triangleBytes }
+		);
+
+	c::ListBLASGeometry geometryList{};
+
+	if(!Test_assert(t, "capGeometries", c::ListBLASGeometry_createRefConst(geometries, 2, &geometryList, e_rr)))
+		return;
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_geometries(blasFlags, geometryList);
 
 	if(!Test_assert(t, "capBlas", dev.createBlas(blasInfo, "Capability trace BLAS", blas, e_rr)))
 		return;
@@ -425,7 +504,7 @@ static c::Bool Test_runCapabilityShader(
 	const c::Bool hasDataTypes =
 		!cap->dataType || (caps.dataTypes & cap->dataType) == cap->dataType;
 
-	const c::Bool supported = (cap->feature || cap->dataType) && hasFeatures && hasDataTypes;
+	const c::Bool supported = (cap->feature || cap->dataType || cap->variant) && hasFeatures && hasDataTypes;
 
 	if(!supported)
 		return true;
@@ -440,6 +519,7 @@ static c::Bool Test_runCapabilityShader(
 		Log::debugLn(
 			*dev.alloc(), "-- capabilityExec: %s claimed but experimental on this backend, skipped", cap->name
 		);
+
 		return true;
 	}
 
@@ -467,9 +547,19 @@ static c::Bool Test_runCapabilityShader(
 	//The entrypoint is only present when compiled with the extension, so this doubles as the check that the
 	// shader really was built for the capability rather than silently falling back.
 
-	const c::U32 entryId = dev.getFirstShaderEntry(file.list, "main", c::ESHExtension_None, cap->require);
+	const c::U32 entryId =
+		cap->variant ?
+		dev.resolveEntry(file.list, "main", *cap->variant) :
+		dev.getFirstShaderEntry(file.list, "main", c::ESHExtension_None, cap->require);
 
 	if (entryId == c::U32_MAX) {
+
+		//Found by its values, the binary exists on every backend, so missing it is the lookup failing.
+
+		if (cap->variant) {
+			Test_assert(t, "capVariantLookup", false);
+			return false;
+		}
 
 		//No entrypoint for this backend's binary type.
 		//That is legitimate rather than a failure:
@@ -491,7 +581,7 @@ static c::Bool Test_runCapabilityShader(
 		// which makes every shader write land on descriptor 0 and the readback come back untouched.
 
 		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked),
-		"Capability output", 16, output, nullptr, e_rr
+		"Capability output", TEST_CAPS_MAX_WORDS * 4, output, nullptr, e_rr
 	));
 
 	if(ok) {
@@ -499,7 +589,8 @@ static c::Bool Test_runCapabilityShader(
 		ok = ok && gfxtest::pushConstantLayout(t, dev, file.list, entryId, pipelineLayout);
 
 		ok = ok && Test_assert(t, "capPipeline", dev.createComputePipeline(
-			file.list, "main", "Capability pipeline", pipeline, {}, &pipelineLayout, e_rr
+			file.list, "main", "Capability pipeline", pipeline, cap->variant ? *cap->variant : gfx::ShaderVariant{},
+			&pipelineLayout, e_rr
 		));
 	}
 
@@ -606,11 +697,11 @@ static void Test_capabilityRayTriPositionGuard(c::Test *t, gfx::Device &dev) {
 	if((caps.features & needed) != needed || (caps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition))
 		return;
 
-	gfx::DeviceBuffer positions, output;
+	gfx::DeviceBuffer positions, indices, output;
 	gfx::Blas blas;
 	gfx::Tlas tlas;
 
-	Test_buildCapabilityTlas(t, dev, true, positions, blas, tlas);
+	Test_buildCapabilityTlas(t, dev, true, positions, indices, blas, tlas);
 
 	if(!Test_assert(t, "rtpGuardTlas", tlas.valid()))
 		return;
@@ -698,12 +789,12 @@ extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::Graphi
 	//It only exists where the device claims RayQuery.
 	//Entries that need it are skipped otherwise.
 
-	gfx::DeviceBuffer positions;
+	gfx::DeviceBuffer positions, indices;
 	gfx::Blas blas;
 	gfx::Tlas tlas;
 
 	if(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)
-		Test_buildCapabilityTlas(t, dev, false, positions, blas, tlas);
+		Test_buildCapabilityTlas(t, dev, false, positions, indices, blas, tlas);
 
 	c::U32 verified = 0, skipped = 0;
 

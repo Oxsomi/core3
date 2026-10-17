@@ -24,6 +24,8 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
+#include "types/container/buffer.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/texture_format.h"
@@ -307,19 +309,34 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	const Bool captureIsa =
 		(pipeline->flags & EPipelineFlags_CaptureISA) && deviceExt->amdAnalyzer.analyzer;
 
+	const U64 irBytes =
+		graphics.VS.BytecodeLength + graphics.PS.BytecodeLength + graphics.DS.BytecodeLength +
+		graphics.HS.BytecodeLength + graphics.GS.BytecodeLength;
+
 	if (captureIsa) {
 		gotoIfError3(clean, DxAmdShaderAnalyzer_createGraphicsPipeline(
 			&deviceExt->amdAnalyzer, &graphics, pipelinei, &dxPipeline->amdAnalyzerHandle, e_rr
 		));
+
+		DxPipeline_trackMemory(pipeline, *pipelinei, irBytes);
 	}
 
 	else {
-		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
-			deviceExt->device,
-			&graphics,
-			&IID_ID3D12PipelineState,
-			(void**) pipelinei
-		), e_rr));
+
+		//Keyed by the shaders and the fixed function state as the caller described it, which graphics derives from
+
+		const D3D12_SHADER_BYTECODE stages[5] = { graphics.VS, graphics.PS, graphics.DS, graphics.HS, graphics.GS };
+		U64 key = Pipeline_hash(Buffer_fnv1a64Offset, &pipeline->type, sizeof(pipeline->type));
+
+		for(U32 i = 0; i < 5; ++i)
+			key = Pipeline_hash(key, stages[i].pShaderBytecode, stages[i].BytecodeLength);
+
+		PipelineGraphicsInfo state = *info;
+		state.renderPass = (RefPtr*) (U64) !!state.renderPass;
+		key = Pipeline_hash(key, &state, sizeof(state));
+		key = Pipeline_hashLayout(key, pipeline->layout);
+
+		gotoIfError3(clean, DxGraphicsDevice_buildPipeline(device, pipeline, &graphics, key, irBytes, pipelinei, e_rr));
 	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {

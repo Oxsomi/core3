@@ -96,6 +96,9 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if(!header.extensionCount || header.extensionCount > 32)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.extensionCount is invalid"));
 
+	if(!header.extension2Count || header.extension2Count > 32)
+		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.extension2Count is invalid"));
+
 	//Capped at 16 because vendorMask is a U16.
 	//Rejecting zero also catches a file written before this field replaced the header's padding, which would
 	// otherwise read as "the writer knew no vendors" and widen every mask to everything.
@@ -279,12 +282,20 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if (binary.extensions >> ESHExtension_Count)
 			retError(clean, Error_invalidState(1, "SHFile_read() binary had invalid extensions"));
 
+		if (binary.extensions2 >> ESHExtension2_Count)
+			retError(clean, Error_invalidState(1, "SHFile_read() binary had invalid extensions2"));
+
 		//Native extensions added after this file was written can't have been reflected by its compiler,
 		// so mark them dormant automatically (matches what a fresh compile of the same shader would produce).
 
 		ESHExtension autoDormant = (ESHExtension) (
 			(ESHExtension_DxilNative | ESHExtension_SpirvNative) &
 			(header.extensionCount >= 32 ? 0 : ~(((U32)1 << header.extensionCount) - 1))
+		);
+
+		ESHExtension2 autoDormant2 = (ESHExtension2) (
+			(ESHExtension2_DxilNative | ESHExtension2_SpirvNative) &
+			(header.extension2Count >= 32 ? 0 : ~(((U32)1 << header.extension2Count) - 1))
 		);
 
 		//A vendor the writer had never heard of can't have been meant by its mask, so bits above its count are
@@ -298,10 +309,12 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			.identifier = (SHBinaryIdentifier) {
 				.extensions = binary.extensions,
 				.shaderVersion = ((binary.shaderModel & 0xF0) << 4) | (binary.shaderModel & 0xF),
-				.stageType = binary.entrypointType
+				.stageType = binary.entrypointType,
+				.extensions2 = binary.extensions2
 			},
 
 			.dormantExtensions = (ESHExtension) (binary.dormantExt | autoDormant),
+			.dormantExtensions2 = (ESHExtension2) (binary.dormantExt2 | autoDormant2),
 			.vendorMask = ESHVendor_widenMask(binary.vendorMask, header.vendorCount),
 			.hasShaderAnnotation = binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation
 		};
@@ -642,11 +655,8 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 						0, 0, "SHFile_read() waveSize not supported by mesh or task shader"
 					));
 
-				for (U8 k = 0; k < 4; ++k) {
-					U8 curr = (entry.waveSize >> (k << 2)) & 0xF;
-					if (curr == 1 || curr == 2 || curr > 8)
-						retError(clean, Error_invalidParameter(0, 0, "SHFile_read() entry.waveSize contained invalid data"));
-				}
+				if(!SHEntry_isValidWaveSize(entry.waveSize))
+					retError(clean, Error_invalidParameter(0, 0, "SHFile_read() entry.waveSize contained invalid data"));
 
 				break;
 			}

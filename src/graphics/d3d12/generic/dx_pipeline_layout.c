@@ -148,11 +148,13 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 
 	else {
 
+		//Most frequently changed first (see DxPipelineLayout): constants, push descriptors, tables
+
 		U64 count = 0;
 
-		if (layout->info.bindings) {
-			DxDescriptorLayout *descExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Dx);
-			count += descExt->rootParams.length;
+		if(constants.count) {
+			layoutExt->rootParamPushConstants = (U32) count;
+			++count;
 		}
 
 		if (layout->info.pushDescriptors) {
@@ -161,9 +163,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 			count += descExt->rootParams.length;
 		}
 
-		if(constants.count) {
-			layoutExt->rootParamPushConstants = (U32) count;
-			++count;
+		if (layout->info.bindings) {
+			DxDescriptorLayout *descExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Dx);
+			layoutExt->rootParamBindings = (U32) count;
+			count += descExt->rootParams.length;
 		}
 
 		gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_resize(&rootParams, count, alloc, e_rr));
@@ -172,13 +175,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 		rootSig.Desc_1_1.NumParameters = (U32) rootParams.length;
 		rootSig.Desc_1_1.pParameters = rootParams.length ? rootParams.ptr : NULL;
 
-		if (layout->info.bindings) {
-
-			DxDescriptorLayout *descExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Dx);
-
-			for(U64 i = 0; i < descExt->rootParams.length; ++i)
-				rootParams.ptrNonConst[count++] = descExt->rootParams.ptr[i];
-		}
+		if(constants.count)
+			rootParams.ptrNonConst[count++] = pushConstants;
 
 		if (layout->info.pushDescriptors) {
 
@@ -188,8 +186,13 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 				rootParams.ptrNonConst[count++] = descExt->rootParams.ptr[i];
 		}
 
-		if(constants.count)
-			rootParams.ptrNonConst[count++] = pushConstants;
+		if (layout->info.bindings) {
+
+			DxDescriptorLayout *descExt = DescriptorLayout_ext(DescriptorLayoutRef_ptr(layout->info.bindings), Dx);
+
+			for(U64 i = 0; i < descExt->rootParams.length; ++i)
+				rootParams.ptrNonConst[count++] = descExt->rootParams.ptr[i];
+		}
 	}
 
 	if(!dxCheck(deviceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(

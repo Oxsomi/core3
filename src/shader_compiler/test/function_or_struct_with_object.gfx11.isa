@@ -13,5 +13,5 @@ _amdgpu_ps_main:
 	v_mul_f32_e32 v1, v5, v1                                   // 000000000034
 	v_mul_f32_e32 v2, v6, v2                                   // 000000000038
 	v_mul_f32_e32 v3, v7, v3                                   // 00000000003C
-	exp mrt0 v0, v1, v2, v3 done                               // 000000000040
+	exp mrt0, v0, v1, v2, v3 done                              // 000000000040
 	s_endpgm                                                   // 000000000048

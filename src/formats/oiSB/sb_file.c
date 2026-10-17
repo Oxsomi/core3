@@ -22,6 +22,7 @@
 
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiDL/dl_file.h"
+#include "types/base/string_read_helper.h"
 #include "types/container/list_impl.h"
 #include "types/container/log.h"
 #include "types/container/list_basic_types.h"
@@ -128,6 +129,55 @@ clean:
 		SBFile_free(sbFile, alloc);
 
 	return s_uccess;
+}
+
+Bool SBFile_equals(const SBFile *a, const SBFile *b) {
+
+	if(a == b)
+		return true;
+
+	if(!a || !b)
+		return false;
+
+	if(a->hash != b->hash)
+		return false;
+
+	//HideMagicNumber is a write time flag the hash already leaves out, so it is masked here too
+
+	const ESBSettingsFlags mask = (ESBSettingsFlags) ~(U32) ESBSettingsFlags_HideMagicNumber;
+
+	if((a->flags & mask) != (b->flags & mask) || a->bufferSize != b->bufferSize)
+		return false;
+
+	if(
+		a->structs.length != b->structs.length ||
+		a->vars.length != b->vars.length ||
+		a->arrays.length != b->arrays.length
+	)
+		return false;
+
+	//SBStruct and SBVar are both POD, so the two tables compare as bytes
+
+	if(Buffer_neq(ListSBStruct_bufferConst(a->structs), ListSBStruct_bufferConst(b->structs)))
+		return false;
+
+	if(Buffer_neq(ListSBVar_bufferConst(a->vars), ListSBVar_bufferConst(b->vars)))
+		return false;
+
+	for(U64 i = 0; i < a->arrays.length; ++i)
+		if(ListU32_neq(a->arrays.ptr[i], b->arrays.ptr[i]))
+			return false;
+
+	const U64 names = DLFile_entryCount(&a->names);
+
+	if(names != DLFile_entryCount(&b->names))
+		return false;
+
+	for(U64 i = 0; i < names; ++i)
+		if(!CharString_equalsStringSensitive(&a->names.entryStrings.ptr[i], &b->names.entryStrings.ptr[i]))
+			return false;
+
+	return true;
 }
 
 void SBFile_free(SBFile *sbFile, const Allocator *alloc) {

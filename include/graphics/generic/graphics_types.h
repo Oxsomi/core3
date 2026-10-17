@@ -107,6 +107,15 @@ static inline U64 GraphicsObjectSize_stride(GraphicsObjectSize s) {
 	return GraphicsObjectSize_alignUp(GraphicsObjectSize_size(s), GraphicsObjectSize_alignment(s));
 }
 
+//A backend ext struct sits directly behind its base (X_ext is ptr + 1), so sizeof(base) is its offset.
+//Bases are multiples of 64 because any ext may hold a SpinLock; each base header asserts that.
+//Exts are multiples of 16 so whatever is appended behind them stays aligned.
+//size is what the backend's GraphicsObjectSizes entry reports for Ext.
+
+#define _GraphicsObjectSize_assertExt(Base, Ext, size)                                    \
+	static_assert(sizeof(Base) % alignof(Ext) == 0, #Ext " is misaligned behind " #Base); \
+	static_assert((size) % 16 == 0, #Ext " has to be a multiple of 16 bytes")
+
 #ifdef __cplusplus
 	}
 #endif

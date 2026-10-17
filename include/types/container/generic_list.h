@@ -138,6 +138,15 @@ static inline GenericList GenericList_createEmpty(U64 stride) {
 
 Bool GenericList_create(U64 length, U64 stride, const Allocator *allocator, GenericList *result, Error *e_rr);
 
+//create and resize zero what they add; the Uninitialized forms leave it as the allocator returned it, for memory the
+// caller writes in full before reading any of it (a big list filled in parallel, for one, where the zeroing would be a
+// serial pass the fill makes pointless). createUninitialized allocates exactly length elements, as create does, and
+// resizeUninitialized grows the way resize does.
+
+Bool GenericList_createUninitialized(
+	U64 length, U64 stride, const Allocator *allocator, GenericList *result, Error *e_rr
+);
+
 Bool GenericList_createRepeated(
 	U64 length,
 	U64 stride,
@@ -359,6 +368,7 @@ Bool GenericList_insertAll(GenericList *list, const GenericList other, U64 offse
 
 Bool GenericList_reserve(GenericList *list, U64 capacity, const Allocator *allocator, Error *e_rr);
 Bool GenericList_resize(GenericList *list, U64 size, const Allocator *allocator, Error *e_rr);
+Bool GenericList_resizeUninitialized(GenericList *list, U64 size, const Allocator *allocator, Error *e_rr);
 
 Bool GenericList_shrinkToFit(GenericList *list, const Allocator *allocator, Error *e_rr);
 

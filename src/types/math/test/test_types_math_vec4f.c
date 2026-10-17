@@ -46,6 +46,26 @@ void Test_vec4f(Test *test) {
 	F32x4 wzyx = F32x4_wzyx(v4);
 	Test_assert(test, "F32x4_wzyx",    F32x4_x(wzyx) == 10 && F32x4_y(wzyx) == 9 && F32x4_z(wzyx) == 2 && F32x4_w(wzyx) == 1);
 
+	//Load and store round trip, and that a store writes only the lanes it names
+
+	const F32 src4[4] = { 11, 12, 13, 14 };
+	F32x4 loaded = F32x4_load3(src4);
+	Test_assert(test, "F32x4_load3", F32x4_x(loaded) == 11 && F32x4_y(loaded) == 12 && F32x4_z(loaded) == 13 &&
+		F32x4_w(loaded) == 0);
+
+	F32 dst4[4] = { -1, -1, -1, -1 };
+	F32x4_store3(dst4, F32x4_load4(src4));
+	Test_assert(test, "F32x4_store3", dst4[0] == 11 && dst4[1] == 12 && dst4[2] == 13 && dst4[3] == -1);
+
+	F32x4_store1(dst4, F32x4_create1(7));
+	Test_assert(test, "F32x4_store1", dst4[0] == 7 && dst4[1] == 12);
+
+	F32x4_store4(dst4, F32x4_load4(src4));
+	Test_assert(test, "F32x4_store4", dst4[0] == 11 && dst4[3] == 14);
+
+	F32x4_store2(NULL, loaded);        //A NULL destination writes nothing rather than faulting
+	Test_assert(test, "F32x4_storeNull", dst4[0] == 11);
+
 	//Comparisons
 
 	F32x4 a = F32x4_create4(1, 2, 3, 4);
@@ -56,6 +76,15 @@ void Test_vec4f(Test *test) {
 	Test_assert(test, "F32x4_gt",         F32x4_eqExact4(F32x4_gt(b, a),  F32x4_create4(0, 1, 0, 1)));
 	Test_assert(test, "F32x4_lt",         F32x4_eqExact4(F32x4_lt(a, b),  F32x4_create4(0, 1, 0, 1)));
 	Test_assert(test, "F32x4_geq",        F32x4_eqExact4(F32x4_geq(a, b), F32x4_create4(1, 0, 1, 0)));
+
+	//The side not taken may hold a NaN, so select is checked with one in every lane it must not pick
+
+	const U32 nanBits = 0x7FC00000;
+	F32 nan;
+	Buffer_memcpy(Buffer_createRef(&nan, sizeof(nan)), Buffer_createRefConst(&nanBits, sizeof(nanBits)));
+
+	const F32x4 picked = F32x4_select(F32x4_leq(a, b), a, F32x4_create4(nan, nan, 9, nan));
+	Test_assert(test, "F32x4_select",     F32x4_eqExact4(picked, F32x4_create4(1, 2, 9, 4)));
 
 	//Arithmetic
 
@@ -91,8 +120,33 @@ void Test_vec4f(Test *test) {
 	F32x4 c = F32x4_create4(6, 5, 4, 3);
 	Test_assert(test, "F32x4_sqrt",       !F32x4_neqExact4(F32x4_sqrt(F32x4_create4(36, 25, 16, 9)),  c));
 
+	//EXACT, not approximate: rsqrt is the correctly rounded divide on every backend now, so a loose tolerance
+	//here would be the thing that lets one of them drift again. rsqrtFast is the one with a backend's accuracy,
+	// and the only claim worth making about it is that it is close.
+
 	c = F32x4_create4(1 / 6.f, 0.2f, 0.25f, 1 / 3.f);
-	Test_assert(test, "F32x4_rsqrt",      !F32x4_neqApproxAdv4(F32x4_rsqrt(F32x4_create4(36, 25, 16, 9)), c, 1e-3f, 1e-3f));
+	Test_assert(test, "F32x4_rsqrt",      !F32x4_neqExact4(F32x4_rsqrt(F32x4_create4(36, 25, 16, 9)), c));
+	Test_assert(
+		test, "F32x4_rsqrtFast",
+		!F32x4_neqApproxAdv4(F32x4_rsqrtFast(F32x4_create4(36, 25, 16, 9)), c, 1e-3f, 1e-3f)
+	);
+
+	//The whole point of the split: one axis normalizes to exactly one, on every backend and at every width.
+
+	Test_assert(
+		test, "F32x4_normalize3 exact",
+		!F32x4_neqExact4(F32x4_normalize3(F32x4_create3(2, 0, 0)), F32x4_create3(1, 0, 0))
+	);
+
+	Test_assert(
+		test, "F32x4_normalize4 exact",
+		!F32x4_neqExact4(F32x4_normalize4(F32x4_create4(0, 0, 0, 4)), F32x4_create4(0, 0, 0, 1))
+	);
+
+	Test_assert(
+		test, "F32x4_normalize2 exact",
+		!F32x4_neqExact4(F32x4_normalize2(F32x4_create2(0, 3)), F32x4_create2(0, 1))
+	);
 
 	c = F32x4_create4(6, 6.5f, 8, 5.5f);
 	Test_assert(test, "F32x4_lerp",       !F32x4_neqExact4(F32x4_lerp(v4, F32x4_xxxx4(10), 0.5f), c));
@@ -103,8 +157,20 @@ void Test_vec4f(Test *test) {
 	Test_assert(test, "F32x4_min",        !F32x4_neqExact4(F32x4_min(a, F32x4_zero()),  F32x4_create4(-2, 0, 0, 0)));
 	Test_assert(test, "F32x4_max",        !F32x4_neqExact4(F32x4_max(a, F32x4_one()),   F32x4_create4(1, 1, 2, 10)));
 	Test_assert(test, "F32x4_saturate",   !F32x4_neqExact4(F32x4_saturate(a),            F32x4_create4(0, 0.5f, 1, 1)));
-	Test_assert(test, "F32x4_sign",       !F32x4_neqExact4(F32x4_sign(F32x4_create4(-3, 4, 0, 1)), F32x4_create4(-1, 1, 1, 1)));
+	//ZERO has no sign, which is what the scalar says, and the pair below is what keeps the two agreeing.
+
+	Test_assert(test, "F32x4_sign",       !F32x4_neqExact4(F32x4_sign(F32x4_create4(-3, 4, 0, 1)), F32x4_create4(-1, 1, 0, 1)));
+	Test_assert(
+		test, "F32x4_sign agrees with F32_sign",
+		F32x4_x(F32x4_sign(F32x4_create1(0))) == F32_sign(0) &&
+		F32x4_x(F32x4_sign(F32x4_create1(-0.f))) == F32_sign(-0.f)
+	);
+
 	Test_assert(test, "F32x4_abs",        !F32x4_neqExact4(F32x4_abs(F32x4_create4(-3, 4, -1, 0)), F32x4_create4(3, 4, 1, 0)));
+
+	//abs CLEARS the sign bit, so -0 comes back as +0 rather than staying negative zero.
+
+	Test_assert(test, "F32x4_abs of -0", !(U32_fromF32Bits(F32x4_x(F32x4_abs(F32x4_create1(-0.f)))) >> 31));
 
 	c = F32x4_clamp(F32x4_create4(-1, 5, 1, 2), F32x4_zero(), F32x4_two());
 	Test_assert(test, "F32x4_clamp",      !F32x4_neqExact4(c, F32x4_create4(0, 2, 1, 2)));
@@ -190,4 +256,17 @@ void Test_vec4f(Test *test) {
 
 	c = F32x4_create3(20, 50, 80);
 	Test_assert(test, "F32x4_mul3x4", !F32x4_neqExact4(F32x4_mul3x4(F32x4_create4(1, 2, 3, 4), mat4), c));
+
+	//rcpSafe: a zero keeps its sign, which is the whole point, and anything under the floor takes the floor's
+
+	const F32 big = 1 / 1e-5f;
+
+	Test_assert(test, "F32_rcpSafe two", F32_rcpSafe(2) == 0.5f);
+	Test_assert(test, "F32_rcpSafe negative", F32_rcpSafe(-4) == -0.25f);
+	Test_assert(test, "F32_rcpSafe zero", F32_rcpSafe(0) == big);
+	Test_assert(test, "F32_rcpSafe negative zero", F32_rcpSafe(-0.0f) == -big);
+	Test_assert(test, "F32_rcpSafe tiny", F32_rcpSafe(1e-7f) == big && F32_rcpSafe(-1e-7f) == -big);
+
+	c = F32x4_create4(big, -big, 0.5f, -0.25f);
+	Test_assert(test, "F32x4_rcpSafe", !F32x4_neqExact4(F32x4_rcpSafe(F32x4_create4(0, -0.0f, 2, -4)), c));
 }

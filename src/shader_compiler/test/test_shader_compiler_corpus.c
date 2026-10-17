@@ -88,32 +88,6 @@ static void printOiSR(const Allocator *alloc, Buffer buf, const C8 *label) {
 	RefPtr_dec(&ms);
 }
 
-//ISA references are text, and a Windows checkout hands them back CRLF (core.autocrlf) while
-//amdllpc emits LF, so the comparison is on lines rather than bytes: a \r before a \n is skipped on
-//both sides and any other byte has to match exactly.
-//Guarded with its only caller: targets without the bundled amdllpc compile no ISA phase, and an
-//unused static is an error under -Werror.
-#ifdef SHADER_COMPILER_OFFLINE_ISA
-static Bool isaTextEq(Buffer a, Buffer b) {
-
-	U64 i = 0, j = 0;
-	const U64 lenA = Buffer_length(a), lenB = Buffer_length(b);
-
-	while (i < lenA && j < lenB) {
-
-		if (a.ptr[i] == '\r' && i + 1 < lenA && a.ptr[i + 1] == '\n') { ++i; continue; }
-		if (b.ptr[j] == '\r' && j + 1 < lenB && b.ptr[j + 1] == '\n') { ++j; continue; }
-
-		if (a.ptr[i] != b.ptr[j])
-			return false;
-
-		++i; ++j;
-	}
-
-	return i == lenA && j == lenB;
-}
-#endif
-
 //Read an in-memory oiSH into an SHFile (returns false + prints on failure).
 static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
 
@@ -194,6 +168,7 @@ static void shCrossCheckReflection(Test *t, const Allocator *alloc, Buffer spvBu
 		Test_assert(t, "cross-check: same input types", Buffer_eq(
 			Buffer_createRefConst(se->inputs, sizeof(se->inputs)), Buffer_createRefConst(de->inputs, sizeof(de->inputs))
 		));
+
 		Test_assert(t, "cross-check: same output types", Buffer_eq(
 			Buffer_createRefConst(se->outputs, sizeof(se->outputs)), Buffer_createRefConst(de->outputs, sizeof(de->outputs))
 		));
@@ -237,7 +212,10 @@ static Bool shReflectionMatches(const Allocator *alloc, Buffer a, Buffer b) {
 	match = true;
 
 	for(U64 i = 0; i < fa.binaries.length && match; ++i)
-		if(fa.binaries.ptr[i].identifier.extensions != fb.binaries.ptr[i].identifier.extensions)
+		if(
+			fa.binaries.ptr[i].identifier.extensions != fb.binaries.ptr[i].identifier.extensions ||
+			fa.binaries.ptr[i].identifier.extensions2 != fb.binaries.ptr[i].identifier.extensions2
+		)
 			match = false;
 
 	for(U64 i = 0; i < fa.entries.length && match; ++i) {
@@ -483,6 +461,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 					alloc, "\toiSH differs from %.*s only in version/include metadata, content is identical",
 					(int) CharString_length(ref), ref.ptr
 				);
+
 				matches = true;
 			}
 
@@ -682,6 +661,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 					alloc, "oiSR reference %.*s is missing from the bundled corpus",
 					(int) CharString_length(ref), ref.ptr
 				);
+
 				Test_assert(t, ref.ptr, false);         //Can't regenerate from a read only bundle; fix on desktop
 			}
 
@@ -691,6 +671,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				Log_warnLn(
 					alloc, "Generated missing oiSR reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr
 				);
+
 				Test_assert(t, ref.ptr, false);
 			}
 
@@ -808,6 +789,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 							alloc, "ISA disassembly failed for %.*s binary %"PRIu64" @ %s",
 							(int) baseLen, out.ptr, b, isaTargets[tI]
 						);
+
 						Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 						err = Error_none();
 						Test_assert(t, "ISA disassembly", false);
@@ -838,7 +820,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 						if (File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
 
-							const Bool matches = isaTextEq(isa, golden);
+							//As text: a golden checked out on Windows may carry CRLF, which says nothing about the ISA
+
+							const CharString isaText =
+								CharString_createRefSizedConst((const C8*) isa.ptr, Buffer_length(isa), false);
+
+							const CharString goldenText =
+								CharString_createRefSizedConst((const C8*) golden.ptr, Buffer_length(golden), false);
+
+							const Bool matches = CharString_equalsStringIgnoreEolSensitive(&isaText, &goldenText);
 
 							if (!matches)
 								Log_errorLn(alloc, "ISA mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);
@@ -857,6 +847,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 							alloc, "ISA reference %.*s is missing from the bundled corpus",
 							(int) CharString_length(ref), ref.ptr
 						);
+
 						Test_assert(t, ref.ptr, false);     //Can't regenerate from a read only bundle; fix on desktop
 					}
 
@@ -867,6 +858,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 							alloc, "Generated missing ISA reference %.*s (review & commit)",
 							(int) CharString_length(ref), ref.ptr
 						);
+
 						Test_assert(t, ref.ptr, false);
 					}
 

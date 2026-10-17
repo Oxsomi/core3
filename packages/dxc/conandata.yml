@@ -1,4 +1,4 @@
 sources:
-  "2026.09.11":
+  "2026.10.12":
     url: "https://github.com/Oxsomi/DirectXShaderCompiler.git"
-    checkout: "d55a80584373a80eebee4ce5bd8e72906a936ebb"
+    checkout: "50560f82a9dd2ef4ffe5bafaa31eaa33243dc2e8"

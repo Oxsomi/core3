@@ -54,6 +54,17 @@ void Pipeline_free(void *pipelineGeneric, const Allocator *alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
 
+	if(pipeline->statsTracked) {
+		GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
+		const Bool estimate = pipeline->gpuBytesEstimated;
+
+		if(!estimate)
+			AtomicI64_add(&device->pipelineKnownIRBytes, -(I64) pipeline->irBytes);
+
+		AtomicI64_add(estimate ? &device->pipelineEstimateBytes : &device->pipelineBytes, -(I64) pipeline->gpuBytes);
+		AtomicI64_dec(estimate ? &device->pipelineEstimateCount : &device->pipelineCount);
+	}
+
 	if (pipeline->type == EPipelineType_RaytracingExt) {
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);
 		ListPipelineRaytracingGroup_free(&info->groups, alloc);
@@ -203,7 +214,8 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 				continue;
 
 			//Match uniforms the same way as defines: the binary's uniform set must equal the requested set.
-			//A uniform carries a typed value, so compare the requested value against the stored value stringified.
+			//A uniform carries a typed value, so the requested text is read as that type and compared by value: "3",
+			//"+3", "1.5" and "1.50" each find the binary that holds them.
 
 			ListSHUniformRuntime uniforms2 = binInfo.identifier.uniforms;
 
@@ -228,18 +240,13 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 					const TypeId typeId = ETypeId_arr[u.typeIdShort];
 
-					SHValue value = (SHValue) { 0 };
+					SHValue value = (SHValue) { 0 }, requested = (SHValue) { 0 };
 					Buffer_memcpy(
 						Buffer_createRef(&value, sizeof(value)),
 						Buffer_createRefConst(binInfo.identifier.uniformData.ptr + u.dataOffset, ETypeId_getBytes(typeId))
 					);
 
-					CharString valStr = CharString_createNull();
-
-					if (SHValue_stringify(&value, typeId, GraphicsDeviceRef_getAlloc(deviceRef), &valStr, NULL))
-						contains = CharString_equalsString(&valStr, &reqValue, EStringCase_Sensitive);
-
-					CharString_free(&valStr, GraphicsDeviceRef_getAlloc(deviceRef));
+					contains = SHValue_parse(reqValue, typeId, &requested, NULL) && SHValue_equals(&value, &requested, typeId);
 					break;
 				}
 

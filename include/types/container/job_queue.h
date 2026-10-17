@@ -25,6 +25,7 @@
 #include "types/base/lock.h"
 #include "types/base/atomic.h"
 #include "types/base/allocator.h"
+#include "types/container/list_basic_types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -33,6 +34,7 @@
 typedef struct Error Error;
 typedef struct Thread Thread;
 typedef struct JobQueue JobQueue;
+typedef struct JobGroup JobGroup;
 
 //A job callback executes on one of the queue's execution contexts.
 //threadId is stable per executing thread and in [0, JobQueue_threadCount(queue)>,
@@ -72,16 +74,28 @@ typedef struct JobWrapperJob {
 
 Bool JobQueue_wrapperCallback(void *data, U64 threadId, JobQueue *queue);
 
+//Which work a job is, which decides who runs it and in what order (see JobQueue).
+
+typedef enum EJobLane {
+	EJobLane_Normal,
+	EJobLane_Critical,              //Work a frame waits on: taken first, and never by an efficiency worker
+	EJobLane_Background,            //Work that can wait: taken last, and never by a reserved worker
+	EJobLane_Count
+} EJobLane;
+
 typedef struct Job {
 	JobCallback callback;
 	void *data;
 	JobDestructor destructor;       //May be NULL; only used for jobs discarded on shutdown
+	JobGroup *group;                //May be NULL; the group JobGroup_wait runs this job for
+	EJobLane lane;
+	U32 padding;
 } Job;
 
 TList(Job);
 TListNamed(Thread*, ListThreadHandle);
 
-//JobQueue is a simple FIFO work queue built on SpinLock + Thread + AtomicI64.
+//JobQueue is a FIFO work queue per lane, built on SpinLock + Thread + AtomicI64.
 //It has two modes, selected at create time:
 //- threadCount <= 1: single threaded mode.
 //  No worker threads are created.
@@ -91,11 +105,20 @@ TListNamed(Thread*, ListThreadHandle);
 //  and the thread calling JobQueue_wait participates as the final execution context,
 //  so there are exactly threadCount contexts.
 //The struct is address stable after create (workers hold a pointer to it); don't move or copy it.
+//
+//One pool, so lanes share the cores instead of separate queues competing for them. A running job is never
+// interrupted; what keeps Critical work from waiting is who takes what (JobQueueInfo):
+//- Reserved workers take Critical, then Normal, never Background, so one is free or nearly so when Critical
+//  work arrives. That only holds while Background jobs are short, so split them (about a millisecond each).
+//- Other performance workers take Critical, Normal, then Background, at Normal priority throughout.
+//- Efficiency workers take Normal, then Background, never Critical, at Background priority throughout.
+//- The owner thread, in JobQueue_wait, takes Critical, Normal, then Background.
 
 typedef struct JobQueue {
 
-	ListJob jobs;                   //FIFO, guarded by lock
+	ListJob jobs[EJobLane_Count];   //FIFO per lane, guarded by lock
 	ListThreadHandle threads;       //threadCount - 1 workers, empty in single threaded mode
+	U8 padding0[32];
 
 	SpinLock lock;
 
@@ -108,12 +131,34 @@ typedef struct JobQueue {
 
 	U64 threadCount;                //Execution contexts (>= 1)
 
+	U32 reservedWorkers;            //Workers 1 .. reservedWorkers
+	U32 efficiencyWorkers;          //The last efficiencyWorkers workers
+	ListU32 performanceCpus;        //Where the performance workers run (Thread_setAffinity), empty for anywhere
+	ListU32 efficiencyCpus;
+	U8 padding1[24];
+
 } JobQueue;
 
 //threadCount <= 1 creates a single threaded (inline) queue; see JobQueue struct docs.
 //The caller decides the count; e.g. pass Platform_getThreads() from a higher level lib.
 //queue must be zero initialized or a previously freed queue.
 Bool JobQueue_create(U64 threadCount, const Allocator *alloc, JobQueue *queue, Error *e_rr);
+
+//A queue whose workers are placed by core class (see the JobQueue struct docs). The cpu lists are what Platform
+// detected (Platform_instance->cpuInfo.performance.cpus, efficiency.cpus) and are copied; empty ones leave the workers
+// unplaced, which still keeps the lanes and the priorities.
+
+typedef struct JobQueueInfo {
+	U64 threadCount;                //Execution contexts, the owner included, as JobQueue_create takes it
+	U32 reservedWorkers;            //Performance workers that never take Background
+	U32 efficiencyWorkers;          //Workers on efficiencyCpus at Background priority, never taking Critical
+	const U32 *performanceCpus;
+	const U32 *efficiencyCpus;
+	U64 performanceCpuCount;
+	U64 efficiencyCpuCount;
+} JobQueueInfo;
+
+Bool JobQueue_createInfo(const JobQueueInfo *info, const Allocator *alloc, JobQueue *queue, Error *e_rr);
 
 //Enqueue a job.
 //Safe to call from the owner thread and from within running jobs.
@@ -127,11 +172,47 @@ Bool JobQueue_pushDestructor(
 	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, Error *e_rr
 );
 
+//Like JobQueue_pushDestructor, but tags the job as belonging to 'group' (may be NULL), which is what
+// JobGroup_wait picks jobs by.
+//Tagging only selects the job; the token still has to be taken with JobGroup_enter before pushing and
+// released with JobGroup_leave by the callback, exactly as for an untagged group.
+Bool JobQueue_pushGroup(
+	JobQueue *queue, JobCallback callback, void *data, JobDestructor destructor, JobGroup *group, Error *e_rr
+);
+
+//Like JobQueue_pushGroup, into a lane; every other push is EJobLane_Normal.
+
+Bool JobQueue_pushLane(
+	JobQueue *queue,
+	EJobLane lane,
+	JobCallback callback,
+	void *data,
+	JobDestructor destructor,
+	JobGroup *group,
+	Error *e_rr
+);
+
 //Run/help run jobs until the queue is fully drained (including jobs pushed by other jobs).
 //Must be called by the thread that created the queue (it becomes execution context 0).
 //Returns false (with e_rr untouched) only on invalid usage;
 // job failures are reported through JobQueue_isSuccess instead so all jobs still run.
 Bool JobQueue_wait(JobQueue *queue, Error *e_rr);
+
+//Wait for one group instead of the whole queue, running that group's jobs on the calling thread.
+//Returns once the group's last token drops, leaving the rest of the queue to the workers.
+//
+//Only jobs tagged with this group (JobQueue_pushGroup) are run here, and that is what makes the call safe
+// under a lock the queue's other jobs may also take: the caller keeps draining its own work even when
+// every worker is blocked on that lock, and releases it when the group completes.
+//Running the queue instead would hand the calling thread an unrelated job that wants the same lock, with
+// the lock held, and neither side could proceed.
+//Work the group waits on that is NOT tagged with it (a nested sub-group) still completes, but only on the
+// workers, so a caller holding such a lock has to tag every job it means to drain itself, and in single
+// threaded mode, where there are no workers at all, it has to tag all of them.
+//
+//Like JobQueue_wait this runs jobs as execution context 0, so the queue's owner thread is the one that
+// may call it.
+Bool JobGroup_wait(JobGroup *group, Error *e_rr);
 
 //False if any job callback returned false since create.
 Bool JobQueue_isSuccess(const JobQueue *queue);
@@ -155,6 +236,11 @@ void JobQueue_free(JobQueue *queue);
 //If any unit called JobGroup_fail, finalize is skipped instead.
 //Groups nest: a group's finalize (or a plain job) can JobGroup_leave a parent group,
 // giving the SHFile-latch -> output-group-latch hierarchy.
+//
+//A group is not required to be transient. One that lives as long as a subsystem does, entered and left by
+// every job that subsystem pushes, is how a caller sharing a queue waits for its OWN work and not the
+// queue's: JobGroup_wait on it drains that subsystem on shutdown while other work on the same queue keeps
+// running.
 //
 //Counts are often not known up front (a precompile discovers how many compiles to spawn),
 // so hold one token yourself while spawning: JobGroup_enter(g, 1) up front,
@@ -181,7 +267,8 @@ typedef struct JobGroup {
 //finalize (may be NULL) runs once when the last token is released and nothing failed.
 //dataDestructor (may be NULL) frees data when finalize won't run.
 //group must be zero initialized.
-//queue must be valid when finalize is set (that is where finalize is pushed).
+//queue must be valid when finalize is set (that is where finalize is pushed) or when JobGroup_wait is used
+// (that is where its jobs are run from).
 Bool JobGroup_create(
 	JobGroup *group, JobQueue *queue, JobCallback finalize, void *data, JobDestructor dataDestructor, Error *e_rr
 );

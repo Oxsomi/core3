@@ -28,6 +28,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
@@ -311,7 +312,7 @@ static void VkCommandBufferState_bindDescriptors(
 				buffers[writeCount] = (VkDescriptorBufferInfo) {
 					.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
 					.offset = Descriptor_startBuffer(&d),
-					.range = Descriptor_bufferLength(&d)
+					.range = Descriptor_bufferViewLength(&d, type)
 				};
 
 				writes[writeCount].descriptorType =
@@ -430,19 +431,10 @@ static VkPipelineStageFlags2 VkPipelineStage_fromMask(U32 stageMask, const Graph
 	if(stageMask & EPipelineStageMask_RtAny)
 		stages |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
 
-	if (stageMask & EPipelineStageMask_RTASBuild) {
+	//Micromap arrays build at this stage too, being acceleration structures
 
+	if (stageMask & EPipelineStageMask_RTASBuild)
 		stages |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
-
-		//Micromap builds run at their own stage, so on the EXT path the build barrier has to cover both;
-		// a stage bit no op in the scope uses is legal and free.
-
-		if(
-			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) &&
-			!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_OpacityMicromapKHR)
-		)
-			stages |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
-	}
 
 	return stages;
 }
@@ -459,6 +451,26 @@ static void vkTimestampWrite(VkGraphicsDevice *deviceExt, U8 fifId, VkCommandBuf
 		deviceExt->cmdWriteTimestamp(buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pool, deviceExt->timestampCursor);
 
 	++deviceExt->timestampCursor;
+}
+
+//A buffer marker needs no barrier: TOP_OF_PIPE when what it covers began, ALL_COMMANDS once it ended.
+
+void VkGraphicsDevice_breadcrumb(
+	const GraphicsDevice *device,
+	const VkGraphicsDevice *deviceExt,
+	VkCommandBuffer buffer,
+	U32 slot,
+	U32 value,
+	VkPipelineStageFlags2 stage
+) {
+
+	if(slot == U32_MAX)
+		return;
+
+	deviceExt->cmdWriteBufferMarker2(
+		buffer, stage, deviceExt->breadcrumbBuffer,
+		((U64) device->fifId * GRAPHICS_BREADCRUMBS + slot) * sizeof(U32), value
+	);
 }
 
 void VK_WRAP_FUNC(CommandList_process)(
@@ -807,6 +819,33 @@ void VK_WRAP_FUNC(CommandList_process)(
 			break;
 		}
 
+		case ECommandOp_CopyBuffer: {
+
+			const CopyBufferCmd copyBuffer = *(const CopyBufferCmd*) data;
+			const CopyBufferRegion *regions = (const CopyBufferRegion*) (data + sizeof(copyBuffer));
+
+			//VkBufferCopy is the same three U64s in the same order, but spelled out rather than cast
+
+			VkBufferCopy copies[128];
+
+			for(U32 i = 0; i < copyBuffer.regionCount; ++i)
+				copies[i] = (VkBufferCopy) {
+					.srcOffset = regions[i].srcOffset,
+					.dstOffset = regions[i].dstOffset,
+					.size = regions[i].length
+				};
+
+			deviceExt->cmdCopyBuffer(
+				buffer,
+				DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.src), Vk)->buffer,
+				DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.dst), Vk)->buffer,
+				copyBuffer.regionCount,
+				copies
+			);
+
+			break;
+		}
+
 		//Dynamic rendering / direct rendering
 
 		case ECommandOp_StartRenderingExt: {
@@ -1121,17 +1160,19 @@ void VK_WRAP_FUNC(CommandList_process)(
 				temp->tempBoundBuffers.indexBuffer &&
 				(
 					temp->boundBuffers.indexBuffer != temp->tempBoundBuffers.indexBuffer ||
+					temp->boundBuffers.indexOffset != temp->tempBoundBuffers.indexOffset ||
 					temp->boundBuffers.isIndex32Bit != temp->tempBoundBuffers.isIndex32Bit
 				)
 			) {
 
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
+				temp->boundBuffers.indexOffset = temp->tempBoundBuffers.indexOffset;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
 				deviceExt->cmdBindIndexBuffer(
 					temp->buffer,
 					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer,
-					0,
+					temp->boundBuffers.indexOffset,
 					temp->boundBuffers.isIndex32Bit ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16
 				);
 			}
@@ -1150,11 +1191,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 				for(U32 i = 0; i < 16; ++i) {
 
 					DeviceBufferRef *bufferRef = temp->tempBoundBuffers.vertexBuffers[i];
+					const U64 offset = temp->tempBoundBuffers.vertexOffsets[i];
 
 					if (!bufferRef)
 						continue;
 
-					if(temp->boundBuffers.vertexBuffers[i] != bufferRef) {
+					if(temp->boundBuffers.vertexBuffers[i] != bufferRef || temp->boundBuffers.vertexOffsets[i] != offset) {
 
 						if(start == 16)
 							start = i;
@@ -1162,9 +1204,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 						end = i + 1;
 
 						temp->boundBuffers.vertexBuffers[i] = bufferRef;
+						temp->boundBuffers.vertexOffsets[i] = offset;
 					}
 
 					vertexBuffers[i] = DeviceBuffer_ext(DeviceBufferRef_ptr(bufferRef), Vk)->buffer;
+					vertexBufferOffsets[i] = offset;
 				}
 
 				if(end > start)
@@ -1511,6 +1555,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
 				vkTimestampWrite(deviceExt, device->fifId, buffer);
 
+			temp->breadcrumbSlot = GraphicsDevice_claimBreadcrumb(device, scope.scopeId);
+			VkGraphicsDevice_breadcrumb(
+				device, deviceExt, buffer, temp->breadcrumbSlot, 1, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT
+			);
+
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
@@ -1539,18 +1588,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 					if (!rtas.isCompleted && transition.type != ETransitionType_ShaderWrite)
 						continue;
 
-					//A micromap is written and read with its own access bits on the EXT path; the AS bits stay in
-					// the mask so the same barrier is right for a KHR device, where the array IS an AS.
-					//A BLAS build consuming a micromap reads it with the micromap bit too.
+					//A micromap array is an acceleration structure, so it takes the same access bits, including when
+					// a BLAS build reads it.
 
-					VkAccessFlags2 rtasAccess =
+					const VkAccessFlags2 rtasAccess =
 						transition.type == ETransitionType_ShaderWrite ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR :
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-
-					if(isOMM && (pipelineStage & VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT))
-						rtasAccess |=
-							transition.type == ETransitionType_ShaderWrite ?
-							VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT : VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
 
 					gotoIfError3(nextTransition, VkDeviceBuffer_transition(
 
@@ -1878,6 +1921,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion) && instanceExt->cmdDebugMarkerEnd)
 				instanceExt->cmdDebugMarkerEnd(buffer);
 
+			VkGraphicsDevice_breadcrumb(
+				device, deviceExt, buffer, temp->breadcrumbSlot, 2, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+			);
+
+			temp->breadcrumbSlot = U32_MAX;
 			break;
 
 		//Unsupported

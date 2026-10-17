@@ -23,6 +23,12 @@
 #include "types/container/list_impl.h"
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
+#include "graphics/generic/blas.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/opacity_micromap.h"
+#include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_amd_shader_analyzer.h"
@@ -45,7 +51,7 @@
 #include <dxgi1_6.h>
 #include <d3d11.h>            //AMD AGS needs it...
 
-#if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64    //TODO: Enable for arm later
+#ifdef _HAS_NV_API
 	#include <nvapi.h>
 	#define USE_NVAPI
 #endif
@@ -71,7 +77,7 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.descriptorLayout = GraphicsObjectSize_create(DxDescriptorLayout),
 	.descriptorTable = GraphicsObjectSize_create(DxDescriptorTable),
 	.descriptorHeap = GraphicsObjectSize_create(DxDescriptorHeap),
-	.pipelineLayout = GraphicsObjectSize_createPadded(ID3D12RootSignature, 8)
+	.pipelineLayout = GraphicsObjectSize_create(DxPipelineLayout)
 };
 
 //As on the Vulkan side: the packing has far more room than these need, and this keeps that a fact.
@@ -89,6 +95,23 @@ static_assert(
 	alignof(DxSwapchain) <= 64 && alignof(DxUnifiedTexture) <= 64,
 	"A D3D12 texture extension struct needs more than the cache line TextureRef_getImplExt rounds to"
 );
+
+_GraphicsObjectSize_assertExt(BLAS, DxBLAS, sizeof(DxBLAS));
+_GraphicsObjectSize_assertExt(TLAS, DxTLAS, sizeof(DxTLAS));
+_GraphicsObjectSize_assertExt(OpacityMicromap, DxOpacityMicromap, sizeof(DxOpacityMicromap));
+_GraphicsObjectSize_assertExt(Pipeline, DxPipeline, sizeof(DxPipeline));
+_GraphicsObjectSize_assertExt(DeviceBuffer, DxDeviceBuffer, sizeof(DxDeviceBuffer));
+_GraphicsObjectSize_assertExt(GraphicsDevice, DxGraphicsDevice, sizeof(DxGraphicsDevice));
+_GraphicsObjectSize_assertExt(GraphicsInstance, DxGraphicsInstance, sizeof(DxGraphicsInstance));
+_GraphicsObjectSize_assertExt(DescriptorLayout, DxDescriptorLayout, sizeof(DxDescriptorLayout));
+_GraphicsObjectSize_assertExt(DescriptorTable, DxDescriptorTable, sizeof(DxDescriptorTable));
+_GraphicsObjectSize_assertExt(DescriptorHeap, DxDescriptorHeap, sizeof(DxDescriptorHeap));
+_GraphicsObjectSize_assertExt(PipelineLayout, DxPipelineLayout, sizeof(DxPipelineLayout));
+
+//The texture exts are placed by UnifiedTexture_imageExtBase and TextureRef_getImplExt, which align them.
+
+static_assert(sizeof(DxUnifiedTexture) % 16 == 0, "DxUnifiedTexture has to be a multiple of 16 bytes");
+static_assert(sizeof(DxSwapchain) % 16 == 0, "DxSwapchain has to be a multiple of 16 bytes");
 
 #ifndef GRAPHICS_API_DYNAMIC
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
@@ -161,9 +184,12 @@ static_assert(
 
 			.deviceInit = D3D12GraphicsDevice_init,
 			.deviceWait = D3D12GraphicsDeviceRef_wait,
+			.deviceReportLoss = D3D12GraphicsDeviceRef_reportLoss,
 			.deviceFree = D3D12GraphicsDevice_free,
 			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
 			.deviceGetMemoryBudget = D3D12GraphicsDevice_getMemoryBudget,
+			.deviceLoadPipelineCache = D3D12GraphicsDevice_loadPipelineCache,
+			.deviceSavePipelineCache = D3D12GraphicsDevice_savePipelineCache,
 
 			.commandListProcess = D3D12CommandList_process,
 
@@ -238,18 +264,22 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 		instance->flags &=~ EGraphicsInstanceFlags_IsDebug;
 	}
 
+	//DXGI's debug factory and the D3D12 debug layer are separate interfaces and either can be refused on its
+	//own, so losing this one does not decide the other and the flag stays on for the layer below to try.
+	//Both are commonly absent together, since a machine without the graphics tools feature tends to have
+	// neither, and each site says which one it was rather than reporting debugging as a single thing.
+
 	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-		if (FAILED(CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory))) {
-			Log_warnLnx(
-				"Tried to enable debugging on DxGraphicsInstance but couldn't, "
-				"please setup the developer environment for this functionality"
-			);
+		if (SUCCEEDED(CreateDXGIFactory2(
+			DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory
+		)))
+			goto setup;
 
-			instance->flags &= ~EGraphicsInstanceFlags_IsDebug;
-		}
-
-		else goto setup;
+		Log_warnLnx(
+			"D3D12: DXGI's debug factory isn't available (the graphics tools feature is not installed), "
+			"continuing with the D3D12 debug layer alone"
+		);
 	}
 
 	gotoIfError3(clean, dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory), e_rr));
@@ -353,27 +383,74 @@ setup:
 
 	#endif
 
+	//DRED's page fault reporting is always on: what a lost device faulted on is the one thing worth having afterwards,
+	// and it only costs bookkeeping as resources come and go. Its breadcrumbs stay off, since they cost every command.
+	//Asked of both factories, as the debug layer is. A runtime without it only loses the report.
+
+	{
+		ID3D12DeviceFactory *factories[2] = { instanceExt->deviceFactoryNoSingleton, instanceExt->deviceFactorySingleton };
+		instanceExt->flags |= EDxGraphicsInstanceFlags_HasDRED;
+
+		for(U64 i = 0; i < 2; ++i) {
+
+			ID3D12DeviceRemovedExtendedDataSettings1 *dred = NULL;
+
+			if(FAILED(factories[i]->lpVtbl->GetConfigurationInterface(
+				factories[i], &CLSID_D3D12DeviceRemovedExtendedData,
+				&IID_ID3D12DeviceRemovedExtendedDataSettings1, (void**) &dred
+			))) {
+				Log_warnLnx("D3D12: DRED isn't available, a lost device won't report what it faulted on");
+				instanceExt->flags &= ~EDxGraphicsInstanceFlags_HasDRED;
+				continue;
+			}
+
+			dred->lpVtbl->SetPageFaultEnablement(dred, D3D12_DRED_ENABLEMENT_FORCED_ON);
+			dred->lpVtbl->SetAutoBreadcrumbsEnablement(dred, D3D12_DRED_ENABLEMENT_FORCED_OFF);
+			dred->lpVtbl->SetBreadcrumbContextEnablement(dred, D3D12_DRED_ENABLEMENT_FORCED_OFF);
+			dred->lpVtbl->Release(dred);
+		}
+	}
+
+	//The layer ships with the Agility SDK as d3d12SDKLayers.dll beside the core, so it is normally there
+	//whenever the core loaded at all, and a failure here means the deployment is missing it rather than the
+	// machine being unable to validate.
+	//IsDebug is a request rather than a requirement either way, so it gives way with a warning instead of
+	// taking instance creation down with it.
+	//Both factories are asked before either is enabled, so the flag describes what is actually on.
+
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-		gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
-			instanceExt->deviceFactoryNoSingleton, &CLSID_D3D12Debug,
-			&IID_ID3D12Debug1, (void**) &instanceExt->debug1NoSingleton
-		), e_rr));
+		const Bool hasDebugLayer =
+			SUCCEEDED(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
+				instanceExt->deviceFactoryNoSingleton, &CLSID_D3D12Debug,
+				&IID_ID3D12Debug1, (void**) &instanceExt->debug1NoSingleton
+			)) &&
+			SUCCEEDED(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
+				instanceExt->deviceFactorySingleton, &CLSID_D3D12Debug,
+				&IID_ID3D12Debug1, (void**) &instanceExt->debug1Singleton
+			));
 
-		instanceExt->debug1NoSingleton->lpVtbl->EnableDebugLayer(instanceExt->debug1NoSingleton);
+		if (!hasDebugLayer) {
 
-		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
-			instanceExt->debug1NoSingleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1NoSingleton, true);
+			Log_warnLnx(
+				"D3D12: the debug layer isn't available (d3d12SDKLayers.dll), continuing without validation"
+			);
 
-		gotoIfError3(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
-			instanceExt->deviceFactorySingleton, &CLSID_D3D12Debug,
-			&IID_ID3D12Debug1, (void**) &instanceExt->debug1Singleton
-		), e_rr));
+			instance->flags &=~ EGraphicsInstanceFlags_IsDebug;
+		}
 
-		instanceExt->debug1Singleton->lpVtbl->EnableDebugLayer(instanceExt->debug1Singleton);
+		else {
 
-		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
-			instanceExt->debug1Singleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1Singleton, true);
+			ID3D12Debug1 *debugs[2] = { instanceExt->debug1NoSingleton, instanceExt->debug1Singleton };
+
+			for(U64 i = 0; i < 2; ++i) {
+
+				debugs[i]->lpVtbl->EnableDebugLayer(debugs[i]);
+
+				if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
+					debugs[i]->lpVtbl->SetEnableGPUBasedValidation(debugs[i], true);
+			}
+		}
 	}
 
 	//Check for NVApi
@@ -679,10 +756,32 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
 
-		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device. The period
-		// needs a live command queue, so it is filled at device create rather than here.
+		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device.
+		//The period is only reported by a live command queue, so a direct queue is created on the temporary device
+		// for the query and released straight after; device_info.h promises the period wherever the feature is set.
+		//A queue that fails to create leaves it 0 here, and device create fills it from its own graphics queue.
 
 		caps.features2 |= EGraphicsFeatures2_Timestamps;
+
+		{
+			D3D12_COMMAND_QUEUE_DESC queueInfo = (D3D12_COMMAND_QUEUE_DESC) {
+				.Type = D3D12_COMMAND_LIST_TYPE_DIRECT
+			};
+
+			ID3D12CommandQueue *queue = NULL;
+
+			if(SUCCEEDED(device->lpVtbl->CreateCommandQueue(
+				device, &queueInfo, &IID_ID3D12CommandQueue, (void**) &queue
+			))) {
+
+				U64 timestampFreq = 0;
+
+				if(SUCCEEDED(queue->lpVtbl->GetTimestampFrequency(queue, &timestampFreq)) && timestampFreq)
+					caps.timestampPeriod = (F32) (1.0e9 / (F64) timestampFreq);
+
+				queue->lpVtbl->Release(queue);
+			}
+		}
 
 		if(independentDevices)
 			caps.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
@@ -746,13 +845,19 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					"D3D12: Unsupported device %"PRIu64", subgroup size %"PRIu32"-%"PRIu32" is not in range 4-128!",
 					i, opt1.WaveLaneCountMin, opt1.WaveLaneCountMax
 				);
+
+			caps.waveSizeMin = (U8) opt1.WaveLaneCountMin;
+			caps.waveSizeMax = (U8) opt1.WaveLaneCountMax;
 		}
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS3, &opt3, sizeof(opt3))) &&
 			(opt3.WriteBufferImmediateSupportFlags & D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT)   //DRI records on the direct queue
 		)
-			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
+			caps.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
+
+		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasDRED)
+			caps.features2 |= EGraphicsFeatures2_DeviceFault;
 
 		//Predication is core D3D12 (SetPredication), so every device carries the capability.
 
@@ -785,11 +890,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
 
 				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
-
-				//DXR accepts 8-bit OMM index buffers wherever it accepts micromaps at all, unlike Vulkan where
-				// only the KHR extension permits them, so the qualifier ships with the tier.
-
-				caps.features2 |= EGraphicsFeatures2_RayMicromapOpacityU8;
 
 				//RayReorder above only means the SER API is available (it can be a no-op).
 				//OPTIONS22 reports whether the device actually reorders,
@@ -1078,6 +1178,18 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(hasArch && arch.CacheCoherentUMA)
 			caps.featuresExt |= EDxGraphicsFeatures_CacheCoherentUMA;
+
+		//Asked of the factory rather than the adapter, since DXGI decides whether a flip can tear
+
+		BOOL allowTearing = FALSE;
+
+		if(
+			SUCCEEDED(instanceExt->factory->lpVtbl->CheckFeatureSupport(
+				instanceExt->factory, DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing)
+			)) &&
+			allowTearing
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_AllowTearing;
 
 		U64 sharedMem = desc.SharedSystemMemory;
 		U64 dedicatedMem = desc.DedicatedVideoMemory;

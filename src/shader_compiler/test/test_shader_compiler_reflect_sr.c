@@ -363,6 +363,7 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "round-trip interface count",
 			roundTrip.interfaces.length == reflection.interfaces.length && reflection.interfaces.length > 0
 		);
+
 		Test_assert(t, "round-trip hash matches", roundTrip.hash == reflection.hash);
 	}
 

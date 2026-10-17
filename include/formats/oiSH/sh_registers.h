@@ -87,6 +87,11 @@ typedef struct SHRegisterRuntime {
 TList(SHRegister);
 TList(SHRegisterRuntime);
 
+//Whether two registers are the same one. Identity is the SHRegister bytes, the name, the arrays and the shader
+//buffer's contents; the hash only prefilters, for the reason SBFile_equals gives.
+
+Bool SHRegisterRuntime_equals(const SHRegisterRuntime *a, const SHRegisterRuntime *b);
+
 //Whether a register is part of the given binary type at all.
 //Normally that is whether it has a binding, since a register the other backend bound on its own reads U64_MAX
 // here (a standalone DXIL sampler, a SPIRV subpass input).

@@ -257,7 +257,6 @@ clean:
 	) {
 
 		Bool s_uccess = true;
-		CharString line = CharString_createNull();
 
 		//A device with no introspection still validated the pipeline by creating it, so that's what's reported.
 		//On D3D12 that means anything but an AMD driver, since ISA there comes from AMD's own extension.
@@ -295,48 +294,45 @@ clean:
 
 			const PipelineExecutable *e = &execs->ptr[i];
 
-			CharString_free(&line, alloc);
-			gotoIfError3(clean, CharString_format(
-				alloc, &line, e_rr, "; %.*s  subgroup %"PRIu32"\n",
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, out, e_rr, "; %.*s  subgroup %"PRIu32"\n",
 				(int) CharString_length(e->name), e->name.ptr, e->subgroupSize
 			));
-			gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
 
 			for(U64 j = 0; j < e->statistics.length; ++j) {
 
 				const PipelineStatistic *s = &e->statistics.ptr[j];
 				const int nl = (int) CharString_length(s->name);
 
-				CharString_free(&line, alloc);
-
 				switch(s->format) {
 
 					case EPipelineStatisticFormat_Bool:
-						gotoIfError3(clean, CharString_format(
-							alloc, &line, e_rr, ";   %.*s = %s\n", nl, s->name.ptr, s->value ? "true" : "false"
+						gotoIfError3(clean, CharString_appendFormat(
+							alloc, out, e_rr, ";   %.*s = %s\n", nl, s->name.ptr, s->value ? "true" : "false"
 						));
+
 						break;
 
 					case EPipelineStatisticFormat_I64:
-						gotoIfError3(clean, CharString_format(
-							alloc, &line, e_rr, ";   %.*s = %"PRIi64"\n", nl, s->name.ptr, (I64) s->value
+						gotoIfError3(clean, CharString_appendFormat(
+							alloc, out, e_rr, ";   %.*s = %"PRIi64"\n", nl, s->name.ptr, (I64) s->value
 						));
+
 						break;
 
 					case EPipelineStatisticFormat_F64: {
 						const F64 d = F64_fromU64Bits(s->value);
-						gotoIfError3(clean, CharString_format(alloc, &line, e_rr, ";   %.*s = %f\n", nl, s->name.ptr, d));
+						gotoIfError3(clean, CharString_appendFormat(alloc, out, e_rr, ";   %.*s = %f\n", nl, s->name.ptr, d));
 						break;
 					}
 
 					default:
-						gotoIfError3(clean, CharString_format(
-							alloc, &line, e_rr, ";   %.*s = %"PRIu64"\n", nl, s->name.ptr, s->value
+						gotoIfError3(clean, CharString_appendFormat(
+							alloc, out, e_rr, ";   %.*s = %"PRIu64"\n", nl, s->name.ptr, s->value
 						));
+
 						break;
 				}
-
-				gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
 			}
 
 			if(CharString_length(e->disassembly)) {
@@ -348,7 +344,6 @@ clean:
 		}
 
 	clean:
-		CharString_free(&line, alloc);
 		return s_uccess;
 	}
 
@@ -390,7 +385,6 @@ clean:
 	) {
 
 		Bool s_uccess = true;
-		CharString line = CharString_createNull();
 
 		const Bool hasSemantics =
 			entry->inputSemanticNamesU64[0] | entry->inputSemanticNamesU64[1] |
@@ -416,21 +410,17 @@ clean:
 			const ESBPrimitive prim = ESBType_getPrimitive(type);
 			const Bool isInteger = prim == ESBPrimitive_Int || prim == ESBPrimitive_UInt;
 
-			CharString_free(&line, alloc);
-			gotoIfError3(clean, CharString_format(
-				alloc, &line, e_rr, "\t%s%s _v%"PRIu8" : %.*s%"PRIu8";\n",
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, out, e_rr, "\t%s%s _v%"PRIu8" : %.*s%"PRIu8";\n",
 				isInteger ? "nointerpolation " : "",
 				ESBType_name(type),
 				i,
 				(int) CharString_length(semantic), semantic.ptr,
 				hasSemantics ? (U8) (semanticValue & 0xF) : i
 			));
-
-			gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
 		}
 
 	clean:
-		CharString_free(&line, alloc);
 		return s_uccess;
 	}
 
@@ -443,7 +433,6 @@ clean:
 	) {
 
 		Bool s_uccess = true;
-		CharString line = CharString_createNull();
 
 		const CharString head = CharString_createRefCStrConst(
 			"#include \"@types.hlsli\"\n"
@@ -506,13 +495,10 @@ clean:
 				static const C8 *swizzles[4] = { "x", "xy", "xyz", "xyzw" };
 				const U8 comp = (U8) ESBType_getVector(type);
 
-				CharString_free(&line, alloc);
-				gotoIfError3(clean, CharString_format(
-					alloc, &line, e_rr, "\to._v%"PRIu8" = (%s) %s.%s;\n",
+				gotoIfError3(clean, CharString_appendFormat(
+					alloc, out, e_rr, "\to._v%"PRIu8" = (%s) %s.%s;\n",
 					i, ESBType_name(type), source, swizzles[comp & 3]
 				));
-
-				gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
 			}
 
 			const CharString vsTail = CharString_createRefCStrConst("\n\treturn o;\n}\n\n");
@@ -548,9 +534,7 @@ clean:
 				if(!psSource->outputs[i])
 					continue;
 
-				CharString_free(&line, alloc);
-				gotoIfError3(clean, CharString_format(alloc, &line, e_rr, "\tacc.x += (F32) i._v%"PRIu8".x;\n", i));
-				gotoIfError3(clean, CharString_appendString(out, &line, alloc, e_rr));
+				gotoIfError3(clean, CharString_appendFormat(alloc, out, e_rr, "\tacc.x += (F32) i._v%"PRIu8".x;\n", i));
 			}
 
 			const CharString psTail = CharString_createRefCStrConst("\n\treturn acc;\n}\n");
@@ -558,7 +542,6 @@ clean:
 		}
 
 	clean:
-		CharString_free(&line, alloc);
 		return s_uccess;
 	}
 
@@ -685,6 +668,7 @@ clean:
 				Log_errorLnx(
 					"-pso-set: '%.*s' isn't a field this pipeline reports (see the report's paths)", (int) eq, seg.ptr
 				);
+
 				retError(clean, Error_invalidParameter(0, 0, "CLI_isaDisassemble() -pso-set has an unknown field path"));
 			}
 
@@ -984,7 +968,6 @@ clean:
 		PipelineRef *pipeline = NULL;
 		ListPipelineExecutable execs = (ListPipelineExecutable) { 0 };
 		CharString text = CharString_createNull();
-		CharString stageLine = CharString_createNull();
 		SPFile spFile = (SPFile) { 0 };
 		PipelineLayoutRef *pipelineLayout = NULL;
 		ListCharString runtimeNames = (ListCharString) { 0 };
@@ -1653,11 +1636,9 @@ clean:
 
 		if (boundStageCount) {
 
-			gotoIfError3(clean, CharString_format(
-				alloc, &stageLine, e_rr, "; %"PRIu32" stage(s) bound\n", (U32) boundStageCount
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, &text, e_rr, "; %"PRIu32" stage(s) bound\n", (U32) boundStageCount
 			));
-
-			gotoIfError3(clean, CharString_appendString(&text, &stageLine, alloc, e_rr));
 		}
 
 		//The state that produced this disassembly is printed with each field's provenance, so an assumed value is
@@ -1703,7 +1684,6 @@ clean:
 		else Log_debugLnx("%.*s", (int) CharString_length(text), text.ptr);
 
 	clean:
-		CharString_free(&stageLine, alloc);
 		ListCharString_free(&runtimeNames, alloc);
 		ListCharString_freeUnderlying(&liveTargets, alloc);
 		RefPtr_dec(&pipelineLayout);
@@ -1915,6 +1895,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				shFile, liveType, deviceId, liveTarget, hasOutput, outputStr, &fileHandleType, assumeDefaults,
 				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
+
 			goto clean;
 		}
 

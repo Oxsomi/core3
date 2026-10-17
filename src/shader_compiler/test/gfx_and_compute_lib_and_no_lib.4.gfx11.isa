@@ -19,10 +19,10 @@ _amdgpu_cs_main:
 	v_cvt_f32_u32_e32 v3, s3                                   // 000000000054
 	s_load_b256 s[0:7], s[6:7], 0x0                            // 000000000058
 	v_cvt_f32_u32_e32 v4, v0                                   // 000000000060
-	v_rcp_iflag_f32_e32 v2, v2                                 // 000000000064
+	v_rcp_f32_e32 v2, v2                                       // 000000000064
 	v_cvt_f32_u32_e32 v5, v1                                   // 000000000068
-	v_rcp_iflag_f32_e32 v3, v3                                 // 00000000006C
-	s_waitcnt_depctr 0xfff                                     // 000000000070
+	v_rcp_f32_e32 v3, v3                                       // 00000000006C
+	s_waitcnt_depctr depctr_va_vdst(0)                         // 000000000070
 	v_mul_f32_e32 v2, v4, v2                                   // 000000000074
 	v_mov_b32_e32 v4, 0                                        // 000000000078
 	v_mul_f32_e32 v3, v5, v3                                   // 00000000007C

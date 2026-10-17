@@ -333,6 +333,26 @@ U64 Descriptor_bufferLength(const Descriptor *d) {
 	return Descriptor_endBuffer(d) - Descriptor_startBuffer(d);
 }
 
+U64 Descriptor_bufferViewLength(const Descriptor *d, EGfxRegisterType type) {
+
+	if(!d || !d->resource)
+		return 0;
+
+	const U64 size = DeviceBufferRef_ptr(d->resource)->resource.size;
+	const U64 start = Descriptor_startBuffer(d);
+	const U64 end = Descriptor_endBuffer(d) ? Descriptor_endBuffer(d) : size;
+
+	if(end < start)
+		return 0;
+
+	const U64 len = end - start;
+
+	if((type & EGfxRegisterType_TypeMask) != EGfxRegisterType_ByteAddressBuffer || end != size)
+		return len;
+
+	return DeviceBuffer_allocSize(len);
+}
+
 U32 Descriptor_counterOffset(const Descriptor *d) {
 	return !d ? 0 :
 		d->buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
@@ -446,6 +466,12 @@ Bool DescriptorTableRef_unsetDescriptors(
 
 	if(layoutPtr->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_unsetDescriptors() called on a push descriptor"));
+
+	if(DescriptorBinding_immutableSamplerId(bindings.ptr[bindId]))
+		retError(clean, Error_invalidOperation(
+			0,
+			"DescriptorTableRef_unsetDescriptors() a baked sampler binding holds no descriptor to clear"
+		));
 
 	if(!count)
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_unsetDescriptors() needs count of >0"));
@@ -591,6 +617,20 @@ Bool DescriptorTableRef_setDescriptors(
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors() called on a push descriptor"));
 
 	const DescriptorBinding *b = &bindings.ptr[bindId];
+
+	//A baked sampler is in the layout itself and owns no slot in the table, so it has no offset to write at.
+	//D3D12 leaves such a binding out of the descriptor ranges entirely, which leaves its binding offset zero,
+	// so a write aimed here would land on the table's FIRST sampler and overwrite an unrelated one; Vulkan
+	// ignores the sampler a write names on an immutable binding.
+	//Refused rather than dropped, since reaching this at all means the caller thinks it bound something.
+
+	if(DescriptorBinding_immutableSamplerId(*b))
+		retError(clean, Error_invalidOperation(
+			0,
+			"DescriptorTableRef_setDescriptors() a baked sampler binding takes no descriptor; it is named by "
+			"the layout, not written to the table"
+		));
+
 	EGfxRegisterType type = b->registerType & EGfxRegisterType_TypeMask;
 
 	if(arrayId >= b->count)
@@ -766,7 +806,10 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if (type == EGfxRegisterType_ByteAddressBuffer) {
 
-					if(descLen % 4)
+					//A view that reaches the END of the resource rounds up to a whole word instead, since the
+					// backend allocation is padded to one and the alternative is a tail no shader can reach.
+
+					if((descLen % 4) && start + descLen != len)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() byte address buffer length should be aligned to 4"
 						));

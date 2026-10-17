@@ -134,10 +134,12 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	gotoIfError3(
 		clean, StreamCursor_appendBuffer(&cursor, offset, ListSRAnnotation_bufferConst(srFile->annotations), alloc, e_rr)
 	);
+
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRRegister_bufferConst(srFile->registers), alloc, e_rr));
 	gotoIfError3(
 		clean, StreamCursor_appendBuffer(&cursor, offset, ListSREnumValue_bufferConst(srFile->enumValues), alloc, e_rr)
 	);
+
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRType_bufferConst(srFile->types), alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListU32_bufferConst(srFile->arrayDims), alloc, e_rr));
 	gotoIfError3(

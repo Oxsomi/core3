@@ -59,6 +59,20 @@ T getAt(U32 resourceId, U32 id) {
 	return buffer(resourceId).Load<T>(id);
 }
 
+//Reads through the WRITABLE view, for a buffer the same dispatch also writes. A handle only indexes the table it
+//was allocated in, so a write handle given to getAt reads whatever the read-only table holds at that index: a
+//different resource, with no error. The RW suffix is what says which table the handle belongs to.
+
+template<typename T>
+T getAtUniformRW(U32 resourceId, U32 id) {
+	return rwBufferUniform(resourceId).Load<T>(id);
+}
+
+template<typename T>
+T getAtRW(U32 resourceId, U32 id) {
+	return rwBuffer(resourceId).Load<T>(id);
+}
+
 template<typename T>
 void setAtUniform(U32 resourceId, U32 id, T t) {
 	rwBufferUniform(resourceId).Store<T>(id, t);

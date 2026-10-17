@@ -111,6 +111,10 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 		U16 oldId = U16_MAX;
 
+		//Names hold the structs first and the variables after them, so a variable's name index is offset by the
+		// struct count on both sides: the search ends at the last variable, and a found index is a variable's
+		// only once that offset is taken off.
+
 		{
 			//The name pool holds the struct names first and the variable names after them, so a variable's
 			//name id is structs.length + its index and the search range is the second half of the pool.

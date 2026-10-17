@@ -70,7 +70,6 @@ clean:
 static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 
 	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
 
 	gotoIfError3(clean, CharString_append(w->out, '"', w->alloc, e_rr));
 
@@ -93,9 +92,7 @@ static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 			default:
 
 				if((U8) c < 0x20) {
-					CharString_free(&tmp, w->alloc);
-					gotoIfError3(clean, CharString_format(w->alloc, &tmp, e_rr, "\\u%04x", (U32)(U8) c));
-					gotoIfError3(clean, CharString_appendString(w->out, &tmp, w->alloc, e_rr));
+					gotoIfError3(clean, CharString_appendFormat(w->alloc, w->out, e_rr, "\\u%04x", (U32)(U8) c));
 					break;
 				}
 
@@ -107,7 +104,6 @@ static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 	gotoIfError3(clean, CharString_append(w->out, '"', w->alloc, e_rr));
 
 clean:
-	CharString_free(&tmp, w->alloc);
 	return s_uccess;
 }
 
@@ -175,12 +171,13 @@ static Bool JsonWriter_begin(JsonWriter *w, Bool isObject, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	gotoIfError3(clean, JsonWriter_valuePrefix(w, e_rr));
-
-	if(w->depth >= JsonWriter_MAX_DEPTH)
+	//Before the prefix, which consumes a pending key or writes a comma
+	if(w && w->depth >= JsonWriter_MAX_DEPTH)
 		retError(clean, Error_outOfBounds(
 			0, w->depth, JsonWriter_MAX_DEPTH, "JsonWriter_begin() nests deeper than a document may"
 		));
+
+	gotoIfError3(clean, JsonWriter_valuePrefix(w, e_rr));
 
 	gotoIfError3(clean, CharString_append(w->out, isObject ? '{' : '[', w->alloc, e_rr));
 
@@ -342,7 +339,11 @@ clean:
 
 Bool JsonWriter_u64(JsonWriter *w, U64 v, Error *e_rr) { return JsonWriter_fmt(w, e_rr, "%"PRIu64, v); }
 Bool JsonWriter_i64(JsonWriter *w, I64 v, Error *e_rr) { return JsonWriter_fmt(w, e_rr, "%"PRIi64, v); }
-Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr) { return JsonWriter_fmt(w, e_rr, "%g", v); }
+//JSON has no NaN or infinity (v - v is 0 for every finite v only), and 17 digits round trip a double
+
+Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr) {
+	return v - v != 0 ? JsonWriter_null(w, e_rr) : JsonWriter_fmt(w, e_rr, "%.17g", v);
+}
 
 Bool JsonWriter_keyObject(JsonWriter *w, const C8 *key, Error *e_rr) {
 	return JsonWriter_key(w, key, e_rr) && JsonWriter_beginObject(w, e_rr);

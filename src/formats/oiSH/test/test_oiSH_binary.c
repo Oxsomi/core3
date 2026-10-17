@@ -139,6 +139,10 @@ void Test_SHFileAddBinInvalidExtensions(Test *t) {
 	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 	info.identifier.extensions = (ESHExtension)(1u << ESHExtension_Count);
 	Test_assert(t, "bad extensions rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
+
+	info.identifier.extensions = ESHExtension_None;
+	info.identifier.extensions2 = (ESHExtension2)(1u << ESHExtension2_Count);
+	Test_assert(t, "bad extensions2 rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
 	SHFile_free(&sh, t->alloc);
 }
 
