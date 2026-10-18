@@ -108,7 +108,7 @@ static HashIndex Allocator_allocationIndex;
 		.compare = U64_compare,
 		.stride = sizeof(DebugAllocation),
 		.keyOffset = offsetof(DebugAllocation, location),
-		.smallLimit = 32
+		.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
 	};
 
 #endif

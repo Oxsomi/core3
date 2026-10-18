@@ -139,7 +139,7 @@ void Test_hashIndex(Test *t) {
 		Test_assert(t, "zeroed index clears", HashIndex_clear(&index, e_rr));
 
 		HashIndex_free(&index, alloc);
-		Test_assert(t, "freeing a zeroed index is a no-op", !index.slots && !index.capacity);
+		Test_assert(t, "freeing a zeroed index is a no-op", !index.slots.ptr && !index.slots.length);
 	}
 
 	//========================= small mode, get or add and erase =========================
@@ -206,7 +206,7 @@ void Test_hashIndex(Test *t) {
 		ok &= HashIndexTest_add(&index, &info, &list, 8, &existing, alloc, e_rr);
 
 		Test_assert(t, "one past the limit builds the slot array", ok && !HashIndex_isSmall(index));
-		Test_assert(t, "the first slot array is the minimum capacity", index.capacity == 64);
+		Test_assert(t, "the first slot array is the minimum capacity", index.slots.length == 64);
 		Test_assert(t, "every earlier key survived the transition", HashIndexTest_consistent(&index, &info, &list));
 
 		//Past 3/4 of 64 the table doubles, re-placing from its slots rather than from the keys.
@@ -214,15 +214,15 @@ void Test_hashIndex(Test *t) {
 		for(U64 i = 9; i < 60; ++i)
 			ok &= HashIndexTest_add(&index, &info, &list, i, &existing, alloc, e_rr);
 
-		Test_assert(t, "growth kept every key", ok && index.capacity == 128 && list.length == 60);
+		Test_assert(t, "growth kept every key", ok && index.slots.length == 128 && list.length == 60);
 		Test_assert(t, "consistent after growth", HashIndexTest_consistent(&index, &info, &list));
-		Test_assert(t, "load stays at or below 3/4", index.count * 4 <= index.capacity * 3);
+		Test_assert(t, "load stays at or below 3/4", index.count * 4 <= index.slots.length * 3);
 
 		//clear keeps the slot array, so a table refilled every frame allocates once.
 
-		const U64 capacity = index.capacity;
+		const U64 capacity = index.slots.length;
 		Test_assert(t, "clear", HashIndex_clear(&index, e_rr) && ListU64_clear(&list, e_rr));
-		Test_assert(t, "clear keeps the capacity", index.capacity == capacity && !index.count);
+		Test_assert(t, "clear keeps the capacity", index.slots.length == capacity && !index.count);
 
 		const U64 gone = 11;
 		Test_assert(t, "cleared table finds nothing", HashIndex_find(&index, &info, list.ptr, &gone) == U64_MAX);
@@ -245,14 +245,14 @@ void Test_hashIndex(Test *t) {
 		ok &= HashIndex_reserve(&index, &info, list.ptr, 300, alloc, e_rr);
 		ok &= ListU64_reserve(&list, 300, alloc, e_rr);
 
-		const U64 capacity = index.capacity;
+		const U64 capacity = index.slots.length;
 
 		Test_assert(t, "reserve built a table for 300", ok && capacity == 512);
 
 		for(U64 i = 0; i < 300; ++i)
 			ok &= HashIndexTest_add(&index, &info, &list, i * 0x9E3779B1, &existing, alloc, e_rr);
 
-		Test_assert(t, "300 inserts fit the reserved table", ok && index.capacity == capacity);
+		Test_assert(t, "300 inserts fit the reserved table", ok && index.slots.length == capacity);
 		Test_assert(t, "reserved table is consistent", HashIndexTest_consistent(&index, &info, &list));
 
 		HashIndex_free(&index, alloc);
@@ -294,7 +294,7 @@ void Test_hashIndex(Test *t) {
 
 		Test_assert(t, "refilled to 2000", ok && list.length == 2000);
 		Test_assert(t, "consistent after refilling", HashIndexTest_consistent(&index, &info, &list));
-		Test_assert(t, "load stays at or below 3/4 after churn", index.count * 4 <= index.capacity * 3);
+		Test_assert(t, "load stays at or below 3/4 after churn", index.count * 4 <= index.slots.length * 3);
 
 		for(U64 i = 0; i < 2000 && ok; ++i)
 			ok &= HashIndexTest_erase(&index, &info, &list, 0, e_rr);
@@ -414,24 +414,24 @@ void Test_hashIndex(Test *t) {
 			ok &= HashIndexTest_add(&index, &info, &list, key, &existing, alloc, e_rr);
 		}
 
-		Test_assert(t, "786000 random keys added", ok && index.capacity == ((U64)1 << 20));
+		Test_assert(t, "786000 random keys added", ok && index.slots.length == ((U64)1 << 20));
 
 		U64 maxDisplacement = 0;
 
-		for (U64 i = 0; i < index.capacity; ++i) {
+		for (U64 i = 0; i < index.slots.length; ++i) {
 
-			if(!index.slots[i].index)
+			if(!index.slots.ptr[i].index)
 				continue;
 
-			const U64 home = index.slots[i].hash & (index.capacity - 1);
-			const U64 displacement = (i - home) & (index.capacity - 1);
+			const U64 home = index.slots.ptr[i].hash & (index.slots.length - 1);
+			const U64 displacement = (i - home) & (index.slots.length - 1);
 
 			if(maxDisplacement < displacement)
 				maxDisplacement = displacement;
 		}
 
 		Test_assert(t, "observed maximum stays under half the ceiling at 2^20",
-			maxDisplacement * 2 < HashIndex_displacementCeiling(index.capacity)
+			maxDisplacement * 2 < HashIndex_displacementCeiling(index.slots.length)
 		);
 
 		HashIndex_free(&index, alloc);
@@ -470,7 +470,7 @@ void Test_hashIndex(Test *t) {
 		}
 
 		Test_assert(t, "the flood is refused rather than absorbed", refused);
-		Test_assert(t, "it is refused within two doublings of what it earned", index.capacity <= 256);
+		Test_assert(t, "it is refused within two doublings of what it earned", index.slots.length <= 256);
 		Test_assert(t, "the refused insert left the index matching the list", index.count == list.length);
 		Test_assert(t, "what did get in is still findable", HashIndexTest_consistent(&index, &info, &list));
 
@@ -478,13 +478,13 @@ void Test_hashIndex(Test *t) {
 
 		U64 occupied = 0, collided = 0;
 
-		for (U64 i = 0; i < index.capacity; ++i) {
+		for (U64 i = 0; i < index.slots.length; ++i) {
 
-			if(!index.slots[i].index)
+			if(!index.slots.ptr[i].index)
 				continue;
 
 			++occupied;
-			collided += index.slots[i].hash == 0xABCD1234;
+			collided += index.slots.ptr[i].hash == 0xABCD1234;
 		}
 
 		Test_assert(t, "every key that got in shares one hash", added > 1 && occupied && occupied == collided);

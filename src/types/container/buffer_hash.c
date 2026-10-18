@@ -345,10 +345,6 @@ MD5Hash Buffer_md5(const Buffer buf) {
 	return hash;
 }
 
-U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
-	return (a ^ hash) * Buffer_fnv1a64Prime;
-}
-
 U64 Buffer_fnv1a64(const Buffer buf, U64 hash) {
 
 	U64 len = Buffer_length(buf);
@@ -375,16 +371,4 @@ U64 Buffer_fnv1a64(const Buffer buf, U64 hash) {
 		hash = Buffer_fnv1a64Single(buf.ptr[off], hash);
 
 	return hash;
-}
-
-//The seed xors into the fnv1a state, which costs no step and still moves every key.
-
-U64 U32_hash(const void *key, U64 seed, void *context) {
-	(void) context;
-	return Buffer_fnv1a64Single(*(const U32*) key, seed ^ Buffer_fnv1a64Offset);
-}
-
-U64 U64_hash(const void *key, U64 seed, void *context) {
-	(void) context;
-	return Buffer_fnv1a64Single(*(const U64*) key, seed ^ Buffer_fnv1a64Offset);
 }

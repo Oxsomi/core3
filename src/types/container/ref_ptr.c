@@ -28,14 +28,7 @@
 TListNamedImpl(ListRefPtr);
 TListNamedImpl(ListWeakRefPtr);
 
-static const HashIndexInfo HashSetRefPtr_indexInfo = {
-	.hash = U64_hash,
-	.compare = U64_compare,
-	.stride = sizeof(RefPtr*),
-	.smallLimit = 32
-};
-
-THashSetNamedImpl(ListRefPtr, HashSetRefPtr, &HashSetRefPtr_indexInfo);
+THashSetImplKey(RefPtr, U64);
 
 Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 

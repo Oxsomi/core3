@@ -24,6 +24,9 @@
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/container/list_impl.h"
+
+TListImpl(HashSlot);
 
 //Read once per table, when its slot array is built, and the only global anything here touches.
 
@@ -31,13 +34,6 @@ static U64 HashIndex_processSeed = 0x9E3779B97F4A7C15;
 
 void HashIndex_initSeed(U64 seed) {
 	HashIndex_processSeed = seed;
-}
-
-U32 HashIndex_finalize(U64 hash) {
-	hash ^= hash >> 32;
-	hash *= HashIndex_finalizeMultiplier;
-	hash ^= hash >> 32;
-	return (U32) hash;
 }
 
 U64 HashIndex_displacementCeiling(U64 capacity) {
@@ -50,53 +46,32 @@ U64 HashIndex_displacementCeiling(U64 capacity) {
 	return (bits << 1) + 16;
 }
 
-static const void *HashIndex_keyOf(const HashIndexInfo *info, const void *entries, U64 index) {
-	return info->getKey ?
-		info->getKey(entries, index, info->context) :
-		(const void*)((const U8*) entries + index * info->stride + info->keyOffset);
-}
-
-static U32 HashIndex_hashKey(const HashIndexInfo *info, U64 seed, const void *key) {
-	return HashIndex_finalize(info->hash(key, seed, info->context));
-}
-
-static Bool HashIndex_entryMatches(const HashIndexInfo *info, const void *entries, U64 entry, const void *key) {
-	return info->compare(HashIndex_keyOf(info, entries, entry), key, info->context) == ECompareResult_Eq;
-}
-
-//Robin Hood keeps homes non decreasing along a run, so a slot LESS displaced than the probe has reached is a
-// proof of absence: the key would have taken that slot.
-
-static U64 HashIndex_displacement(U64 pos, U32 hash, U64 mask) {
-	return (pos - ((U64) hash & mask)) & mask;
-}
-
 //An occupant sitting closer to its own home than what is being carried hands the slot over and is carried on.
 //Returns the greatest displacement anything ended up at, so the ceiling is compared against once rather than
 // at every step. The load cap is what terminates this: an empty slot always exists.
 
 static U64 HashIndex_place(HashIndex *index, U64 pos, U32 hash, U32 slotIndex) {
 
-	const U64 mask = index->capacity - 1;
+	const U64 mask = index->slots.length - 1;
 	U64 maxDisplacement = 0;
 
 	for (;;) {
 
 		const U64 displacement = HashIndex_displacement(pos, hash, mask);
-		const HashSlot slot = index->slots[pos];
+		const HashSlot slot = index->slots.ptr[pos];
 
 		if(maxDisplacement < displacement)
 			maxDisplacement = displacement;
 
 		if (!slot.index) {
-			index->slots[pos].hash = hash;
-			index->slots[pos].index = slotIndex;
+			index->slots.ptrNonConst[pos].hash = hash;
+			index->slots.ptrNonConst[pos].index = slotIndex;
 			return maxDisplacement;
 		}
 
 		if (HashIndex_displacement(pos, slot.hash, mask) < displacement) {
-			index->slots[pos].hash = hash;
-			index->slots[pos].index = slotIndex;
+			index->slots.ptrNonConst[pos].hash = hash;
+			index->slots.ptrNonConst[pos].index = slotIndex;
 			hash = slot.hash;
 			slotIndex = slot.index;
 		}
@@ -109,12 +84,12 @@ static U64 HashIndex_place(HashIndex *index, U64 pos, U32 hash, U32 slotIndex) {
 
 static Bool HashIndex_findSlot(const HashIndex *index, U32 hash, U64 entry, U64 *res) {
 
-	const U64 mask = index->capacity - 1;
+	const U64 mask = index->slots.length - 1;
 	U64 pos = (U64) hash & mask;
 
 	for (U64 displacement = 0; ; ++displacement, pos = (pos + 1) & mask) {
 
-		const HashSlot slot = index->slots[pos];
+		const HashSlot slot = index->slots.ptr[pos];
 
 		if(!slot.index || HashIndex_displacement(pos, slot.hash, mask) < displacement)
 			return false;
@@ -130,22 +105,22 @@ static Bool HashIndex_findSlot(const HashIndex *index, U32 hash, U64 entry, U64 
 
 static void HashIndex_removeAt(HashIndex *index, U64 pos) {
 
-	const U64 mask = index->capacity - 1;
+	const U64 mask = index->slots.length - 1;
 
 	for (;;) {
 
 		const U64 next = (pos + 1) & mask;
-		const HashSlot slot = index->slots[next];
+		const HashSlot slot = index->slots.ptr[next];
 
 		if(!slot.index || !HashIndex_displacement(next, slot.hash, mask))
 			break;
 
-		index->slots[pos] = slot;
+		index->slots.ptrNonConst[pos] = slot;
 		pos = next;
 	}
 
-	index->slots[pos].hash = 0;
-	index->slots[pos].index = 0;
+	index->slots.ptrNonConst[pos].hash = 0;
+	index->slots.ptrNonConst[pos].index = 0;
 }
 
 //A key set solved for one slot survives every doubling, and the ceiling grows with the capacity, so growing
@@ -185,7 +160,7 @@ static Bool HashIndex_resize(
 ) {
 
 	Bool s_uccess = true;
-	Buffer slots = Buffer_createNull();
+	ListHashSlot slots = (ListHashSlot) { 0 };
 	HashIndex next = (HashIndex) { 0 };
 
 	for (;;) {
@@ -195,22 +170,21 @@ static Bool HashIndex_resize(
 				3, capacity, HashIndex_maxCapacity, "HashIndex_resize()::capacity out of bounds"
 			));
 
-		gotoIfError3(clean, Buffer_createEmptyBytes(capacity * sizeof(HashSlot), allocator, &slots, e_rr));
+		gotoIfError3(clean, ListHashSlot_create(capacity, allocator, &slots, e_rr));
 
 		next = (HashIndex) { 0 };
-		next.slots = (HashSlot*) slots.ptrNonConst;
-		next.capacity = capacity;
+		next.slots = slots;
 		next.count = index->count;
-		next.seed = index->capacity ? index->seed : HashIndex_processSeed;
+		next.seed = index->slots.length ? index->seed : HashIndex_processSeed;
 
 		U64 maxDisplacement = 0;
 
 		//Growth re-reads no key: the slot holds the whole hash. Only leaving small mode has to hash.
 
-		if (index->capacity)
-			for (U64 i = 0; i < index->capacity; ++i) {
+		if (index->slots.length)
+			for (U64 i = 0; i < index->slots.length; ++i) {
 
-				const HashSlot slot = index->slots[i];
+				const HashSlot slot = index->slots.ptr[i];
 
 				if(!slot.index)
 					continue;
@@ -235,7 +209,7 @@ static Bool HashIndex_resize(
 		if(maxDisplacement <= HashIndex_displacementCeiling(capacity))
 			break;
 
-		Buffer_free(&slots, allocator);
+		ListHashSlot_free(&slots, allocator);
 		next = (HashIndex) { 0 };
 
 		if(!HashIndex_mayGrowOnBreach(index->count, capacity))
@@ -246,45 +220,12 @@ static Bool HashIndex_resize(
 
 	HashIndex_free(index, allocator);
 	*index = next;
-	slots = Buffer_createNull();
+	slots = (ListHashSlot) { 0 };
 
 clean:
 
-	Buffer_free(&slots, allocator);
+	ListHashSlot_free(&slots, allocator);
 	return s_uccess;
-}
-
-U64 HashIndex_find(const HashIndex *index, const HashIndexInfo *info, const void *entries, const void *key) {
-
-	if(!index || !info || !info->hash || !info->compare || !key)
-		return U64_MAX;
-
-	if (!index->capacity) {
-
-		for(U64 i = 0; i < index->count; ++i)
-			if(HashIndex_entryMatches(info, entries, i, key))
-				return i;
-
-		return U64_MAX;
-	}
-
-	const U64 mask = index->capacity - 1;
-	const U32 hash = HashIndex_hashKey(info, index->seed, key);
-
-	U64 pos = (U64) hash & mask;
-
-	for (U64 displacement = 0; ; ++displacement, pos = (pos + 1) & mask) {
-
-		const HashSlot slot = index->slots[pos];
-
-		if(!slot.index || HashIndex_displacement(pos, slot.hash, mask) < displacement)
-			return U64_MAX;
-
-		//The stored hash rejects a wrong entry without touching the caller's data; the compare is what decides.
-
-		if(slot.hash == hash && HashIndex_entryMatches(info, entries, slot.index - 1, key))
-			return slot.index - 1;
-	}
 }
 
 Bool HashIndex_reserve(
@@ -306,10 +247,10 @@ Bool HashIndex_reserve(
 
 	//Small mode holds no slots at all, so there is nothing to make room for.
 
-	if(!index->capacity && count <= info->smallLimit)
+	if(!index->slots.length && count <= info->smallLimit)
 		goto clean;
 
-	if(index->capacity && count * HashIndex_maxLoadDenominator <= index->capacity * HashIndex_maxLoadNumerator)
+	if(index->slots.length && count * HashIndex_maxLoadDenominator <= index->slots.length * HashIndex_maxLoadNumerator)
 		goto clean;
 
 	gotoIfError3(clean, HashIndex_resize(index, info, entries, HashIndex_capacityFor(count), allocator, e_rr));
@@ -350,7 +291,7 @@ Bool HashIndex_insert(
 
 	//Small mode: a linear scan, with no slots until it outgrows the limit.
 
-	if (!index->capacity) {
+	if (!index->slots.length) {
 
 		for(U64 i = 0; i < index->count; ++i)
 			if (HashIndex_entryMatches(info, entries, i, key)) {
@@ -373,18 +314,18 @@ Bool HashIndex_insert(
 
 	//Checked before anything walks, which is what guarantees the loops below terminate.
 
-	else if((index->count + 1) * HashIndex_maxLoadDenominator > index->capacity * HashIndex_maxLoadNumerator)
-		gotoIfError3(clean, HashIndex_resize(index, info, entries, index->capacity << 1, allocator, e_rr));
+	else if((index->count + 1) * HashIndex_maxLoadDenominator > index->slots.length * HashIndex_maxLoadNumerator)
+		gotoIfError3(clean, HashIndex_resize(index, info, entries, index->slots.length << 1, allocator, e_rr));
 
 	{
-		const U64 mask = index->capacity - 1;
+		const U64 mask = index->slots.length - 1;
 		const U32 hash = HashIndex_hashKey(info, index->seed, key);
 
 		U64 pos = (U64) hash & mask;
 
 		for (U64 displacement = 0; ; ++displacement, pos = (pos + 1) & mask) {
 
-			const HashSlot slot = index->slots[pos];
+			const HashSlot slot = index->slots.ptr[pos];
 
 			//Both prove absence, and are exactly where the new entry claims the slot.
 
@@ -406,12 +347,12 @@ Bool HashIndex_insert(
 		//A run past the ceiling is the flooding case rather than a tuning miss, so it grows even though the
 		// load is fine. Undoing keeps this all or nothing once that growth is refused.
 
-		if (maxDisplacement > HashIndex_displacementCeiling(index->capacity)) {
+		if (maxDisplacement > HashIndex_displacementCeiling(index->slots.length)) {
 
 			Bool grown = false;
 
-			if(HashIndex_mayGrowOnBreach(index->count, index->capacity))
-				grown = HashIndex_resize(index, info, entries, index->capacity << 1, allocator, e_rr);
+			if(HashIndex_mayGrowOnBreach(index->count, index->slots.length))
+				grown = HashIndex_resize(index, info, entries, index->slots.length << 1, allocator, e_rr);
 
 			else if(e_rr)
 				*e_rr = Error_invalidState(0, "HashIndex_insert() key set exceeds the displacement ceiling");
@@ -450,7 +391,7 @@ Bool HashIndex_eraseSwap(
 	if(entryIndex >= index->count)
 		retError(clean, Error_outOfBounds(3, entryIndex, index->count, "HashIndex_eraseSwap()::entryIndex out of bounds"));
 
-	if (index->capacity) {
+	if (index->slots.length) {
 
 		const U64 last = index->count - 1;
 
@@ -474,7 +415,7 @@ Bool HashIndex_eraseSwap(
 
 			//Repointing moves no slot, so the removal below still finds its own where it was located.
 
-			index->slots[tail].index = (U32)(entryIndex + 1);
+			index->slots.ptrNonConst[tail].index = (U32)(entryIndex + 1);
 		}
 
 		HashIndex_removeAt(index, hole);
@@ -493,9 +434,9 @@ Bool HashIndex_clear(HashIndex *index, Error *e_rr) {
 	if(!index)
 		retError(clean, Error_nullPointer(0, "HashIndex_clear()::index is required"));
 
-	if(index->capacity)
+	if(index->slots.length)
 		gotoIfError3(clean, Buffer_unsetAllBits(
-			Buffer_createRef(index->slots, index->capacity * sizeof(HashSlot)), e_rr
+			Buffer_createRef(index->slots.ptrNonConst, index->slots.length * sizeof(HashSlot)), e_rr
 		));
 
 	index->count = 0;
@@ -509,10 +450,6 @@ void HashIndex_free(HashIndex *index, const Allocator *allocator) {
 	if(!index)
 		return;
 
-	if (index->capacity) {
-		Buffer slots = Buffer_createManagedPtr(index->slots, index->capacity * sizeof(HashSlot));
-		Buffer_free(&slots, allocator);
-	}
-
+	ListHashSlot_free(&index->slots, allocator);
 	*index = (HashIndex) { 0 };
 }

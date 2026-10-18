@@ -350,7 +350,7 @@ static const HashIndexInfo DescriptorTable_resourceIndexInfo = {
 	.compare = U64_compare,
 	.stride = sizeof(DescriptorTableResourceRef),
 	.keyOffset = offsetof(DescriptorTableResourceRef, resource),
-	.smallLimit = 32
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
 };
 
 Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {

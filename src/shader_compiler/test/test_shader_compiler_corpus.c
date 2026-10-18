@@ -864,7 +864,15 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 						if (File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, &err)) {
 
-							const Bool matches = Buffer_eq(isa, golden);
+							//The goldens are committed with LF, which a checkout may have turned into CRLF.
+
+							U64 goldenLen = 0;
+
+							for(U64 j = 0; j < Buffer_length(golden); ++j)
+								if(golden.ptr[j] != '\r')
+									golden.ptrNonConst[goldenLen++] = golden.ptr[j];
+
+							const Bool matches = Buffer_eq(isa, Buffer_createRefConst(golden.ptr, goldenLen));
 
 							if (!matches)
 								Log_errorLn(alloc, "ISA mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);

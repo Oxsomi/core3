@@ -71,7 +71,7 @@ static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }            
 static inline ECompareResult T##_compare(const void *a, const void *b, void *context) {                 \
 	const T x = *(const T*) a, y = *(const T*) b;                                                       \
 	(void) context;                                                                                     \
-	return x < y ? ECompareResult_Lt : (x > y ? ECompareResult_Gt : ECompareResult_Eq);                 \
+	return x == y ? ECompareResult_Eq : (x < y ? ECompareResult_Lt : ECompareResult_Gt);                \
 }
 
 //rol/ror below mask the second shift as well as the first.

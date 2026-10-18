@@ -22,6 +22,7 @@
 //
 //Covers THashSet over a whole entry key, a key inside a struct and a key behind a callback: get or add, find,
 // small mode, eraseSwap handing the entry back, clear, geometric reserve, an allocator that fails and a flood.
+//The hand written infos cover the general form; the Key and KeyField macros cover the generated one.
 
 #include "test_types_container_shared.h"
 #include "test_types_container_flood.h"
@@ -42,11 +43,24 @@ typedef struct KeyedEntry {
 TList(KeyedEntry);
 TListImpl(KeyedEntry);
 
+//The key sits past the start of the entry, so a keyOffset that is dropped hashes the wrong field.
+
+typedef struct FieldEntry {
+	U32 value;
+	U32 key;
+	U64 payload;
+} FieldEntry;
+
+TList(FieldEntry);
+TListImpl(FieldEntry);
+
 THashSet(U64);
 THashSet(KeyedEntry);
+THashSet(FieldEntry);
 
 THashSetNamed(ListKeyedEntry, HashSetKeyedGet);
 THashSetNamed(ListU64, HashSetFlood);
+THashSetNamed(ListU64, HashSetWord);
 
 static const HashIndexInfo HashSetTest_u64Info = {
 	.hash = U64_hash,
@@ -89,6 +103,8 @@ THashSetImpl(U64, &HashSetTest_u64Info);
 THashSetImpl(KeyedEntry, &HashSetTest_entryInfo);
 THashSetNamedImpl(ListKeyedEntry, HashSetKeyedGet, &HashSetTest_getKeyInfo);
 THashSetNamedImpl(ListU64, HashSetFlood, &HashSetTest_floodInfo);
+THashSetImplKeyField(FieldEntry, U32, key);
+THashSetNamedImplKey(ListU64, HashSetWord, U64);
 
 //Statically zeroed, so it only works if a zeroed set needs no init call.
 
@@ -152,6 +168,34 @@ static Bool HashSetTest_floodConsistent(const HashSetFlood *set) {
 	return true;
 }
 
+static Bool HashSetTest_fieldConsistent(const HashSetFieldEntry *set) {
+
+	if(set->index.count != set->list.length)
+		return false;
+
+	for (U64 i = 0; i < set->list.length; ++i)
+		if(HashSetFieldEntry_find(set, &set->list.ptr[i].key) != i)
+			return false;
+
+	return true;
+}
+
+static Bool HashSetTest_wordConsistent(const HashSetWord *set) {
+
+	if(set->index.count != set->list.length)
+		return false;
+
+	for (U64 i = 0; i < set->list.length; ++i)
+		if(HashSetWord_find(set, &set->list.ptr[i]) != i)
+			return false;
+
+	return true;
+}
+
+static U64 HashSetTest_wordKey(U64 i) {
+	return i * 0x9E3779B1 + 3;
+}
+
 static Bool HashSetTest_sameEntry(KeyedEntry a, KeyedEntry b) {
 	return a.payload == b.payload && a.id == b.id && a.value == b.value;
 }
@@ -174,7 +218,7 @@ void Test_hashSet(Test *t) {
 		Test_assert(t, "zeroed set clears", HashSetU64_clear(&set, e_rr));
 
 		HashSetU64_free(&set, alloc);
-		Test_assert(t, "freeing a zeroed set is a no-op", !set.list.ptr && !set.index.slots);
+		Test_assert(t, "freeing a zeroed set is a no-op", !set.list.ptr && !set.index.slots.ptr);
 	}
 
 	{
@@ -191,7 +235,7 @@ void Test_hashSet(Test *t) {
 		Test_assert(t, "free zeroes both halves", (
 			!HashSetTest_global.list.ptr &&
 			!HashSetTest_global.list.length &&
-			!HashSetTest_global.index.slots &&
+			!HashSetTest_global.index.slots.ptr &&
 			!HashSetTest_global.index.count
 		));
 	}
@@ -528,7 +572,7 @@ void Test_hashSet(Test *t) {
 		for(U64 i = 0; i < 100; ++i)
 			ok &= HashSetU64_insert(&set, i, NULL, alloc, e_rr);
 
-		const U64 indexCapacity = set.index.capacity;
+		const U64 indexCapacity = set.index.slots.length;
 		const U64 listCapacity = set.list.capacityAndRefInfo;
 
 		Test_assert(t, "clear empties both halves", (
@@ -536,7 +580,7 @@ void Test_hashSet(Test *t) {
 		));
 
 		Test_assert(t, "clear keeps the capacity of both", (
-			indexCapacity && set.index.capacity == indexCapacity && set.list.capacityAndRefInfo == listCapacity
+			indexCapacity && set.index.slots.length == indexCapacity && set.list.capacityAndRefInfo == listCapacity
 		));
 
 		const U64 gone = 5;
@@ -554,7 +598,7 @@ void Test_hashSet(Test *t) {
 		HashSetU64 set = (HashSetU64) { 0 };
 		Bool ok = HashSetU64_reserve(&set, 300, alloc, e_rr);
 
-		const U64 indexCapacity = set.index.capacity;
+		const U64 indexCapacity = set.index.slots.length;
 		const U64 listCapacity = set.list.capacityAndRefInfo;
 
 		Test_assert(t, "reserve sized both halves", ok && indexCapacity == 512 && listCapacity == 300);
@@ -563,7 +607,7 @@ void Test_hashSet(Test *t) {
 			ok &= HashSetU64_insert(&set, i * 0x9E3779B1, NULL, alloc, e_rr);
 
 		Test_assert(t, "300 inserts grew neither half", (
-			ok && set.index.capacity == indexCapacity && set.list.capacityAndRefInfo == listCapacity
+			ok && set.index.slots.length == indexCapacity && set.list.capacityAndRefInfo == listCapacity
 		));
 
 		Test_assert(t, "the reserved set is consistent", HashSetTest_u64Consistent(&set));
@@ -678,9 +722,9 @@ void Test_hashSet(Test *t) {
 			ok &= HashSetU64_insert(&big, i * 0x9E3779B1, NULL, alloc, e_rr);
 
 		const U64 bigCapacity = big.list.capacityAndRefInfo;
-		const U64 indexCapacity = big.index.capacity;
+		const U64 indexCapacity = big.index.slots.length;
 		const U64 *bigPtr = big.list.ptr;
-		const HashSlot *slots = big.index.slots;
+		const HashSlot *slots = big.index.slots.ptr;
 
 		Test_assert(t, "setup: a slot array set whose list is exactly full", (
 			ok && !HashIndex_isSmall(big.index) && big.list.length == bigCapacity
@@ -696,9 +740,9 @@ void Test_hashSet(Test *t) {
 			big.list.length == 96 &&
 			big.index.count == 96 &&
 			big.list.capacityAndRefInfo == bigCapacity &&
-			big.index.capacity == indexCapacity &&
+			big.index.slots.length == indexCapacity &&
 			big.list.ptr == bigPtr &&
-			big.index.slots == slots &&
+			big.index.slots.ptr == slots &&
 			HashSetTest_u64Consistent(&big)
 		));
 
@@ -735,9 +779,9 @@ void Test_hashSet(Test *t) {
 			ok &= HashSetU64_insert(&set, i * 0x9E3779B1, NULL, alloc, e_rr);
 
 		const U64 *ptr = set.list.ptr;
-		const HashSlot *slots = set.index.slots;
+		const HashSlot *slots = set.index.slots.ptr;
 		const U64 listCapacity = set.list.capacityAndRefInfo;
-		const U64 indexCapacity = set.index.capacity;
+		const U64 indexCapacity = set.index.slots.length;
 
 		Test_assert(t, "setup: 10 keys past small mode", ok && !HashIndex_isSmall(set.index));
 		Test_assert(t, "reserve fails with a failing allocator", !HashSetU64_reserve(&set, 5000, &failing, NULL));
@@ -745,9 +789,9 @@ void Test_hashSet(Test *t) {
 			set.list.length == 10 &&
 			set.index.count == 10 &&
 			set.list.ptr == ptr &&
-			set.index.slots == slots &&
+			set.index.slots.ptr == slots &&
 			set.list.capacityAndRefInfo == listCapacity &&
-			set.index.capacity == indexCapacity &&
+			set.index.slots.length == indexCapacity &&
 			HashSetTest_u64Consistent(&set)
 		));
 
@@ -840,7 +884,7 @@ void Test_hashSet(Test *t) {
 
 		//A key that finalizes to the far side of the table from the colliding run.
 
-		const U64 other = HashFlood_unfinalize(((U64) 5000 << 32) | (0xABCD1234 + set.index.capacity / 2));
+		const U64 other = HashFlood_unfinalize(((U64) 5000 << 32) | (0xABCD1234 + set.index.slots.length / 2));
 
 		Test_assert(t, "a key that does not collide still inserts", (
 			HashSetFlood_insert(&set, other, &existing, alloc, e_rr) &&
@@ -850,5 +894,126 @@ void Test_hashSet(Test *t) {
 		));
 
 		HashSetFlood_free(&set, alloc);
+	}
+
+	//========================= generated key sets =========================
+
+	{
+		HashSetFieldEntry set = (HashSetFieldEntry) { 0 };
+		FieldEntry removed = (FieldEntry) { 0 };
+		U64 existing = 0;
+		Bool ok = true;
+
+		Test_assert(t, "KeyField reads the key where the field sits", (
+			HashSetFieldEntry_indexInfo.keyOffset == offsetof(FieldEntry, key) &&
+			HashSetFieldEntry_indexInfo.stride == sizeof(FieldEntry) &&
+			HashSetFieldEntry_indexInfo.hash == U32_hash &&
+			HashSetFieldEntry_indexInfo.compare == U32_compare &&
+			HashSetFieldEntry_indexInfo.smallLimit == HASHINDEX_SMALL_LIMIT_WORD
+		));
+
+		for(U32 i = 0; i < HASHINDEX_SMALL_LIMIT_WORD; ++i)
+			ok &= HashSetFieldEntry_insert(&set, (FieldEntry) { .value = i, .key = i * 5 + 1 }, &existing, alloc, e_rr) &&
+				existing == U64_MAX;
+
+		Test_assert(t, "KeyField set stays in small mode at the limit", (
+			ok && HashIndex_isSmall(set.index) && HashSetTest_fieldConsistent(&set)
+		));
+
+		for(U32 i = HASHINDEX_SMALL_LIMIT_WORD; i < 100; ++i)
+			ok &= HashSetFieldEntry_insert(&set, (FieldEntry) { .value = i, .key = i * 5 + 1 }, &existing, alloc, e_rr) &&
+				existing == U64_MAX;
+
+		Test_assert(t, "KeyField set leaves small mode past the limit", (
+			ok && set.list.length == 100 && !HashIndex_isSmall(set.index) && HashSetTest_fieldConsistent(&set)
+		));
+
+		//A hit reports the entry that holds the key and keeps what that entry already stored.
+
+		Test_assert(t, "KeyField hit reports the existing entry and keeps its value", (
+			HashSetFieldEntry_insert(&set, (FieldEntry) { .value = 9999, .key = 41 * 5 + 1 }, &existing, alloc, e_rr) &&
+			existing == 41 &&
+			set.list.length == 100 &&
+			set.list.ptr[41].value == 41
+		));
+
+		const U32 present = 77 * 5 + 1, absent = 2;
+
+		Test_assert(t, "KeyField find hits by key", HashSetFieldEntry_find(&set, &present) == 77);
+		Test_assert(t, "KeyField find misses an absent key", HashSetFieldEntry_find(&set, &absent) == U64_MAX);
+
+		const FieldEntry second = set.list.ptr[2], last = set.list.ptr[99];
+
+		Test_assert(t, "KeyField eraseSwap hands the entry back", (
+			HashSetFieldEntry_eraseSwap(&set, 2, &removed, e_rr) &&
+			removed.key == second.key &&
+			removed.value == second.value &&
+			set.list.length == 99 &&
+			set.list.ptr[2].key == last.key
+		));
+
+		Test_assert(t, "KeyField erased key is gone and the moved key is found", (
+			HashSetFieldEntry_find(&set, &second.key) == U64_MAX && HashSetFieldEntry_find(&set, &last.key) == 2
+		));
+
+		Test_assert(t, "KeyField set is consistent after the swap", HashSetTest_fieldConsistent(&set));
+
+		HashSetFieldEntry_free(&set, alloc);
+	}
+
+	{
+		HashSetWord set = (HashSetWord) { 0 };
+		U64 removed = 0, existing = 0;
+		Bool ok = true;
+
+		Test_assert(t, "Key reads the whole entry", (
+			HashSetWord_indexInfo.keyOffset == 0 &&
+			HashSetWord_indexInfo.stride == sizeof(U64) &&
+			HashSetWord_indexInfo.hash == U64_hash &&
+			HashSetWord_indexInfo.compare == U64_compare &&
+			HashSetWord_indexInfo.smallLimit == HASHINDEX_SMALL_LIMIT_WORD
+		));
+
+		for(U64 i = 0; i < HASHINDEX_SMALL_LIMIT_WORD; ++i)
+			ok &= HashSetWord_insert(&set, HashSetTest_wordKey(i), &existing, alloc, e_rr) && existing == U64_MAX;
+
+		Test_assert(t, "Key set stays small up to the limit", (
+			ok && HashIndex_isSmall(set.index) && HashSetTest_wordConsistent(&set)
+		));
+
+		for(U64 i = HASHINDEX_SMALL_LIMIT_WORD; i < 100; ++i)
+			ok &= HashSetWord_insert(&set, HashSetTest_wordKey(i), &existing, alloc, e_rr) && existing == U64_MAX;
+
+		Test_assert(t, "Key set holds 100 entries in hashed mode", (
+			ok && set.list.length == 100 && !HashIndex_isSmall(set.index) && HashSetTest_wordConsistent(&set)
+		));
+
+		Test_assert(t, "Key hit reports the existing entry", (
+			HashSetWord_insert(&set, HashSetTest_wordKey(41), &existing, alloc, e_rr) &&
+			existing == 41 &&
+			set.list.length == 100
+		));
+
+		const U64 present = HashSetTest_wordKey(63), absent = 4;
+
+		Test_assert(t, "Key find hits by key", HashSetWord_find(&set, &present) == 63);
+		Test_assert(t, "Key find misses an absent key", HashSetWord_find(&set, &absent) == U64_MAX);
+
+		const U64 first = set.list.ptr[0], last = set.list.ptr[99];
+
+		Test_assert(t, "Key eraseSwap hands the entry back", (
+			HashSetWord_eraseSwap(&set, 0, &removed, e_rr) &&
+			removed == first &&
+			set.list.length == 99 &&
+			set.list.ptr[0] == last
+		));
+
+		Test_assert(t, "Key erased key is gone and the moved key is found", (
+			HashSetWord_find(&set, &first) == U64_MAX && HashSetWord_find(&set, &last) == 0
+		));
+
+		Test_assert(t, "Key set is consistent after the swap", HashSetTest_wordConsistent(&set));
+
+		HashSetWord_free(&set, alloc);
 	}
 }

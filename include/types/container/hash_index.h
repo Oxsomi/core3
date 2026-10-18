@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/base/algorithm.h"
+#include "types/container/list.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -57,7 +58,12 @@ static const U64 HashIndex_maxCapacity = (U64)1 << 32;
 
 static const U64 HashIndex_finalizeMultiplier = 0xD6E8FEB86659FD93;
 
-U32 HashIndex_finalize(U64 hash);
+static inline U32 HashIndex_finalize(U64 hash) {
+	hash ^= hash >> 32;
+	hash *= HashIndex_finalizeMultiplier;
+	hash ^= hash >> 32;
+	return (U32) hash;
+}
 
 //2 * log2(capacity) + 16. A constant ceiling won't do: Robin Hood compresses the spread but the maximum
 // still grows with the table, so one small enough to be a defence fires on honest keys.
@@ -85,10 +91,11 @@ typedef struct HashSlot {
 	U32 index;       //Entry index + 1, so 0 is empty and a zeroed array is already a valid empty index
 } HashSlot;
 
+TList(HashSlot);
+
 typedef struct HashIndex {
-	HashSlot *slots;        //NULL in small mode
-	U64 capacity;           //0 in small mode, else a power of two. The mask is capacity - 1, never stored
-	U64 count;              //Entries indexed, which is the length of the caller's list
+	ListHashSlot slots;        //Empty in small mode, else a power of two long, so the mask is length - 1
+	U64 count;                 //Entries indexed, which is the length of the caller's list
 	U64 seed;
 } HashIndex;
 
@@ -96,6 +103,10 @@ typedef struct HashIndex {
 // pointers or handles; a callback covers the rest, like InputDevice.handles holding two strides in one Buffer.
 
 typedef const void *(*HashKeyFunction)(const void *entries, U64 index, void *context);
+
+//The small limit for a word sized key.
+
+#define HASHINDEX_SMALL_LIMIT_WORD 8
 
 //Describes the key type and belongs to its index for the table's whole life: changing the hash or the small
 // limit under a built table invalidates every slot.
@@ -109,17 +120,77 @@ typedef struct HashIndexInfo {
 
 	U64 stride, keyOffset;          //Only read when getKey is NULL
 
-	//Up to this many entries there is no slot array and lookup is a linear scan, because hashing loses at
-	//those sizes. 32 suits a word sized key, 4 a string where one compare costs about as much as one hash.
+	//Up to this many entries there is no slot array and lookup scans, which beats hashing at that size.
+	//HASHINDEX_SMALL_LIMIT_WORD for a word, 4 for a string.
 
 	U32 smallLimit, pad;
 
 } HashIndexInfo;
 
+//Everything a lookup runs is inline and HashIndex_find is forced, since a compiler declines it on cost alone, and a
+// copy that isn't inlined keeps the hash, the compare and the key layout behind indirect calls.
+
+static inline const void *HashIndex_keyOf(const HashIndexInfo *info, const void *entries, U64 index) {
+	return info->getKey ?
+		info->getKey(entries, index, info->context) :
+		(const void*)((const U8*) entries + index * info->stride + info->keyOffset);
+}
+
+static inline U32 HashIndex_hashKey(const HashIndexInfo *info, U64 seed, const void *key) {
+	return HashIndex_finalize(info->hash(key, seed, info->context));
+}
+
+static inline Bool HashIndex_entryMatches(const HashIndexInfo *info, const void *entries, U64 entry, const void *key) {
+	return info->compare(HashIndex_keyOf(info, entries, entry), key, info->context) == ECompareResult_Eq;
+}
+
+//Robin Hood keeps homes non decreasing along a run, so a slot LESS displaced than the probe has reached is a
+// proof of absence: the key would have taken that slot.
+
+static inline U64 HashIndex_displacement(U64 pos, U32 hash, U64 mask) {
+	return (pos - ((U64) hash & mask)) & mask;
+}
+
 //U64_MAX when absent. A hit is ALWAYS confirmed by comparing the key: there is deliberately no find-by-hash
 // entry point, since hash equality is necessary and never sufficient.
 
-U64 HashIndex_find(const HashIndex *index, const HashIndexInfo *info, const void *entries, const void *key);
+__forceinline__ static U64 HashIndex_find(
+	const HashIndex *index,
+	const HashIndexInfo *info,
+	const void *entries,
+	const void *key
+) {
+
+	if(!index || !info || !info->hash || !info->compare || !key)
+		return U64_MAX;
+
+	if (!index->slots.length) {
+
+		for(U64 i = 0; i < index->count; ++i)
+			if(HashIndex_entryMatches(info, entries, i, key))
+				return i;
+
+		return U64_MAX;
+	}
+
+	const U64 mask = index->slots.length - 1;
+	const U32 hash = HashIndex_hashKey(info, index->seed, key);
+
+	U64 pos = (U64) hash & mask;
+
+	for (U64 displacement = 0; ; ++displacement, pos = (pos + 1) & mask) {
+
+		const HashSlot slot = index->slots.ptr[pos];
+
+		if(!slot.index || HashIndex_displacement(pos, slot.hash, mask) < displacement)
+			return U64_MAX;
+
+		//The stored hash rejects a wrong entry without touching the caller's data; the compare is what decides.
+
+		if(slot.hash == hash && HashIndex_entryMatches(info, entries, slot.index - 1, key))
+			return slot.index - 1;
+	}
+}
 
 //Makes room for count entries, so a hot path can be made allocation free.
 //Takes the info and the entries because leaving small mode indexes what the list already holds.
@@ -182,7 +253,7 @@ Bool HashIndex_eraseSwap(
 Bool HashIndex_clear(HashIndex *index, Error *e_rr);        //Keeps the capacity and the seed, never allocates
 void HashIndex_free(HashIndex *index, const Allocator *allocator);
 
-static inline Bool HashIndex_isSmall(const HashIndex index) { return !index.capacity; }
+static inline Bool HashIndex_isSmall(const HashIndex index) { return !index.slots.length; }
 
 #ifdef __cplusplus
 	}

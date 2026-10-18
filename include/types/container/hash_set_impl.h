@@ -23,6 +23,7 @@
 #pragma once
 #include "types/container/hash_set.h"
 #include "types/base/error.h"
+#include "types/base/mathi.h"
 
 //info is an expression for the const HashIndexInfo * of the key inside one entry, whose stride is sizeof(entry).
 
@@ -139,3 +140,34 @@ void Name##_free(Name *set, const Allocator *allocator) {                       
 }
 
 #define THashSetImpl(T, info) THashSetNamedImpl(List##T, HashSet##T, info)
+
+//The Key variants build the info for a key type with KeyT##_hash and KeyT##_compare (U32, U64) at
+// HASHINDEX_SMALL_LIMIT_WORD, and check the key is sizeof(KeyT) bytes.
+//Key: the entry is the key, like a list of pointers or ids. KeyField: the key is entry.field.
+
+#define THashSetNamedImplKeyAt(ListName, Name, KeyT, keyOffsetValue)                                                        \
+																															\
+static const HashIndexInfo Name##_indexInfo = {                                                                             \
+	.hash = KeyT##_hash,                                                                                                    \
+	.compare = KeyT##_compare,                                                                                              \
+	.stride = sizeof(ListName##_Type),                                                                                      \
+	.keyOffset = (keyOffsetValue),                                                                                          \
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD                                                                                \
+};                                                                                                                          \
+																															\
+THashSetNamedImpl(ListName, Name, &Name##_indexInfo)
+
+#define THashSetNamedImplKey(ListName, Name, KeyT)                                                                          \
+																															\
+static_assert(sizeof(KeyT) == sizeof(ListName##_Type), #Name " entry has to be sizeof(" #KeyT ") bytes");                   \
+																															\
+THashSetNamedImplKeyAt(ListName, Name, KeyT, 0)
+
+#define THashSetNamedImplKeyField(ListName, Name, KeyT, field)                                                              \
+																															\
+static_assert(sizeof(((ListName##_Type*) 0)->field) == sizeof(KeyT), #field " has to be sizeof(" #KeyT ") bytes");          \
+																															\
+THashSetNamedImplKeyAt(ListName, Name, KeyT, offsetof(ListName##_Type, field))
+
+#define THashSetImplKey(T, KeyT) THashSetNamedImplKey(List##T, HashSet##T, KeyT)
+#define THashSetImplKeyField(T, KeyT, field) THashSetNamedImplKeyField(List##T, HashSet##T, KeyT, field)

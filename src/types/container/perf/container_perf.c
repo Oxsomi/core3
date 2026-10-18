@@ -206,13 +206,13 @@ static U64 Perf_hashIndexMaxDisplacement(const HashIndex *index) {
 
 	U64 maxDisplacement = 0;
 
-	for (U64 i = 0; i < index->capacity; ++i) {
+	for (U64 i = 0; i < index->slots.length; ++i) {
 
-		if(!index->slots[i].index)
+		if(!index->slots.ptr[i].index)
 			continue;
 
-		const U64 home = index->slots[i].hash & (index->capacity - 1);
-		const U64 displacement = (i - home) & (index->capacity - 1);
+		const U64 home = index->slots.ptr[i].hash & (index->slots.length - 1);
+		const U64 displacement = (i - home) & (index->slots.length - 1);
 
 		if(maxDisplacement < displacement)
 			maxDisplacement = displacement;
@@ -240,7 +240,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 	info.hash = U64_hash;
 	info.compare = U64_compare;
 	info.stride = sizeof(U64);
-	info.smallLimit = 32;
+	info.smallLimit = HASHINDEX_SMALL_LIMIT_WORD;
 
 	gotoIfError3(clean, CharString_createCopy(
 		CharString_createRefCStrConst("Structure,Count,Capacity,Operation,Seconds,OpsPerSecond,MaxDisplacement\n"),
@@ -302,7 +302,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 		if(found != count || missed != count)
 			retError(clean, Error_invalidState(0, "Perf_hashIndex() lookup disagreed with what was inserted"));
 
-		const U64 capacity = index.capacity;
+		const U64 capacity = index.slots.length;
 		const U64 maxDisplacement = Perf_hashIndexMaxDisplacement(&index);
 		const U64 ceiling = HashIndex_displacementCeiling(capacity);
 

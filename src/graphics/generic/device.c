@@ -66,7 +66,7 @@ static const HashIndexInfo GraphicsDevice_inFlightIndexInfo = {
 	.hash = U64_hash,
 	.compare = U64_compare,
 	.stride = sizeof(RefPtr*),
-	.smallLimit = 32
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
 };
 
 //Frees a timings list filled by GraphicsDeviceRef_getTimings: its owned name copies, then the array itself.

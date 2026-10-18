@@ -56,7 +56,7 @@ static const HashIndexInfo CommandList_resourceIndexInfo = {
 	.hash = U64_hash,
 	.compare = U64_compare,
 	.stride = sizeof(RefPtr*),
-	.smallLimit = 32
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
 };
 
 static const HashIndexInfo CommandList_scopeIndexInfo = {
@@ -64,7 +64,7 @@ static const HashIndexInfo CommandList_scopeIndexInfo = {
 	.compare = U32_compare,
 	.stride = sizeof(CommandScope),
 	.keyOffset = offsetof(CommandScope, scopeId),
-	.smallLimit = 32
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
 };
 
 //A resource whose refcount cannot be raised is left untracked, which is why the lookup is separate from the
