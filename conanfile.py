@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "3.2.105"
+	version = "3.2.106"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -228,14 +228,14 @@ class oxc3(ConanFile):
 
 		# NVAPI is only needed for the D3D12 backend (RT validation, and future cluster / mega geometry).
 		if hasD3D12:
-			self.requires("nvapi/2026.08.02")
+			self.requires("nvapi/2026.10.10")
 
 		# agility_sdk ships d3d12shader.h, which DXC's dxcreflect.h includes.
 		if hasD3D12 or self.options.enableShaderCompiler:
-			self.requires("agility_sdk/2026.07.29")
+			self.requires("agility_sdk/2026.09.25")
 
 		if hasD3D12 and self.settings.arch == "x86_64":
-			self.requires("ags/2024.09.21")
+			self.requires("ags/2026.10.11")
 
 		if self.options.enableShaderCompiler:
 
@@ -244,14 +244,14 @@ class oxc3(ConanFile):
 			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
-			self.requires("dxc/2026.08.23", options=sanitized)
-			self.requires("spirv_reflect/2026.08.17", options=sanitized)
+			self.requires("dxc/2026.10.12", options=sanitized)
+			self.requires("spirv_reflect/2026.10.11", options=sanitized)
 
 			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
 			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
 			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
 			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
-				self.requires("radeon_gpu_analyzer/2026.09.02", run=True)
+				self.requires("radeon_gpu_analyzer/2026.10.06", run=True)
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
@@ -265,12 +265,12 @@ class oxc3(ConanFile):
 		usesVulkan = usesVulkan and self.settings.os != "Emscripten"
 
 		if usesVulkan:
-			self.requires("vulkan_headers/2026.07.28")
+			self.requires("vulkan_headers/2026.10.02")
 
 		# Validation layers must be built manually for Android; not needed elsewhere.
 		# Pinned near the vulkan_headers version, since an old layer silently weakens validation.
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
-			self.requires("vulkan_validation_layers/1.4.357.0-oxc1")
+			self.requires("vulkan_validation_layers/2026.10.11")
 
 		# emscripten ships its own OpenAL (WebAudio-backed); openal_soft has no web backend.
 		if self.settings.os != "Emscripten":
@@ -410,13 +410,19 @@ class oxc3(ConanFile):
 		else:
 			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
-		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr" ]
+		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr", "OxC3_formats_obj", "OxC3_formats_ply", "OxC3_types_mesh" ]
 
 		# Headless: no graphics module on the web target (no WebGPU backend yet)
 		if self.settings.os != "Emscripten":
 			self.cpp_info.libs += [ "OxC3_graphics" ]
 
-		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
+		# OxC3_graphics carries this as a PUBLIC define and the graphics headers branch on it, so a consumer has to
+		# see the same declarations the library was built with.
+		# The backends themselves are DLLs in bin, which apply_dependencies copies next to the executable.
+		if self.options.dynamicLinkingGraphics:
+			self.cpp_info.defines = [ "GRAPHICS_API_DYNAMIC" ]
+
+		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_formats_json", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the
 		# vulkan_headers package, so there's no Vulkan import lib, system lib or SDK dir to link/include here.

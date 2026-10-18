@@ -57,7 +57,6 @@ typedef enum EGfxPipelineStage {
 	EGfxPipelineStage_MeshExt,
 	EGfxPipelineStage_TaskExt,
 
-	//Reserved, free to reuse.
 	//The slot stays because the stage id is serialized in oiSH and indexes SHEntry_stageNames.
 
 	EGfxPipelineStage_Reserved,
@@ -153,6 +152,12 @@ static inline GfxBindings GfxBindings_dummy() {
 // against a different value binds somewhere this runtime doesn't look.
 
 #define OXC3_RESERVED_SPACE 0xC3
+
+//The register space (DXIL) and descriptor set (SPIRV) of @variants.hlsli's disable marker, _oxcDisableBinary.
+//It never reaches a binary the compiler keeps, which loses the register, so nothing binds here either.
+//Keep this in sync with OXC3_DISABLE_SPACE in shader_compiler/shaders/variants.hlsli.
+
+#define OXC3_DISABLE_SPACE 0xC4
 
 //The DXIL register namespace a register type binds in (t, u, s or b), so a same-numbered binding in another
 // namespace is never mistaken for the same register: t0, u0, s0 and b0 coexist.

@@ -44,7 +44,7 @@
 
 #define OXC3_MAJOR 3
 #define OXC3_MINOR 2
-#define OXC3_PATCH 104
+#define OXC3_PATCH 106
 #define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 
 //A hint to show that something is implementation dependent
@@ -73,11 +73,3 @@ typedef I64 DNs;       //Delta Ns
 typedef char C8;
 
 typedef bool Bool;
-
-#ifndef _MSC_VER
-	#define MIGHT_BE_UNUSED __attribute__((unused))
-	#define __forceinline__ __attribute__((always_inline)) inline
-#else
-	#define MIGHT_BE_UNUSED
-	#define __forceinline__ __forceinline
-#endif

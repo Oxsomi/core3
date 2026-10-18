@@ -79,9 +79,22 @@ if(DynamicLinkingShaderCompiler)
 
 	# The public API is ~40 free functions and no exported data, so letting CMake write the .def is enough
 	# and keeps __declspec out of the headers.
-	# Everything else already defaults to visible; nothing here sets -fvisibility=hidden.
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+	# ELF exports everything by default, including whatever the static libraries below bring with them, so the
+	# same global ends up defined in this library AND in an executable that links those archives directly.
+	# Identical constants make that harmless in practice, but it is a genuine ODR violation and a sanitized
+	# build aborts on it as soon as one runtime can see both modules. --exclude-libs hides what came out of the
+	# archives and leaves this library's own API exported, which is what the comment above always claimed.
+	#
+	# The option is GNU ld and lld only: MSVC (clang-cl included, which CMake reports as MSVC) has no such
+	# flag, Apple's ld64 has none either, and wasm-ld does not take it. Android's lld does, and ELF is what
+	# needs it, so android stays in even though the shared build is coerced off there.
+
+	if(NOT MSVC AND NOT APPLE AND NOT EMSCRIPTEN)
+		target_link_options(OxC3_shader_compiler PRIVATE "-Wl,--exclude-libs,ALL")
+	endif()
 	target_compile_definitions(OxC3_shader_compiler PUBLIC -DSHADER_COMPILER_DYNAMIC)
 
 	if(MSVC)
@@ -102,6 +115,36 @@ endif()
 
 if(OfflineIsaSupported)
 	target_compile_definitions(OxC3_shader_compiler PUBLIC -DSHADER_COMPILER_OFFLINE_ISA)
+endif()
+
+# amdllpc is spawned from rga/ next to the running binary, so it resolves from any working directory.
+# OxC3_rga places it there, and every binary that spawns it depends on that target.
+# The package has os and arch settings only, so every config copies the same folder.
+
+if(OfflineIsaSupported)
+
+	find_package(radeon_gpu_analyzer REQUIRED)
+
+	set(rgaBin
+		"$<$<CONFIG:Debug>:${radeon_gpu_analyzer_BIN_DIRS_DEBUG}>$<$<CONFIG:Release>:${radeon_gpu_analyzer_BIN_DIRS_RELEASE}>$<$<CONFIG:MinSizeRel>:${radeon_gpu_analyzer_BIN_DIRS_MINSIZEREL}>$<$<CONFIG:RelWithDebInfo>:${radeon_gpu_analyzer_BIN_DIRS_RELWITHDEBINFO}>"
+	)
+
+	set(rgaCompiler "${rgaBin}/utils/amdllpc${CMAKE_EXECUTABLE_SUFFIX}")
+	set(rgaBundled "${oxc3BinDir}/rga/utils/amdllpc${CMAKE_EXECUTABLE_SUFFIX}")
+
+	# Touched so an identical copy also counts as done, rather than comparing the folder again on every build.
+
+	add_custom_command(
+		OUTPUT "${rgaBundled}"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${rgaBin}" "${oxc3BinDir}/rga"
+		COMMAND ${CMAKE_COMMAND} -E touch "${rgaBundled}"
+		DEPENDS "${rgaCompiler}"
+		VERBATIM
+	)
+
+	add_custom_target(OxC3_rga ALL DEPENDS "${rgaBundled}")
+	set_target_properties(OxC3_rga PROPERTIES FOLDER Oxsomi/graphics)
+
 endif()
 
 target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSR)
@@ -127,11 +170,11 @@ if(EnableTests AND OxC3TestExecutables)
 	set_source_files_properties(${shaderCompilerTestHlsl} PROPERTIES HEADER_FILE_ONLY ON)
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/test/hlsl" PREFIX "hlsl" FILES ${shaderCompilerTestHlsl})
 
-	# Everything the corpus test is built FROM, none of which is a source it links against: the HLSL corpus, the reference
-	# oiSH it compares against, and the includes embedded into the compiler itself (types.hlsli and friends).
+	# Everything the corpus test is built FROM, none of which is a source it links against: the HLSL corpus, the references
+	# it compares against, the includes embedded into the compiler itself (types.hlsli and friends) and amdllpc.
 	# Editing any of them has to re-run the test, and none of them relinks the executable.
 
-	file(GLOB shaderCompilerGoldens CONFIGURE_DEPENDS "test/*.oiSH")
+	file(GLOB_RECURSE shaderCompilerGoldens CONFIGURE_DEPENDS "test/*.oiSH" "test/*.oiSR" "test/*.isa")
 	file(GLOB_RECURSE shaderCompilerEmbedded CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../include/shader_compiler/shaders/*.hlsli")
 
 	# The corpus test reads/writes shaders + their reference oiSH relative to the working directory, so
@@ -145,15 +188,12 @@ if(EnableTests AND OxC3TestExecutables)
 		LIBS        OxC3_shader_compiler OxC3_platforms OxC3_types_test
 		SOURCES     ${shaderCompilerTestHlsl}
 		WORKING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/test"
-		DATA        ${shaderCompilerTestHlsl} ${shaderCompilerGoldens} ${shaderCompilerEmbedded}
+		DATA        ${shaderCompilerTestHlsl} ${shaderCompilerGoldens} ${shaderCompilerEmbedded} ${rgaCompiler}
 	)
 
-	# DXC's vendored clang allocates CGFunctionInfo with a trailing objects layout, one operator new
-	# sized for the arguments that follow the object, and then destroys it through a plain delete on
-	# the smaller declared type. ASan sees 128 bytes allocated against 32 deallocated and aborts.
-	# The mismatch is real but it is theirs, and it cannot be suppressed by symbol the way a leak or an
-	# odr violation can, so the check is turned off for the tests that link DXC and stays on everywhere
-	# else. Every other ASan check remains active here.
+	if(TARGET OxC3_rga)
+		add_dependencies(OxC3_shader_compiler_test OxC3_rga)
+	endif()
 
 	# The leak suppressions are the same ones the build uses, DXC and SPIRV-Reflect leaving allocations
 	# to process exit, suppressed by library entry point so a leak in OxC3's own code still reports.
@@ -162,12 +202,11 @@ if(EnableTests AND OxC3TestExecutables)
 	# and a plain ENVIRONMENT would replace them instead of adding to them.
 
 	# Through oxc3_test_env rather than set_tests_properties: a test property reaches ctest only, and this
-	# suite also runs at build time behind its stamp, where it would abort on the very mismatch these
-	# options exist to allow.
+	# suite also runs at build time behind its stamp, where it would fail on the very leaks these
+	# options suppress.
 
 	if(EnableASAN)
 		oxc3_test_env(OxC3_shader_compiler_test
-			"ASAN_OPTIONS=string_append:,new_delete_type_mismatch=0"
 			"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
 		)
 	endif()

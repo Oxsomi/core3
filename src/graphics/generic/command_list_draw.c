@@ -43,7 +43,7 @@
 #include "types/base/string_base.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
-#include "command_list_internal.h"
+#include "graphics/generic/command_list_internal.h"
 
 //Ray triangle position fetch requires every BLAS it reads to be built with ERTASBuildFlags_AllowDataAccessExt,
 // but the shader picks its TLAS descriptor at runtime, so the exact target is unknowable at record time.
@@ -525,6 +525,36 @@ clean:
 	return s_uccess;
 }
 
+static Bool CommandListRef_validatePrimitiveOffset(DeviceBufferRef *buffer, U64 offset, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!buffer) {
+
+		if(offset)
+			retError(clean, Error_invalidParameter(
+				1, 0, "CommandListRef_setPrimitiveBuffers()::buffers has an offset for a slot without a buffer"
+			));
+
+		goto clean;
+	}
+
+	if(offset & 3)
+		retError(clean, Error_invalidParameter(
+			1, 1, "CommandListRef_setPrimitiveBuffers()::buffers offsets have to be multiples of 4"
+		));
+
+	const U64 size = DeviceBufferRef_ptr(buffer)->resource.size;
+
+	if(offset >= size)
+		retError(clean, Error_outOfBounds(
+			1, offset, size, "CommandListRef_setPrimitiveBuffers()::buffers has an offset past its buffer"
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const SetPrimitiveBuffersCmd *buffers, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -550,13 +580,22 @@ Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const Se
 		e_rr
 	));
 
-	if(!s_uccess)
-		return s_uccess;
+	gotoIfError3(clean, CommandListRef_validatePrimitiveOffset(buffers->indexBuffer, buffers->indexOffset, e_rr));
 
-	for(U8 i = 0; i < 8; ++i)
+	//Every slot the command holds; the backends bind all of them
+
+	const U8 slots = (U8) (sizeof(buffers->vertexBuffers) / sizeof(buffers->vertexBuffers[0]));
+
+	for(U8 i = 0; i < slots; ++i) {
+
 		gotoIfError3(clean, CommandListRef_validateBufferDesc(
 			device, buffers->vertexBuffers[i], EDeviceBufferUsage_Vertex, U32_MAX, e_rr
 		));
+
+		gotoIfError3(clean, CommandListRef_validatePrimitiveOffset(
+			buffers->vertexBuffers[i], buffers->vertexOffsets[i], e_rr
+		));
+	}
 
 	//Transition
 
@@ -564,7 +603,7 @@ Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, const Se
 		commandList, buffers->indexBuffer, (BufferRange) { 0 }, ETransitionType_Index, EPipelineStage_Count, e_rr
 	));
 
-	for(U8 i = 0; i < 8; ++i)
+	for(U8 i = 0; i < slots; ++i)
 		gotoIfError3(clean, CommandListRef_transitionBuffer(
 			commandList, buffers->vertexBuffers[i], (BufferRange) { 0 }, ETransitionType_Vertex, EPipelineStage_Count, e_rr
 		));
@@ -773,8 +812,10 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 
 	total *= dispatch.z;
 
-	if(total > 1 * GIBI)
-		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 1Gibi rays"));
+	//The minimum every supported device guarantees, not the device's own limit (docs/graphics_spec.md).
+
+	if(total > 64 * MIBI)
+		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 64Mi rays"));
 
 	if(!total)
 		retError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() can't be executed with 0 count"));
@@ -1451,6 +1492,12 @@ Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, Descript
 
 		gotoIfError3(clean, ListTransitionInternal_pushBack(&commandList->pendingTransitions, transition, alloc, e_rr));
 	}
+
+	//The list holds the table from the bind on rather than from end(), where its transitions take their references:
+	// a table made for one dispatch can be let go by the caller as soon as it is bound, and the work ops of this
+	// recording still read it. end() skips what is already held.
+
+	gotoIfError3(clean, CommandList_trackResource(commandList, table, alloc, e_rr));
 
 	DescriptorTableRef *args[2] = { table, NULL };
 

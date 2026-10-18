@@ -87,7 +87,9 @@ static inline F32x4 F32x4_round(F32x4 a) { NONE_OP4F(F32_round(a.v[i])); }
 //Transcendentals
 	
 static inline F32x4 F32x4_sqrt(F32x4 a) { NONE_OP4F(F32_sqrt(a.v[i])); }
+static inline F32x4 F32x4_abs(F32x4 a) { NONE_OP4F(F32_abs(a.v[i])); }
 static inline F32x4 F32x4_rsqrt(F32x4 a) { NONE_OP4F(1 / F32_sqrt(a.v[i])); }
+static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return F32x4_rsqrt(a); }
 
 //Boolean
 
@@ -97,6 +99,7 @@ static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] >= b.v[
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] > b.v[i])); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] <= b.v[i])); }
 static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] < b.v[i])); }
+static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) { NONE_OP4F(cond.v[i] ? a.v[i] : b.v[i]); }
 
 //Trunc & reduce
 

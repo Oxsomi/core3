@@ -42,6 +42,7 @@ OXC3_TEST_MAIN(types_container) {
 	#endif
 
 	Test_textureFormat(&t);
+	Test_textureCodec(&t);
 
 	Test_allocationBuffer(&t);
 	Test_bigInt(&t);
@@ -54,9 +55,11 @@ OXC3_TEST_MAIN(types_container) {
 	Test_hashIndex(&t);
 	Test_hashSet(&t);
 	Test_jobQueue(&t);
+	Test_jobQueueLanes(&t);
 	Test_hpp(&t);
 	Test_hppWrappers(&t);
 	Test_memoryStream(&t);
+	Test_rangeStream(&t);
 	Test_encryptionStream(&t);
 	Test_logOOM(&t);
 

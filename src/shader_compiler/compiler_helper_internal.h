@@ -81,6 +81,7 @@ Bool Compiler_linkSingle(
 	U16 shaderVersion,
 	EGfxPipelineStage stageType,
 	ESHExtension exts,
+	Bool keepRegisters,
 	Bool enableLogging,
 	Buffer *result,
 	const Allocator *alloc
@@ -104,8 +105,13 @@ Bool Compiler_processSingle(
 	Error *e_rr
 );
 
+//A lib's link entry is shared by every entry that compiles to its binary, and each of those entries reaches it
+// through a combination of its own, kept in combinationIds beside runtimeEntries.
+//A single entry's link leaves combinationIds empty and uses combinationId.
+
 typedef struct LinkEntry {
 	ListU16 runtimeEntries;
+	ListU16 combinationIds;
 	Buffer uniformData;
 	U16 combinationId, entrypointId;
 	U8 padding[4];

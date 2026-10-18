@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//File spec (docs/oiSH.md)
+//File spec (docs/file/oiSH.md)
 
 typedef enum ESHVersion {
 	ESHVersion_Undefined,
@@ -48,6 +48,10 @@ typedef struct BinaryInfoFixedSize {
 	ESHExtension extensions;    //&~ dormantExt = used extensions, this is what the shader was compiled with
 
 	ESHExtension dormantExt;    //Dormant extensions (not detected in final executable)
+
+	ESHExtension2 extensions2;  //The same pair for ESHExtension2
+
+	ESHExtension2 dormantExt2;
 
 	U16 registerCount;
 	U8 uniformCount;
@@ -94,6 +98,10 @@ typedef struct SHHeader {
 	//Once a vendor is added that spelling stops matching, and a binary meant for anything would start being
 	// refused on the new vendor, so the reader widens a was-everything mask to today's everything.
 	U16 vendorCount;
+
+	//ESHExtension2_Count of the writer, as extensionCount is for ESHExtension.
+	U16 extension2Count;
+	U16 padding;
 
 } SHHeader;
 

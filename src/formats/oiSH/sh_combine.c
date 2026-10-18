@@ -92,10 +92,12 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				.defines = ListCharString_createRefFromList(ai.identifier.defines),
 				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint),
 				.uniformData = ListU8_createRefFromList(ai.identifier.uniformData),
-				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms)
+				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms),
+				.extensions2 = ai.identifier.extensions2
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(ai.registers),
 			.dormantExtensions = ai.dormantExtensions,
+			.dormantExtensions2 = ai.dormantExtensions2,
 			.vendorMask = ai.vendorMask,
 			.hasShaderAnnotation = ai.hasShaderAnnotation
 		};
@@ -125,6 +127,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			c.identifier.extensions |= bi.identifier.extensions;
 
 			c.dormantExtensions &= bi.dormantExtensions;
+			c.dormantExtensions2 &= bi.dormantExtensions2;
 
 			if(ai.vendorMask != bi.vendorMask || ai.hasShaderAnnotation != bi.hasShaderAnnotation)
 				retError(clean, Error_invalidState(
@@ -179,10 +182,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 				//Not found
 
-				if (
-					l == bi.registers.length ||
-					(rega.hash == bi.registers.ptr[l].hash && SHRegisterRuntime_equals(&rega, &bi.registers.ptr[l]))
-				) {
+				if (l == bi.registers.length || SHRegisterRuntime_equals(&rega, bi.registers.ptr + l)) {
 					gotoIfError3(clean, SHRegisterRuntime_createCopy(&c.registers.ptr[k], alloc, &tmpReg, e_rr));
 					gotoIfError3(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc, e_rr));
 					tmpReg = (SHRegisterRuntime) { 0 };
@@ -446,10 +446,12 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				.defines = ListCharString_createRefFromList(bi.identifier.defines),
 				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint),
 				.uniformData = ListU8_createRefFromList(bi.identifier.uniformData),
-				.uniforms = ListSHUniformRuntime_createRefFromList(bi.identifier.uniforms)
+				.uniforms = ListSHUniformRuntime_createRefFromList(bi.identifier.uniforms),
+				.extensions2 = bi.identifier.extensions2
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(bi.registers),
 			.dormantExtensions = bi.dormantExtensions,
+			.dormantExtensions2 = bi.dormantExtensions2,
 			.vendorMask = bi.vendorMask,
 			.hasShaderAnnotation = bi.hasShaderAnnotation
 		};

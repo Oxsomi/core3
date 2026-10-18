@@ -53,6 +53,10 @@ Bool CLI_audioDevices(const ParsedArgs *args) {
 	gotoIfError3(clean, AudioInterface_create(&ref, alloc, &type, &err));
 	gotoIfError3(clean, AudioInterface_getDeviceInfos(AudioInterfaceRef_ptr(ref), alloc, &infos, &err));
 
+	//The count first, so a machine with no audio device (a headless CI runner) still says what it found.
+
+	Log_debugLnx("Audio devices: %"PRIu64, infos.length);
+
 	for(U64 i = 0; i < infos.length; ++i)
 		AudioDeviceInfo_print(infos.ptr[i], alloc);
 
@@ -273,6 +277,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 				gotoIfError3(clean, File_openStream(
 					&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &inputStream, e_rr
 				));
+
 				gotoIfError3(clean, WAV_read(inputStream, 0, 0, alloc, &wav, e_rr));
 
 				Bool hasBitPreference = bitPreferenceCount == 0;

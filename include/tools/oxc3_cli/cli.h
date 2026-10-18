@@ -205,6 +205,8 @@ Bool CLI_graphicsCreate(const ParsedArgs *args);
 Bool CLI_audioDevices(const ParsedArgs *args);
 Bool CLI_audioConvert(const ParsedArgs *args);
 
+Bool CLI_imageConvert(const ParsedArgs *args);
+
 Bool CLI_execute(ListCharString argList);
 
 //Should be called on init and shutdown of program

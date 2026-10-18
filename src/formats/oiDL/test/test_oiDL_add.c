@@ -116,6 +116,7 @@ void Test_DLAddEntries(Test *t) {
 				CharString_createRefSizedConst("\xE5\x85\x89\xE8\xBF\xB9", 6, true),
 				t->alloc, &uni, NULL
 			);
+
 			Test_assert(t, "addEntryString unicode ok", DLFile_addEntryString(&f, &uni, t->alloc, &t->err));
 			Test_assert(t, "entryCount 2", DLFile_entryCount(&f) == 2);
 			CharString_free(&uni, t->alloc);

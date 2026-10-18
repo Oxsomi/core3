@@ -503,4 +503,67 @@ extern "C" void Test_graphicsFramesInFlight(oxc::c::Test *t, oxc::c::GraphicsDev
 	//The ring must be drained by the wait above; nothing should still be pending.
 
 	c::Test_assert(t, "noPendingPulls", !device->pendingPulls.length);
+
+	//A large pull grows the readback buffer, and frames that read nothing back shrink it again, but not under the
+	//most reserved for a frame: 8 MiB here, above the 4 MiB the empty frames alone would shrink it to. The check
+	//spans 64 frames, so two spans of quiet frames hold one without the pull in it.
+
+	const c::U64 floor = 8 * c::MIBI, bigLen = 24 * c::MIBI;
+
+	c::Test_assert(t, "reserveFloor", dev.reserveReadback(floor, &t->err));
+
+	c::Buffer big = c::Buffer_createNull();
+
+	if(!c::Test_assert(t, "bigAlloc", c::Buffer_createUninitializedBytes(bigLen, alloc, &big, &t->err)))
+		return;
+
+	for(c::U64 j = 0; j < bigLen / sizeof(c::U32); ++j)
+		((c::U32*)big.ptrNonConst)[j] = (c::U32) j * 2654435761u;
+
+	DeviceBuffer large;
+
+	if(!c::Test_assert(t, "bigCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Readback shrink buffer", &big, large,
+		nullptr, &t->err
+	))) {
+		c::Buffer_free(&big, alloc);
+		return;
+	}
+
+	c::U32 pulled = 0;
+
+	c::Bool ok =
+		c::Test_assert(t, "bigPull", large.pullRegion(0, bigLen, pullCompleted, &pulled, &t->err)) &&
+		c::Test_assert(t, "bigSubmit", dev.submit({ &emptyList }, {}, 0, 0, &t->err)) &&
+		c::Test_assert(t, "bigWait", dev.wait(&t->err));
+
+	const c::U64 grown = ok ? c::bufferOf(device->stagingReadback)->resource.size / 3 : 0;
+	c::Test_assert(t, "readbackGrew", ok && pulled == 1 && grown >= bigLen);
+
+	for (c::U32 i = 0; ok && i < 140; ++i)
+		ok = c::Test_assert(t, "quietSubmit", dev.submit({ &emptyList }, {}, 0, 0, &t->err));
+
+	ok = ok && c::Test_assert(t, "quietWait", dev.wait(&t->err));
+
+	const c::U64 shrunk = ok ? c::bufferOf(device->stagingReadback)->resource.size / 3 : 0;
+	c::Test_assert(t, "readbackShrank", ok && shrunk < grown);
+	c::Test_assert(t, "readbackKeepsFloor", ok && shrunk >= floor);
+
+	//A pull after the swap still lands: cleared on the host first, so only the GPU's copy can bring the data back.
+
+	const c::Buffer cpu = large.data()->cpuData;
+	pulled = 0;
+
+	ok = ok &&
+		c::Test_assert(t, "hostCleared", c::Buffer_setAllToU8(c::Buffer_createRef((void*) cpu.ptr, 4 * c::KIBI), 0, &t->err)) &&
+		c::Test_assert(t, "smallPull", large.pullRegion(0, 4 * c::KIBI, pullCompleted, &pulled, &t->err)) &&
+		c::Test_assert(t, "smallSubmit", dev.submit({ &emptyList }, {}, 0, 0, &t->err)) &&
+		c::Test_assert(t, "smallWait", dev.wait(&t->err));
+
+	c::Bool same = ok && pulled == 1;
+
+	for(c::U64 j = 0; same && j < 4 * c::KIBI / sizeof(c::U32); ++j)
+		same = ((const c::U32*)cpu.ptr)[j] == (c::U32) j * 2654435761u;
+
+	c::Test_assert(t, "pullAfterShrink", same);
 }

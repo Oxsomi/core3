@@ -102,6 +102,7 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 							cryptoState[l],
 							m ? "Instant encrypt" : "Streaming"
 						);
+
 						printedHeader = true;
 					}
 
@@ -122,6 +123,7 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 							Buffer dat = Buffer_createRef(
 								full.ptrNonConst + ((count + j) % elems) * siz, siz
 							);
+
 							Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256Or512);
 
 							if (m)
@@ -194,11 +196,11 @@ static const U64 hashIndexCounts[] = {
 	16, 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 12582912
 };
 
-//Random_sample advances the LCG and reports [0, 1>; the word behind it is what a key wants.
+//Random_nextFloat advances the LCG and reports [0, 1>; the word behind it is what a key wants.
 //Its period is 2^32 and every count above stays well inside it, so the keys are distinct.
 
 static U32 Perf_hashIndexRandom(U32 *seed) {
-	Random_sample(seed);
+	Random_nextFloat(seed);
 	return *seed;
 }
 
@@ -229,8 +231,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 
 	Bool s_uccess = true;
 
-	CharString csv    = CharString_createNull();
-	CharString tmpStr = CharString_createNull();
+	CharString csv = CharString_createNull();
 
 	ListU64 keys  = (ListU64) { 0 };
 	ListU64 list  = (ListU64) { 0 };
@@ -367,8 +368,8 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 			if(o == 4 && !scanned)
 				continue;
 
-			gotoIfError3(clean, CharString_format(
-				alloc, &tmpStr, e_rr,
+			gotoIfError3(clean, CharString_appendFormat(
+				alloc, &csv, e_rr,
 				"%s,%"PRIu64",%"PRIu64",%s,%f,%f,%"PRIu64"\n",
 				o == 4 ? "ListU64 scan" : "HashIndex",
 				count, capacity, names[o],
@@ -376,9 +377,6 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 				count / ((F64) timings[o] / SECOND),
 				maxDisplacement
 			));
-
-			gotoIfError3(clean, CharString_appendString(&csv, &tmpStr, alloc, e_rr));
-			CharString_free(&tmpStr, alloc);
 		}
 	}
 
@@ -397,7 +395,6 @@ clean:
 	HashIndex_free(&index, alloc);
 	ListU64_free(&list, alloc);
 	ListU64_free(&keys, alloc);
-	CharString_free(&csv,    alloc);
-	CharString_free(&tmpStr, alloc);
+	CharString_free(&csv, alloc);
 	return s_uccess;
 }

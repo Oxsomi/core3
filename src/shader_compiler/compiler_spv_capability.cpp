@@ -227,6 +227,8 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityUntypedPointersKHR:
 		case SpvCapabilityTileShadingQCOM:
 		case SpvCapabilityCooperativeMatrixConversionQCOM:
+		case SpvCapabilityBFloat16MulAddQCOM:
+		case SpvCapabilitySubgroupSizeQCOM:
 		case SpvCapabilityTextureBlockMatch2QCOM:
 		case SpvCapabilityMultipleWaitQueuesQCOM:
 		case SpvCapabilityImageGatherLinearQCOM:
@@ -259,6 +261,8 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityRayTracingClusterAccelerationStructureNV:
 		case SpvCapabilityTensorAddressingNV:
 		case SpvCapabilityCooperativeMatrixDecodeVectorNV:
+		case SpvCapabilityCooperativeMatrixConversionsEXT:
+		case SpvCapabilityCooperativeMatrixGetCoordinateEXT:
 		case SpvCapabilityReplicatedCompositesEXT:
 		case SpvCapabilityFloatControls2:
 		case SpvCapabilityFMAKHR:

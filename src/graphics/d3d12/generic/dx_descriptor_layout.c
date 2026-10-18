@@ -238,8 +238,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			binding->registerType  == EGfxRegisterType_SamplerComparisonState
 		) {
 
-			//Baked into the root signature instead, so it takes no range, no sampler heap slot and no place
-			// in the sampler root table.
+			//Baked into the root signature instead, so it takes no range and no place in the sampler root
+			// table. The table still reserves a slot for the binding, which nothing ever writes.
 
 			if(DescriptorBinding_immutableSamplerId(*binding))
 				continue;

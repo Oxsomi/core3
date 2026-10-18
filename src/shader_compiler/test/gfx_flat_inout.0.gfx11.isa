@@ -1,39 +1,48 @@
-; gfx1100  SGPRs 18  VGPRs 9  code 196 B  instrs 37  scratch 0  lds 0
+; gfx1100  SGPRs 22  VGPRs 9  code 252 B  instrs 46  scratch 0  lds 0
 _amdgpu_gs_main:
 	s_mov_b64 exec, -1                                         // 000000000000
 	v_mbcnt_lo_u32_b32 v1, -1, 0                               // 000000000004
 	s_lshr_b32 s1, s3, 18                                      // 00000000000C
-	s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(VALU_DEP_1)// 000000000010
+	s_getpc_b64 s[6:7]                                         // 000000000010
 	s_and_b32 s1, s1, 0x3c0                                    // 000000000014
-	v_mbcnt_hi_u32_b32 v1, -1, v1                              // 00000000001C
-	s_delay_alu instid0(VALU_DEP_1)                            // 000000000024
+	s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)// 00000000001C
+	v_mbcnt_hi_u32_b32 v1, -1, v1                              // 000000000020
 	v_add_nc_u32_e32 v3, s1, v1                                // 000000000028
 	s_bfe_u32 s1, s2, 0x9000c                                  // 00000000002C
 	s_delay_alu instid0(VALU_DEP_1) | instid1(SALU_CYCLE_1)    // 000000000034
 	v_cmp_gt_u32_e32 vcc, s1, v3                               // 000000000038
-	s_and_saveexec_b64 s[4:5], vcc                             // 00000000003C
+	s_and_saveexec_b64 s[12:13], vcc                           // 00000000003C
 	s_cbranch_execz .LBB0_2                                    // 000000000040
-	s_getpc_b64 s[6:7]                                         // 000000000044
-	s_mov_b32 s0, s9                                           // 000000000048
-	s_mov_b32 s1, s7                                           // 00000000004C
-	v_add_nc_u32_e32 v1, s10, v5                               // 000000000050
-	s_load_b128 s[12:15], s[0:1], 0x0                          // 000000000054
-	s_waitcnt lgkmcnt(0)                                       // 00000000005C
-	tbuffer_load_format_xy v[1:2], v1, s[12:15], 0 format:[BUF_FMT_32_32_FLOAT] idxen// 000000000060
-	s_waitcnt vmcnt(0)                                         // 000000000068
-	v_fma_f32 v1, v1, 2.0, -1.0                                // 00000000006C
-	v_fma_f32 v2, v2, -2.0, 1.0                                // 000000000074
-	s_or_b64 exec, exec, s[4:5]                                // 00000000007C
-	s_bfe_u32 s0, s2, 0x90016                                  // 000000000080
-	s_mov_b64 s[2:3], exec                                     // 000000000088
-	v_cmpx_gt_u32_e64 s0, v3                                   // 00000000008C
-	s_cbranch_execz .LBB0_4                                    // 000000000094
-	exp prim v0, off, off, off done                            // 000000000098
-	s_waitcnt expcnt(0)                                        // 0000000000A0
-	s_or_b64 exec, exec, s[2:3]                                // 0000000000A4
-	s_and_saveexec_b64 s[0:1], vcc                             // 0000000000A8
-	s_cbranch_execz .LBB0_6                                    // 0000000000AC
-	v_mov_b32_e32 v0, 1.0                                      // 0000000000B0
-	v_mov_b32_e32 v3, 0                                        // 0000000000B4
-	exp pos0 v1, v2, v3, v0 done                               // 0000000000B8
-	s_endpgm                                                   // 0000000000C0
+	s_mov_b32 s0, s9                                           // 000000000044
+	s_mov_b32 s1, s7                                           // 000000000048
+	v_add_nc_u32_e32 v1, s10, v5                               // 00000000004C
+	s_load_b128 s[16:19], s[0:1], 0x0                          // 000000000050
+	s_waitcnt lgkmcnt(0)                                       // 000000000058
+	tbuffer_load_format_xy v[4:5], v1, s[16:19], 0 format:[BUF_FMT_32_32_FLOAT] idxen// 00000000005C
+	s_waitcnt vmcnt(0)                                         // 000000000064
+	v_fma_f32 v1, v4, 2.0, -1.0                                // 000000000068
+	v_fma_f32 v4, v5, -2.0, 1.0                                // 000000000070
+	s_or_b64 exec, exec, s[12:13]                              // 000000000078
+	s_bfe_u32 s0, s2, 0x90016                                  // 00000000007C
+	s_mov_b64 s[2:3], exec                                     // 000000000084
+	v_cmpx_gt_u32_e64 s0, v3                                   // 000000000088
+	s_cbranch_execz .LBB0_4                                    // 000000000090
+	s_mov_b32 s9, s7                                           // 000000000094
+	s_lshl_b32 s1, s5, 9                                       // 000000000098
+	s_load_b128 s[8:11], s[8:9], 0xb0                          // 00000000009C
+	exp prim, v0, off, off, off done                           // 0000000000A4
+	s_waitcnt lgkmcnt(0)                                       // 0000000000AC
+	s_and_b32 s0, s9, 0xc000ffff                               // 0000000000B0
+	s_delay_alu instid0(SALU_CYCLE_1)                          // 0000000000B8
+	s_or_b32 s9, s0, 0x200000                                  // 0000000000BC
+	s_and_b32 s0, s1, 0xfffe00                                 // 0000000000C4
+	buffer_store_b128 v[2:5], v3, s[8:11], s0 idxen offset:16 glc// 0000000000CC
+	s_waitcnt expcnt(0)                                        // 0000000000D4
+	s_or_b64 exec, exec, s[2:3]                                // 0000000000D8
+	s_and_saveexec_b64 s[0:1], vcc                             // 0000000000DC
+	s_cbranch_execz .LBB0_6                                    // 0000000000E0
+	v_mov_b32_e32 v0, 1.0                                      // 0000000000E4
+	v_mov_b32_e32 v2, 0                                        // 0000000000E8
+	s_waitcnt_vscnt null, 0x0                                  // 0000000000EC
+	exp pos0, v1, v4, v2, v0 done                              // 0000000000F0
+	s_endpgm                                                   // 0000000000F8

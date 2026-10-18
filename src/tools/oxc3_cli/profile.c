@@ -732,9 +732,10 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 		(F64) (F32x4_x(mnAcc) + F32x4_x(mxAcc))
 	);
 
-	//rsqrt: SSE has the rsqrtps estimate, wasm SIMD128 has no reciprocal square root at all and
-	// vec4f_wasm.inc.h does an exact divide by a square root instead. Doing four lanes at once still
-	// beats four scalar square roots by more than the exact form costs.
+	//rsqrt, BOTH forms, because the difference is the whole reason the fast one has a name. F32x4_rsqrt is a
+	// square root and a divide on every backend, so it is correctly rounded and the same everywhere;
+	// F32x4_rsqrtFast is whatever estimate the backend has, which on wasm is nothing and so is the same call.
+	//What this pair prices is what a caller gives up by asking for the exact one, which is the default.
 
 	F32x4 rAcc = F32x4_zero();
 	then = Time_now();
@@ -744,6 +745,16 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile vec4f rsqrt: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
 		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(rAcc)
+	);
+
+	F32x4 rfAcc = F32x4_zero();
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		rfAcc = F32x4_add(rfAcc, F32x4_rsqrtFast(win[i & mask]));
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f rsqrtFast: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(rfAcc)
 	);
 
 	//Lane extract is SIMD hostile by construction: scalar reads a float, the vector backends need an

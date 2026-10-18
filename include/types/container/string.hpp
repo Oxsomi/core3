@@ -23,12 +23,17 @@
 #pragma once
 #include <utility>
 #include <type_traits>
+#include "types/base/bool_arg.hpp"
 
 //Pre-include system headers used by the C headers below at global scope;
 //they must not be pulled in for the first time inside a namespace.
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
 #include <stdarg.h>
 #include <assert.h>
 
@@ -78,7 +83,7 @@ namespace oxc {
 		//From a C string literal or any null terminated buffer
 		StringView(const c::C8 *cstr) noexcept : str(c::CharString_createRefCStrConst(cstr)) {}
 
-		StringView(const c::C8 *ptr, c::U64 len, bool nullTerminated = false) noexcept :
+		StringView(const c::C8 *ptr, c::U64 len, BoolArg nullTerminated = false) noexcept :
 			str(c::CharString_createRefSizedConst(ptr, len, nullTerminated)) {}
 
 		//From an existing C CharString of any flavour; the view is always const-ref regardless of the source
@@ -109,7 +114,7 @@ namespace oxc {
 		[[nodiscard]] bool operator==(const StringView &o) const noexcept { return equals(o); }
 		[[nodiscard]] bool operator!=(const StringView &o) const noexcept { return !equals(o); }
 
-		[[nodiscard]] c::ECompareResult compare(const StringView &o, bool sensitive = true) const noexcept {
+		[[nodiscard]] c::ECompareResult compare(const StringView &o, BoolArg sensitive = true) const noexcept {
 			return c::CharString_compare(&str, &o.str, sensitive ? c::EStringCase_Sensitive : c::EStringCase_Insensitive);
 		}
 
@@ -250,6 +255,16 @@ namespace oxc {
 			va_list args;
 			va_start(args, fmt);
 			const c::Bool res = c::CharString_formatVariadic(alloc, &str, e_rr, fmt, args);
+			va_end(args);
+			return res;
+		}
+
+		//Formats onto the end of what this holds. NEVER pass user generated content as the format.
+		[[nodiscard]] c::Bool appendFormat(c::Error *e_rr, const c::C8 *fmt, ...) noexcept {
+
+			va_list args;
+			va_start(args, fmt);
+			const c::Bool res = c::CharString_appendFormatVariadic(alloc, &str, e_rr, fmt, args);
 			va_end(args);
 			return res;
 		}

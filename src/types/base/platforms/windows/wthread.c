@@ -120,3 +120,50 @@ Bool Thread_wait(Thread *thread, Error *e_rr) {
 clean:
 	return s_uccess;
 }
+
+Bool Thread_setPriority(EThreadPriority priority, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(priority >= EThreadPriority_Count)
+		retError(clean, Error_invalidEnum(0, (U64) priority, EThreadPriority_Count, "Thread_setPriority()::priority"));
+
+	const int level =
+		priority == EThreadPriority_Critical ? THREAD_PRIORITY_ABOVE_NORMAL :
+		priority == EThreadPriority_Background ? THREAD_PRIORITY_BELOW_NORMAL : THREAD_PRIORITY_NORMAL;
+
+	if(!SetThreadPriority(GetCurrentThread(), level))
+		retError(clean, Error_platformError(0, GetLastError(), "Thread_setPriority() SetThreadPriority failed"));
+
+	//EcoQoS: a throttled thread is what the scheduler moves to efficiency cores, and slows on battery
+
+	THREAD_POWER_THROTTLING_STATE state = (THREAD_POWER_THROTTLING_STATE) {
+		.Version = THREAD_POWER_THROTTLING_CURRENT_VERSION,
+		.ControlMask = THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+		.StateMask = priority == EThreadPriority_Background ? THREAD_POWER_THROTTLING_EXECUTION_SPEED : 0
+	};
+
+	//Older Windows doesn't know the class; the priority above still applies there
+
+	SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
+
+clean:
+	return s_uccess;
+}
+
+Bool Thread_setAffinity(const U32 *cpus, U64 count, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(count && !cpus)
+		retError(clean, Error_nullPointer(0, "Thread_setAffinity()::cpus is required"));
+
+	if(count > U32_MAX)
+		retError(clean, Error_outOfBounds(1, count, U32_MAX, "Thread_setAffinity()::count"));
+
+	if(!SetThreadSelectedCpuSets(GetCurrentThread(), (const ULONG*) cpus, (ULONG) count))
+		retError(clean, Error_platformError(0, GetLastError(), "Thread_setAffinity() SetThreadSelectedCpuSets failed"));
+
+clean:
+	return s_uccess;
+}

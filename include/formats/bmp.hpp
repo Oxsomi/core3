@@ -29,6 +29,7 @@
 #pragma once
 
 #include "platforms/file.hpp"
+#include "types/base/bool_arg.hpp"
 
 namespace oxc {
 
@@ -60,7 +61,7 @@ namespace oxc {
 		[[nodiscard]] inline c::Bool write(
 			const StringView &loc, const c::Buffer &pixels, c::U32 width, c::U32 height,
 			const file::Types &types, const c::Allocator *alloc,
-			c::Bool discardAlpha = false, c::Bool inputIsFlipped = false, c::Error *e_rr = nullptr
+			BoolArg discardAlpha = false, BoolArg inputIsFlipped = false, c::Error *e_rr = nullptr
 		) noexcept {
 
 			c::BMPInfo info{};
@@ -85,7 +86,7 @@ namespace oxc {
 			)) {
 
 				if(c::File_openStream(
-					&loc.handle(), c::U64_MAX, c::EFileOpenType_Write, true,
+					&loc.handle(), 0, c::EFileOpenType_Write, true,
 					&types.fileHandle, &streamType, &out, e_rr
 				)) {
 					c::U64 off = 0;

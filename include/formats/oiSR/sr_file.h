@@ -427,7 +427,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 // summary, so a shader's own symbols aren't buried under the couple hundred builtin symbols the includes pull in.
 void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool collapseBuiltins, const Allocator *alloc);
 
-//File headers (file spec: docs/oiSR.md)
+//File headers (file spec: docs/file/oiSR.md)
 
 typedef enum ESRVersion {
 	ESRVersion_Undefined,

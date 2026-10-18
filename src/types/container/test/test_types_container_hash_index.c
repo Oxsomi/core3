@@ -108,11 +108,11 @@ static Bool HashIndexTest_consistent(const HashIndex *index, const HashIndexInfo
 	return true;
 }
 
-//Random_sample advances the LCG and reports [0, 1>; the word behind it is what a key wants.
+//Random_nextFloat advances the LCG and reports [0, 1>; the word behind it is what a key wants.
 //Its period is 2^32, so every draw below is distinct, which is what lets the counts be asserted exactly.
 
 static U32 HashIndexTest_random(U32 *seed) {
-	Random_sample(seed);
+	Random_nextFloat(seed);
 	return *seed;
 }
 
@@ -505,6 +505,7 @@ void Test_hashIndex(Test *t) {
 		Test_assert(t, "insert reports a failing allocator",
 			!HashIndex_insert(&index, &info, NULL, &key, 0, &existing, &failing, NULL)
 		);
+
 		Test_assert(t, "a failed insert changed nothing", !index.count && HashIndex_isSmall(index));
 
 		HashIndex_free(&index, alloc);

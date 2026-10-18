@@ -143,6 +143,8 @@ typedef struct DescriptorTableBinding {
 		DescriptorTableBindingSingle single;
 	};
 
+	U8 padding[8];
+
 } DescriptorTableBinding;
 
 typedef struct DescriptorTableResourceRef {
@@ -160,15 +162,18 @@ typedef struct DescriptorTable {
 
 	DescriptorTableFlags flags;
 	Bool acquiredAtomic;
-	U8 padding[3];
+	U8 padding[6];
 
 	ListDescriptorTableResourceRef resources;        //All resources that are bound by the table
 	HashIndex resourceIndex;                         //Identity map over resources, so a bind or unbind is O(1)
 	ListDescriptorTableBinding bindings;
+	U8 padding1[56];
 
 	SpinLock lock;                                   //To access resources
 
 } DescriptorTable;
+
+static_assert(sizeof(DescriptorTable) % 64 == 0, "DescriptorTable must be a 64 byte multiple, its backend ext follows it");
 
 #define DescriptorTable_ext(ptr, T) (!ptr ? NULL : (T##DescriptorTable*)(ptr + 1))        //impl
 #define DescriptorTableRef_ptr(ptr) RefPtr_data(ptr, DescriptorTable)
@@ -197,12 +202,24 @@ Descriptor Descriptor_sampler(SamplerRef *sampler);
 U64 Descriptor_startBuffer(const Descriptor *d);
 U64 Descriptor_endBuffer(const Descriptor *d);
 U64 Descriptor_bufferLength(const Descriptor *d);
+
+//The length a VIEW of this descriptor covers, which is not always the length the caller wrote: an end of zero
+//means the rest of the resource, and a raw view that reaches the resource's end rounds up to a whole word,
+// which the backend allocation is padded to. A view the caller sized itself is never rounded, since an
+// unaligned length there is a mistake rather than a tail.
+
+U64 Descriptor_bufferViewLength(const Descriptor *d, EGfxRegisterType type);
 U32 Descriptor_counterOffset(const Descriptor *d);
 
 //Note: When setting descriptors, ensure all descriptors are valid (e.g. resource != NULL)
 //        not all implementations support null descriptors, as such, setting all descriptors in a range to NULL
 //        is unexpected behavior.
 //For telling our front end that descriptors are free use unsetDescriptor(s)(byName).
+
+//maintainRef decides who keeps the resource ALIVE. Without it the table stores a weak pointer, which the next
+//set or unset of that slot still has to read to know what it is releasing, so the resource has to outlive its
+// binding: a caller that lets it go first leaves the table reading freed memory rather than an empty slot.
+//Pass it whenever the resource is scoped more tightly than the table.
 
 Bool DescriptorTableRef_setDescriptors(
 	DescriptorTableRef *table,

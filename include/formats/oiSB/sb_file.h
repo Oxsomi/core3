@@ -74,9 +74,6 @@ Bool SBFile_createCopy(
 
 void SBFile_free(SBFile *shFile, const Allocator *alloc);
 
-//Whether two shader buffers are identical, names included; equal hashes don't imply it.
-Bool SBFile_equals(const SBFile *a, const SBFile *b);
-
 Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const Allocator *alloc, Error *e_rr);
 
 Bool SBFile_addVariableAsType(
@@ -117,13 +114,19 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecursive, const Allocator *alloc);
 
 //Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary)
+//Whether two buffers are the same layout. The hash only prefilters: fnv1a's step is a multiply by an odd prime
+//and so a bijection, which makes a colliding pair something a writer CONSTRUCTS rather than searches for, and
+//every input to it came out of a file.
+
+Bool SBFile_equals(const SBFile *a, const SBFile *b);
+
 Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SBFile *combined, Error *e_rr);
 
 void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc);
 
 //File headers
 
-//File spec (docs/oiSB.md)
+//File spec (docs/file/oiSB.md)
 
 typedef enum ESBVersion {
 	ESBVersion_Undefined,

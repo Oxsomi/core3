@@ -21,6 +21,7 @@
 //types/container/list.h
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "types/container/generic_list.h"
 
 //Extended TList functions
@@ -53,7 +54,7 @@ Bool ListVoid_fromList(const GenericList list, U64 stride, ListVoid *result, Err
 // state that going unused is fine.
 //gcc and MSVC don't warn here, so the attribute is only spelled where it exists.
 
-#if defined(__clang__) || defined(__GNUC__)
+#if _COMPILER != COMPILER_MSVC
 	#define TListFn static inline __attribute__((unused))
 #else
 	#define TListFn static inline
@@ -134,6 +135,7 @@ Bool Name##_sortCustom(Name l, CompareFunction func, void *context);            
 																															\
 Bool Name##_createSubset(const Name l, U64 index, U64 length, Name *result, Error *e_rr);                                   \
 Bool Name##_create(U64 length, const Allocator *alloc, Name *result, Error *e_rr);                                          \
+Bool Name##_createUninitialized(U64 length, const Allocator *alloc, Name *result, Error *e_rr);                             \
 Bool Name##_createCopy(const Name l, const Allocator *alloc, Name *result, Error *e_rr);                                    \
 Bool Name##_createCopySubset(const Name l, U64 off, U64 len, const Allocator *alloc, Name *result, Error *e_rr);            \
 Bool Name##_createRepeated(U64 length, Name##_Type data, const Allocator *alloc, Name *result, Error *e_rr);                \
@@ -168,6 +170,7 @@ Bool Name##_pushFront(Name *l, Name##_Type t, const Allocator *allocator, Error 
 Bool Name##_eraseAllIndices(Name *l, const ListU64 *indices, Error *e_rr);                                                  \
 Bool Name##_reserve(Name *l, U64 capacity, const Allocator *allocator, Error *e_rr);                                        \
 Bool Name##_resize(Name *l, U64 size, const Allocator *allocator, Error *e_rr);                                             \
+Bool Name##_resizeUninitialized(Name *l, U64 size, const Allocator *allocator, Error *e_rr);                                \
 Bool Name##_shrinkToFit(Name *l, const Allocator *allocator, Error *e_rr);                                                  \
 																															\
 Bool Name##_eraseFirst(Name *l, Name##_Type t, U64 offset, EqualsFunction eq, Error *e_rr);                                 \

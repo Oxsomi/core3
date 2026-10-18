@@ -85,6 +85,13 @@ on:
         type: string
         required: false
         default: default
+      # Asks the graphics suite to create its instance and device with the API's own validation on.
+      # Off by default because the debug layers cost real run time; on where a configuration is being
+      # diagnosed, since a crash the process cannot report is only ever described from outside it.
+      graphics_validation:
+        type: boolean
+        required: false
+        default: false
       hook_name:
         type: string
         required: true
@@ -137,6 +144,15 @@ jobs:
     env:
       ASAN_OPTIONS: ${{ inputs.sanitizers && 'detect_leaks=0:abort_on_error=1:detect_odr_violation=0' || '' }}
       UBSAN_OPTIONS: ${{ inputs.sanitizers && 'print_stacktrace=1:halt_on_error=1' || '' }}
+
+      # Spelled to a literal either way: an empty value is a switch nobody set, and the suite reads it as off.
+
+      OXC3_TEST_VALIDATION: ${{ inputs.graphics_validation && '1' || '0' }}
+
+      # Names the module being entered, so a suite that dies mid module says which one rather than only
+      # reporting the modules that finished.
+
+      OXC3_TEST_TRACE: ${{ inputs.graphics_validation && '1' || '0' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -200,7 +216,7 @@ jobs:
 
       - name: Install Conan
         if: inputs.os != 'steamos' && runner.os != 'Linux'
-        uses: turtlebrowser/get-conan@main
+        uses: turtlebrowser/get-conan@e41c1e039be765c0ed9d9d38cc2a287566e1d8b3 # = main on 2026-10-02 (unchanged since its last commit, 2023-02-28)
 
       # ── Host platform deps ─────────────────────────────────────────────────
       # Needed by every build that produces host binaries, including the android job's OxC3_package.
@@ -246,7 +262,7 @@ jobs:
             || echo "vulkaninfo failed; the graphics suite will report what it found"
 
       # The Khronos validation layer, pinned near the header version conanfile.py pins (vulkan_headers is
-      # 1.4.357 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
+      # 1.4.365 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
       # layer silently weakens validation. Khronos only publishes Android prebuilts, so the layer comes out of
       # the LunarG SDK tarball; only the two layer files are extracted, the rest of the SDK stays untouched.
       # The graphics suite enables the layer by name in debug builds and counts every message it reports;
@@ -255,7 +271,7 @@ jobs:
       - name: Install Vulkan validation layer (lavapipe)
         if: inputs.vulkan_icd && runner.os == 'Linux' && runner.arch == 'X64'
         run: |
-          VVL_VERSION=1.4.357.1
+          VVL_VERSION=1.4.363.0
           curl -fL -o vvl.tar.xz "https://sdk.lunarg.com/sdk/download/${VVL_VERSION}/linux/vulkansdk-linux-x86_64-${VVL_VERSION}.tar.xz" \
             || { echo "::error::LunarG SDK ${VVL_VERSION} download failed; check https://vulkan.lunarg.com/sdk/versions/linux.json"; exit 1; }
           mkdir -p "$HOME/vvl"
@@ -275,15 +291,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # v4 or newer: Google removed the legacy 'tools' package from the SDK repository, and every version
+      # before v4.0.2 still asks for it, which fails the whole step with "failed to find package".
       - name: Setup Android SDK
         if: inputs.os == 'android'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # setup-android exports ANDROID_SDK_ROOT for whichever runner we're on; derive ours from that
       # instead of hardcoding a Windows path, so the same job works on linux/macos/windows.
       # sdkmanager is resolved by path rather than by name: on the windows runner it's only on PATH as
       # sdkmanager.bat, which bash won't find (no PATHEXT resolution), and the cmdline-tools directory
       # is versioned rather than always being "latest".
+      # Only cmdline-tools is searched; the tools/bin that used to hold a copy belonged to the 'tools'
+      # package, which no longer exists in the repository and so cannot be installed.
       - name: Setup Android NDK
         if: inputs.os == 'android'
         shell: bash
@@ -292,7 +312,7 @@ jobs:
           if [ -z "$SDK" ]; then echo "Neither ANDROID_SDK_ROOT nor ANDROID_HOME is set"; exit 1; fi
 
           SDKMANAGER=""
-          for d in "$SDK"/cmdline-tools/*/bin "$SDK"/tools/bin; do
+          for d in "$SDK"/cmdline-tools/*/bin; do
             for exe in "$d/sdkmanager" "$d/sdkmanager.bat"; do
               if [ -f "$exe" ]; then SDKMANAGER="$exe"; break 2; fi
             done
@@ -300,9 +320,29 @@ jobs:
 
           if [ -z "$SDKMANAGER" ]; then echo "No sdkmanager under $SDK"; ls -R "$SDK" | head -50; exit 1; fi
 
-          "$SDKMANAGER" "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}"
+          NDK_DIR="$SDK/ndk/${{ inputs.android_ndk }}"
+          PKGS=( "platforms;android-${{ inputs.android_api }}" "ndk;${{ inputs.android_ndk }}" )
+
+          # --sdk_root pins where the packages land. Left off, sdkmanager takes the grandparent of its own
+          # bin directory, which is the cmdline-tools folder rather than the SDK, and an install that goes
+          # there is not where ANDROID_NDK below points.
+          # The failure path prints what sdkmanager can actually see, because "failed to find package" says
+          # nothing about whether the repository was reachable, the root was wrong, or the pin is gone.
+          if ! "$SDKMANAGER" --sdk_root="$SDK" "${PKGS[@]}"; then
+            echo "sdkmanager could not install ${PKGS[*]}; what it sees:"
+            "$SDKMANAGER" --sdk_root="$SDK" --version || true
+            "$SDKMANAGER" --sdk_root="$SDK" --list | head -60 || true
+            exit 1
+          fi
+
+          # An install that reported success but landed elsewhere is caught here, by name, rather than much
+          # later as a compiler nothing can find.
+          if [ ! -d "$NDK_DIR" ]; then
+            echo "ndk;${{ inputs.android_ndk }} is not at $NDK_DIR after install"; ls "$SDK" || true; exit 1
+          fi
+
           echo "ANDROID_SDK=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK=$SDK/ndk/${{ inputs.android_ndk }}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK=$NDK_DIR" >> "$GITHUB_ENV"
 
       # ── Conan package cache ────────────────────────────────────────────────
       # cache_name keeps toolchains apart.
@@ -515,6 +555,34 @@ jobs:
           Write-Host "Sanitizer runtime : $runtime"
           Add-Content -Path $env:GITHUB_PATH -Value $runtime
 
+      # The D3D12 debug layer and DXGI's debug factory both come from the Graphics Tools feature, which a runner
+      # image does not carry. Without it a request for validation is refused and the run says nothing about why
+      # it then dies, so the configurations that ask for validation install it first.
+      # Reported either way and never fatal: verbose logging still works without it, and losing the layer is
+      # worth knowing about rather than worth stopping for.
+
+      - name: Enable Graphics Tools (the D3D12 debug layer lives there)
+        if: runner.os == 'Windows' && inputs.graphics_validation
+        shell: pwsh
+        run: |
+          $cap = Get-WindowsCapability -Online |
+            Where-Object { $_.Name -like "Tools.Graphics.DirectX*" } |
+            Select-Object -First 1
+
+          if (-not $cap) {
+            Write-Warning "This image offers no Graphics Tools capability; the debug layer will stay unavailable"
+            exit 0
+          }
+
+          Write-Host "Graphics Tools: $($cap.Name) is $($cap.State)"
+
+          if ($cap.State -ne "Installed") {
+            try { Add-WindowsCapability -Online -Name $cap.Name | Out-Null }
+            catch { Write-Warning "Add-WindowsCapability failed: $_" }
+          }
+
+          Write-Host "Graphics Tools now: $((Get-WindowsCapability -Online -Name $cap.Name).State)"
+
       - name: Enable Developer Mode (the preview Agility SDK requires it)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -539,6 +607,29 @@ jobs:
       - name: Build Release (SIMD fallback)
         if: inputs.os != 'android' && inputs.os != 'web'
         run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True -ctest True ${{ inputs.build_flags }}
+
+      # ── Backtraces ─────────────────────────────────────────────────────────
+      # A segfault only reaches the log through the engine's own signal handler, which can't symbolize a frame
+      # inside a driver (lavapipe's JIT on the arm64 runners printed one bare address and nothing else).
+      # On failure, every test ctest recorded as failed is rerun once under gdb, which names the frames in the
+      # driver's own libraries as well. Diagnostic only: it runs after the job has already failed, from the
+      # binary's own directory so it finds its packages, and it never changes the job's result.
+
+      - name: Backtrace failed tests (Linux)
+        if: failure() && runner.os == 'Linux' && inputs.os != 'android' && inputs.os != 'web'
+        continue-on-error: true
+        shell: bash
+        run: |
+          sudo apt-get install -y gdb >/dev/null || exit 0
+          for failed in $(find build -name LastTestsFailed.log 2>/dev/null); do
+            cut -d: -f2 "$failed" | while read -r test; do
+              exe=$(find build -type f -name "$test" -perm -u+x 2>/dev/null | head -1)
+              [ -n "$exe" ] || continue
+              echo "::group::gdb backtrace: $test"
+              (cd "$(dirname "$exe")" && timeout 1800 gdb -batch -ex run -ex "thread apply all bt 30" --args "./$test")
+              echo "::endgroup::"
+            done
+          done
 
       # ── Prebuilts ──────────────────────────────────────────────────────────
       # Last, and only on success(): every build and every test of this job has to have passed before a
@@ -612,7 +703,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           COMMIT_SHA: ${{ github.sha }}
-          # Only push events carry a head_commit, so this is empty on the nightly schedule and the subject is
+          # Only push events carry a head_commit, so this is empty for a dispatched nightly and the subject is
           # then simply left out.
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           ACTOR: ${{ github.actor }}

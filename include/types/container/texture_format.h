@@ -786,6 +786,42 @@ static inline ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
 	return (ETextureFormatId) i;
 }
 
+//---------------------------------------------------------------- Texel codec
+
+//What the codec below handles: the uncompressed formats whose texels are a whole number of bytes, which is
+//every format a GPU takes as a vertex input and every one a caller can address a single texel of. A
+// compressed block has no per texel meaning, so it is refused rather than half handled.
+
+static inline Bool ETextureFormatId_canCodec(ETextureFormatId id) {
+
+	if(!id || id >= ETextureFormatId_Count)
+		return false;
+
+	const ETextureFormat f = ETextureFormatId_unpack[id];
+
+	if(ETextureFormat_getIsCompressed(f))
+		return false;
+
+	const U64 bits = ETextureFormat_getBits(f);
+	return bits && !(bits & 7) && bits <= 128;
+}
+
+//One texel's bytes. Only meaningful where ETextureFormatId_canCodec holds, since a compressed format is sized
+// per block and not per texel.
+
+static inline U8 ETextureFormatId_texelBytes(ETextureFormatId id) {
+	return (U8) (ETextureFormat_getBits(ETextureFormatId_unpack[id]) >> 3);
+}
+
+//ONE texel, as F32 components, whatever primitive and width the format stores it in. Components past what the
+//caller supplies write zero, and past what the format holds are dropped, which is what lets an RGBA format
+// carry a three component value without the caller knowing.
+//A value out of the format's range SATURATES rather than wrapping, and a NaN reaches an integer format as
+// zero, because converting either is undefined in C rather than merely wrong.
+
+void ETextureFormatId_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 srcCount);
+void ETextureFormatId_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 dstCount);
+
 static const U8 ETextureFormatId_toDXFormatArr[ETextureFormatId_Count] = {
 
 	0,    // ETextureFormatId_Undefined

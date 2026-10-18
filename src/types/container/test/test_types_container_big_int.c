@@ -341,6 +341,33 @@ void Test_bigIntBitScan(Test *t) {
 		const U16 expected = (U16)(127 - n);
 		Test_assert(t, "BigInt_bitScan", got == expected);
 	}
+
+	//The lowest set bit, with every bit above it set too so it isn't found by accident.
+
+	for (U16 p = 0; p < 128; ++p) {
+
+		U64 limbs[2] = { 0, 0 };
+
+		for (U16 b = p; b < 128; ++b)
+			limbs[b >> 6] |= (U64) 1 << (b & 63);
+
+		BigInt aBig = { 0 };
+
+		if (!BigInt_createRefConst(&limbs[0], 2, &aBig, &t->err)) {
+			Test_assert(t, "BigInt_bitScanReverse createRef", false);
+			continue;
+		}
+
+		Test_assert(t, "BigInt_bitScanReverse", BigInt_bitScanReverse(aBig) == p);
+	}
+
+	const U64 zero[2] = { 0, 0 };
+	BigInt zeroBig = { 0 };
+
+	if (Test_assert(t, "BigInt zero createRef", BigInt_createRefConst(&zero[0], 2, &zeroBig, &t->err))) {
+		Test_assert(t, "BigInt_bitScan zero", BigInt_bitScan(zeroBig) == U16_MAX);
+		Test_assert(t, "BigInt_bitScanReverse zero", BigInt_bitScanReverse(zeroBig) == U16_MAX);
+	}
 }
 
 void Test_bigInt(Test *t) {

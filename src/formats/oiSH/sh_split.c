@@ -87,9 +87,11 @@ Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, 
 				.defines = ListCharString_createRefFromList(ai.identifier.defines),
 				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint),
 				.uniformData = ListU8_createRefFromList(ai.identifier.uniformData),
-				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms)
+				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms),
+				.extensions2 = ai.identifier.extensions2
 			},
 			.dormantExtensions = ai.dormantExtensions,
+			.dormantExtensions2 = ai.dormantExtensions2,
 			.vendorMask = ai.vendorMask,
 			.hasShaderAnnotation = ai.hasShaderAnnotation
 		};
@@ -109,7 +111,7 @@ Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, 
 		//That's how a DXIL only standalone sampler, a SPIRV only subpass input or the $Globals / push constant
 		// pair that SHFile_combine leaves unmatched (their names differ) each end up back in the half they came from.
 		//What survives is copied as it was found: the reflection both halves gained from the merge is deliberately
-		// kept, so two splits of one file keep agreeing with eachother (see docs/oiSH.md).
+		// kept, so two splits of one file keep agreeing with eachother (see docs/file/oiSH.md).
 
 		for (U64 j = 0; j < ai.registers.length; ++j) {
 

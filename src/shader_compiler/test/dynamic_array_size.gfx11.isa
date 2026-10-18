@@ -1,7 +1,7 @@
 ; gfx1100  SGPRs 8  VGPRs 13  code 176 B  instrs 33  scratch 0  lds 0
 _amdgpu_ps_main:
 	s_mov_b32 s0, s1                                           // 000000000000
-	s_mov_b32 m0, s3                                           // 000000000004
+	s_mov_b32 m0, s2                                           // 000000000004
 	s_mov_b64 s[2:3], exec                                     // 000000000008
 	s_wqm_b64 exec, exec                                       // 00000000000C
 	lds_param_load v6, attr0.x wait_vdst:15                    // 000000000010
@@ -31,5 +31,5 @@ _amdgpu_ps_main:
 	v_mul_f32_e32 v2, v3, v7                                   // 000000000098
 	v_mul_f32_e32 v3, v4, v8                                   // 00000000009C
 	v_mul_f32_e32 v0, v5, v0                                   // 0000000000A0
-	exp mrt0 v1, v2, v3, v0 done                               // 0000000000A4
+	exp mrt0, v1, v2, v3, v0 done                              // 0000000000A4
 	s_endpgm                                                   // 0000000000AC

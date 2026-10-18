@@ -36,7 +36,7 @@
 //Requires EGraphicsFeatures_RayMicromapOpacity.
 
 //How many opacity states one microtriangle can express.
-//The values deliberately match VkOpacityMicromapFormatEXT and D3D12_RAYTRACING_OPACITY_MICROMAP_FORMAT, but
+//The values deliberately match VkOpacityMicromapFormatKHR and D3D12_RAYTRACING_OPACITY_MICROMAP_FORMAT, but
 // both backends still map them through a switch so a header change breaks the build rather than the opacity.
 
 //Starts at 1 like both APIs do, so there is no "no format" value: a zeroed format is invalid, not a default.
@@ -47,9 +47,9 @@ typedef enum EOpacityMicromapFormat {
 } EOpacityMicromapFormat;
 
 //One (subdivisionLevel, format) pair and how many entries of this micromap use it.
-//Vulkan calls this VkMicromapUsageEXT, D3D12 calls it a histogram entry; both need it at BUILD time, and
-// Vulkan needs it AGAIN in every BLAS that links the micromap, which is why the object keeps its own copy for
-// its whole lifetime rather than treating it as a transient build input.
+//Vulkan calls this VkMicromapUsageKHR, D3D12 calls it a histogram entry; both need it at BUILD time, which
+// runs at submit, long after the create call that borrowed the caller's list returned.
+//So the object keeps its own copy, and each backend keeps the API shaped translation its build reads.
 
 typedef struct OpacityMicromapUsage {
 	U32 count;                                 //Entries sharing this pair; the total over all usages is entryCount
@@ -60,7 +60,7 @@ typedef struct OpacityMicromapUsage {
 TList(OpacityMicromapUsage);
 
 //One record per micromap entry, laid out exactly as both APIs read it.
-//Byte identical to VkMicromapTriangleEXT, and to D3D12_RAYTRACING_OPACITY_MICROMAP_DESC on a little endian
+//Byte identical to VkMicromapTriangleKHR, and to D3D12_RAYTRACING_OPACITY_MICROMAP_DESC on a little endian
 // target, so a single entry buffer feeds either backend unchanged.
 
 typedef struct OpacityMicromapEntry {
@@ -82,9 +82,11 @@ typedef struct OpacityMicromap {
 	U32 entryStride;                           //Bytes between entries; >= sizeof(OpacityMicromapEntry)
 	U32 entryCount;                            //Sum of every usage's count
 
-	ListOpacityMicromapUsage usages;           //Owned copy, needed again by every BLAS that links this
+	ListOpacityMicromapUsage usages;           //Owned copy of the create info's usages
 
 } OpacityMicromap;
+
+static_assert(sizeof(OpacityMicromap) % 64 == 0, "OpacityMicromap must be a 64 byte multiple, its backend ext follows it");
 
 typedef RefPtr OpacityMicromapRef;
 

@@ -23,6 +23,7 @@
 #pragma once
 #include "formats/oiCA/ca_file.h"
 #include "types/container/string.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/platform_types.h"
 #include "types/base/string_base.h"
 #include "types/base/lock.h"
@@ -62,9 +63,19 @@ typedef enum ECPUVendor {
 	ECPUVendor_Count
 } ECPUVendor;
 
+//One class of a hybrid CPU's cores. cpus are its logical CPUs as Thread_setAffinity takes them (CPU set ids on
+// Windows, cpu indices on Linux and Android), empty where a thread can't pick its cores (Apple, the web).
+
+typedef struct PlatformCPUClass {
+	ListU32 cpus;
+	U32 physicalCores;
+	U32 logicalCores;
+} PlatformCPUClass;
+
 //Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo).
 //Fields that couldn't be determined on the current OS/arch are left 0.
-//Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU isn't hybrid (or the split is unknown).
+//Cache sizes are in bytes. Both classes are empty when the CPU isn't hybrid or the split is unknown; a CPU with more
+// than two classes counts its fastest as performance and the rest as efficiency.
 
 typedef struct PlatformCPUInfo {
 
@@ -74,8 +85,8 @@ typedef struct PlatformCPUInfo {
 	U32 logicalCores;                   //Hardware threads (== Platform_getThreads)
 	U32 physicalCores;                  //Physical cores (0 if unknown)
 
-	U32 performanceCores;               //Hybrid P-cores (0 if not hybrid / unknown)
-	U32 efficiencyCores;                //Hybrid E-cores
+	PlatformCPUClass performance;
+	PlatformCPUClass efficiency;
 
 	U64 l1DataCacheBytes;               //Per physical core L1 data cache
 	U64 l2CacheBytes;                   //Per physical core / per cluster L2 cache
@@ -102,8 +113,6 @@ typedef struct Platform {
 
 	const Allocator *alloc;
 
-	SpinLock virtualSectionsLock;
-
 	ListVirtualSection virtualSections;
 	ListCAFile archives;
 
@@ -111,6 +120,9 @@ typedef struct Platform {
 
 	void *data1;                        //If present can contain the executable file
 	U64 size1;
+	U8 pad2[40];
+
+	SpinLock virtualSectionsLock;
 
 	U64 hashSeed;                       //HashIndex seed, adopted by modules that link their own types/container
 
@@ -120,6 +132,17 @@ extern Platform *Platform_instance;     //DLLs that call this need to also call 
 
 Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr);
 
+//True once an interrupt (Ctrl+C, SIGINT) or SIGTERM arrived. The first only sets this, so the application stops at a
+// point of its choosing: WindowManager_wait returns at its next step. A second ends the process at once.
+Bool Platform_interruptRequested();
+
+//While deferred, the first SIGINT or SIGTERM only raises the flag above (a loop that checks it then unwinds); otherwise
+// an interrupt ends the process as before. WindowManager_wait defers for as long as it runs.
+//Calls nest and must come in pairs: true adds a deferral, false removes one (never going below none), and interrupts
+// stay deferred while any caller holds one, so two waiting loops on two threads don't undo each other.
+
+void Platform_deferInterrupts(Bool defer);
+
 impl void Platform_cleanupExt();
 impl Bool Platform_initExt(Error *e_rr);
 
@@ -127,7 +150,41 @@ impl Bool Platform_checkCPUSupport();   //SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();
 impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in bytes (0 if unknown)
 impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
-impl void Platform_detectCPUInfo(PlatformCPUInfo *out);   //Fills topology (called once at Platform_create)
+impl Bool Platform_detectCPUInfo(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr);   //Called once at Platform_create
+
+//Reads an environment variable as UTF-8 on every platform; Windows converts from its UTF-16 block.
+//An unset variable is not an error: *result is left null and the call succeeds.
+//An empty one reads as unset too, because Windows cannot hold one ("set X=" removes the variable), and a
+// script has to mean the same thing everywhere.
+//The name must be non-empty and hold no '='.
+//POSIX leaves a read racing a setenv on another thread undefined; OxC3 never writes the environment.
+Bool Platform_getEnv(CharString name, const Allocator *alloc, CharString *result, Error *e_rr);
+
+//The backend of Platform_getEnv, handed a validated, null terminated name. Empty or unset, it returns null.
+impl Bool Platform_getEnvExt(CharString name, const Allocator *alloc, CharString *result, Error *e_rr);
+
+//Typed readers over Platform_getEnv.
+//Each leaves *result untouched when the variable is unset, so the caller stores its default first.
+//A variable that is set but does not parse is an error rather than the default: a typo must not pass for
+// the value it failed to set.
+//  Bool  0, 1, true, false, case insensitive
+//  U64   decimal, or hex behind 0x (a leading 0 is NOT octal)
+//  I64   decimal with an optional minus
+//  F64   decimal with an optional minus, fraction and exponent
+
+//The grammar the typed readers apply, for a caller parsing part of a variable itself, such as one entry of a list.
+//False when the value doesn't parse; *result is then untouched.
+
+Bool Platform_parseEnvBool(CharString value, Bool *result);
+Bool Platform_parseEnvU64(CharString value, U64 *result);
+Bool Platform_parseEnvI64(CharString value, I64 *result);
+Bool Platform_parseEnvF64(CharString value, F64 *result);
+
+Bool Platform_hasEnv(CharString name, const Allocator *alloc, Bool *result, Error *e_rr);
+Bool Platform_getEnvBool(CharString name, const Allocator *alloc, Bool *result, Error *e_rr);
+Bool Platform_getEnvU64(CharString name, const Allocator *alloc, U64 *result, Error *e_rr);
+Bool Platform_getEnvI64(CharString name, const Allocator *alloc, I64 *result, Error *e_rr);
+Bool Platform_getEnvF64(CharString name, const Allocator *alloc, F64 *result, Error *e_rr);
 
 //Whether the user has a hardware keyboard they can type on right now.
 //True on platforms that have no on screen keyboard at all, since then there's nothing to weigh it against.
@@ -147,6 +204,12 @@ static inline Bool Platform_setKeyboardVisible(Bool isVisible) {
 }
 
 void Platform_cleanup();                //Call on exit
+
+//Whole pages from the OS, page aligned and outside the allocator: for memory a driver imports or maps (a graphics
+// device's breadcrumbs) rather than memory the app works in. NULL on failure; free with the size that was asked.
+
+void *Platform_allocPages(U64 size);
+void Platform_freePages(void *ptr, U64 size);
 
 impl void *Platform_getDataImpl(void *ptr);
 

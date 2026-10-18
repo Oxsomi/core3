@@ -10,9 +10,8 @@ name: Windows x64 D3D12+Vulkan dynamic (clang-cl, ASan + UBSan)
 # runtimes (clang_rt.asan_dynamic-aarch64 and friends), which CMakeLists checks for and reports at configure
 # time. MSVC stays unsanitized on purpose, its sanitizers aren't trusted here.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:

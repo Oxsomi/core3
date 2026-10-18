@@ -1,4 +1,4 @@
 sources:
-  "1.4.357.0-oxc1":
+  "2026.10.11":
     url: "https://github.com/Oxsomi/Vulkan-ValidationLayers.git"
-    checkout: "vulkan-sdk-1.4.357.0-oxc1"
+    checkout: "926ac86c85aeb2cc316df9aa14754da7b3dd6f77"

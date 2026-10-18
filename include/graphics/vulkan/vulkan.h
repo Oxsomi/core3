@@ -24,6 +24,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/descriptor_table.h"
 #include "types/container/list.h"
+#include "types/container/list_basic_types.h"
 
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
@@ -88,6 +89,7 @@ typedef struct VkUnifiedTexture {
 	U32 padding;
 
 	ListVkImageViewMapping views;
+	U8 padding1[8];
 
 	SpinLock lock;                    //To acquire views
 
@@ -98,13 +100,55 @@ typedef enum EGfxRegisterType EGfxRegisterType;
 
 Bool VkUnifiedTexture_getView(Descriptor d, EGfxRegisterType type, VkImageView *view, U32 *viewId, Error *e_rr);
 
+typedef enum EVkBlockFlags {
+	EVkBlockFlags_None              = 0,
+	EVkBlockFlags_Readback          = 1 << 0,        //The CPU reads it, so host cached memory is preferred
+	EVkBlockFlags_RequiresDedicated = 1 << 1,
+	EVkBlockFlags_PrefersDedicated  = 1 << 2,
+	EVkBlockFlags_HighPriority      = 1 << 3         //Paged out last: acceleration structures, render targets
+} EVkBlockFlags;
+
+//What VkDeviceMemoryAllocator_allocate takes as requirementsExt.
+//buffer or image names the resource a dedicated allocation is for (VkMemoryDedicatedAllocateInfo); both are null when
+// the allocation holds several.
+//newMemory is written back: the allocation made a new VkDeviceMemory rather than landing in an existing block.
+
+typedef struct VkBlockRequirements {
+	VkMemoryRequirements memory;
+	VkBuffer buffer;
+	VkImage image;
+	EVkBlockFlags flags;
+	Bool newMemory;
+	U8 padding[3];
+} VkBlockRequirements;
+
 typedef enum ECompareOp ECompareOp;
+
+//The triangle data CHAINS one of these rather than containing it, so it has to live as long as the
+//  geometry desc and cannot sit on the stack of the function that fills it in.
+
+typedef VkAccelerationStructureTrianglesOpacityMicromapKHR VkBLASOmmTriangles;
+
+TListNamed(VkAccelerationStructureGeometryKHR, ListVkAccelerationStructureGeometryKHR);
+TListNamed(VkAccelerationStructureBuildRangeInfoKHR, ListVkAccelerationStructureBuildRangeInfoKHR);
+TListNamed(VkBLASOmmTriangles, ListVkBLASOmmTriangles);
 
 typedef struct VkBLAS {
 
-	VkAccelerationStructureGeometryKHR geometry;
-	VkAccelerationStructureBuildGeometryInfoKHR geometries;
-	VkAccelerationStructureBuildRangeInfoKHR range;
+	//One entry per BLASGeometry and in the same order, since that index is what a shader reads back as
+	// GeometryIndex().
+	//The build info POINTS into geometries and every chained micromap struct is addressed out of
+	// ommTriangles, and the build re-reads both at every flush, so they are sized once at init and the
+	// pointers are taken after that.
+	//ommTriangles is only allocated when some geometry carries an OMM index buffer; pNext stays NULL
+	// otherwise.
+
+	ListVkAccelerationStructureGeometryKHR geometries;
+	ListVkAccelerationStructureBuildRangeInfoKHR ranges;
+	ListU32 maxPrimitiveCounts;
+	ListVkBLASOmmTriangles ommTriangles;
+
+	VkAccelerationStructureBuildGeometryInfoKHR build;
 	VkAccelerationStructureKHR as;
 
 	//Destination of a recorded compaction, held between the record call that creates it and the submit
@@ -112,31 +156,25 @@ typedef struct VkBLAS {
 
 	VkAccelerationStructureKHR pendingAs;
 
-	//The triangle data CHAINS one of these rather than containing it, so it has to live as long as the
-	//  geometry desc and cannot sit on the stack of the function that fills it in.
-	//A union because a device runs exactly one of the two opacity micromap extensions: the KHR promotion
-	// where the driver has it, the EXT original otherwise (EVkGraphicsFeatures_OpacityMicromapKHR says
-	// which), and the structs are NOT layout compatible (EXT carries usage counts the KHR one moved to the
-	// micromap array's own build).
-	//Only used when the BLAS carries an OMM index buffer; pNext stays NULL otherwise.
+	//Summed over the geometries once, which is what a build contributes to the device's pending work.
 
-	union {
-		VkAccelerationStructureTrianglesOpacityMicromapEXT ommTrianglesExt;
-		VkAccelerationStructureTrianglesOpacityMicromapKHR ommTrianglesKhr;
-	};
+	U64 primitives;
+	U8 padding[8];
 
-	U64 padding;
 } VkBLAS;
 
-TListNamed(VkMicromapUsageEXT, ListVkMicromapUsageEXT);
+TListNamed(VkMicromapUsageKHR, ListVkMicromapUsageKHR);
 
-//The usages have to be re-supplied to every BLAS that links this micromap, so the API shaped copy is built
-// once at create and kept, rather than rebuilt per BLAS.
+//A micromap array is an acceleration structure of its own type, built from one micromap geometry.
+//The build info points at geometry, which chains micromapData, which points into usages; the build runs at
+// flush time, so all of it lives on the object rather than on the stack of the init that fills it in.
 
 typedef struct VkOpacityMicromap {
-	VkMicromapBuildInfoEXT build;
-	VkMicromapEXT micromap;
-	ListVkMicromapUsageEXT usages;
+	VkAccelerationStructureBuildGeometryInfoKHR build;
+	VkAccelerationStructureGeometryKHR geometry;
+	VkAccelerationStructureGeometryMicromapDataKHR micromapData;
+	VkAccelerationStructureKHR as;
+	ListVkMicromapUsageKHR usages;
 } VkOpacityMicromap;
 
 typedef struct VkTLAS {

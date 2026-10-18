@@ -28,6 +28,11 @@
 #include <stdint.h>
 #include <assert.h>
 
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
+#include "types/base/bool_arg.hpp"
+
 namespace oxc {
 
 	namespace c {
@@ -84,7 +89,7 @@ namespace oxc {
 			return c::Buffer_createOneBits(length, alloc, &self, e_rr);
 		}
 
-		[[nodiscard]] c::Bool createBits(c::U64 length, c::Bool value, c::Error *e_rr = nullptr) noexcept {
+		[[nodiscard]] c::Bool createBits(c::U64 length, BoolArg value, c::Error *e_rr = nullptr) noexcept {
 			release();
 			return c::Buffer_createBits(length, value, alloc, &self, e_rr);
 		}
@@ -114,7 +119,7 @@ namespace oxc {
 		}
 
 		[[nodiscard]] c::Bool resize(
-			c::U64 newLen, c::Bool preserveContents, c::Bool clearUnsetContents, c::Error *e_rr = nullptr
+			c::U64 newLen, BoolArg preserveContents, BoolArg clearUnsetContents, c::Error *e_rr = nullptr
 		) noexcept {
 			return c::Buffer_resize(&self, newLen, preserveContents, clearUnsetContents, alloc, e_rr);
 		}
@@ -147,7 +152,7 @@ namespace oxc {
 			return c::Buffer_writeAsUTF16(self, i, codepoint, bytes, e_rr);
 		}
 
-		[[nodiscard]] c::Bool isUnicode(c::F32 threshold, c::Bool isUTF16) const noexcept {
+		[[nodiscard]] c::Bool isUnicode(c::F32 threshold, BoolArg isUTF16) const noexcept {
 			return c::Buffer_isUnicode(self, threshold, isUTF16);
 		}
 

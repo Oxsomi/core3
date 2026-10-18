@@ -21,10 +21,18 @@
 //types/base/buffer_base.h
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
 #include "types/base/c8.h"
 #include "types/base/algorithm.h"
+
+//The copies and fills below: gcc and clang take their builtins, which need no header, and MSVC what vcruntime_string.h
+// declares, the part of string.h they live in, as atomic.h takes intrin0.h over intrin.h.
+
+#if _COMPILER == COMPILER_MSVC
+	#include <vcruntime_string.h>
+#endif
 
 #ifdef __cplusplus
 	extern "C" {
@@ -143,12 +151,70 @@ static inline Buffer Buffer_createVirtualRefConst(U64 length) {
 	return buf;
 }
 
-//Bit manipulation
+//Copies and fills
 
-Bool Buffer_memcpy(const Buffer dst, const Buffer src);            //Copies bytes from two separate ranges
-Bool Buffer_memmove(const Buffer dst, const Buffer src);           //Copies bytes from two overlapping ranges
+//Inline, so a copy or fill of a size the compiler can see becomes a few moves instead of a call.
+//Link time optimization only removes the call within one link.
+//The copies take the shorter of the two lengths. A null dst or src copies nothing and succeeds, a const dst fails.
 
-Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr);
+static inline Bool Buffer_memcpy(const Buffer dst, const Buffer src) {        //Copies bytes from two separate ranges
+
+	if(!dst.ptr || !src.ptr)
+		return true;
+
+	if(Buffer_isConstRef(dst))
+		return false;
+
+	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
+
+	#if _COMPILER == COMPILER_MSVC
+		memcpy(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
+	#else
+		__builtin_memcpy(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
+	#endif
+
+	return true;
+}
+
+static inline Bool Buffer_memmove(const Buffer dst, const Buffer src) {       //Copies bytes from two overlapping ranges
+
+	if(!dst.ptr || !src.ptr)
+		return true;
+
+	if(Buffer_isConstRef(dst))
+		return false;
+
+	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
+
+	#if _COMPILER == COMPILER_MSVC
+		memmove(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
+	#else
+		__builtin_memmove(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
+	#endif
+
+	return true;
+}
+
+static inline Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr) {
+
+	if(!buf.ptr || Buffer_isConstRef(buf)) {
+
+		if(e_rr)
+			*e_rr = !buf.ptr ? Error_nullPointer(0, "Buffer_setAllToU8()::buf is required") :
+				Error_constData(0, 0, "Buffer_setAllToU8()::buf should be writable");
+
+		return false;
+	}
+
+	#if _COMPILER == COMPILER_MSVC
+		memset(buf.ptrNonConst, b8, Buffer_length(buf));
+	#else
+		__builtin_memset(buf.ptrNonConst, b8, Buffer_length(buf));
+	#endif
+
+	return true;
+}
+
 void Buffer_clearAllSecure(Buffer buf);                            //Clear all without allowing optimization (sensitive data)
 
 static inline Bool Buffer_setAllBits(const Buffer dst, Error *e_rr) {
@@ -162,6 +228,8 @@ static inline Bool Buffer_unsetAllBits(const Buffer dst, Error *e_rr) {
 static inline Bool Buffer_setAllBitsTo(const Buffer buf, Bool isOn, Error *e_rr) {
 	return isOn ? Buffer_setAllBits(buf, e_rr) : Buffer_unsetAllBits(buf, e_rr);
 }
+
+//Bit manipulation
 
 Bool Buffer_getBit(const Buffer buf, U64 offset, Bool *output, Error *e_rr);
 Bool Buffer_setBit(Buffer buf, U64 offset, Error *e_rr);

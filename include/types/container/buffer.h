@@ -83,6 +83,7 @@ Bool Buffer_createUninitializedBytesAligned(
 Bool Buffer_createEmptyBytesAligned(
 	U64 length, U64 alignment, U64 headerOffset, const Allocator *alloc, Buffer *result, Error *e_rr
 );
+
 Bool Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output, Error *e_rr);
 
 Bool Buffer_resize(

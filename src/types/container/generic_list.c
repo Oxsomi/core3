@@ -126,6 +126,47 @@ clean:
 	return s_uccess;
 }
 
+Bool GenericList_createUninitialized(
+	U64 length, U64 stride, const Allocator *allocator, GenericList *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!result)
+		retError(clean, Error_nullPointer(3, "GenericList_createUninitialized()::result is required"));
+
+	if (result->ptr)
+		retError(clean, Error_invalidOperation(
+			0, "GenericList_createUninitialized()::result wasn't empty, which might indicate memleak"
+		));
+
+	if(!length && stride) {        //Keep the list empty
+		*result = GenericList_createEmpty(stride);
+		goto clean;
+	}
+
+	if(!length || !stride)
+		retError(clean, Error_invalidParameter(
+			!length ? 0 : 1, 0, "GenericList_createUninitialized()::length and stride are required"
+		));
+
+	if(length * stride / stride != length)
+		retError(clean, Error_overflow(0, length * stride, U64_MAX, "GenericList_createUninitialized() overflow"));
+
+	Buffer buf = Buffer_createNull();
+	gotoIfError3(clean, GenericList_alloc(length * stride, stride, false, allocator, &buf, e_rr));
+
+	*result = (GenericList) {
+		.ptr = buf.ptr,
+		.length = length,
+		.stride = stride,
+		.capacityAndRefInfo = length
+	};
+
+clean:
+	return s_uccess;
+}
+
 Bool GenericList_createRepeated(
 	U64 length,
 	U64 stride,
@@ -748,11 +789,11 @@ Bool GenericList_resizeInternal(GenericList *list, U64 size, const Allocator *al
 
 	gotoIfError3(clean, GenericList_reserve(list, size * 3 / 2, allocator, e_rr));
 
+	//Only what the new length exposes: growing within the capacity later clears its own part, as the branch above does.
+
 	if(doClear)
 		gotoIfError3(clean, Buffer_unsetAllBits(
-			Buffer_createRef(
-				(U8*)list->ptrNonConst + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride
-			),
+			Buffer_createRef((U8*)list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
 			e_rr
 		));
 
@@ -800,6 +841,10 @@ clean:
 
 Bool GenericList_resize(GenericList *list, U64 size, const Allocator *allocator, Error *e_rr) {
 	return GenericList_resizeInternal(list, size, allocator, true, e_rr);
+}
+
+Bool GenericList_resizeUninitialized(GenericList *list, U64 size, const Allocator *allocator, Error *e_rr) {
+	return GenericList_resizeInternal(list, size, allocator, false, e_rr);
 }
 
 Bool GenericList_shrinkToFit(GenericList *list, const Allocator *allocator, Error *e_rr) {

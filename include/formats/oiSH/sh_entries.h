@@ -48,7 +48,7 @@ typedef struct SHEntry {
 		U64 equal[1];                            //This compare can be done in addition to compatible to know exact equality
 
 		struct {
-			U16 waveSize;                        //U4[4] req, min, max, preferSize: each U4 is in range [0, 9]
+			U16 waveSize;                        //U4[ESHWaveSize_Count], see SHEntry_waveSizeLanes
 			U16 reserved0[3];                    //Only use if property that might need unique comparison
 		};
 	};
@@ -98,6 +98,27 @@ typedef struct SHEntry {
 
 extern const C8 *SHEntry_stageNames[EGfxPipelineStage_Count];
 
+//SHEntry::waveSize holds a compute entry's [WaveSize] as four codes of four bits, indexed by ESHWaveSize.
+//A code is log2 of the lanes plus one, 0 for none, so 3 is 4 lanes and 8 is 128.
+//[WaveSize(N)] sets the required size alone; the ranged form (SM6.8) sets min and max, and preferred if it names one.
+
+typedef enum ESHWaveSize {
+	ESHWaveSize_Required,
+	ESHWaveSize_Min,
+	ESHWaveSize_Max,
+	ESHWaveSize_Preferred,
+	ESHWaveSize_Count
+} ESHWaveSize;
+
+static inline U8 SHEntry_waveSizeLanes(U16 waveSize, ESHWaveSize which) {
+	const U8 code = (U8) ((waveSize >> ((U8) which << 2)) & 0xF);
+	return code ? (U8) (1 << (code - 1)) : 0;
+}
+
+//Whether waveSize is none or one of the two forms, with every code from 3 to 8 and a preferred size in the range.
+
+Bool SHEntry_isValidWaveSize(U16 waveSize);
+
 typedef enum ESHEntryRuntimeFlag {
 	ESHEntryRuntimeFlag_None              = 0,
 	ESHEntryRuntimeFlag_IsRt              = 1 << 0,    //Raytracing stage (raygen/miss/closesthit/anyhit/intersection/callable)
@@ -116,7 +137,7 @@ typedef struct SHEntryRuntime {
 	U8 binaryTypes;                       //[[oxc::binary(...)]] mask of (1 << EGfxBinaryType); 0 = unset (all supported)
 	U16 uniformStride;                    //How many bytes all uniforms combined take
 
-	ListU32 extensions;                   //Explicitly enabled extensions (ESHExtension[])
+	ListSHExtensionSet extensions;        //Explicitly enabled extensions, a set per [[oxc::extension(...)]] line
 
 	ListU16 shaderVersions;               //U16: U8 major, minor;        If not defined will default.
 

@@ -412,7 +412,7 @@ typedef enum ETopologyMode {
 typedef enum EPipelineRaytracingFlags { //rt.flags; a derived pipeline assumes EPipelineRaytracingFlags_Default
 	EPipelineRaytracingFlags_SkipTriangles      = 1 << 0,
 	EPipelineRaytracingFlags_SkipAABBs          = 1 << 1,
-	EPipelineRaytracingFlags_Reserved2          = 1 << 2, //Reserved, free to reuse
+	EPipelineRaytracingFlags_Reserved2          = 1 << 2,
 	EPipelineRaytracingFlags_NoNullAnyHit       = 1 << 3, //Null shaders disallowed per stage (extra validation)
 	EPipelineRaytracingFlags_NoNullClosestHit   = 1 << 4,
 	EPipelineRaytracingFlags_NoNullMiss         = 1 << 5,

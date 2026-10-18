@@ -25,6 +25,7 @@
 //One entrypoint per file, as in the other test shaders.
 
 #include "@resources.hlsli"
+#include "@pack.hlsli"
 
 struct SamplerPush {
 	U32 texture;         //Bindless read handle of the source texture
@@ -51,13 +52,5 @@ void main(U32x3 id : SV_DispatchThreadID) {
 
 	F32x4 texel = texture2D(_push.texture).SampleLevel(sampler(_push.samplerId), uv, 0);
 
-	//Repacked into the 0xAABBGGRR the texture was uploaded as
-
-	U32 packed =
-		((U32)(texel.x * 255.0f + 0.5f)) |
-		((U32)(texel.y * 255.0f + 0.5f) << 8) |
-		((U32)(texel.z * 255.0f + 0.5f) << 16) |
-		((U32)(texel.w * 255.0f + 0.5f) << 24);
-
-	rwBuffer(_push.output).Store((id.y * 8 + id.x) * 4, packed);
+	rwBuffer(_push.output).Store((id.y * 8 + id.x) * 4, packUnorm4x8(texel));
 }

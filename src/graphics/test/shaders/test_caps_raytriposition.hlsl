@@ -45,19 +45,21 @@ PUSH_CONSTANT CapsPush _push;
 //Thread 0 traces the instance at the origin, thread 1 the one translated +2 along X.
 //Both must see the SAME object space positions, which is itself part of the test: a fetch returning world
 // space positions gives thread 1 an X shifted by 2 and fails.
+//Thread 2 traces the BLAS's second geometry, primitive 0 of it, which has to hand back that geometry's own
+// triangle rather than the first geometry's at the same primitive index.
 //App data: [0] = bindless write handle of the output buffer, [1] = bindless handle of the TLAS.
 
 [[oxc::extension("RayQuery", "RayTriPosition")]]
 [[oxc::model("6.10")]]
 [shader("compute")]
-[numthreads(2, 1, 1)]
+[numthreads(3, 1, 1)]
 void main(U32 i : SV_DispatchThreadID) {
 
-	if(i >= 2)
+	if(i >= 3)
 		return;
 
 	RayDesc ray;
-	ray.Origin = F32x3(i == 1 ? 2.25f : 0.25f, 0.25f, -1);
+	ray.Origin = F32x3(i == 1 ? 2.25f : 0.25f, i == 2 ? 2.25f : 0.25f, -1);
 	ray.Direction = F32x3(0, 0, 1);
 	ray.TMin = 0;
 	ray.TMax = 10;
@@ -72,12 +74,17 @@ void main(U32 i : SV_DispatchThreadID) {
 
 		const oxc::TrianglePositions p = oxc::CommittedTriangleObjectPositions(query);
 
-		//The exact vertices the BLAS was built from, in stored order.
+		//The exact vertices the BLAS was built from, in stored order, and the geometry and primitive they belong to.
+
+		const F32 y = i == 2 ? 2 : 0;
+		const U32 geometry = i == 2 ? 1 : 0;
 
 		ok =
-			all(p.p0 == F32x3(0, 0, 0)) &&
-			all(p.p1 == F32x3(1, 0, 0)) &&
-			all(p.p2 == F32x3(0, 1, 0)) ? 1 : 0;
+			all(p.p0 == F32x3(0, y, 0)) &&
+			all(p.p1 == F32x3(1, y, 0)) &&
+			all(p.p2 == F32x3(0, y + 1, 0)) &&
+			query.CommittedGeometryIndex() == geometry &&
+			query.CommittedPrimitiveIndex() == 0 ? 1 : 0;
 	}
 
 	setAtUniform<U32>(_push.output, i << 2, ok);

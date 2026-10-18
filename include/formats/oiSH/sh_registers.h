@@ -87,6 +87,11 @@ typedef struct SHRegisterRuntime {
 TList(SHRegister);
 TList(SHRegisterRuntime);
 
+//Whether two registers are the same one. Identity is the SHRegister bytes, the name, the arrays and the shader
+//buffer's contents; the hash only prefilters, for the reason SBFile_equals gives.
+
+Bool SHRegisterRuntime_equals(const SHRegisterRuntime *a, const SHRegisterRuntime *b);
+
 //Whether a register is part of the given binary type at all.
 //Normally that is whether it has a binding, since a register the other backend bound on its own reads U64_MAX
 // here (a standalone DXIL sampler, a SPIRV subpass input).
@@ -97,9 +102,6 @@ Bool SHRegister_isPresentIn(const SHRegister *reg, EGfxBinaryType type);
 Bool SHRegisterRuntime_hash(
 	const SHRegister *reg, const CharString *name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr
 );
-
-//Whether two registers are identical, comparing everything the hash was built from; equal hashes don't imply it.
-Bool SHRegisterRuntime_equals(const SHRegisterRuntime *a, const SHRegisterRuntime *b);
 
 Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator *alloc, SHRegisterRuntime *res, Error *e_rr);
 

@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-09-19 (v3.2.105). Update this table in the same PR as the feature.
+Last updated: 2026-09-20 (v3.2.106). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -21,7 +21,7 @@ Last updated: 2026-09-19 (v3.2.105). Update this table in the same PR as the fea
 | AllocationBuffer (GPU suballocator) | ✅ | Non-linear alignment supported |
 | JobQueue | ✅ | Deterministic single-thread mode |
 | Compression (Brotli) | 📄 | oiXX headers reserve flags; implementation is a disabled WIP. Readers must reject compressed files |
-| HashIndex (open addressed index beside a list) | ✅ | Robin Hood, seeded, displacement bounded; laid beside the caller's list rather than owning it. Consumed by the tracked allocator; the graphics and format sites are still linear |
+| Hash set (THashSet over HashIndex) | ✅ | An owning list plus a Robin Hood index of its entries: seeded, displacement bounded, lookups inlined per key type. Consumed by the tracked allocator, command lists, descriptor tables and the device's in flight sets; format sites stay linear |
 
 ## Formats
 
@@ -34,7 +34,19 @@ Last updated: 2026-09-19 (v3.2.105). Update this table in the same PR as the fea
 | oiBC (Chimera) | 📄 | 📄 | – | Spec draft + stub only |
 | BMP | 🟡 | 🟡 | – | BGRA8/BGR8 only, ≤2 GiB |
 | DDS | 🟡 | 🟡 | – | Modern DXGI subset; no YUV/depth/legacy |
+| HDR | ✅ | ✅ | – | RGBE (Radiance); -Y +X orientation; RLE and flat |
 | WAV | ✅ | ✅ | – | |
+| OBJ | ✅ | ✅ | – | The flat mesh form (`types/mesh`) both ways. See the note below on what it carries |
+| PLY | ✅ | ✅ | – | ASCII and binary, little and big endian, read and written. Same flat mesh form as OBJ. `Ply_readParallel` splits a fixed stride binary body across a `JobQueue`; ~4x on Lucy (28M triangles) on a 24 thread desktop, bytes identical to `Ply_read` |
+
+**Known issue, both mesh readers:** a read fills one fixed flat form, which carries a position, one packed
+normal, one uv pair and the indices. Every other per-vertex property a file declares is parsed, so the widths
+between the wanted ones are known, and then dropped. A gaussian splat is the case that makes this visible: its
+62 vertex channels (3 f_dc, 45 f_rest, opacity, scale, rot) read without error and only the position survives.
+Carrying arbitrary properties needs a richer in-memory mesh and is not planned. The writers emit this same flat
+form rather than reproducing the file they came from, so `write(read(f)) != f` for any file richer than the
+form: a splat reads and writes back as bare geometry. Round trips are tested per format, big endian included,
+and compare triangles rather than vertices, since a read renumbers vertices into first use order.
 
 ## Platforms
 
@@ -59,8 +71,8 @@ Last updated: 2026-09-19 (v3.2.105). Update this table in the same PR as the fea
 | Buffers/textures + suballocation | ✅ | ✅ | |
 | Descriptor heap/layout/table + bindless | ✅ | ✅ | Android: bindful path missing |
 | Compute/graphics pipelines | ✅ | ✅ | Android: render passes missing |
-| Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags |
-| Mesh shaders / VRS | ✅ | ✅ | |
+| Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags; Vulkan micromaps need VK_KHR_opacity_micromap; ray queries reach them from every stage whose entry names `OXC_ENABLE_OPACITY_MICROMAP()` |
+| Mesh shaders / VRS | 🟡 | 🟡 | Capabilities exposed, nothing exercised: no `dispatchMesh` runtime path on either backend, no VRS test (see roadmap) |
 | Metal | 📄 | — | Enum reserved; needs SPIRV-Cross MSL path |
 | WebGPU | 📄 | — | |
 | Android swapchain pre-rotation | ✅ | — |  |
@@ -74,7 +86,7 @@ Last updated: 2026-09-19 (v3.2.105). Update this table in the same PR as the fea
 | `[[oxc::...]]` annotations | ✅ | stage/model/vendor/extension/uniforms/binary masks; parsed via DXC reflection |
 | Multithreaded batch compile | ✅ | JobQueue, per-thread Compiler |
 | Include tracking / sourceHash | ✅ | Hot-reload & incremental-build ready |
-| Lib specialization + link (RT/workgraphs) | ✅ | Under active review |
+| Lib specialization + link (RT) | ✅ | |
 | GLSL / Slang input | ❌ | HLSL-only by design (state in docs) |
 | MSL output | 📄 | Blocked on SPIRV-Cross/Shader translator integration |
 | CLI: convert/encrypt/hash/inspect/rand/profile/devices/package | ✅ | `-aes` key via argv only, stdin/env/file input wanted |

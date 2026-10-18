@@ -189,6 +189,10 @@
 			for(U8 j = 0; j < ESHExtension_Count; ++j)
 				if(id->extensions & (1 << j))
 					Log_debugLnx("\t\tExtension: %s", ESHExtension_names[j]);
+
+			for(U8 j = 0; j < ESHExtension2_Count; ++j)
+				if(id->extensions2 & (1 << j))
+					Log_debugLnx("\t\tExtension: %s", ESHExtension2_names[j]);
 		}
 
 	clean:
@@ -364,11 +368,13 @@
 		gotoIfError3(clean, CharString_format(
 			alloc, &spvPath, e_rr, "%.*s.spv.oiSH", (int) CharString_length(output), output.ptr
 		));
+
 		gotoIfError3(clean, CLI_shaderStripToReflection(spvPath, &stripped, e_rr));
 
 		gotoIfError3(clean, CharString_format(
 			alloc, &dxilPath, e_rr, "%.*s.dxil.oiSH", (int) CharString_length(output), output.ptr
 		));
+
 		gotoIfError3(clean, CLI_shaderStripToReflection(dxilPath, &stripped, e_rr));
 
 		if(!stripped) {

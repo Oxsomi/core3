@@ -25,6 +25,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "platforms/logx.h"
 #include "types/container/list_basic_types.h"
@@ -124,6 +125,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 			break;
 
 		case ETextureFormatId_BGR10A2:                             dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;  break;
+		case ETextureFormatId_RGB9E5:                              dxFormat = DXGI_FORMAT_R9G9B9E5_SHAREDEXP;    break;
 		case ETextureFormatId_BC6H:                                dxFormat = DXGI_FORMAT_BC6H_TYPELESS;         break;
 
 		case ETextureFormatId_BC4:    case ETextureFormatId_BC4s:  dxFormat = DXGI_FORMAT_BC4_TYPELESS;          break;
@@ -211,9 +213,12 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 		//RenderTextures or DepthStencils can't.
 		//This saves some space.
 
-		if (texture->resource.type == EResourceType_DeviceTexture) {
+		//It is asked for through the resource desc, which the placed resource is then created with too.
+		//Tight alignment (an Alignment of 0) already lets the driver go below it.
 
-			allocInfo.Alignment = 4 * KIBI;
+		if (texture->resource.type == EResourceType_DeviceTexture && resourceDesc.Alignment) {
+
+			resourceDesc.Alignment = D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT;
 
 			res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
 				deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
@@ -221,8 +226,9 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			//Small alignment failed, try again with default alignment.
 
-			if (!res || allocInfo.Alignment != 4 * KIBI || allocInfo.SizeInBytes == U64_MAX) {
+			if (!res || allocInfo.Alignment != D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT || allocInfo.SizeInBytes == U64_MAX) {
 
+				resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 				allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
 				retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
 
@@ -334,6 +340,12 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 				(void**)&managedImageExt->image
 			), e_rr));
 
+			DxGraphicsDevice_setResidencyPriority(
+				deviceExt, (ID3D12Pageable*) managedImageExt->image,
+				!!(texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit),
+				texture->resource.type != EResourceType_DeviceTexture
+			);
+
 			texture->resource.allocated = true;
 			texture->resource.blockId = blockId;
 			texture->resource.blockOffset = 0;
@@ -410,6 +422,16 @@ clean:
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->allocator.lock);
+
+	//After the allocator lock, as a buffer's. A texture has no device address, so DRED's own object pointer is what
+	// finds it. Swapchains are left out: a resize replaces their images without freeing the resource.
+
+	if(s_uccess && texture->resource.type != EResourceType_Swapchain)
+		for(U8 i = 0; i < texture->images && s_uccess; ++i)
+			s_uccess = GraphicsDevice_registerResource(
+				device, textureRef,
+				DxObject_identity((IUnknown*) TextureRef_getImgExtT(textureRef, Dx, 0, i)->image), name, e_rr
+			);
 
 	ListU16_free(&temp16, alloc);
 	return s_uccess;

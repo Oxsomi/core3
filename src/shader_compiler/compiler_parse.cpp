@@ -161,6 +161,14 @@ Bool Compiler_finalizeEntrypoint(
 
 	gotoIfError3(clean, Compiler_findEntry(entries, *entryName, &entry, e_rr));
 
+	//The parse read the entry's [WaveSize] off the source, where every binary type sees it: SPIR-V can't carry one and
+	// its compile passes none, and what DXIL reflects has to be the size the parse read.
+
+	if(waveSize && waveSize != entry->entry.waveSize)
+		retError(clean, Error_invalidState(
+			0, "Compiler_finalizeEntrypoint() DXIL reflected a WaveSize other than the one the source declares"
+		));
+
 	//A closesthit/anyhit that never READS its attribute struct gets it stripped before reflection runs,
 	// DXIL reports AttributeSize 0, and SPIR-V has no OpVariable left to measure,
 	// so the entry would be rejected for an attribute the driver allocates regardless.
@@ -195,7 +203,6 @@ Bool Compiler_finalizeEntrypoint(
 
 		entry->entry.payloadSize = payloadSize;
 		entry->entry.intersectionSize = intersectSize;
-		entry->entry.waveSize = waveSize;
 
 		entry->entry.inputsU64[0] = input.aU64[0];
 		entry->entry.inputsU64[1] = input.aU64[1];
@@ -224,7 +231,6 @@ Bool Compiler_finalizeEntrypoint(
 		entry->entry.groupZ != localSize[2] ||
 		entry->entry.payloadSize != payloadSize ||
 		entry->entry.intersectionSize != intersectSize ||
-		entry->entry.waveSize != waveSize ||
 		entry->entry.inputsU64[0] != input.aU64[0] ||
 		entry->entry.inputsU64[1] != input.aU64[1] ||
 		entry->entry.outputsU64[0] != output.aU64[0] ||
@@ -239,7 +245,7 @@ Bool Compiler_finalizeEntrypoint(
 		retError(clean, Error_invalidState(
 			0,
 			"Compiler_finalizeEntrypoint() had two mismatching inputs from reflection:\n"
-			"numthreads, payloadSize, intersectSize, waveSize, inputs or outputs"
+			"numthreads, payloadSize, intersectSize, inputs or outputs"
 		));
 	}
 
@@ -978,6 +984,12 @@ Bool Compiler_parse(
 		tmp = CharString_createNull();
 	}
 
+	for(U32 i = 0; i < ESHExtension2_Count; ++i) {
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension2_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
 	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection parse,
 	// including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch).
 	//Reflection is stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage),
@@ -1055,7 +1067,11 @@ Bool Compiler_parse(
 
 		runtimeEntry.entry.stage = EGfxPipelineStage_Count;
 
-		for (uint32_t j = 0; j < nodeDesc.AnnotationCount; ++j) {
+		//The reflector hands a function's annotations back last first, so they are walked from the end to parse them in
+		// the order they were written.
+		//That order is what the permutation lists keep, and an entry's binaries follow it (Compiler_binaryIndex).
+
+		for (uint32_t j = nodeDesc.AnnotationCount; j-- > 0;) {
 
 			D3D12_HLSL_ANNOTATION annot;
 			if (FAILED(hr = reflectionData->GetAnnotationByIndex(funcDesc.NodeId, j, &annot)))
@@ -1073,7 +1089,16 @@ Bool Compiler_parse(
 
 		else {
 
-			U16 minVersion = Compiler_minFeatureSetStage(EGfxPipelineStage(runtimeEntry.entry.stage), 0);
+			//[WaveSize] (oiSH holds it for compute alone) raises the shader model: SM6.6 for one size, SM6.8 for a range.
+
+			const U16 waveSize = runtimeEntry.entry.waveSize;
+
+			if (waveSize && runtimeEntry.entry.stage != EGfxPipelineStage_Compute)
+				retError(clean, Error_invalidState(0, "Compiler_parse() WaveSize is only supported on compute shaders"));
+
+			U16 minVersion = Compiler_minFeatureSetStage(
+				EGfxPipelineStage(runtimeEntry.entry.stage), waveSize >> 4 ? 2 : waveSize ? 1 : 0
+			);
 
 			//Ensure all shader versions are compatible with minimum featureset
 
@@ -1103,14 +1128,14 @@ Bool Compiler_parse(
 
 				if(
 					runtimeEntry.entry.stage != EGfxPipelineStage_RaygenExt &&
-					(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
+					(runtimeEntry.extensions.ptr[j].extensions & ESHExtension_RayReorder)
 				)
 					retError(clean, Error_invalidState(
 						0,
 						"Compiler_parse() one of the non raygen stages uses RayReorder, which isn't supported"
 					));
 
-				if(!isRt && (runtimeEntry.extensions.ptr[j] & ESHExtension_PAQ))
+				if(!isRt && (runtimeEntry.extensions.ptr[j].extensions & ESHExtension_PAQ))
 					retError(clean, Error_invalidState(
 						0,
 						"Compiler_parse() one of the non raytracing stages uses PAQ, which isn't supported"
@@ -1120,7 +1145,7 @@ Bool Compiler_parse(
 					runtimeEntry.entry.stage != EGfxPipelineStage_Compute &&
 					runtimeEntry.entry.stage != EGfxPipelineStage_MeshExt &&
 					runtimeEntry.entry.stage != EGfxPipelineStage_TaskExt &&
-					(runtimeEntry.extensions.ptr[j] & ESHExtension_ComputeDeriv)
+					(runtimeEntry.extensions.ptr[j].extensions & ESHExtension_ComputeDeriv)
 				)
 					retError(clean, Error_invalidState(
 						0,
@@ -1852,6 +1877,12 @@ Bool Compiler_reflect(
 		tmp = CharString_createNull();
 	}
 
+	for (U32 i = 0; i < ESHExtension2_Count; ++i) {
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension2_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
 	//Reflect at the highest shader model (a SM6.10 library) so every feature is available (see Compiler_parse)
 
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
@@ -1923,6 +1954,7 @@ Bool Compiler_reflect(
 			features,
 			alloc, reflection, e_rr
 		));
+
 		allocatedSR = true;
 
 		for (U32 i = 0; i < reflDesc.NodeCount; ++i)

@@ -56,6 +56,9 @@ void Test_graphicsBindlessDescriptor(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBufferBindless(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessSampler(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsUnsafeExecution(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsExperimentTiers(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsStaticSamplerDevice(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDescriptorAlloc(Test *t, GraphicsDeviceRef *deviceRef);
@@ -84,21 +87,34 @@ void Test_graphicsBindfulPushConstants(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushDescriptors(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushTexture(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulStaticSampler(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBindfulStaticSamplerByValue(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulReservedSpace(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulPushClass(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindfulRays(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBlasCompaction(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBlasGeometry(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsBlasScratch(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsOmmRayQuery(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsResourceRegistry(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsPipelineCache(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsShaderReflection(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsSubmit(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSubmitSwapchainOnly(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSubmitFlush(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsSubmitFailure(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsVirtualSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPhysicalSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
+
+//A buffer whose upload source is a stream rather than a host buffer.
+
+void Test_graphicsBufferStream(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsAccelerationStructures(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsShaderCompute(Test *t, GraphicsDeviceRef *deviceRef);
@@ -145,6 +161,7 @@ Bool TestShaders_computePipelinePush(
 	Test *t, GraphicsDeviceRef *deviceRef, const SHFile *file, PipelineRef **pipeline,
 	PipelineLayoutRef **layoutOut
 );
+
 Bool TestShaders_submitAndWait(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *commandList);
 Bool TestShaders_pullBuffer(Test *t, GraphicsDeviceRef *deviceRef, CommandListRef *emptyList, DeviceBufferRef *buffer);
 
@@ -183,11 +200,19 @@ Bool TestShaders_checkPixels(
 );
 
 void Test_graphicsCapabilityExecution(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsWaveSize(Test *t, GraphicsDeviceRef *deviceRef);
 
 //Config variants build their own devices from the flags under test, so this one takes the instance and the
 //adapter rather than a device the suite already created.
 
 void Test_graphicsConfigVariants(Test *t, GraphicsInstanceRef *instRef, const GraphicsDeviceInfo *info);
+
+//An upload source that refuses every read and counts them (test_graphics_refusing_stream.c)
+
+typedef struct OxStream OxStream;
+extern U32 TestGraphics_refusedReads;
+
+Bool TestGraphics_refusingRead(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr);
 
 #ifdef __cplusplus
 	}

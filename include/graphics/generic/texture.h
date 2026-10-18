@@ -97,6 +97,20 @@ Bool TextureRef_pullRegion(
 	TexturePullCallback callback, void *context, Error *e_rr
 );
 
+//Same timing, region and plane semantics, but the region is written to a STREAM at streamOffset as tight
+// rows rather than into a buffer handed to the callback, which is the allocation this saves: a pull headed
+// for a stream needs no destination of its own.
+//The stream is referenced until the pull completes and has to be writable; the callback is optional here,
+// since the data has somewhere to land without it.
+Bool TextureRef_pullRegionStream(
+	TextureRef *tex,
+	U16 x, U16 y, U16 z,
+	U16 w, U16 h, U16 l,
+	U8 plane,
+	StreamRef *stream, U64 streamOffset,
+	DeviceStreamPullCallback callback, void *context, Error *e_rr
+);
+
 UnifiedTextureImage TextureRef_getImage(TextureRef *tex, U32 subResource, U8 imageId);
 
 U32 TextureRef_getCurrReadHandle(TextureRef *tex, U32 subResource);

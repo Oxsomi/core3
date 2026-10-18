@@ -23,6 +23,7 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_device.h"
@@ -104,6 +105,8 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 	VkImageSubresourceLayers range = (VkImageSubresourceLayers) { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT };
 
 	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
+
+		GraphicsDevice_noteStagingBypass(device, allocRange);
 
 		CharString dedicatedStagingName = CharString_createRefCStrConst("Dedicated staging buffer");
 

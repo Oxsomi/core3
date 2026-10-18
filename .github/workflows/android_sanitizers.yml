@@ -18,9 +18,8 @@ name: Android Vulkan (emulator run, ASan + UBSan)
 # No sanitized android run has happened yet, so the first results measure the platform layer rather than
 # report a regression in it.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 9 * * *'
   workflow_dispatch:
 
 jobs:

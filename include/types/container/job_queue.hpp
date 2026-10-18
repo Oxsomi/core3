@@ -26,13 +26,31 @@
 #include <type_traits>
 
 //Pre-include system headers used by the C headers below at global scope;
-//they must not be pulled in for the first time inside a namespace.
+//they must not be pulled in for the first time inside a namespace (see lock.hpp for <intrin0.h>).
 
 #include <atomic>
 #include <stdalign.h>
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
+
+#ifdef __APPLE__
+	#include <TargetConditionals.h>            //platform_types.h reaches for this on apple
+#endif
+
+//platform_types.h goes into oxc::c first, where its types belong, and its _COMPILER picks the header below.
+
+namespace oxc { namespace c {
+	#include "types/base/platform_types.h"
+} }
+
+#if _COMPILER == COMPILER_MSVC || _COMPILER == COMPILER_CLANG_CL
+	#include <intrin0.h>
+#endif
 
 namespace oxc {
 
@@ -138,6 +156,16 @@ namespace oxc {
 			return initialized;
 		}
 
+		//Workers placed by core class, with lanes (see JobQueueInfo in job_queue.h)
+
+		[[nodiscard]] c::Bool init(
+			const c::JobQueueInfo &info, const c::Allocator &alloc, c::Error *e_rr = nullptr
+		) noexcept {
+			release();
+			initialized = c::JobQueue_createInfo(&info, &alloc, &queue, e_rr);
+			return initialized;
+		}
+
 		//Raw C style push; data is owned by the caller
 
 		[[nodiscard]] c::Bool push(c::JobCallback callback, void *data, c::Error *e_rr = nullptr) noexcept {
@@ -149,6 +177,11 @@ namespace oxc {
 
 		template<typename F>
 		[[nodiscard]] c::Bool push(F &&f, c::Error *e_rr = nullptr) noexcept {
+			return push(c::EJobLane_Normal, std::forward<F>(f), e_rr);
+		}
+
+		template<typename F>
+		[[nodiscard]] c::Bool push(c::EJobLane lane, F &&f, c::Error *e_rr = nullptr) noexcept {
 
 			using Storage = JobStorage<typename std::decay<F>::type>;
 
@@ -172,8 +205,8 @@ namespace oxc {
 			//The callback is the C forwarder rather than Storage::invoke, so the pointer the queue calls was
 			// defined with the same types the queue calls it through.
 
-			if (!c::JobQueue_pushDestructor(
-				&queue, &c::JobQueue_wrapperCallback, storage, &Storage::destroy, e_rr
+			if (!c::JobQueue_pushLane(
+				&queue, lane, &c::JobQueue_wrapperCallback, storage, &Storage::destroy, nullptr, e_rr
 			)) {
 				Storage::destroy(storage);
 				return false;

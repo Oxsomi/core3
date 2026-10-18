@@ -1,4 +1,4 @@
 sources:
-  "2024.09.21":
+  "2026.10.11":
     url: "https://github.com/Oxsomi/AGS_SDK.git"
-    checkout: "master"
+    checkout: "9a1179edb9ee264ea8206589b4074a1ccac4fa2c"

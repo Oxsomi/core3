@@ -1309,6 +1309,7 @@ static void Test_SPLayoutDeriveSupplyRoundTrip(Test *t) {
 		t, "rowsDerived",
 		PLDescriptorBinding_source(row0) == EPLSource_Derived && PLDescriptorBinding_source(row1) == EPLSource_Derived
 	);
+
 	Test_assert(t, "visibility", row0.visibility == ((U32)1 << EGfxPipelineStage_Compute));
 	const GfxBinding row0Spv = row0.bindings.arr[EGfxBinaryType_SPIRV];
 

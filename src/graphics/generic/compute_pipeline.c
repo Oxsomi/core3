@@ -131,7 +131,9 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	gotoIfError3(clean, ListPipelineStage_resize(&pipelinePtr->stages, 1, alloc, e_rr));
 	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };
 
-	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, entryName, pipelinePtr, binary, e_rr));
+	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(
+		device, name, entryName, pipelinePtr, binary, entry, e_rr
+	));
 
 	goto success;
 

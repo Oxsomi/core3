@@ -97,7 +97,7 @@ static const U32 CAFile_maxFilePathSize = 192;
 static const U32 CAFile_maxFileNameSize = 96;
 static const U32 CAFile_maxRecursionSize = 128;        //Must match chainSize (walking file parents)
 
-//Check docs/oiCA.md for the file spec
+//Check docs/file/oiCA.md for the file spec
 
 typedef struct CAFile {
 	DLFile names;

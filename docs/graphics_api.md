@@ -1,4 +1,4 @@
-# Graphics library (OxC3 id: 0x1C33)
+# Graphics library (OxC3 id: 0x1C34)
 
 The core pillars of the abstraction of this graphics library are the following:
 
@@ -23,7 +23,7 @@ All fallible graphics functions follow the OxC3 `Bool` convention: they return `
 
 ### Obtaining the real object
 
-RefPtr doesn't contain the object itself, but it does contain information about the type and length of the constructed type. RefPtr contains this object after the data of the RefPtr itself. RefPtr_data can be used to obtain the data pointed to by the RefPtr. This is generally also a macro from the specialized RefPtr (e.g. `GraphicsInstanceRef_ptr`). It also generally contains the extended object after the common object. For example GraphicsInstance has `GraphicsInstance_ext` which can get the API-specific data of the GraphicsInstance. This should only be used internally, as there is no public interface of this extended data that won't randomly change.
+RefPtr doesn't contain the object itself, but it does contain information about the type and length of the constructed type. RefPtr contains this object after the data of the RefPtr itself. RefPtr_data can be used to obtain the data pointed to by the RefPtr. This is generally also a macro from the specialized RefPtr (e.g. `GraphicsInstanceRef_ptr`). It also generally contains the extended object after the common object. For example GraphicsInstance has `GraphicsInstance_ext` which can get the API-specific data of the GraphicsInstance. This should only be used internally, as there is no public interface of this extended data that won't randomly change. Since the extended object starts right at the end of the common one, every common object is a multiple of 64 bytes (an extended object may hold a SpinLock) and every extended object a multiple of 16; both are static asserts.
 
 In the case of multiple inheritance, the data pointed to can be linked however the creator of the object sees fit. For example: The first data could be a UnifiedTexture, then a UnifiedTextureImage * 3, then a UnifiedTextureImageExt * 3 and then a SwapchainExt.
 
@@ -142,21 +142,34 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 
 - experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, RayMicromapOpacityU8, Timestamps.
+- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, Timestamps, Predication, PipelineExecutableInfo, SoftwareRT, DeviceFault, WriteBufferImmediate, ExperimentTier1, ExperimentTier2.
   - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
-  - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesEXT is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
-  - RayMicromapOpacityU8: 8-bit (R8u) OMM index buffers are legal. D3D12 ships this with opacity micromaps themselves; on Vulkan only the VK_KHR_opacity_micromap promotion permits VK_INDEX_TYPE_UINT8 (the EXT extension forbids it), and since OxC3's KHR path isn't implemented yet no Vulkan device claims the bit today; R8u is rejected at BLAS create there.
+  - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesKHR is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
   - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
   - RayClusterAS + RayPartitionedTLAS: mega geometry (RTXMG), split the way Vulkan splits it: cluster acceleration structures (CLAS/cluster BLAS) and partitioned TLAS. Vulkan: VK_NV_cluster_acceleration_structure / VK_NV_partitioned_acceleration_structure; D3D12: NVAPI raytracing caps (cluster operations / partitioned TLAS).
   - Timestamps: the device can write GPU timestamps and reports a period to convert ticks to nanoseconds. Vulkan gates it on timestampComputeAndGraphics with a non-zero timestampValidBits on the submit queue; D3D12 has it on the graphics/compute queues at root-signature level, so it is effectively always present there. It drives the per-scope and manual timing commands (see the Timestamps feature below) and GraphicsDeviceRef_getTimings; the nanoseconds per tick lives in capabilities.timestampPeriod.
   - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
+  - Predication: a scope can carry a predicate, a U64 in a device buffer read when the scope executes; zero skips its draws and dispatches while its barriers still run. D3D12: SetPredication (core); Vulkan: VK_EXT_conditional_rendering, which reads the low 32 bits, so write all 64. Without it a predicated scope simply runs.
+  - PipelineExecutableInfo: the driver can return per-pipeline ISA disassembly and register statistics. Vulkan: VK_KHR_pipeline_executable_properties. Device and driver dependent, so not for goldens.
+  - SoftwareRT: ray traversal likely runs on the shader cores rather than dedicated units. A heuristic like RayMicromapOpacityActual, since neither API reports it; use it to pick between arms that are both correct (e.g. rasterized or traced primaries). D3D12 draws the line at raytracing tier 1.0.
+  - DeviceFault: a lost device reports what it faulted on, addresses included (see Device loss). D3D12: DRED; Vulkan: VK_EXT_device_fault.
+  - WriteBufferImmediate: the graphics queue can write a 32-bit value to a buffer address, ordered before or after the work around it (crash breadcrumbs). D3D12: WriteBufferImmediate on the direct queue; Vulkan: VK_AMD_buffer_marker.
+  - ExperimentTier1, ExperimentTier2: experiment tiers the driver claims for itself, through the Vulkan device extensions VK_MESA_experiment_tier1 and VK_MESA_experiment_tier2 that a driver built for experiments may advertise. OxC3 enables the extension and reports the claim, nothing more: it gives the tiers no meaning and says nothing about what an experiment at one may use, which is between the driver and the application. A binary declares the tier it needs with `[[oxc::extension("ExperimentTier1")]]` (ESHExtension2), and `GraphicsDeviceRef_checkShaderFeatures` refuses it on a device whose driver doesn't claim that tier, an UnsafeExperimentExecution binary included, so first fit takes the entry's fallback there. D3D12 has no such extension, so a D3D12 device never claims one. The interface test prints what each device claims, and with `OXC3_TEST_EXPERIMENT_TIERS` set (a mask: 1 for the first tier, 2 for the second) asserts that it claims exactly that.
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
-  - Vulkan: PerformanceQuery, PerformantPushDescriptor.
+  - Vulkan: PerformanceQuery, MemoryBudget, PerformantPushDescriptor, NoCompactionQuery, AddressBindingReport, ExternalHostMemory, MemoryPriority, PageableMemory, SubgroupSizeControl.
     - PerformantPushDescriptor: VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer is pushed straight into the command buffer instead of bound from a set allocated to hold it. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 allocates one descriptor set per frame in flight, writes each once to that frame's globals buffer and binds it unchanged afterwards, so there's no per-frame update and nothing is rewritten while in flight. A one-time performance warning is logged on the first submit that takes the emulated path. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
-  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+), CacheCoherentUMA (UMA that snoops CPU caches; upload heaps then use WRITE_BACK instead of WRITE_COMBINE).
+    - MemoryBudget: VK_EXT_memory_budget, so new blocks can respect the OS budget (see the device's Properties).
+    - NoCompactionQuery: the driver can't be asked for a compacted size, so a BLAS built with AllowCompaction is marked compacted by its build, with no query and no copy.
+    - AddressBindingReport: VK_EXT_device_address_binding_report, so a fault address can name an image too.
+    - ExternalHostMemory: VK_EXT_external_memory_host; memory the process allocated can be imported as device memory.
+    - MemoryPriority: VK_EXT_memory_priority; blocks carry a priority so the OS pages staging out before acceleration structures.
+    - PageableMemory: VK_EXT_pageable_device_local_memory (needs MemoryPriority); device local memory pages out to host memory under pressure instead of failing, as a D3D12 heap does.
+    - SubgroupSizeControl: VK_EXT_subgroup_size_control with compute among its stages, so a compute pipeline asks for the subgroup size its entry's `[WaveSize]` names and waveSizeMin to waveSizeMax is the device's whole range (see Wave size under Pipeline).
+  - Direct3D12: ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+), CacheCoherentUMA (UMA that snoops CPU caches; upload heaps then use WRITE_BACK instead of WRITE_COMBINE), AllowTearing (DXGI tearing support, needed for the Immediate present mode).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
+- waveSizeMin and waveSizeMax: the wave sizes, in lanes, a compute shader's `[WaveSize]` can name on this device: every power of two from one to the other. D3D12 reports WaveLaneCountMin and WaveLaneCountMax; Vulkan the subgroup size control range, or without SubgroupSizeControl its one subgroup size as both.
 
 ### Functions
 
@@ -198,7 +211,7 @@ GraphicsDeviceRef *device = NULL;
 gotoIfError3(clean, GraphicsDeviceRef_create(
     instance, 						//See "Graphics instance"
     &deviceInfo, 					//See "Graphics device info"
-    EGraphicsDeviceFlags_None,		//IsVerbose, IsDebug, DisableRt, DisableDebug, DisableBindless
+    EGraphicsDeviceFlags_None,		//See "Device flags"
     EGraphicsBufferingMode_Default,	//Frames in flight: Default, Double or Triple
     NULL,							//Bindless DescriptorLayoutInfo; NULL is OxC3's default layout
     &device,
@@ -209,6 +222,35 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
 The bindless layout is what the default descriptor table and pipeline layout are built from. Passing NULL uses OxC3's own layout, which is what the prebuilt shaders and the oiSH files OxC3 ships are compiled against. A caller that wants a different one can obtain the default through `GraphicsDevice_defaultBindlessLayout`, modify it and pass it in (it is freed with `DescriptorLayoutInfo_free`, the device copies whatever it gets). `EGraphicsDeviceFlags_DisableBindless` drops bindless entirely, even on a device that supports it; the feature bit is then cleared from the device's capabilities, so there is no default descriptor table or pipeline layout and every pipeline has to supply its own layout.
 
 Whichever layout the device ends up with is the one every shader is held to. When a pipeline is created (or a binary is picked through `GraphicsDeviceRef_getFirstShaderEntry`), `GraphicsDeviceRef_checkShaderFeatures` walks the binary's reflected registers and refuses any bindless array that the device's layout doesn't have at the same space and binding, with an incompatible register type, or with fewer descriptors than the shader declares. A shader that wants bindless arrays on a device without a bindless layout is refused too. The offending register and what the layout has instead are logged, so an oiSH built against an older layout can be run again by recreating that layout and passing it to `GraphicsDeviceRef_create`. Only binaries the oiSH marks as needing bindless are checked; push constants, push descriptors and singular bound resources come from the pipeline layout the caller supplies and are left alone.
+
+### Device flags
+
+| EGraphicsDeviceFlags | Meaning |
+| --- | --- |
+| IsVerbose | Device creation is verbose. |
+| IsDebug | Debug features: API/RT validation, debug markers and names. Turns Breadcrumbs on. |
+| DisableRt | Don't allow raytracing to be enabled (might reduce driver overhead). |
+| DisableDebug | Force disable debugging even on a debug build; NDEBUG is leading otherwise. |
+| DisableBindless | No bindless layout, even where the device supports it. |
+| EnableDynamicSamplers | Adds the bindless `_samplers[]` array to the default layout. Opt in: on Vulkan it owns descriptor set 0 and both backends need a sampler heap; static samplers cover the ordinary case for free (see "Dynamic samplers are opt in"). |
+| Breadcrumbs | Every scope records on the GPU when it began and ended, so a lost device can name its scopes (see "Breadcrumbs"). Two small writes per scope; on by default on a debug device. |
+| AllowUnsafeExperimentExecution | Takes binaries marked `UnsafeExperimentExecution`, unvalidated and without feature checks, which no other device does (see "Unsafe experiment execution"). Creating the device logs a warning that says so. |
+| AllowUnsafeExtensionExecution | Takes binaries marked `UnsafeExtensionExecution`, which use extensions OxC3 doesn't recognize and so can't check the device for; the ones it does recognize are still checked (see "Unsafe extension execution"). Creating the device logs a warning that says so. |
+
+### Unsafe experiment execution
+
+For experiments with instructions no API can report support for, such as a private extended instruction set in a patched driver. A binary is marked with `[[oxc::extension("UnsafeExperimentExecution")]]` and its author vouches for it instead of OxC3 checking it:
+
+- **Compiling.** SPIR-V only, as there is no unvalidated path into DXIL, so the whole entry compiles no DXIL (as AtomicF32 does) and an experiment belongs in an entry of its own beside its fallback. The module is not validated, neither by DXC (`-Vd`) nor by OxC3's own SPIRV-Tools passes. A capability oiSH has no extension for still fails the compile; an experiment that needs one is marked `UnsafeExtensionExecution` as well (see "Unsafe extension execution"). An unknown instruction has to come in through a `NonSemantic.` extended instruction set (`[[vk::ext_instruction(id, "NonSemantic.Name")]]`), the only kind SPIRV-Tools reads without a grammar; it then takes every operand as an id, so constants go in as values rather than `[[vk::ext_literal]]`, and the instruction's result may be used, which the validator would refuse. Such a binary keeps its NonSemantic instructions, which every other binary has stripped in a release compile; any strip of them run later deletes the experiment's own instructions and leaves their results undefined. SPIRV-Tools also skips dead code elimination and its local variable passes on any module importing a NonSemantic set other than its own debug info, since it cannot optimize around one it doesn't know, so HLSL that leans on legalization, such as resources inside structs, can come out unlegalized: keep an experiment's kernel plain, or register the set in the SPIRV-Tools inside DXC.
+- **Running.** `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary by name on a device created without `EGraphicsDeviceFlags_AllowUnsafeExperimentExecution`, so it is never an entry's first fit there. On a device with the flag it skips the features, features2 and dataTypes checks for it, so it also runs where an extension it declares is unsupported; what is not a matter of support stays checked: the bindless layout, the vendor mask and a blob for the api.
+- **Gating.** No API reports what such a binary needs, so whether a device can run it is the caller's to know. The one thing it is still checked for is an experiment tier it declares (`[[oxc::extension("UnsafeExperimentExecution", "ExperimentTier1")]]`): a device whose driver doesn't claim the tier refuses it, so it runs only where the driver says its experiment does, and first fit takes the entry's fallback elsewhere. The device logs a warning naming itself when it is created with the flag. API validation runs the same SPIR-V validator over every module, so an experiment with an instruction it doesn't know runs without validation layers.
+
+### Unsafe extension execution
+
+For a binary that uses an extension OxC3 doesn't recognize yet, such as a vendor extension newer than oiSH, without waiting for oiSH to name it. A binary is marked with `[[oxc::extension("UnsafeExtensionExecution")]]`, independently of `UnsafeExperimentExecution`, and a binary may carry both:
+
+- **Compiling.** Both backends. DXC gets no `-fspv-extension` allow list, so it emits any SPIR-V extension it knows, and a SPIR-V capability or a DXIL requirement flag oiSH has no extension for passes and maps to nothing instead of failing the compile. Everything OxC3 does recognize is reflected as for any binary, and the module is validated as usual.
+- **Running.** `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary by name on a device created without `EGraphicsDeviceFlags_AllowUnsafeExtensionExecution`, so it is never an entry's first fit there. On a device with the flag the extensions OxC3 recognized are checked as for any binary; the ones it didn't were never reflected, so whether the device has them is the caller's to know. Creating the device with the flag logs a warning that says so.
 
 ### Properties
 
@@ -223,6 +265,12 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 - frameData; current frame data for this frame.
 - currentLocks; which resources are currently locked while submitCommands is active.
 - pendingBytes, flushThreshold; how many bytes of copy data are pending. The higher this is the bigger the chance of a flush happening. This is when there's so much data pending that the submitCommands will split the record in multiple submits. The reason it does this is because too much data can result in the operation taking too long and the GPU will cause a device lost error. Another reason is because these copies might make temporary staging resources which take up VRAM. Surpassing too many copies at once can result in out of memory errors or the device paging the memory to disk (resulting in too slow operations, which might cause a device lost). flushThreshold can be set to control when this happens; though it is set to a default value of < 4 GIBI (20% of cpuHeapSize when on shared memory otherwise 20% of gpuHeapSize + 10% of cpuHeapSize < 33% gpuHeapSize). For example on a system with an RTX 4090 (24GiB) and 128GiB of RAM (64 shared) the formula turns into 24GiB / 5 + 64GiB / 10 = 4.8 + 6.4 = 11.2GiB < 8GiB (24GiB/3) < 4 GiB (so limited to 4GiB). For more normal systems it is expected that flushThreshold is <4GiB.
+  - A flush (pending bytes or BLAS primitives crossing flushThreshold / flushThresholdPrimitives) waits for the work recorded so far but does not complete the submit it splits: completedSubmitId only counts submits that finished entirely, so for example a compaction size from a build in that submit is only available from a later submit. The split submit keeps its resources in flight until its own fence signals; only internal temporary staging buffers are released early. Both counters restart from zero after each flush.
+  - A resource larger than half the allocator's block size gets a memory block (D3D12 heap or Vulkan VkDeviceMemory) of its own, released as soon as the resource is. The resource is placed at its own reported alignment (tight alignment included); on D3D12 the heap's size is rounded to the heap's alignment, which is the only part that is a D3D12 constant (a heap may only be 64 KiB aligned, or 4 MiB when the resource needs more than 64 KiB), and on Vulkan the block is the memory requirement's size. Smaller resources share standard blocks: the full block size is 64, 128 or 256 MiB depending on the heap's size, and the first three blocks of a kind are 1/8, 1/4 and 1/2 of it (grown if the request needs more).
+  - Shared blocks hold any alignment up to the heap's own. On D3D12 render targets, depth stencils and swapchain images keep blocks of their own, since on some drivers a buffer placed in memory one of them used earlier gave wrong results (and the other way around), even after that resource was released and its frame had completed. Small sampled textures ask for 4 KiB placement where tight alignment isn't available. On Vulkan a resource the driver says requires or prefers a dedicated allocation gets one, and the driver is told which resource it is for (`VkMemoryDedicatedAllocateInfo`); readback memory prefers HOST_CACHED, since CPU reads from write combined memory are many times slower.
+  - New blocks respect the OS budget (`VK_EXT_memory_budget` or DXGI's `QueryVideoMemoryInfo`): a shared block that would go past it is halved down to what the request needs, a device local one on Vulkan is then placed in host memory instead, and what still goes over logs the OverBudget performance message once. Going past the device's total memory still fails.
+  - Blocks carry a residency priority (D3D12 `SetResidencyPriority`, Vulkan `VK_EXT_memory_priority`), so under memory pressure the OS pages out CPU side staging first and dedicated acceleration structures, render targets and depth stencils last. A shared block stays normal, since it holds whatever lands in it. With `VK_EXT_pageable_device_local_memory` Vulkan's device local memory is pageable like a D3D12 heap.
+  - New device memory is committed when the resource that needed it is created, on both APIs. D3D12 does so in heap creation; Vulkan commits memory on the first submit that references it, so a buffer whose creation allocated new device local memory (ReBAR included: mapping doesn't commit it) gets a 4 byte fill submitted and waited on right there (the device lock is held for the submit only). Without it a 1.1 GB allocation cost its first frame 340 ms on an RTX 3070. Images aren't filled yet, so a new allocation made for an image still commits in its first frame on Vulkan.
 
 ### Functions
 
@@ -252,7 +300,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
   ```
 
-  - One time runtime hints: returns true exactly once per device per message (an atomic test and set on GraphicsDevice::runtimeMessages), so the caller logs on true and stays silent forever after, preventing a per call hint from spamming. Current messages: OmmLikelyEmulated (a BLAS links a real opacity micromap on a device without RayMicromapOpacityActual, where the free special indices usually serve better), SubmitFlushed (a submit was split mid recording because pending copies or AS builds crossed flushThreshold, adding a GPU sync point), RootSignature13Dwords (a pipeline layout exceeds the 13 root signature DWORDs D3D12 drivers keep in fast memory) and TooManyMemoryBlocks (a dedicated allocation fell back to shared because the device already holds >= 2000 blocks).
+  - One time runtime hints: returns true exactly once per device per message (an atomic test and set on GraphicsDevice::runtimeMessages), so the caller logs on true and stays silent forever after, preventing a per call hint from spamming. Current messages: OmmLikelyEmulated (a BLAS links a real opacity micromap on a device without RayMicromapOpacityActual, where the free special indices usually serve better), SubmitFlushed (a submit was split mid recording because pending copies or AS builds crossed flushThreshold, adding a GPU sync point), RootSignature13Dwords (a pipeline layout exceeds the 13 root signature DWORDs D3D12 drivers keep in fast memory), TooManyMemoryBlocks (a dedicated allocation fell back to shared because the device already holds >= 2000 blocks), PullStreamFailed (a pull's destination stream refused its bytes) and OverBudget (a memory block went past the OS budget: shrunk, placed in host memory, or allocated over it).
 
 - ```c
   Bool createSwapchain(
@@ -373,27 +421,20 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   ```
 
 - ```c
-  //Triangle geometry parameters travel as a struct so optional features become fields, not entry points.
-  //Built through BLASCreateInfo_indexed/_unindexed rather than by hand: required parameters stay
-  // positional there, so forgetting one is still a compile error.
+  //Triangle geometry travels as a struct holding a LIST of geometries, so optional features become fields, not
+  //entry points. A shader reads the geometries back as GeometryIndex(), in list order.
+  //The list is REFERENCED (it only has to outlive the create call, which copies what it needs).
   typedef struct BLASCreateInfo {
   	ERTASBuildFlags buildFlags;
-  	EBLASFlag blasFlags;
-  	ETextureFormatId positionFormat;	//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
-  	ETextureFormatId indexFormat;		//R16u, R32u, Undefined for unindexed
-  	U16 positionOffset;					//Offset into first position for first vertex
-  	U16 positionBufferStride;			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
   	U32 padding;
-  	DeviceData positionBuffer;			//Required
-  	DeviceData indexBuffer;				//Only if indexFormat
-  	ETextureFormatId ommIndexFormat;	//R16u, R32u, Undefined for no OMM
-  	U32 padding1;
-  	DeviceData ommIndexBuffer;			//Only if ommIndexFormat
+  	ListBLASGeometry geometries;
+  	DeviceBufferRef *scratchBuffer;   //Optional caller provided build scratch, NULL allocates one per BLAS
   } BLASCreateInfo;
 
-  BLASCreateInfo BLASCreateInfo_indexed(
-  	ERTASBuildFlags buildFlags,
-  	EBLASFlag blasFlags,
+  //Build a geometry with these rather than by hand: required parameters stay positional (a forgotten one is a
+  //compile error) and the optional fields (flags, OMM) are left zeroed. Set BLASGeometry::flags
+  //(EBLASGeometryFlag) on the result for AvoidDuplicateAnyHit / DisableAnyHit.
+  BLASGeometry BLASGeometry_indexed(
   	ETextureFormatId positionFormat,
   	U16 positionOffset,
   	U16 positionBufferStride,
@@ -402,13 +443,36 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   	DeviceData indexBuffer
   );
 
-  BLASCreateInfo BLASCreateInfo_unindexed(
-  	ERTASBuildFlags buildFlags,
-  	EBLASFlag blasFlags,
+  BLASGeometry BLASGeometry_unindexed(
   	ETextureFormatId positionFormat,
   	U16 positionOffset,
   	U16 positionBufferStride,
   	DeviceData positionBuffer
+  );
+
+  //Opacity micromaps (Ext): per triangle index buffer, see "Opacity micromaps (Ext)"
+  BLASGeometry BLASGeometry_indexedWithOmmIndicesExt(
+  	/* indexed arguments, */
+  	ETextureFormatId ommIndexFormat,
+  	DeviceData ommIndexBuffer
+  );
+
+  BLASGeometry BLASGeometry_indexedWithOmmExt(
+  	/* indexed arguments, */
+  	ETextureFormatId ommIndexFormat,
+  	DeviceData ommIndexBuffer,
+  	OpacityMicromapRef *ommMicromap
+  );
+
+  //One geometry (a BLAS holding a single mesh), or several (a mesh's material runs sharing one BLAS)
+  BLASCreateInfo BLASCreateInfo_single(
+  	ERTASBuildFlags buildFlags,
+  	const BLASGeometry *geometry
+  );
+
+  BLASCreateInfo BLASCreateInfo_geometries(
+  	ERTASBuildFlags buildFlags,
+  	ListBLASGeometry geometries
   );
 
   Bool createBLASExt(
@@ -455,7 +519,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 - ```c
   Bool createBLASProceduralExt(
   	ERTASBuildFlags buildFlags,
-  	EBLASFlag blasFlags,
+  	EBLASGeometryFlag geometryFlags,
   	U32 aabbStride,						//Alignment: 8
   	U32 aabbOffset,						//Offset into the aabb array
   	DeviceData buffer,					//Required
@@ -494,9 +558,92 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
   );
   ```
 
+- `U64 GraphicsDeviceRef_getMemoryBudget(dev, Bool isDeviceLocal)` returns the bytes in use. On a dGPU isDeviceLocal is VRAM and !isDeviceLocal the shared memory; an iGPU/CPU device reports 0 for device local. Returns U64_MAX on error (e.g. NULL) instead of Bool + e_rr.
+- `GraphicsDeviceRef_getMemoryStats(dev, alloc, &json, e_rr)` writes the allocator's state as JSON for finding where memory goes. The top level object has `usage` (`deviceLocal` and `shared` from getMemoryBudget, `blocks` and `used` bytes over the active blocks, `resources` for the bytes attributed to resources, and `outsideBlocks` for descriptor heaps and pipelines, which the allocator doesn't hold), `summary` (an array of `category`, `count` and `bytes`, descriptor heaps and pipelines included; `pipeline` is code size the driver reported (a D3D12 PSO's cached blob, which some drivers keep to a small fixed size rather than the code, or what a Vulkan pipeline added to its pipeline cache) and `pipelineEstimate` is the IR size (DXIL or SPIR-V) where the driver doesn't say: a D3D12 ray tracing state object always, since D3D12 has no way to get its compiled form, and a Vulkan pipeline whose driver keeps nothing in a pipeline cache), `blocks` (per active block: `id`, `size`, `used`, `allocations`, `freeRanges` as a count, `largestFree`, `dedicated`, `typeExt`, `allocationTypeExt`) and `resources` (per registered buffer and texture: `name`, `category`, `bytes`, `size`, `block` (-1 if not in a block) and `offset`). `json` has to be empty; the caller frees it.
+- `GraphicsDeviceRef_getPipelineCache(dev, alloc, &data, e_rr)` returns what the device compiled so far as one blob ([oiPC](file/oiPC.md); the caller frees it), and `GraphicsDeviceRef_setPipelineCache(dev, data, e_rr)` merges such a blob back in, best before creating pipelines. OxC3 never touches a file for it: the application decides where the blob lives, one per API and device, since a blob from another API, device or driver version is ignored. Each pipeline is keyed by a hash of its shaders, fixed function state and layout. On Vulkan every new pipeline is built into a pipeline cache of its own first, which is how its code size becomes known, then merged into the device's; one the device's cache already holds is built from it. On D3D12 PSOs are stored in an `ID3D12PipelineLibrary` under their key and loaded from it when it has them; the library can't merge, so a blob set after PSOs were built is ignored. A ray tracing state object can't be cached by an application on D3D12 at all.
+- `GraphicsDeviceRef_getTypes(dev)` / `GraphicsDevice_getTypes(device)` return the `GraphicsObjectTypes` (the RefPtrTypes of the instance's allocator/objects); `GraphicsDeviceRef_getAlloc` returns the allocator. Valid for as long as the device lives.
+- `GraphicsDeviceRef_getObjectSizes(dev)` returns the `GraphicsObjectSizes` of the backend (the size of each backend object, e.g. blas, buffer, image); `GraphicsInterface_getObjectSizes(api)` does the same per API. Mostly useful to code that allocates RefPtrs itself.
+- `GraphicsDeviceRef_listShaderTargets(dev, alloc, &list, e_rr)` lists the ASIC targets the driver can compile for besides the device itself (empty except on AMD's D3D12 today); the names can be passed back as an ISA target.
+- `GraphicsDeviceRef_selectShaderTarget(dev, &name, e_rr)` picks which target the NEXT device created in this process compiles for (empty name = the real GPU). Process wide; the driver reads it while initializing the adapter, so it cannot apply to a device that already exists (create one to enumerate, release it, create a second to compile with). A backend that only compiles for the device refuses any other name.
+- Internal, called by backends: `GraphicsDeviceRef_flushPendingPulls` (records the queued pullRegion reads after the frame's commands) and `GraphicsDeviceRef_resizeStagingBuffer` (resizes the staging buffer). The device also shrinks staging on its own: every 64 frames, if that window's peak use stayed at or below a quarter of a region, it shrinks to three regions of 4 MiB doubled until each holds twice the peak (uploads through a temporary buffer count toward the peak). Apps use `GraphicsDeviceRef_reserveReadback` instead of touching these.
+
+### Device loss
+
+When a submit or a wait fails because the device was lost (removed on D3D12), the device logs once what the backend
+can tell about why, through `GraphicsDeviceRef_reportLoss`. Without it a loss ends in "device lost" and nothing else.
+`EGraphicsFeatures2_DeviceFault` says whether the device can report what it faulted on, on either API.
+Apps only use `GraphicsDeviceRef_isLost` and `GraphicsDeviceRef_findResourceByAddress`; reporting, the registry and
+breadcrumbs are internal (`src/graphics/generic/device_internal.h`), as are the backend table entries around them.
+
+- **D3D12:** the removal reason, then DRED: whether the device **hung** (a timeout: nothing faulted, the work took too
+  long for a submit) or **faulted**, and for a page fault the address and the allocations DRED found there, existing
+  and recently freed. DRED's page fault reporting is always on, set on both device factories before any device is
+  created; its auto breadcrumbs stay off, since they cost every command. DRED is part of the runtime, so every device
+  has DeviceFault unless the runtime refused the settings.
+- **Vulkan:** with `VK_EXT_device_fault` (DeviceFault), the driver's description, each fault
+  address with its kind (invalid read, write, execute, instruction pointer) and precision, and vendor codes.
+
+Every address and object is named through the device's **resource registry**: each buffer and texture registers on
+creation with a copy of its name, its API object (the D3D12 resource's IUnknown, the Vulkan handle) and its device
+address range where it has one, and moves to a ring of the last `GRAPHICS_FREED_RESOURCES` freed ones when freed, so a
+fault in freed memory is named as such. The names stay in OxC3: nothing is named for the API, a debugger or a capture
+tool unless the device is a debug one, as before.
+
+- A buffer resolves by its device address range on both APIs (on Vulkan when it has a device address).
+- A D3D12 texture has no device address, but DRED reports the object itself, which resolves it.
+- A Vulkan image resolves through `VK_EXT_device_address_binding_report`
+  (`EVkGraphicsFeatures_AddressBindingReport`): the instance enables `VK_EXT_debug_utils` whenever it is there and
+  keeps a messenger that listens only for address bindings, recording where each object's memory is bound. Object
+  naming and debug labels still load only on a debug instance.
+- What resolves nowhere is reported by DRED's own name and allocation type, or as an address nothing registered.
+
+The registry is also queryable: `GraphicsDeviceRef_findResourceByAddress(dev, address, &resource, &offset)` gives the
+live buffer (or Vulkan image with a reported binding) holding a device address and the offset into it. The resource
+is a `WeakRefPtr`: no reference is taken and another thread can free it as soon as the call returns, so only a caller
+that already keeps that resource alive may dereference it or take a reference; comparing it against references the
+caller holds is always safe. Swapchain images are not registered, since a resize replaces them without freeing the resource.
+
+A D3D12 wait also checks for removal: a removed device reports every fence as passed, so a wait that sees that value
+asks whether the device was removed rather than taking it as done. A Vulkan device remembers the
+`VK_ERROR_DEVICE_LOST` any queue, fence, command buffer, present or query result reported, since a driver may answer a later `vkDeviceWaitIdle` on a lost
+device with `VK_SUCCESS` (some drivers do).
+
+#### Breadcrumbs
+
+A device created with `EGraphicsDeviceFlags_Breadcrumbs` (or any debug device) also says which **scopes** the GPU was
+in, when it has `EGraphicsFeatures2_WriteBufferImmediate` (and on Vulkan `EVkGraphicsFeatures_ExternalHostMemory`). Every scope claims a slot per submit; the GPU writes 1 to it when the scope begins and 2 when it ends, so after a
+loss the scopes left at 1 began and never finished. That names the scope a timeout was in, which a fault address
+cannot, since a timeout faults nothing. The report lists each frame in flight, newest first: how many scopes ended,
+the scope ids that began without ending, and the last scope that ended.
+
+- The slots live in memory the process owns, so they stay readable after the device is gone:
+  `Platform_allocPages` memory, opened on D3D12 with `OpenExistingHeapFromAddress` and imported on Vulkan with
+  `VK_EXT_external_memory_host`.
+- The writes are `WriteBufferImmediate` (`MARKER_IN` at the start, `MARKER_OUT` at the end) on D3D12 and
+  `vkCmdWriteBufferMarker2AMD` (`VK_AMD_buffer_marker`; top of pipe at the start, all commands at the end) on Vulkan:
+  two small writes per scope, which is why they are opt in.
+- `GRAPHICS_BREADCRUMBS` scopes per frame in flight are followed; a submit with more leaves the rest out.
+- Scopes are named by the id they were recorded with, since that is what an app knows them by. What a submit records
+  outside any scope has a breadcrumb too: the **uploads** before the scopes (`GRAPHICS_BREADCRUMB_UPLOADS`) and the
+  **readbacks** after them (`GRAPHICS_BREADCRUMB_READBACKS`).
+- A driver may report a lost device's fence as signalled, so the loss can surface a few submits after the one it
+  happened in, once that one's frame was reused. A frame reused before all its scopes ended is kept as it was and
+  reported first, as the likely place of the loss.
+- The first scope that began and never ended is the one to look at: a begin is written once the GPU front end reaches
+  it, so the scopes queued right behind a stalled one can show as begun too.
+
+#### After a loss
+
+`GraphicsDeviceRef_isLost` says whether a submit or wait found the device lost. Every later submit is refused, so an app
+ends or recreates the device rather than retrying each frame. The work a lost device had in flight is released by the
+next wait as if it completed, so freeing the device leaks nothing; readbacks still pending are dropped rather than
+handing on what the readback memory happened to hold, a stream's callback hearing that it failed and the others never
+firing.
+
 ### Obtained
 
 - Through GraphicsDeviceRef_create; see overview.
+- `GraphicsDeviceRef_getMemoryBudget` reports the memory in use (see "Functions").
 
 ## Command list
 
@@ -627,7 +774,9 @@ DeviceTexture and DeviceBuffer can be marked dirty by their respective markDirty
 
 DeviceTexture and DeviceBuffer can be pulled back from GPU by their pullRegion functions. These functions run at the end of the next frame (next submitCommands end) and will then be pulled back async to the CPU when the operation is completed on the device. On completion, the callback function can be ran (this is 3 frames later). If the result is important right now, it can be stalled by calling wait after the submitCommands, *though that fully stalls the device and should be prevented at all costs*. If it's desired to copy the current state of the resource (if it gets modified after) then a manual copy resource should be created and manual copy should be done to ensure it won't be modified in between.
 
-The staging memory that carries pulls back to the CPU is created at the first pull and only ever grows. On D3D12 that first allocation can bring in a whole new CPU sided memory block mid frame, so latency sensitive applications can call GraphicsDeviceRef_reserveReadback(device, sizePerFrame, e_rr) during load time to move that cost to a predictable place. Underestimating (or passing 0) is fine, the buffers simply grow at the next pull that needs more.
+A buffer can send the region to a stream instead of into its cpuData, with `DeviceBufferRef_pullRegionStream(buf, offset, len, stream, streamOffset, callback, context, e_rr)`. The timing is the one above; what changes is the destination and what the buffer has to be. A stream destination needs no CPUBacked, so nothing the size of the resource has to stay resident, which is what a readback headed for a file or a cache wants. The stream is referenced until the pull completes and has to be writable, and its callback is a `DeviceStreamPullCallback`, carrying whether the write landed: the bytes reach the host either way, so a false only ever means the stream refused them, which a copy into cpuData has no way to fail at. `DeviceTextureRef_pullRegionStream` and `TextureRef_pullRegionStream` do the same for textures, writing the region as tight rows: the first replaces the copy into cpuData, the second replaces the buffer the runtime allocates to hand a render target's region over, so a frame headed for an encoder or a file costs no destination of its own and its callback becomes optional.
+
+The staging memory that carries pulls back to the CPU is created at the first pull and grows for any pull that needs more. Once 64 frames have read back less than a quarter of it, it shrinks as the upload staging buffer does, to three regions of 4 MiB doubled until they hold twice the peak. On D3D12 that first allocation can bring in a whole new CPU sided memory block mid frame, so latency sensitive applications can call GraphicsDeviceRef_reserveReadback(device, sizePerFrame, e_rr) during load time to move that cost to a predictable place; the most reserved for a frame is also the floor the buffer never shrinks below. Underestimating (or passing 0) is fine, the buffers simply grow at the next pull that needs more.
 
 Texture pulls follow the same region semantics as markDirty: zero for an axis means the rest of that axis, and for block compressed formats the region snaps outward to whole blocks, so slightly more than asked can be refreshed. Compressed formats are supported; the pulled data lands in cpuData in the same tight block rows the upload reads from.
 
@@ -781,13 +930,13 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
   - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip.
   - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
   - aniso: is anisotropy is applied and how much. 0 means no anisotropy and 1-16 means anistropy of that level.
-  - borderColor: what border color is used if one of the address modes (uvw) is ClampToBorder. TransparentBlack (0.xxxx), OpaqueBlackFloat (0.xxx, 1.f), OpaqueBlackInt (0.xxx, 1), OpaqueWhiteFloat(1.f.xxxx), OpaqueWhiteInt (1.xxxx).
+  - borderColor: what border color is used if one of the address modes (uvw) is ClampToBorder. TransparentBlack (0.xxxx), OpaqueBlackFloat (0.xxx, 1.f), OpaqueWhiteFloat (1.f.xxxx). The two integer entries beside them are reserved and refused at sampler creation; see the immutable sampler section for why.
   - comparisonFunction: comparison function for SamplerComparisonState. Same type (ECompareOp) as depth stencil state. One of Gt, Geq, Eq, Neq, Leq, Lt, Always, Never.
   - enableComparison: whether or not the comparison function is used.
   - mipBias, minLod, maxLod:
     - These properties are F16s (halfs) and require conversion from F32 by using F32_castF16 or F64_castF16.
     - mipBias: mip bias that is applied before reading from the mip.
-    - minLod, maxLod: min and max mip. If maxLod is 0 it is assumed that this property isn't set and 65504 (F16_max) is used. If maxLod of 0 is desired it can be achieved by setting it to >5.97e-8 or just any other small number like 0.001.
+    - minLod, maxLod: min and max mip. If maxLod is 0 it is assumed that this property isn't set and 65504 (the largest finite F16) is used. If maxLod of 0 is desired it can be achieved by setting it to >5.97e-8 or just any other small number like 0.001.
 
 ### Used functions and obtained
 
@@ -960,6 +1109,8 @@ Shaders spell it as `OXC3_RESERVED_SPACE` (from types.hlsli), which expands to `
 - Obtained through GraphicsDeviceRef's createDescriptorLayout.
 - A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `GraphicsDeviceRef_detectLayoutFromEntry` (one entrypoint) or `GraphicsDeviceRef_detectLayoutFromEntries` (several sharing one layout). The identifier they take is the packed one `GraphicsDeviceRef_getFirstShaderEntry` returns and `PipelineStage::binaryId` carries: the entrypoint in the low 16 bits, and in the high 16 bits an index into THAT entrypoint's binary list rather than into the file's binaries, so reflection reads the same variant the pipeline will be built from, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates). Naming a register there also splits it out as push constants or push descriptors rather than an ordinary binding.
 - Used when creating a PipelineLayout.
+- `GraphicsDeviceRef_isRuntimeRegister(dev, &name)` says whether a reflected register name is one the RUNTIME owns (bindless set or per frame globals) rather than the caller's; names, not spaces, since spaces differ per backend. `GraphicsDeviceRef_runtimeRegisterNames(dev, &list, alloc, e_rr)` lists them (refs into the device's layouts; the list is the caller's).
+- DescriptorTable by name: `DescriptorTableRef_resolveRegisterName` maps a register name to its binding (U64_MAX if invalid); `DescriptorTableRef_setDescriptorByName` / `setDescriptorsByName` / `unsetDescriptorsByName` / `allocDescriptorByName` are the allocDescriptor/setDescriptor family keyed by register name instead of binding id. `DescriptorTableRef_findBindlessRegister(table, type, strideOrLength, &bindId, &bindlessTypeId, resource, planeId, e_rr)` finds the bindless register matching the type, format and size without allocating into it; `allocDescriptorBindless` finds and allocates in one go.
 
 ## Pipeline
 
@@ -990,7 +1141,16 @@ A pipeline is a combination of the states and shader binaries that are required 
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createPipelineGraphics, createPipelineCompute and createPipelineRaytracingExt.
-- Used in CommandListRef's setComputePipeline, setGraphicsPipeline and setRaytracingPipelineExt.
+- `GraphicsDeviceRef_createPipelineFromSPFile(dev, spFile, pipelineId, files, shaderNames, layout, alloc, &pipeline, e_rr)` creates a pipeline described by an oiSP file: `shaderNames` is parallel to `files` and resolves a stage's shader by name; a NULL layout takes the device's default one (`SPFile_createPipelineLayout` resolves the file's own).
+- `GraphicsDeviceRef_getPipelineExecutables(pipeline, alloc, &list, e_rr)` returns per executable ISA disassembly and VGPR/SGPR statistics. The pipeline needs `EPipelineFlags_CaptureISA` and the device `EGraphicsFeatures2_PipelineExecutableInfo`: Vulkan through VK_KHR_pipeline_executable_properties, D3D12 only on AMD through the driver's shader analyzer extension (`dx_amd_shader_analyzer.h`; D3D12 has no API of its own for it, so other vendors don't advertise the bit); free the list with `ListPipelineExecutable_freeUnderlying`.
+- Used in CommandListRef's setComputePipeline, setGraphicsPipeline and setRaytracingPipelineExt; `CommandListRef_setPipeline(list, pipeline, EPipelineType, e_rr)` is the generic form of those three.
+
+### Wave size
+
+A compute entry's `[WaveSize]` names the wave sizes it runs at: `[WaveSize(N)]` (SM6.6) one it requires, `[WaveSize(min, max)]` or `[WaveSize(min, max, preferred)]` (SM6.8) a range. The oiSH entry keeps it in `SHEntry::waveSize` (see `SHEntry_waveSizeLanes`), and both backends hold it to the device's range (waveSizeMin to waveSizeMax in the capabilities): `GraphicsDeviceRef_checkShaderFeatures` refuses an entry none of whose sizes the device runs, as D3D12 would refuse its pipeline, so `GraphicsDeviceRef_getFirstShaderEntry` never takes it there.
+
+- D3D12: the DXIL carries the size, and the driver picks one from a range. The SM6.6 form needs EDxGraphicsFeatures_WaveSize and the ranged one EDxGraphicsFeatures_WaveSizeMinMax.
+- Vulkan: SPIR-V can't carry a size, so the compute pipeline asks for one (`VkPipelineShaderStageRequiredSubgroupSizeCreateInfo`): the required size, else the preferred one, else the size of the range nearest the device's own (`GraphicsDeviceCapabilities_pickWaveSize`). Without SubgroupSizeControl the only size is the device's own, which the pipeline runs at without asking. At its size the workgroup has to fit the device's maxComputeWorkgroupSubgroups, or the pipeline is refused.
 
 ### Obtaining an extended Pipeline info
 
@@ -1117,6 +1277,7 @@ U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
 	&tempShader,
 	&entrypoint,
 	NULL,						//Defines ([ key, value ][], NULL = none)
+	NULL,						//Uniforms ([ name, value ][], NULL = none), each value compared as the uniform's type
 	ESHExtension_None,			//Extensions to disallow
 	ESHExtension_None			//Extensions to require
 );
@@ -1128,7 +1289,7 @@ gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
 SHFile_free(&tempShader, alloc);
 ```
 
-Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
+Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_createCopy or Buffer_createUninitializedBytes that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
 
 It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
 
@@ -1172,7 +1333,7 @@ gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
 ...;	//Free binaries (tempShaders)
 ```
 
-Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref then the implementation will copy to avoid unsafe behavior.
+Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_createCopy or Buffer_createUninitializedBytes that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref then the implementation will copy to avoid unsafe behavior.
 
 It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime. This can be done from a different thread as well, though the implementation is free to delay the wait for finalization (real driver compiles) until it's first use in a command list (e.g. it starts compilation in async).
 
@@ -1295,19 +1456,23 @@ gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
     - SBTExt (used internally for shader binding table creation).
 - isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
 - isFirstFrame: If the resource was already uploaded before.
-- length: Length of the buffer.
+- length: Length of the buffer. This is exactly what was asked for: it is the length of the upload and of every region taken from the resource. The BACKEND allocation is padded up to a multiple of 4 and a ByteAddressBuffer view that reaches the end of the resource is rounded up to match, because a raw view is word addressed (a D3D12 raw view takes its first element and its count in 4 byte units) and a resource whose length stops inside a word would otherwise end in bytes no shader could read.
 - cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
+- cpuStream: The upload source when it isn't cpuData; see createBufferStream below. NULL leaves cpuData as the source.
+- keepStream: If the stream survives the upload that consumed it. Off (the default), it is dropped the same way cpuData is.
 - pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
 - readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver).
 - lock: Multi-threading helper. A buffer gets locked when it's being modified or used by the CPU while recording. For example DeviceBufferRef_markDirty will require a lock and GraphicsDeviceRef_submitCommands will too. So markDirty has to finish before or after the submitCommands is done.
 
 ### Functions
 
-- `Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr)` marks part or the entire resource dirty (count 0 = rest of the buffer starting at offset). This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy (if the buffer changes each frame) might be to make the buffer 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
+- `Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr)` marks part or the entire resource dirty (count 0 = rest of the buffer starting at offset). This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies; a stream source whose block is larger says so through Stream_setBlock and the merge uses that instead, since a source that decodes per chunk cannot serve half a chunk. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy (if the buffer changes each frame) might be to make the buffer 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
+
+- `Bool GraphicsDeviceRef_createBufferStream(GraphicsDeviceRef *dev, EDeviceBufferUsage usage, EGraphicsResourceFlag flags, DescriptorTableRef *bindlessDescriptorTable, const CharString *name, StreamRef *stream, U64 size, Bool keepSource, DeviceBufferRef **buf, Error *e_rr)` creates a buffer whose upload SOURCE is a stream rather than bytes the caller already holds. Every dirty range is read out of the stream at flush, straight into mapped memory or into staging, so the bytes never exist on the host as a whole: a file backed buffer is uploaded without the file ever being resident, and an archive or encryption stream decodes into the destination rather than into a buffer that is then copied. `size` is what the resource will be, which the caller knows from the stream's own header; this does not read the stream to find out. A reference is taken on the stream and dropped with the buffer. CPUBacked is refused, since that flag means a host copy to read BACK into, which is the opposite of what a stream source is for. `keepSource` holds the stream past the upload so ranges can be updated from it later; without it the stream is released the moment the upload has consumed it, the same bargain cpuData has, since holding one holds a file descriptor or a cipher context for the life of the resource. Once it is gone, markDirty refuses a range again. A range is read on the calling thread unless a queue was lent with `GraphicsDeviceRef_submitCommandsJob`, the stream declares `EStreamType_ConcurrentRead` and the read is large enough to be worth splitting; the split lands on the stream's block, since a source that decodes per chunk cannot be cut inside one.
 
 ### Used functions and obtained
 
-- Obtained through createBuffer and createBufferData from GraphicsDeviceRef.
+- Obtained through createBuffer, createBufferData and createBufferStream from GraphicsDeviceRef.
 - Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCountExt, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations.
 
 ## Features
@@ -1339,7 +1504,7 @@ Contains the following properties:
 
 - device: the device that the AS was created on. An AS is only compatible with other ASes that are from the same device.
 - isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
-- flagsExt: BLAS or TLAS specific flags; EBLASFlag for a BLAS, ETLASFlag for a TLAS.
+- flagsExt: TLAS specific flags (ETLASFlag, read through `TLAS_hasFlag`). A BLAS keeps its flags per geometry instead (EBLASGeometryFlag in `BLASGeometry::flags`).
 - asConstructionType: the BLAS or TLAS specific construction type.
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
 - asBuffer: the buffer resource that represents this acceleration structure. Compaction REPLACES this, which is why it also changes the structure's device address.
@@ -1350,7 +1515,7 @@ Contains the following properties:
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
-  - Reserved5 (5): reserved, free to reuse. Used to mean "this build is a refit", which is no longer something the caller asks for.
+  - Reserved5 (5): reserved.
   - DisableAutomaticUpdate (6): next submitCommands shouldn't build this acceleration structure. This is useful when the mesh has to be initialized by the GPU using commands first (such as copies, compute or stream out).
 
 ##### Refitting
@@ -1384,9 +1549,7 @@ The latter can only be used through intersection shaders, while the former has w
 ##### Example: Triangle geometry
 
 ```c
-const BLASCreateInfo blasInfo = BLASCreateInfo_indexed(
-	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
-	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
+BLASGeometry geometry = BLASGeometry_indexed(
 	ETextureFormatId_RG16f, 0,				//No pos attrib offset and format is RG16f
 	(U16) sizeof(vertexPos[0]),				//Stride is F16[2]
 	(DeviceData) {
@@ -1399,34 +1562,46 @@ const BLASCreateInfo blasInfo = BLASCreateInfo_indexed(
    	}
 );
 
+geometry.flags = EBLASGeometryFlag_DisableAnyHit;		//No transparency needed, optimize for opaque
+
+//Fast trace & allow compaction
+const BLASCreateInfo blasInfo = BLASCreateInfo_single(ERTASBuildFlags_DefaultBLAS, &geometry);
+
 const CharString name = CharString_createRefCStrConst("BLAS");
 gotoIfError3(clean, GraphicsDeviceRef_createBLASExt(twm->device, &blasInfo, &name, &twm->blas, e_rr));
 ```
 
 The example above assumes that there is an index buffer and a position buffer available. Those buffers need to have the ASReadExt buffer usage to be accessible during build time.
 
-Unindexed geometry goes through BLASCreateInfo_unindexed instead, which drops the index format and buffer arguments.
+Unindexed geometry goes through BLASGeometry_unindexed instead, which drops the index format and buffer arguments. Several geometries (e.g. one per material run) go through BLASCreateInfo_geometries with a ListBLASGeometry.
 
-The BLAS flags are the following: EBLASFlag_AvoidDuplicateAnyHit and EBLASFlag_DisableAnyHit. This is only relevant for raytracing pipelines and is irrelevant if the TLAS instance itself turns off anyHit.
+The geometry flags (EBLASGeometryFlag, per geometry) are the following: EBLASGeometryFlag_AvoidDuplicateAnyHit and EBLASGeometryFlag_DisableAnyHit. This is only relevant for raytracing pipelines and is irrelevant if the TLAS instance itself turns off anyHit.
 
 ###### Opacity micromaps (Ext)
 
-BLASCreateInfo_indexedWithOmmIndicesExt extends the indexed form with a per triangle opacity index buffer, which requires EGraphicsFeatures_RayMicromapOpacity. It is the SPECIAL INDEX form: no micromap object is attached, so every element has to be an EOMMSpecialIndex rather than an index into one. Build the values with EOMMSpecialIndex_pack, since the special indices are negative constants matched against an unsigned element and so depend on the element width (FullyTransparent is 0xFFFF with R16u and 0xFFFFFFFF with R32u).
+BLASGeometry_indexedWithOmmIndicesExt extends the indexed form with a per triangle opacity index buffer, which requires EGraphicsFeatures_RayMicromapOpacity. It is the SPECIAL INDEX form: no micromap object is attached, so every element has to be an EOMMSpecialIndex rather than an index into one. Build the values with EOMMSpecialIndex_pack, since the special indices are negative constants matched against an unsigned element and so depend on the element width (FullyTransparent is 0xFFFF with R16u and 0xFFFFFFFF with R32u).
 
 - FullyTransparent: the triangle is ignored entirely, so the ray passes through it.
 - FullyOpaque: the triangle hits without ever running anyHit.
 - FullyUnknownTransparent / FullyUnknownOpaque: anyHit decides, the name being the hint for what it usually is.
 
-The index buffer holds exactly one element per TRIANGLE (so indexBuffer length / index stride / 3). R16u and R32u are accepted everywhere opacity micromaps are; R8u additionally requires the EGraphicsFeatures2_RayMicromapOpacityU8 capability, since Vulkan's EXT extension forbids 8-bit indices and only the KHR promotion (or D3D12) permits them.
+The index buffer holds exactly one element per TRIANGLE (so indexBuffer length / index stride / 3). R8u, R16u and R32u are all accepted wherever opacity micromaps are.
+
+On Vulkan, opacity micromaps are VK_KHR_opacity_micromap only (together with VK_KHR_device_address_commands and VK_KHR_index_type_uint8, which 8-bit indices need): a device that offers just VK_EXT_opacity_micromap does not get EGraphicsFeatures_RayMicromapOpacity, so neither special indices nor micromap objects are available there.
 
 Two opt-ins outside the BLAS have to line up or the micromap is silently ignored, which looks exactly like a micromap that did nothing:
 
-- The pipeline needs EPipelineRaytracingFlags_AllowOpacityMicromapExt. Both APIs may traverse differently when micromaps are in play, so they make you say so at pipeline creation and ignore any micromap otherwise.
+- The pipeline needs EPipelineRaytracingFlags_AllowOpacityMicromapExt. Both APIs may traverse differently when micromaps are in play, so they make you say so at pipeline creation. D3D12 ignores any micromap otherwise; on Vulkan, tracing a TLAS that holds micromap geometry with a pipeline that didn't opt in is invalid usage (VUID-vkCmdTraceRaysKHR-micromap-11640), so a pipeline that can reach such geometry has to opt in.
 - The instance must NOT set ForceDisableAnyHit, and the ray must not use RAY_FLAG_FORCE_OPAQUE. Both mean FORCE_OPAQUE, which makes traversal treat every triangle as opaque and skip the micromap. Note that ETLASInstanceFlag_Default INCLUDES ForceDisableAnyHit, so an instance that wants micromaps has to spell its flags out rather than take the default.
 
 Whether a real micromap object is worth building over special indices is what the EGraphicsFeatures2_RayMicromapOpacityActual capability bit is for; special indices cost nothing either way.
 
-Micromap OBJECTS go through `GraphicsDeviceRef_createOpacityMicromapExt` (see opacity_micromap.h): the create takes an input buffer of packed opacity bits, an entry buffer of `OpacityMicromapEntry` records (dataOffset, subdivisionLevel, format) and the usage counts describing them, all needing EDeviceBufferUsage_ASReadExt. Input and entry buffers must sit at 256 byte aligned addresses on Vulkan (VUID-vkCmdBuildMicromapsEXT-pInfos-07515, validated at create) and 128 byte aligned on D3D12; OxC3's own ASRead allocations satisfy both, and on D3D12 SDK versions whose debug layer wrongly enforces 256 (stable before 620, preview before 722) the allocation floor stays 256 so validation runs clean. The build is recorded with `CommandListRef_updateOmmExt`, which must precede any BLAS build that links the micromap; recording it again after it completed is a no-op, since micromaps have no update mode. A BLAS links one through `BLASCreateInfo_indexedWithOmmExt`, whose OMM index buffer then holds ENTRY indices (special values still allowed per triangle) instead of only special values. On D3D12 an OMM array is itself an acceleration structure; on Vulkan the EXT extension builds it as a `VkMicromapEXT` (the KHR promotion's as-an-acceleration-structure build is not implemented yet for lack of a driver to test against, so micromap objects are refused there while special indices keep working).
+Micromap OBJECTS go through `GraphicsDeviceRef_createOpacityMicromapExt` (see opacity_micromap.h): the create takes an input buffer of packed opacity bits, an entry buffer of `OpacityMicromapEntry` records (dataOffset, subdivisionLevel, format) and the usage counts describing them, all needing EDeviceBufferUsage_ASReadExt. Input and entry buffers must sit at 128 byte aligned addresses on both APIs (on Vulkan VUID-vkCmdBuildAccelerationStructuresKHR-micromap-11552, validated at create); OxC3's own ASRead allocations satisfy that, and on D3D12 SDK versions whose debug layer wrongly enforces 256 (stable before 620, preview before 722) the allocation floor stays 256 so validation runs clean. The build is recorded with `CommandListRef_updateOmmExt`, which must precede any BLAS build that links the micromap; recording it again after it completed is a no-op, since micromaps have no update mode. A BLAS links one through `BLASGeometry_indexedWithOmmExt`, whose OMM index buffer then holds ENTRY indices (special values still allowed per triangle) instead of only special values. On both APIs an OMM array is itself an acceleration structure: D3D12 builds it with the ordinary AS build call, and Vulkan creates it with `vkCreateAccelerationStructure2KHR` (from VK_KHR_device_address_commands, which VK_KHR_opacity_micromap depends on) and builds it through `vkCmdBuildAccelerationStructuresKHR` with a single micromap geometry, so its barriers are the ordinary acceleration structure build ones.
+
+In a shader, micromaps are traced with the ray flag RAY_FLAG_FORCE_OMM_2_STATE under the RayMicromapOpacity extension (SM6.9); a ray query also names RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS as its second template argument, as in `RayQuery<RAY_FLAG_FORCE_OMM_2_STATE, RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS>`. `extension.RayMicromapOpacity.hlsli` declares what DXC's SPIR-V backend leaves out; on DXIL both of its forms compile to nothing.
+
+- `OXC_ENABLE_OPACITY_MICROMAP();` goes at the top of the body of every entry point that traces against micromap geometry through a ray query, in any stage: raygen and the other raytracing stages, compute, and graphics. VK_KHR_opacity_micromap only lets a ray query reach micromaps from an entry point that carries the OpacityMicromapIdKHR execution mode with a true operand (VUID-vkCmdDispatch-micromap-11636 and its draw and trace siblings), and without it a driver may silently ignore the micromaps instead of failing. The macro attaches that mode to the entry point whose body it is written in, and to no other, so a library holding a raygen with an inline ray query next to a miss and a closest hit marks only the raygen. It has to be named in the entry point itself, not in a helper function the entry calls: from a helper, DXC attaches the mode to whichever entry point of a library it picks rather than the caller. The ray query itself can live in a helper.
+- `oxc::EnableOpacityMicromap()` only declares the RayTracingOpacityMicromapKHR and RayTracingOpacityMicromapExecutionModeKHR capabilities with SPV_KHR_opacity_micromap, which the flag needs. The macro calls it, so it is only needed by itself in a shader whose micromap traces all go through a ray pipeline's TraceRay: those need no execution mode, only the AllowOpacityMicromapExt opt in above, which in turn does nothing for a ray query. It can be called once from anywhere, a helper included.
 
 ##### Example: Procedural geometry
 
@@ -1453,7 +1628,7 @@ gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
 gotoIfError3(clean, GraphicsDeviceRef_createBLASProceduralExt(
 	twm->device,
 	ERTASBuildFlags_DefaultBLAS,
-	EBLASFlag_DisableAnyHit,
+	EBLASGeometryFlag_DisableAnyHit,
 	sizeof(F32) * 3 * 2,
 	0,
 	(DeviceData) { .buffer = twm->aabbs },
@@ -1475,16 +1650,33 @@ In the example above, two AABBs are created from a buffer.
     - aabbBuffer: DeviceData pointing to the U8[aabbStride].
   - EBLASConstructionType_Serialized
     - cpuData: contains a serialized version of the BLAS. Might become invalidated because of a driver update.
-  - EBLASConstructionType_Geometry
+  - EBLASConstructionType_Geometry: a `ListBLASGeometry geometries` (owned by the BLAS, copied from the create info); each BLASGeometry has:
     - positionFormatId: RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s. What kind of format the position itself is stored in.
     - indexFormatId: R16u, R32u or Undefined. The index format; if undefined, the mesh is unindexed.
     - positionBufferStride: >0 and <=2048. The stride between each vertex. It is more optimal to only have positions in this buffer, so building won't waste time looking at other data. This is generally the case for normal mobile rendering as well (or visibility buffer approaches). This stride needs to be a multiple of 2 (if 16-bit formats are used) or 4 (if 32-bit formats are used).
     - positionOffset: offset in the vertex to point to the position. Needs to be less than positionBufferStride (including the position itself).
     - indexBuffer, positionBuffer: DeviceData pointing to the vertex and index buffers.
+- One BLAS holds at most BLAS_MAX_PRIMITIVES (16Mi - 1) triangles or AABBs, summed over all its geometries, on every device and API: the minimum OxC3 requires of a device (see graphics_spec.md), so a BLAS that creates on one device creates on all of them. A larger mesh is split into several BLASes, each its own TLAS instance; more geometries in one BLAS don't lift the limit.
+- The acceleration structure and its scratch are each one buffer, so they are also capped by maxBufferSize, and how many bytes a primitive costs differs per driver. Under BLAS_MAX_PRIMITIVES a BLAS can still be too big for the device.
+
+##### Querying the size: getBLASSizesExt
+
+`GraphicsDeviceRef_getBLASSizesExt(dev, &info, &asSize, &scratchSize, e_rr)` returns the size of the acceleration structure buffer and of the build scratch that createBLASExt would allocate for the same BLASCreateInfo, without allocating either. With ERTASBuildFlags_AllowUpdate the scratch is the larger of the build and refit scratch. The info is validated like create, so the geometry buffers have to exist already; their contents aren't read. The sizes are before compaction.
+
+A caller that has to stay under maxBufferSize can query the sizes of a candidate chunk of geometry and lower it until both fit.
+
+##### Providing the scratch: BLASCreateInfo::scratchBuffer
+
+`BLASCreateInfo::scratchBuffer` lets the caller provide the build scratch; NULL keeps the default of one scratch buffer per BLAS. A provided buffer must be created on the same device with usage EDeviceBufferUsage_ScratchExt, have a 256 byte aligned device address, and be at least the scratch size getBLASSizesExt reports for the same create info (with AllowUpdate that size covers refits too). The whole buffer is used from offset 0. The BLAS keeps a reference until its build has run, or for its whole lifetime with AllowUpdate since every refit reuses it, and never frees it.
+
+Any number of BLASes may share one buffer, in one scope or across submits: their builds are serialized by a barrier on the scratch buffer. Sharing one buffer sized to the largest build turns peak scratch memory from the sum of all builds into the largest single one. The TLAS still allocates its own scratch.
 
 ##### Used functions and obtained
 
 - Obtained through createBLASProceduralExt and createBLASExt (via a BLASCreateInfo) from GraphicsDeviceRef.
+- Sized up front through getBLASSizesExt.
+- `createBLASFromCacheExt` / `createTLASFromCacheExt` (serialized AS) are only commented-out TODO stubs in the headers; there is no caching of built structures yet.
+- `GraphicsDeviceRef_prepareCompactBLAS` is internal to `CommandListRef_compactBLASExt` (it reports whether anything needs recording); call the latter.
 - Used in TLAS creation and can be copied to/from the CPU.
 
 #### TLAS
@@ -1684,6 +1876,22 @@ Copy image is only allowed on images which aren't currently bound as a render ta
 
 Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or RenderTexture object.
 
+### copyBuffer/copyBufferRegions
+
+Copies byte ranges from one DeviceBuffer into another, one region or up to 128 at once. A `CopyBufferRegion` is `srcOffset`, `dstOffset` and `length`, all multiples of 4 (WebGPU requires it, so every backend does), every region inside both buffers, and no two regions overlapping in dst.
+
+```c
+gotoIfError3(clean, CommandListRef_copyBuffer(
+    commandList,
+    staging,                                        //src
+    pool,                                           //dst
+    (CopyBufferRegion) { .srcOffset = 0, .dstOffset = at, .length = bytes },
+    e_rr
+));
+```
+
+src and dst must be different buffers of the command list's device: the command transitions the whole of src for a copy read and the whole of dst for a copy write, and a scope holds one transition per resource, so neither can be used for anything else in that scope (copy within one buffer by way of a second). Acceleration structure buffers are refused; they are compacted or rebuilt, not copied. Like every copy it is refused in a predicated scope.
+
 ### setComputePipeline/setGraphicsPipeline/setRaytracingPipeline
 
 The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or dispatchRaysExt to ensure the shader is used.
@@ -1766,10 +1974,13 @@ drawIndirect transitions the input buffer to IndirectDraw. This means that the b
 
 Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCountExt. The buffers need the Vertex and/or Index usage set if they're used for that purpose. In the same scope of the setPrimitiveBuffers it is illegal to transition the subresource(s) back to a different state or to write/read from other sources that use it (check the Scope section of this document). The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well.
 
+`vertexOffsets` and `indexOffset` bind each buffer from a byte offset, so several streams or meshes can live in one buffer (a vertex stream per offset, the indices at another). An offset has to be a multiple of 4, the floor WebGPU and Metal hold vertex and index offsets to, and inside its buffer; a slot without a buffer keeps offset 0. All 16 vertex slots are validated and transitioned.
+
 ```c
 SetPrimitiveBuffersCmd primitiveBuffers = (SetPrimitiveBuffersCmd) {
     .vertexBuffers = { vertexBuffers[0], vertexBuffers[1] },
     .indexBuffer = indexBuffer,
+    .vertexOffsets = { 0, 256 },
     .isIndex32Bit = false
 };
 
@@ -1897,7 +2108,7 @@ Binds a descriptor heap: any descriptor table bound after this has to belong to 
 
 #### bindDescriptorTable
 
-Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope. To be precise about what "stays bound" means there: the RECORDER keeps boundDescriptorTable across the pipeline switch, so the caller does not rebind it; the GPU-side state does not survive. The bindful table lives in the user's heap and the bindless set in the device's own, two different heaps, and each work op that crosses between the two classes lazily re-emits everything for its side, a SetDescriptorHeaps included (D3D12 allows one CBV/SRV/UAV heap bound at a time, so every crossing swaps it). The layout check is what keeps the held table from being emitted against the bindless pipeline in between: doing so would bind sets Vulkan rejects and write root parameters D3D12's signature does not have, so a table whose layout the pipeline does not reference is simply not emitted. Interleaving therefore works, but each direction change costs a heap switch, so batching by pipeline class is still worth it. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces on Vulkan, each bound at the set index its space names, and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
+Bindful: binds the descriptor table that pipelines with a CUSTOM pipeline layout read from. This only sets state; the work ops (draw/dispatch/dispatchRays) are the validators, so bind order never matters: at work time the bound pipeline's layout must reference the exact DescriptorLayout the table was created from, push descriptor layouts are refused until their writes exist, and a pipeline whose layout does not reference the table's DescriptorLayout ignores the bound table entirely rather than emitting it. That covers the device's default (bindless) layout and any custom layout built from the runtime bindless set, which is what lets a bindful dispatch and a bindless one interleave inside one scope. To be precise about what "stays bound" means there: the RECORDER keeps boundDescriptorTable across the pipeline switch, so the caller does not rebind it; the GPU-side state does not survive. The bindful table lives in the user's heap and the bindless set in the device's own, two different heaps, and each work op that crosses between the two classes lazily re-emits everything for its side, a SetDescriptorHeaps included (D3D12 allows one CBV/SRV/UAV heap bound at a time, so every crossing swaps it). The layout check is what keeps the held table from being emitted against the bindless pipeline in between: doing so would bind sets Vulkan rejects and write root parameters D3D12's signature does not have, so a table whose layout the pipeline does not reference is simply not emitted. Interleaving therefore works, but each direction change costs a heap switch, so batching by pipeline class is still worth it. Backends emit the actual binds lazily right before the work, which also re-emits the default bindings after a custom root signature dropped them on D3D12. Custom layout pipelines are opted out of the globals/frame data unless their layout declares that slot. There is no table index: a pipeline layout references exactly ONE bindings DescriptorLayout (which itself spans up to 4 spaces on Vulkan, each bound at the set index its space names, and up to 2 root tables on D3D12), so set indices and root parameters are baked into the layout/table pair; a slot index gets added if pipeline layouts ever grow multiple table slots. The table is kept alive by the command list from the bind on, not only from `end()`, so a table made for one dispatch can be released by the caller right after binding it; per resource scope transitions remain the caller's job until auto transitions land. Scope end resets the bind like it does bound pipelines.
 
 #### setPushConstants
 
@@ -1913,7 +2124,7 @@ Writes every push descriptor the bound pipeline's layout declares, in that layou
 
 All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none: the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
 
-**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on both backends: one raw GPU virtual address, costing 2 of a D3D12 root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded.
+**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on both backends: one raw GPU virtual address, costing 2 of a D3D12 root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded. On D3D12 a pipeline layout's root parameters come in the order push constants, push descriptors, then the binding tables, so what changes per draw or dispatch lands in the first 13 DWORDs, the ones drivers keep in fast memory.
 
 **Textures** can be pushed too, but not as a root descriptor, because an address has nowhere to carry a format, a mip range or a swizzle. D3D12 gives the binding a single entry descriptor table instead and fills it at the work op; Vulkan pushes an image descriptor straight into the set and needs nothing further. That table needs a shader visible slot, and it has to come from a heap the CALLER put in play: a heap the runtime picked itself would need a `SetDescriptorHeaps` behind the caller's back, and that switch is heavy (it can drain the GPU on NV), which is the entire reason heap binds are explicit. So a heap carries a ring of its own for them, sized by `DescriptorHeapInfo::maxPushDescriptors`:
 
@@ -1926,13 +2137,13 @@ All of them are written at once rather than one at a time, because a partial set
 
 An immutable sampler is baked into the layout rather than bound:
 
-- **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range or heap slot.
+- **D3D12** puts it in the root signature as a `D3D12_STATIC_SAMPLER_DESC`, which costs none of the 64 DWORDs and needs no descriptor range.
 - **Vulkan** puts it in the set layout as `pImmutableSamplers`.
-- It takes a binding but **no descriptor**, so nothing is written for it.
-- Held by ref rather than by value so several layouts naming the same sampler share one `VkSampler`; D3D12 never makes an object of one and only reads its `SamplerInfo`.
+- It takes a binding but **no descriptor**, so nothing is written for it. Writing one through `DescriptorTableRef_setDescriptors` is refused rather than dropped, since the binding owns no slot in the table for the write to land in. The binding does still count toward the heap's `maxSamplers` on both backends: Vulkan allocates the descriptor its set layout declares, and D3D12 reserves one it never writes. That is per table, so a heap needs one per static sampler binding for every table of the layout that can be alive at once. Short of that, D3D12 refuses the table with an error naming `maxSamplers`, while a Vulkan driver may refuse it or quietly allocate past the pool (validation reports it either way).
+- Given either by ref, with `DescriptorLayoutInfo_addImmutableSampler`, so several layouts naming the same sampler share one `VkSampler`; or by value, with `DescriptorLayoutInfo_addStaticSampler`, which takes a `SamplerInfo` and has the layout create the sampler itself, owning it like a ref. By value is the only form the bindless layout `GraphicsDeviceRef_create` is given can carry, since that layout exists before any sampler does. D3D12 never makes an object of either and only reads the `SamplerInfo`.
 - It cannot be an array. A dynamically indexed sampler array needs real descriptors.
 
-`ESamplerBorderColor` is already the enumerated set a static sampler allows (transparent black, opaque black, opaque white), so every sampler OxC3 can express is expressible as an immutable one.
+`ESamplerBorderColor` is the enumerated set a static sampler allows, so every sampler OxC3 can express is expressible as an immutable one. Its two integer entries are **reserved**, named `ESamplerBorderColor_ReservedOpaqueBlackInt` and `_ReservedOpaqueWhiteInt`. Neither D3D12 path can describe one at the floor OxC3 builds against: a heap sampler's `D3D12_SAMPLER_DESC` holds the border as `FLOAT[4]` and the integer form needs `D3D12_SAMPLER_DESC2` through `ID3D12Device11::CreateSampler2`, while a root signature static sampler needs version 1.2 and `D3D12_STATIC_SAMPLER_DESC1`. Vulkan has both, so honouring them would mean one thing on one backend and another on the other. `GraphicsDeviceRef_createSampler` refuses them instead, and they keep their numbering because oiPL and oiSP store the value as it stands.
 
 #### Dynamic samplers are opt in
 
@@ -1947,6 +2158,8 @@ Without the flag:
 `ESHExtension_DynamicSamplers` is set by the annotation, and reflection also infers it for any binary declaring a sampler **array** of its own, the same way `ESHExtension_Bindless` is derived. `GraphicsDeviceRef_checkShaderFeatures` refuses such a binary on a device whose layout has no sampler array, naming the flag, instead of letting it resolve against a binding that was never declared. A singular sampler is unaffected: it is a plain binding, or better, an immutable one.
 
 Prefer immutable samplers. Dynamic samplers only pay for themselves when the sampler is genuinely selected by an index the shader computes.
+
+A bindless device gets its static samplers by starting from `GraphicsDevice_defaultBindlessLayout`, adding one sampler binding per sampler, each naming a by-value sampler added with `DescriptorLayoutInfo_addStaticSampler` and each carrying its own name in `bindingNames`, and passing the result as `bindlessLayout` to `GraphicsDeviceRef_create`. There is a binding per sampler rather than one array, so an aniso, a trilinear, a nearest and a border sampler are four bindings in the one layout every pipeline on the device shares, raytracing included, and they cost no root DWORD on D3D12. On Vulkan each is a binding in whichever set its register space names, so a space nothing else uses spends one of the four `OXC3_VK_MAX_BOUND_SETS` allows however many samplers sit in it. Number them on SPIR-V from set 0 binding 1 up, beside the slot the dynamic array would take, and on DXIL from `s0` in `space0` up, so the numbering holds whether or not the device also enables dynamic samplers. That leaves set 1 for the resource arrays and set 2 for the globals, one spare, and it costs the same set either way since the dynamic array already owns set 0 when it is enabled. The shaders declare plain `SamplerState`s at those bindings and carry no `DynamicSamplers` extension.
 
 The resources are kept alive by the command list, like a bound table's are, and per resource scope transitions remain the caller's job until auto transitions land.
 
@@ -1970,6 +2183,8 @@ gotoIfError3(clean, CommandListRef_dispatch2DRaysExt(commandList, rtId, width, h
 
 dispatch2DRaysExt, dispatch1DRaysExt and dispatch3DRaysExt are the easiest implementations. This command is also generalized with the dispatchRaysExt command which takes in a `DispatchRaysExt` struct. rtId is the raygen shader id, this is relevant since multiple raygen shaders can be linked into a single raygen pipeline. Each raygen shader has an id that can be passed here to execute it.
 
+One dispatch launches at most 64 Mi rays (width * height * depth), on every device and API: the minimum OxC3 requires of a device (see graphics_spec.md), rather than each device's own limit, so a dispatch that validates on one device runs on all of them. A larger launch is split into several dispatches.
+
 ### Scope (startScope/endScope)
 
 A scope is the replacement of the "transition" command. The scope makes sure all resources are in the right state for the commands that follow and it collects transitions from any other commands in the scope. It also makes sure to signal the api that the resources referenced are still in flight and shouldn't be deleted. When a scope is exited, it will undo the sets of temporary command states (though under the hood the api's command list is allowed to maintain these states to reduce api overhead). Scopes allow the implementation to figure out more clearly what areas of the command list are important together, and as such it can use them to determine dependencies between them and/or optimize unnecessary calls. It also allows the recorder to optimally record them in separate threads (if supported) since each scope doesn't maintain a global state. There can only be one scope active at a time: nesting scopes is unsupported.
@@ -1983,6 +2198,7 @@ startScope		//Transitions resources
 
 	clearImages								//Keeps scope alive
     copyImageRegions						//Keeps scope alive
+    copyBufferRegions						//Keeps scope alive
 	setGraphicsPipeline
     setComputePipeline
     	dispatch(Indirect)					//Keeps scope alive
@@ -2010,7 +2226,9 @@ startScope		//Transitions resources
     endScope
 ```
 
-Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
+Because a scope hoists the transitions of operations such as clearImages, copyImages, copyBuffers, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
+
+A scope's barriers all run at its start, and none between the work inside it: its dispatches, draws and ray dispatches may run concurrently and in any order, on both APIs. Putting work in one scope is how a caller says it belongs together, so it is also how a caller lets it overlap. Anything that has to see another command's writes, or has to finish before another command writes what it reads, goes in a later scope. OxC3 can't check this: shaders reach resources through bindless handles, so it never sees which bytes a dispatch reads or writes. Two dispatches in one scope may write the same resource only where their writes can't collide (disjoint elements, or atomics where order doesn't matter).
 
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
 
@@ -2019,7 +2237,7 @@ A scope that never records one of the "keeps scope alive" operations is rewound 
 
 #### dispatchRaysIndirectExt
 
-Ray dispatch whose width/height/depth come from a buffer the GPU wrote, so a ray count computed on the device by a GPU driven pass never has to be read back to size the launch. The buffer holds three `U32`s (width, height, depth) at `offset`, needs `EDeviceBufferUsage_Indirect`, and is aligned to 4 (`vkCmdTraceRaysIndirectKHR`'s address requirement). The shader binding table for the bound raytracing pipeline is supplied by the runtime as with the direct form; only the dimensions come from the buffer.
+Ray dispatch whose width/height/depth come from a buffer the GPU wrote, so a ray count computed on the device by a GPU driven pass never has to be read back to size the launch. The same 64 Mi ray limit as the direct form applies, but the CPU cannot see the dimensions, so keeping within it is the writer's job. The buffer holds three `U32`s (width, height, depth) at `offset`, needs `EDeviceBufferUsage_Indirect`, and is aligned to 4 (`vkCmdTraceRaysIndirectKHR`'s address requirement). The shader binding table for the bound raytracing pipeline is supplied by the runtime as with the direct form; only the dimensions come from the buffer.
 
 **Both backends.** Vulkan reads the caller's buffer directly through `vkCmdTraceRaysIndirectKHR`. D3D12's `ExecuteIndirect` for `DISPATCH_RAYS` instead wants the whole `D3D12_DISPATCH_RAYS_DESC` in the argument buffer, the SBT GPU addresses as well as the dimensions, while the caller writes only the three dimensions. The D3D12 backend bridges that with a per-frame intermediate: it writes the pipeline's CPU-known SBT addresses into a slot with `WriteBufferImmediate`, copies the caller's three dimensions in beside them, then runs `ExecuteIndirect` over the slot (`D3D12DispatchRaysIndirect` and its command signature). Because the caller's buffer is a copy source on D3D12 but a direct indirect read on Vulkan, its transition to copy-source is a D3D12-runtime step rather than a recorded scope transition, so both backends stay spec-conformant.
 
@@ -2061,7 +2279,7 @@ It's recommended to use enums to define the ids of scopes to avoid mistakes with
 
 ##### Validation
 
-Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is very hard to tell which resources were accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight). Vulkan and DirectX's debug layers are automatically turned on on Debug mode.
+Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is very hard to tell which resources were accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. Only bindless shader access depends on the layers: commands that name their resources (clears, copies, render targets) transition them themselves. A missing transition can also show up as a resource freed too early while still in flight, since transitions are also how a command list keeps its resources alive. GPU-assisted validation has gaps today: Vulkan GPU-AV only fully instruments SPIR-V 1.4 or newer, and D3D12 GPU-based validation fails on DXIL library state objects (ray tracing pipelines); after a lost device either reports noise. Vulkan and DirectX's debug layers are automatically turned on on Debug mode.
 
 #### Dependencies
 
@@ -2085,3 +2303,5 @@ startScope (1)
 Scope 1 is dependent on scope 0 since it uses the V-Buffer generated by it. The type of dependency in this case is conditional, since if scope 0 doesn't issue any draw calls it won't have to execute the dispatch to unpack the G-Buffer.
 
 Working in this way allows the implementation to thread scopes that are independent. Which results in better performance in cases where lots of GPU commands have to be issued.
+
+**Today this is design intent, not behavior:** scope recording is thread independent (each scope carries its own state), but encoding and execution are single threaded. The thread id is hardcoded to 0 and every command list is encoded into one API command buffer per submit (`//TODO: Multi thread command recording` in dx_device.c and vk_device.c). The parallel version: walk the scopes and their barriers first to resolve resource state, then encode the scopes whose dependencies are met as jobs. Tracked in roadmap.md.

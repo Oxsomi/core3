@@ -30,6 +30,9 @@
 #include "types/container/string.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/constants.h"
+#include "types/container/list_impl.h"
+
+TListImpl(BLASGeometry);
 
 void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 
@@ -69,10 +72,18 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 		RefPtr_dec(&blas->aabbBuffer.buffer);
 
 	else {
-		RefPtr_dec(&blas->indexBuffer.buffer);
-		RefPtr_dec(&blas->positionBuffer.buffer);
-		RefPtr_dec(&blas->ommIndexBuffer.buffer);
-		RefPtr_dec(&blas->ommMicromap);
+
+		for(U64 i = 0; i < blas->geometries.length; ++i) {
+
+			BLASGeometry *geometry = &blas->geometries.ptrNonConst[i];
+
+			RefPtr_dec(&geometry->indexBuffer.buffer);
+			RefPtr_dec(&geometry->positionBuffer.buffer);
+			RefPtr_dec(&geometry->ommIndexBuffer.buffer);
+			RefPtr_dec(&geometry->ommMicromap);
+		}
+
+		ListBLASGeometry_free(&blas->geometries, alloc);
 	}
 
 	RefPtr_dec(&blas->base.device);
@@ -88,6 +99,11 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+
+	//Owned here until it is handed to the BLAS below, so a failure anywhere in between frees it.
+	//Declared before the first jump to clean, which frees it.
+
+	ListBLASGeometry geometries = (ListBLASGeometry) { 0 };
 
 	//Validate
 
@@ -120,220 +136,243 @@ Bool GraphicsDeviceRef_createBLAS(
 			1, "GraphicsDeviceRef_createBLAS() uses AllowDataAccess, but position fetch is unsupported"
 		));
 
-	//Same reasoning for opacity micromaps: an unsupported OMM index buffer would either be ignored or fail
-	// deep inside the build, rather than at the create call that asked for it.
-	//The construction type is only meaningful for geometry, so the field is read behind that check.
-
-	if(
-		blas->base.asConstructionType == EBLASConstructionType_Geometry &&
-		blas->ommIndexFormatId &&
-		!(feat & EGraphicsFeatures_RayMicromapOpacity)
-	)
-		retError(clean, Error_unsupportedOperation(
-			1, "GraphicsDeviceRef_createBLAS() uses an OMM index buffer, but opacity micromaps are unsupported"
-		));
-
-	//RTAS_validateDeviceBuffer may normalize len, so validate local copies;
+	//RTAS_validateDeviceBuffer may normalize len, so validate a local copy of every geometry;
 	//they're committed to the new BLAS below
 
-	DeviceData positionBuffer = (DeviceData) { 0 };
-	DeviceData indexBuffer = (DeviceData) { 0 };
 	DeviceData aabbBuffer = (DeviceData) { 0 };
-	DeviceData ommIndexBuffer = (DeviceData) { 0 };
 
 	//Validate geometry BLAS
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Geometry) {
 
-		positionBuffer = blas->positionBuffer;
-		indexBuffer = blas->indexBuffer;
-
-		U16 stride = blas->positionBufferStride;
-		ETextureFormatId positionFormat = blas->positionFormatId;
-		U16 positionOffset = blas->positionOffset;
-		ETextureFormatId indexFormat = blas->indexFormatId;
-
-		if(stride > 2048 || !stride)
-			retError(clean, Error_unsupportedOperation(1, "GraphicsDeviceRef_createBLAS()::stride must be >0 and <=2048"));
-
-		U8 reqMultiple = 2;
-
-		if(positionFormat == ETextureFormatId_RGBA32f || positionFormat == ETextureFormatId_RG32f)
-			reqMultiple = 4;
-
-		if(stride & (reqMultiple - 1))
-			retError(clean, Error_unsupportedOperation(
-				1, "GraphicsDeviceRef_createBLAS()::stride must be multiple of channel byte size (2 or 4)"
+		if(!blas->geometries.length)
+			retError(clean, Error_invalidParameter(
+				1, 0, "GraphicsDeviceRef_createBLAS()::blas->geometries needs at least one geometry"
 			));
 
-		gotoIfError3(clean, RTAS_validateDeviceBuffer(&positionBuffer, e_rr));
+		gotoIfError3(clean, ListBLASGeometry_resize(&geometries, blas->geometries.length, alloc, e_rr));
 
-		if(indexFormat != ETextureFormatId_Undefined)
-			gotoIfError3(clean, RTAS_validateDeviceBuffer(&indexBuffer, e_rr));
+		for(U64 i = 0; i < blas->geometries.length; ++i) {
 
-		switch (positionFormat) {
+			BLASGeometry geometry = blas->geometries.ptr[i];
 
-			case ETextureFormatId_RGBA16f:
-			case ETextureFormatId_RGBA16s:
-			case ETextureFormatId_RGBA32f:
-			case ETextureFormatId_RG16f:
-			case ETextureFormatId_RG16s:
-			case ETextureFormatId_RG32f:
+			//An unsupported OMM index buffer would either be ignored or fail deep inside the build, rather
+			// than at the create call that asked for it.
 
-				if(positionOffset + ETextureFormat_getSize(ETextureFormatId_unpack[positionFormat], 1, 1, 1) > stride)
-					retError(clean, Error_unsupportedOperation(
-						1,
-						"GraphicsDeviceRef_createBLAS()::positionOffset and/or positionFormat out of bounds (> stride)"
-					));
-
-				if(positionBuffer.len < stride || (positionBuffer.len % stride))
-					retError(clean, Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::positionBuffer should be multiple of stride"
-					));
-
-				if((positionBuffer.len / stride) >> 32)
-					retError(clean, Error_outOfBounds(
-						0, positionBuffer.len / stride, U32_MAX,
-						"GraphicsDeviceRef_createBLAS() vertices out of bounds"
-					));
-
-				break;
-
-			default:
+			if(geometry.ommIndexFormatId && !(feat & EGraphicsFeatures_RayMicromapOpacity))
 				retError(clean, Error_unsupportedOperation(
-					1, "GraphicsDeviceRef_createBLAS()::positionFormat must be RGBA(16f/32f/16)"
+					1, "GraphicsDeviceRef_createBLAS() uses an OMM index buffer, but opacity micromaps are unsupported"
 				));
-		}
 
-		switch (indexFormat) {
+			U16 stride = geometry.positionBufferStride;
+			ETextureFormatId positionFormat = geometry.positionFormatId;
+			U16 positionOffset = geometry.positionOffset;
+			ETextureFormatId indexFormat = geometry.indexFormatId;
 
-			case ETextureFormatId_Undefined:
+			if(stride > 2048 || !stride)
+				retError(clean, Error_unsupportedOperation(
+					1, "GraphicsDeviceRef_createBLAS()::stride must be >0 and <=2048"
+				));
 
-				if(indexBuffer.buffer)
+			U8 reqMultiple = 2;
+
+			if(
+				positionFormat == ETextureFormatId_RGBA32f || positionFormat == ETextureFormatId_RG32f ||
+				positionFormat == ETextureFormatId_RGB32f
+			)
+				reqMultiple = 4;
+
+			if(stride & (reqMultiple - 1))
+				retError(clean, Error_unsupportedOperation(
+					1, "GraphicsDeviceRef_createBLAS()::stride must be multiple of channel byte size (2 or 4)"
+				));
+
+			gotoIfError3(clean, RTAS_validateDeviceBuffer(&geometry.positionBuffer, e_rr));
+
+			if(indexFormat != ETextureFormatId_Undefined)
+				gotoIfError3(clean, RTAS_validateDeviceBuffer(&geometry.indexBuffer, e_rr));
+
+			switch (positionFormat) {
+
+				//RGB32f is the format both APIs actually take for an acceleration structure, and the only one
+				//they mandate. The four component twin is accepted beside it and translated to this one by
+				//both backends, which is what lets a caller whose stride is 16 pass either; a caller whose
+				//stride is 12 has to name this one, since nothing may read the w that is not there.
+
+				case ETextureFormatId_RGB32f:
+
+				case ETextureFormatId_RGBA16f:
+				case ETextureFormatId_RGBA16s:
+				case ETextureFormatId_RGBA32f:
+				case ETextureFormatId_RG16f:
+				case ETextureFormatId_RG16s:
+				case ETextureFormatId_RG32f:
+
+					if(positionOffset + ETextureFormat_getSize(ETextureFormatId_unpack[positionFormat], 1, 1, 1) > stride)
+						retError(clean, Error_unsupportedOperation(
+							1,
+							"GraphicsDeviceRef_createBLAS()::positionOffset and/or positionFormat out of bounds (> stride)"
+						));
+
+					if(geometry.positionBuffer.len < stride || (geometry.positionBuffer.len % stride))
+						retError(clean, Error_unsupportedOperation(
+							1, "GraphicsDeviceRef_createBLAS()::positionBuffer should be multiple of stride"
+						));
+
+					if((geometry.positionBuffer.len / stride) >> 32)
+						retError(clean, Error_outOfBounds(
+							0, geometry.positionBuffer.len / stride, U32_MAX,
+							"GraphicsDeviceRef_createBLAS() vertices out of bounds"
+						));
+
+					break;
+
+				default:
 					retError(clean, Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
+						1, "GraphicsDeviceRef_createBLAS()::positionFormat must be RGB32f, RGBA(16f/32f/16s) or RG(16f/16s/32f)"
 					));
-
-				break;
-
-			case ETextureFormatId_R16u:
-			case ETextureFormatId_R32u: {
-
-				U8 indexStride = indexFormat == ETextureFormatId_R32u ? 4 : 2;
-
-				if(!indexBuffer.buffer || (indexBuffer.len & (indexStride - 1)))
-					retError(clean, Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
-					));
-
-				break;
 			}
 
-			default:
-				retError(clean, Error_unsupportedOperation(
-					2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"
-				));
-		}
+			switch (indexFormat) {
 
-		//Validate opacity micromaps (stage 1, special indices only)
+				case ETextureFormatId_Undefined:
 
-		const ETextureFormatId ommIndexFormat = blas->ommIndexFormatId;
-		ommIndexBuffer = blas->ommIndexBuffer;
+					if(geometry.indexBuffer.buffer)
+						retError(clean, Error_unsupportedOperation(
+							1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
+						));
 
-		if (ommIndexFormat == ETextureFormatId_Undefined) {
+					break;
 
-			if(blas->ommMicromap)
-				retError(clean, Error_invalidOperation(
-					1, "GraphicsDeviceRef_createBLAS()::ommMicromap requires an OMM index buffer to link through"
-				));
+				case ETextureFormatId_R16u:
+				case ETextureFormatId_R32u: {
 
-			if(ommIndexBuffer.buffer)
-				retError(clean, Error_unsupportedOperation(
-					1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be NULL if ommIndexFormat is Undefined"
-				));
-		}
+					U8 indexStride = indexFormat == ETextureFormatId_R32u ? 4 : 2;
 
-		else {
+					if(!geometry.indexBuffer.buffer || (geometry.indexBuffer.len & (indexStride - 1)))
+						retError(clean, Error_unsupportedOperation(
+							1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
+						));
 
-			//An OMM index is per triangle, so without triangle indices there is nothing to index against.
+					break;
+				}
 
-			if(indexFormat == ETextureFormatId_Undefined)
-				retError(clean, Error_unsupportedOperation(
-					1, "GraphicsDeviceRef_createBLAS()::ommIndexFormat requires an indexed BLAS"
-				));
+				default:
+					retError(clean, Error_unsupportedOperation(
+						2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"
+					));
+			}
 
-			if(
-				ommIndexFormat != ETextureFormatId_R16u && ommIndexFormat != ETextureFormatId_R32u &&
-				ommIndexFormat != ETextureFormatId_R8u
-			)
-				retError(clean, Error_unsupportedOperation(
-					2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u, R16u or R8u"
-				));
+			//Validate opacity micromaps (stage 1, special indices only)
 
-			//D3D12 always takes 8-bit OMM indices, Vulkan only under the KHR extension, which is what the
-			// qualifier bit reports; rejected here so the mistake surfaces at create rather than in the driver.
+			const ETextureFormatId ommIndexFormat = geometry.ommIndexFormatId;
 
-			if(
-				ommIndexFormat == ETextureFormatId_R8u &&
-				!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
-			)
-				retError(clean, Error_unsupportedOperation(
-					2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat R8u needs RayMicromapOpacityU8"
-				));
+			if (ommIndexFormat == ETextureFormatId_Undefined) {
 
-			//Validated before the length checks below, because RTAS_validateDeviceBuffer normalizes a len of 0
-			// to "rest of the buffer"; checking lengths first would reject that spelling instead of resolving it.
-
-			gotoIfError3(clean, RTAS_validateDeviceBuffer(&ommIndexBuffer, e_rr));
-
-			const U8 ommIndexStride = EOMMIndex_stride(ommIndexFormat);
-
-			if(!ommIndexBuffer.buffer || (ommIndexBuffer.len & (ommIndexStride - 1)))
-				retError(clean, Error_unsupportedOperation(
-					1,
-					"GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be multiple of ommIndexFormat and not NULL"
-				));
-
-			//A linked micromap has to be a real one from the same device; NULL is the special index only form.
-
-			if (blas->ommMicromap) {
-
-				if(blas->ommMicromap->refPtrType->typeId != (TypeId) EGraphicsTypeId_OpacityMicromapExt)
+				if(geometry.ommMicromap)
 					retError(clean, Error_invalidOperation(
-						1, "GraphicsDeviceRef_createBLAS()::ommMicromap is invalid"
+						1, "GraphicsDeviceRef_createBLAS()::ommMicromap requires an OMM index buffer to link through"
 					));
 
-				if(OpacityMicromapRef_ptr(blas->ommMicromap)->base.device != dev)
-					retError(clean, Error_invalidOperation(
-						1, "GraphicsDeviceRef_createBLAS()::ommMicromap needs to share the BLAS's device"
+				if(geometry.ommIndexBuffer.buffer)
+					retError(clean, Error_unsupportedOperation(
+						1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be NULL if ommIndexFormat is Undefined"
 					));
+			}
 
-				//Worth saying once rather than never or per create: a real micromap costs build time and
-				// memory, and on a device that likely emulates micromaps traversal won't pay that back the
-				// way the free special indices would (see EGraphicsFeatures2_RayMicromapOpacityActual).
+			else {
+
+				//An OMM index is per triangle, so without triangle indices there is nothing to index against.
+
+				if(indexFormat == ETextureFormatId_Undefined)
+					retError(clean, Error_unsupportedOperation(
+						1, "GraphicsDeviceRef_createBLAS()::ommIndexFormat requires an indexed BLAS"
+					));
 
 				if(
-					!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 &
-					EGraphicsFeatures2_RayMicromapOpacityActual) &&
-					GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(dev), EGraphicsDeviceMessage_OmmLikelyEmulated)
+					ommIndexFormat != ETextureFormatId_R16u && ommIndexFormat != ETextureFormatId_R32u &&
+					ommIndexFormat != ETextureFormatId_R8u
 				)
-					Log_performanceLnx(
-						"GraphicsDeviceRef_createBLAS() linked a real opacity micromap, but this device likely "
-						"emulates micromaps (RayMicromapOpacityActual is unset); special index OMM is free, a "
-						"micromap object may not pay off here"
-					);
+					retError(clean, Error_unsupportedOperation(
+						2, "GraphicsDeviceRef_createBLAS()::ommIndexFormat must be R32u, R16u or R8u"
+					));
+
+				//Validated before the length checks below, because RTAS_validateDeviceBuffer normalizes a len of 0
+				// to "rest of the buffer"; checking lengths first would reject that spelling instead of resolving it.
+
+				gotoIfError3(clean, RTAS_validateDeviceBuffer(&geometry.ommIndexBuffer, e_rr));
+
+				const U8 ommIndexStride = EOMMIndex_stride(ommIndexFormat);
+
+				if(!geometry.ommIndexBuffer.buffer || (geometry.ommIndexBuffer.len & (ommIndexStride - 1)))
+					retError(clean, Error_unsupportedOperation(
+						1,
+						"GraphicsDeviceRef_createBLAS()::ommIndexBuffer should be multiple of ommIndexFormat and not NULL"
+					));
+
+				//A linked micromap has to be a real one from the same device; NULL is the special index only form.
+
+				if (geometry.ommMicromap) {
+
+					if(geometry.ommMicromap->refPtrType->typeId != (TypeId) EGraphicsTypeId_OpacityMicromapExt)
+						retError(clean, Error_invalidOperation(
+							1, "GraphicsDeviceRef_createBLAS()::ommMicromap is invalid"
+						));
+
+					if(OpacityMicromapRef_ptr(geometry.ommMicromap)->base.device != dev)
+						retError(clean, Error_invalidOperation(
+							1, "GraphicsDeviceRef_createBLAS()::ommMicromap needs to share the BLAS's device"
+						));
+
+					//Worth saying once rather than never or per create: a real micromap costs build time and
+					// memory, and on a device that likely emulates micromaps traversal won't pay that back the
+					// way the free special indices would (see EGraphicsFeatures2_RayMicromapOpacityActual).
+
+					if(
+						!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 &
+						EGraphicsFeatures2_RayMicromapOpacityActual) &&
+						GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(dev), EGraphicsDeviceMessage_OmmLikelyEmulated)
+					)
+						Log_performanceLnx(
+							"GraphicsDeviceRef_createBLAS() linked a real opacity micromap, but this device likely "
+							"emulates micromaps (RayMicromapOpacityActual is unset); special index OMM is free, a "
+							"micromap object may not pay off here"
+						);
+				}
+
+				//One OMM index per triangle, and a triangle is three vertex indices.
+
+				const U8 indexStride = indexFormat == ETextureFormatId_R32u ? 4 : 2;
+				const U64 triangles = geometry.indexBuffer.len / indexStride / 3;
+
+				if(geometry.ommIndexBuffer.len / ommIndexStride != triangles)
+					retError(clean, Error_unsupportedOperation(
+						1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer needs exactly one index per triangle"
+					));
 			}
 
-			//One OMM index per triangle, and a triangle is three vertex indices.
-
-			const U8 indexStride = indexFormat == ETextureFormatId_R32u ? 4 : 2;
-			const U64 triangles = indexBuffer.len / indexStride / 3;
-
-			if(ommIndexBuffer.len / ommIndexStride != triangles)
-				retError(clean, Error_unsupportedOperation(
-					1, "GraphicsDeviceRef_createBLAS()::ommIndexBuffer needs exactly one index per triangle"
-				));
+			geometries.ptrNonConst[i] = geometry;
 		}
+
+		//The minimum every supported device guarantees, not this device's own limit (docs/graphics_spec.md),
+		// counted over the whole BLAS: splitting a mesh into more geometries doesn't lift it, more BLASes do.
+
+		U64 triangles = 0;
+
+		for(U64 i = 0; i < blas->geometries.length; ++i) {
+
+			const BLASGeometry geometry = blas->geometries.ptr[i];
+
+			triangles +=
+				geometry.indexFormatId ?
+				geometry.indexBuffer.len / (geometry.indexFormatId == ETextureFormatId_R32u ? 4 : 2) / 3 :
+				geometry.positionBuffer.len / geometry.positionBufferStride / 3;
+		}
+
+		if(triangles > BLAS_MAX_PRIMITIVES)
+			retError(clean, Error_outOfBounds(
+				1, triangles, BLAS_MAX_PRIMITIVES, "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 triangles"
+			));
 	}
 
 	//Validate AABBs
@@ -360,6 +399,11 @@ Bool GraphicsDeviceRef_createBLAS(
 			retError(clean, Error_unsupportedOperation(
 				1, "GraphicsDeviceRef_createBLAS()::aabbBuffer should be multiple of stride"
 			));
+
+		if(aabbBuffer.len / stride > BLAS_MAX_PRIMITIVES)
+			retError(clean, Error_outOfBounds(
+				1, aabbBuffer.len / stride, BLAS_MAX_PRIMITIVES, "GraphicsDeviceRef_createBLAS() is limited to 16Mi - 1 AABBs"
+			));
 	}
 
 	//Validate serialized
@@ -368,6 +412,38 @@ Bool GraphicsDeviceRef_createBLAS(
 		retError(clean, Error_unsupportedOperation(
 			1, "GraphicsDeviceRef_createBLAS()::cpuData should be valid if serialized construction is used"
 		));
+
+	//A caller provided scratch buffer (BLASCreateInfo::scratchBuffer); its size is checked by the backend, which is
+	// the one that knows what the build needs.
+	//256 bytes is the strictest scratch address alignment either API asks for, and what a ScratchExt buffer is
+	// always placed at, so a misaligned one is not a scratch buffer this device created.
+
+	const DeviceBufferRef *scratchRef = blas->base.tempScratchBuffer;
+
+	if (scratchRef) {
+
+		if(scratchRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer isn't a DeviceBuffer"
+			));
+
+		const DeviceBuffer *scratch = DeviceBufferRef_ptr(scratchRef);
+
+		if(scratch->resource.device != dev)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs to share the BLAS's device"
+			));
+
+		if(!(scratch->usage & EDeviceBufferUsage_ScratchExt))
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs EDeviceBufferUsage_ScratchExt"
+			));
+
+		if(scratch->resource.deviceAddress & 255)
+			retError(clean, Error_invalidParameter(
+				1, 1, "GraphicsDeviceRef_createBLAS()::scratchBuffer needs a 256 byte aligned address"
+			));
+	}
 
 	//Allocate refPtr
 
@@ -379,6 +455,17 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	*blasPtr = *blas;
 	blasPtr->base.name = CharString_createNull();
+
+	//Like the geometries below, the caller's scratch buffer is only referenced once the device is, so a failure
+	// before that never decs a reference that was never taken.
+
+	blasPtr->base.tempScratchBuffer = NULL;
+
+	//The copy above carries the CALLER's geometries, which this BLAS has not referenced yet.
+	//Cleared before anything can fail, so a free on the way out never decs a reference it never took.
+
+	if(blas->base.asConstructionType == EBLASConstructionType_Geometry)
+		blasPtr->geometries = (ListBLASGeometry) { 0 };
 
 	//U32_MAX means no compacted size slot is claimed, which is what the free path reads to decide whether it
 	// has one to hand back.
@@ -394,6 +481,11 @@ Bool GraphicsDeviceRef_createBLAS(
 	gotoIfError3(clean, RefPtr_inc(dev));
 	blasPtr->base.device = dev;
 
+	if (blas->base.tempScratchBuffer) {
+		gotoIfError3(clean, RefPtr_inc(blas->base.tempScratchBuffer));
+		blasPtr->base.tempScratchBuffer = blas->base.tempScratchBuffer;
+	}
+
 	if (blas->base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();
 		gotoIfError3(clean, Buffer_createCopy(blas->cpuData, alloc, &blasPtr->cpuData, e_rr));
@@ -407,33 +499,43 @@ Bool GraphicsDeviceRef_createBLAS(
 
 	else {
 
-		blasPtr->indexBuffer = (DeviceData) { 0 };
-		blasPtr->positionBuffer = (DeviceData) { 0 };
+		//Handed over zeroed, so the geometries the loop below has not reached yet hold nothing to release.
+		//Committing the validated copies rather than the caller's is what carries the normalized lengths
+		// (a len of 0 means "rest of the buffer") into the object.
 
-		//The index buffer is optional (indexFormat Undefined), and inc'ing a NULL one reports failure without an
-		// error, so an index free BLAS used to fail creation silently here.
+		blasPtr->geometries = geometries;
+		geometries = (ListBLASGeometry) { 0 };
 
-		if(indexBuffer.buffer)
-			RefPtr_inc(indexBuffer.buffer);
+		for(U64 i = 0; i < blasPtr->geometries.length; ++i) {
 
-		blasPtr->indexBuffer = indexBuffer;
+			const BLASGeometry validated = blasPtr->geometries.ptr[i];
+			BLASGeometry *geometry = &blasPtr->geometries.ptrNonConst[i];
 
-		gotoIfError3(clean, RefPtr_inc(positionBuffer.buffer));
-		blasPtr->positionBuffer = positionBuffer;
+			*geometry = (BLASGeometry) { 0 };
 
-		//Optional like the index buffer, so the same NULL guard applies.
-		//Committing the validated local rather than leaving the struct copy in place is what carries the
-		// normalized length (a len of 0 means "rest of the buffer") into the object.
+			//The index buffer is optional (indexFormat Undefined), and inc'ing a NULL one reports failure without an
+			// error, so an index free BLAS has to be recognized rather than inc'd blindly.
+			//The same holds for the OMM index buffer and the micromap.
+			//Each reference is stored the moment it is taken, so a failure further down still releases it.
 
-		blasPtr->ommIndexBuffer = (DeviceData) { 0 };
+			if(validated.indexBuffer.buffer)
+				RefPtr_inc(validated.indexBuffer.buffer);
 
-		if(ommIndexBuffer.buffer)
-			RefPtr_inc(ommIndexBuffer.buffer);
+			geometry->indexBuffer = validated.indexBuffer;
 
-		blasPtr->ommIndexBuffer = ommIndexBuffer;
+			if(validated.ommIndexBuffer.buffer)
+				RefPtr_inc(validated.ommIndexBuffer.buffer);
 
-		if(blasPtr->ommMicromap)
-			gotoIfError3(clean, RefPtr_inc(blasPtr->ommMicromap));
+			geometry->ommIndexBuffer = validated.ommIndexBuffer;
+
+			if(validated.ommMicromap)
+				gotoIfError3(clean, RefPtr_inc(validated.ommMicromap));
+
+			geometry->ommMicromap = validated.ommMicromap;
+
+			gotoIfError3(clean, RefPtr_inc(validated.positionBuffer.buffer));
+			*geometry = validated;
+		}
 	}
 
 	if(name)
@@ -442,6 +544,8 @@ Bool GraphicsDeviceRef_createBLAS(
 	gotoIfError3(clean, BLAS_initExt(blasPtr, e_rr));
 
 clean:
+
+	ListBLASGeometry_free(&geometries, alloc);
 
 	if(!s_uccess)
 		RefPtr_dec(blasRef);
@@ -505,9 +609,7 @@ Bool EOMMIndex_isSpecial(U32 raw, ETextureFormatId ommIndexFormat) {
 	return raw > EOMMIndex_max(ommIndexFormat) && raw <= EOMMIndex_mask(stride);
 }
 
-BLASCreateInfo BLASCreateInfo_indexed(
-	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
+BLASGeometry BLASGeometry_indexed(
 	ETextureFormatId positionFormat,
 	U16 positionOffset,
 	U16 positionBufferStride,
@@ -515,11 +617,9 @@ BLASCreateInfo BLASCreateInfo_indexed(
 	ETextureFormatId indexFormat,
 	DeviceData indexBuffer
 ) {
-	return (BLASCreateInfo) {
-		.buildFlags = buildFlags,
-		.blasFlags = blasFlags,
-		.positionFormat = positionFormat,
-		.indexFormat = indexFormat,
+	return (BLASGeometry) {
+		.positionFormatId = (U8) positionFormat,
+		.indexFormatId = (U8) indexFormat,
 		.positionOffset = positionOffset,
 		.positionBufferStride = positionBufferStride,
 		.positionBuffer = positionBuffer,
@@ -530,17 +630,13 @@ BLASCreateInfo BLASCreateInfo_indexed(
 //Unindexed is the same geometry with no index buffer, which the format enum already expresses as Undefined.
 //It stays a helper rather than an entry point so there is only one create call to validate and to extend.
 
-BLASCreateInfo BLASCreateInfo_unindexed(
-	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
+BLASGeometry BLASGeometry_unindexed(
 	ETextureFormatId positionFormat,
 	U16 positionOffset,
 	U16 positionBufferStride,
 	DeviceData positionBuffer
 ) {
-	return BLASCreateInfo_indexed(
-		buildFlags,
-		blasFlags,
+	return BLASGeometry_indexed(
 		positionFormat,
 		positionOffset,
 		positionBufferStride,
@@ -550,11 +646,7 @@ BLASCreateInfo BLASCreateInfo_unindexed(
 	);
 }
 
-//Special index only OMM: the caller supplies one index per triangle and no micromap object exists yet.
-
-BLASCreateInfo BLASCreateInfo_indexedWithOmmIndicesExt(
-	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
+BLASGeometry BLASGeometry_indexedWithOmmIndicesExt(
 	ETextureFormatId positionFormat,
 	U16 positionOffset,
 	U16 positionBufferStride,
@@ -565,9 +657,7 @@ BLASCreateInfo BLASCreateInfo_indexedWithOmmIndicesExt(
 	DeviceData ommIndexBuffer
 ) {
 
-	BLASCreateInfo info = BLASCreateInfo_indexed(
-		buildFlags,
-		blasFlags,
+	BLASGeometry geometry = BLASGeometry_indexed(
 		positionFormat,
 		positionOffset,
 		positionBufferStride,
@@ -576,16 +666,12 @@ BLASCreateInfo BLASCreateInfo_indexedWithOmmIndicesExt(
 		indexBuffer
 	);
 
-	info.ommIndexFormat = ommIndexFormat;
-	info.ommIndexBuffer = ommIndexBuffer;
-	return info;
+	geometry.ommIndexFormatId = (U8) ommIndexFormat;
+	geometry.ommIndexBuffer = ommIndexBuffer;
+	return geometry;
 }
 
-//The micromap ARRAY form, which is the indices form plus the object the indices point into.
-
-BLASCreateInfo BLASCreateInfo_indexedWithOmmExt(
-	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
+BLASGeometry BLASGeometry_indexedWithOmmExt(
 	ETextureFormatId positionFormat,
 	U16 positionOffset,
 	U16 positionBufferStride,
@@ -596,13 +682,33 @@ BLASCreateInfo BLASCreateInfo_indexedWithOmmExt(
 	DeviceData ommIndexBuffer,
 	OpacityMicromapRef *ommMicromap
 ) {
-	BLASCreateInfo info = BLASCreateInfo_indexedWithOmmIndicesExt(
-		buildFlags, blasFlags, positionFormat, positionOffset, positionBufferStride, positionBuffer,
+
+	BLASGeometry geometry = BLASGeometry_indexedWithOmmIndicesExt(
+		positionFormat, positionOffset, positionBufferStride, positionBuffer,
 		indexFormat, indexBuffer, ommIndexFormat, ommIndexBuffer
 	);
 
-	info.ommMicromap = ommMicromap;
-	return info;
+	geometry.ommMicromap = ommMicromap;
+	return geometry;
+}
+
+BLASCreateInfo BLASCreateInfo_geometries(ERTASBuildFlags buildFlags, ListBLASGeometry geometries) {
+	return (BLASCreateInfo) {
+		.buildFlags = buildFlags,
+		.geometries = geometries
+	};
+}
+
+BLASCreateInfo BLASCreateInfo_single(ERTASBuildFlags buildFlags, const BLASGeometry *geometry) {
+
+	ListBLASGeometry geometries = (ListBLASGeometry) { 0 };
+
+	//A ref over one element of the caller's memory cannot overflow or allocate, so the only way this fails is
+	// a NULL geometry, which leaves an empty list that create rejects by name.
+
+	ListBLASGeometry_createRefConst(geometry, 1, &geometries, NULL);
+
+	return BLASCreateInfo_geometries(buildFlags, geometries);
 }
 
 Bool GraphicsDeviceRef_createBLASExt(
@@ -622,17 +728,9 @@ Bool GraphicsDeviceRef_createBLASExt(
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Geometry,
 			.flags = (U8) info->buildFlags,
-			.flagsExt = (U8) info->blasFlags
+			.tempScratchBuffer = info->scratchBuffer
 		},
-		.positionFormatId = (U8) info->positionFormat,
-		.indexFormatId = (U8) info->indexFormat,
-		.positionBufferStride = info->positionBufferStride,
-		.positionOffset = info->positionOffset,
-		.indexBuffer = info->indexBuffer,
-		.positionBuffer = info->positionBuffer,
-		.ommIndexFormatId = (U8) info->ommIndexFormat,
-		.ommIndexBuffer = info->ommIndexBuffer,
-		.ommMicromap = info->ommMicromap
+		.geometries = info->geometries
 	};
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr));
@@ -641,12 +739,50 @@ clean:
 	return s_uccess;
 }
 
+//A BLAS created only as far as the driver's sizes (sizeQueryOnly), then dropped. Going through the create path is
+// what keeps the answer honest: the same validation and the same geometry descriptions a real build uses.
+
+Bool GraphicsDeviceRef_getBLASSizesExt(
+	GraphicsDeviceRef *dev,
+	const BLASCreateInfo *info,
+	U64 *asSize,
+	U64 *scratchSize,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	BLASRef *blasRef = NULL;
+
+	if(!info || !asSize || !scratchSize)
+		retError(clean, Error_nullPointer(
+			!info ? 1 : (!asSize ? 2 : 3), "GraphicsDeviceRef_getBLASSizesExt()::info, asSize and scratchSize are required"
+		));
+
+	const BLAS blasInfo = (BLAS) {
+		.base = (RTAS) {
+			.asConstructionType = (U8) EBLASConstructionType_Geometry,
+			.flags = (U8) info->buildFlags,
+			.sizeQueryOnly = true
+		},
+		.geometries = info->geometries
+	};
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBLAS(dev, &blasInfo, NULL, &blasRef, e_rr));
+
+	*asSize = BLASRef_ptr(blasRef)->base.queriedSize;
+	*scratchSize = BLASRef_ptr(blasRef)->base.queriedScratchSize;
+
+clean:
+	RefPtr_dec(&blasRef);
+	return s_uccess;
+}
+
 //Creating BLAS from AABBs
 
 Bool GraphicsDeviceRef_createBLASProceduralExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	EBLASFlag blasFlags,
+	EBLASGeometryFlag geometryFlags,
 	U32 aabbStride,
 	U32 aabbOffset,
 	DeviceData buffer,
@@ -657,12 +793,12 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 	const BLAS blasInfo = (BLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Procedural,
-			.flags = (U8) buildFlags,
-			.flagsExt = (U8) blasFlags
+			.flags = (U8) buildFlags
 		},
 		.aabbBuffer = buffer,
 		.aabbStride = aabbStride,
-		.aabbOffset = aabbOffset
+		.aabbOffset = aabbOffset,
+		.aabbFlags = (U8) geometryFlags
 	};
 
 	return GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr);
@@ -838,9 +974,9 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 	blas = BLASRef_ptr(blasRef);
 
 	//Nothing to do rather than an error, so a caller can sweep everything it owns without first sorting out
-	// what was built compactable, and recording twice is harmless.
+	// what was built compactable.
 
-	if(blas->base.isCompacted || !(blas->base.flags & ERTASBuildFlags_AllowCompaction))
+	if(!(blas->base.flags & ERTASBuildFlags_AllowCompaction))
 		goto clean;
 
 	if(!blas->base.isCompleted)
@@ -849,13 +985,6 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 		));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(blas->base.compactionQuery == U32_MAX)
-		retError(clean, Error_invalidState(
-			2,
-			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
-			"its build predates the compaction path or the backend doesn't support it"
-		));
 
 	//The size is produced BY the build, so it does not exist until that build's submit has run. A submit is
 	// done if the device was waited since, or if framesInFlight submits have been queued behind it, which
@@ -870,6 +999,19 @@ Bool GraphicsDeviceRef_prepareCompactBLAS(GraphicsDeviceRef *deviceRef, BLASRef 
 			3,
 			"GraphicsDeviceRef_prepareCompactBLAS() the build's submit hasn't completed, so the compacted "
 			"size isn't readable yet, record the compaction in a later submit than the build"
+		));
+
+	//Recording twice is harmless, and so is a structure whose build already decided it (a backend that can't
+	// query the size); both only once the submit that decided it has completed, like any other.
+
+	if(blas->base.isCompacted)
+		goto clean;
+
+	if(blas->base.compactionQuery == U32_MAX)
+		retError(clean, Error_invalidState(
+			2,
+			"GraphicsDeviceRef_prepareCompactBLAS() no compacted size was recorded for this structure, "
+			"its build predates the compaction path or the backend doesn't support it"
 		));
 
 	if((acq = SpinLock_lock(&blas->base.lock, U64_MAX)) < ELockAcquire_Success)

@@ -25,6 +25,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "formats/oiSH/sh_file.h"
@@ -327,6 +328,17 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	gotoIfError3(clean, dxCheck((*stateObject)->lpVtbl->QueryInterface(
 		*stateObject, &IID_ID3D12StateObjectProperties, (void**) &dxPipeline->stateObjectProps
 	), e_rr));
+
+	//A state object has no cached blob, so its libraries stand in for its code
+
+	{
+		U64 dxilBytes = 0;
+
+		for(U64 j = 0; j < libraries.length; ++j)
+			dxilBytes += libraries.ptr[j].DXILLibrary.BytecodeLength;
+
+		Pipeline_trackMemory(pipeline, dxilBytes, dxilBytes, true);        //A state object has no cached blob
+	}
 
 	//Resolve shader ids in SBT (individual shaders: raygen, callable and miss)
 

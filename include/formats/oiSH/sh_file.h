@@ -56,7 +56,7 @@ typedef enum ECompilerWarning {                            //Present here in cas
 	ECompilerWarning_BufferPadding      = 1 << 2
 } ECompilerWarning;
 
-//Check docs/oiSH.md for the file spec
+//Check docs/file/oiSH.md for the file spec
 
 typedef struct SHInclude {
 
@@ -99,6 +99,16 @@ Bool SHValue_stringifyHLSL(
 	Error *e_rr
 );
 
+//A scalar value from text, as an annotation or a uniform lookup writes it: true or false for B1, a decimal integer with
+//an optional sign for the integer types, and any number for the float types, rounded to the type.
+//Refused where it doesn't fit the type or isn't finite in it.
+
+Bool SHValue_parse(CharString str, TypeId typeId, SHValue *value, Error *e_rr);
+
+//Whether two values of one scalar type are the same: by value for integers and B1, by bits for floats.
+
+Bool SHValue_equals(const SHValue *a, const SHValue *b, TypeId typeId);
+
 typedef struct SHFile {
 
 	ListSHBinaryInfo binaries;
@@ -110,6 +120,7 @@ typedef struct SHFile {
 	U32 compilerVersion;        //OxC3 compiler version
 
 	U32 sourceHash;             //CRC32C of sources
+	U32 padding;
 
 } SHFile;
 
@@ -150,7 +161,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 //A reflection only oiSH has no code to select binaries on, since which backend a binary was for is written as
 // which of its buffers carry code, so there it keeps every binary and entrypoint and splits the registers alone.
 //It is not a lossless inverse; a register that survives keeps the reflection it gained from being merged, so two
-// splits of one file keep agreeing with eachother (see docs/oiSH.md).
+// splits of one file keep agreeing with eachother (see docs/file/oiSH.md).
 Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, SHFile *split, Error *e_rr);
 
 void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc);

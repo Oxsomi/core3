@@ -245,24 +245,30 @@ clean:
 
 Bool SHRegisterRuntime_equals(const SHRegisterRuntime *a, const SHRegisterRuntime *b) {
 
-	if(!a || !b)
-		return a == b;
-
 	if(a == b)
 		return true;
 
-	//SHRegister is a padding free U64[N + 1] (static_assert in SHRegisterRuntime_hash), so comparing bytes is exact.
+	if(!a || !b)
+		return false;
 
-	if(!Buffer_eq(
-		Buffer_createRefConst(&a->reg, sizeof(a->reg)),
-		Buffer_createRefConst(&b->reg, sizeof(b->reg))
+	//Same identity the duplicate check in SHBinaryInfo_addRegisterBase uses, and the hash prefilters there too
+
+	if(a->hash != b->hash)
+		return false;
+
+	if(Buffer_neq(
+		Buffer_createRefConst(&a->reg, sizeof(SHRegister)),
+		Buffer_createRefConst(&b->reg, sizeof(SHRegister))
 	))
 		return false;
 
-	return
-		CharString_equalsStringSensitive(&a->name, &b->name) &&
-		ListU32_eq(a->arrays, b->arrays) &&
-		SBFile_equals(&a->shaderBuffer, &b->shaderBuffer);
+	if(!CharString_equalsStringSensitive(&a->name, &b->name))
+		return false;
+
+	if(ListU32_neq(a->arrays, b->arrays))
+		return false;
+
+	return SBFile_equals(&a->shaderBuffer, &b->shaderBuffer);
 }
 
 Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator *alloc, SHRegisterRuntime *res, Error *e_rr) {
@@ -309,29 +315,48 @@ Bool SHBinaryInfo_addRegisterBase(
 	//The caller hands over the buffer either way, so a duplicate has to consume it too rather than leave it
 	//for the caller to trip over: two entrypoints declaring the same push constant block hash identically,
 	//and the second one's SBFile_create then refuses a buffer that still holds the first one's variables.
-	//Only an equal register is a duplicate: the hash is built from file words, so a colliding pair is cheap to
-	// construct, and dropping one would desync the reflected bindings from the shader.
 
-	SHRegisterRuntime candidate = (SHRegisterRuntime) { 0 };
-	candidate.reg = registr;
-	candidate.name = *name;
+	//The hash only PREFILTERS, it never decides. Every input to it is read out of the file, and fnv1a's step is a
+	//multiply by an odd prime and so a bijection, which makes a colliding pair something a writer CONSTRUCTS
+	//rather than searches for. Taking equal hashes as proof would let a crafted file drop a register the shader
+	//really declares, and the reflected table is what a descriptor layout and a root signature are built from.
+	//A forged collision now falls through to SHFile_validateRegister below and is reported as the name or
+	//binding conflict it is.
+	//
+	//The shader buffer is confirmed by its contents through SBFile_equals, not by its hash, for the same reason.
 
-	if(arrays)
-		candidate.arrays = *arrays;
+	for(U64 i = 0; i < registers->length; ++i) {
 
-	if(sbFile)
-		candidate.shaderBuffer = *sbFile;
+		const SHRegisterRuntime *dupe = registers->ptr + i;
 
-	for(U64 i = 0; i < registers->length; ++i)
-		if(registers->ptr[i].hash == hash && SHRegisterRuntime_equals(&registers->ptr[i], &candidate)) {
+		if(dupe->hash != hash)
+			continue;
 
-			if(sbFile) {
-				SBFile_free(sbFile, alloc);
-				*sbFile = (SBFile) { 0 };
-			}
+		if(Buffer_neq(
+			Buffer_createRefConst(&dupe->reg, sizeof(SHRegister)),
+			Buffer_createRefConst(&registr, sizeof(SHRegister))
+		))
+			continue;
 
-			goto clean;
+		if(!CharString_equalsStringSensitive(&dupe->name, name))
+			continue;
+
+		const ListU32 dupeArrays = dupe->arrays;
+		const ListU32 addArrays = arrays ? *arrays : (ListU32) { 0 };
+
+		if(ListU32_neq(dupeArrays, addArrays))
+			continue;
+
+		if(!SBFile_equals(sbFile, sbFile ? &dupe->shaderBuffer : NULL) && (sbFile || dupe->shaderBuffer.hash))
+			continue;
+
+		if(sbFile) {
+			SBFile_free(sbFile, alloc);
+			*sbFile = (SBFile) { 0 };
 		}
+
+		goto clean;
+	}
 
 	//Ensure there's no registers with duplicate name or binding
 

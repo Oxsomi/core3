@@ -79,9 +79,11 @@ And run the suite, not just the build:
 
 - `Error *e_rr` is the last parameter; use `retError`/`gotoIfError3` with the `clean:` label, error
   strings as `"Function()::param reason"`.
-- A defaulted `Bool` parameter sitting before `e_rr` silently converts a misplaced `Error *` argument
-  to `true` and drops the error channel. At call sites, spell out every defaulted argument before
-  `e_rr` rather than relying on defaults.
+- C++ wrapper parameters that take a bool are `BoolArg` (`include/types/base/bool_arg.hpp`), never
+  `Bool`/`bool`: a plain bool silently accepts a misplaced `Error *` (pointer to bool is a standard
+  conversion) and drops the error channel. `BoolArg` refuses pointers, ints and enums at compile time,
+  and style rule 17 flags a `Bool` directly before an `Error *` in a header. Callbacks the C side
+  invokes keep `c::Bool`.
 - Overflow-safe bounds checks: write `offset > size || size - offset < needed`, never `offset + needed`.
 - `e_rr` may always be NULL (probe calls pass NULL deliberately). Never dereference it: a failed callee
   already filled it, so propagate with `gotoIfError3`, or `s_uccess = false; goto clean;` when cleanup

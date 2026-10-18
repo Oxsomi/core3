@@ -176,6 +176,37 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 		device->staging && c::bufferOf(device->staging)->resource.size == oldSize
 	);
 
+	//A resource over half a block gets a memory block sized to itself rather than one of twice its size, and that
+	// block goes as soon as the resource does.
+	//Sized past half of the LARGER block size, since which one applies depends on where the backend places it.
+
+	{
+		const c::U64 blockSize = device->blockSizeCpu > device->blockSizeGpu ? device->blockSizeCpu : device->blockSizeGpu;
+		const c::U64 largeSize = blockSize / 2 + 64 * c::KIBI;
+
+		gfx::DeviceBuffer large;
+
+		if (Test_assert(t, "largeCreate", dev.createBuffer(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_None, "Large buffer", largeSize, large, nullptr, &t->err
+		))) {
+
+			const c::U32 blockId = large.data()->resource.blockId;
+			const c::DeviceMemoryBlock *block = &device->allocator.blocks.ptr[blockId];
+			const c::U64 blockBytes = c::Buffer_length(block->allocations.buffer);
+
+			//Rounded up to the allocation's alignment at most, which is far below a block on every API
+
+			Test_assert(t, "largeOwnBlock", block->isDedicated);
+			Test_assert(t, "largeExactBlock", blockBytes >= largeSize && blockBytes < largeSize + 4 * c::MIBI);
+
+			large.release();
+
+			Test_assert(t, "largeBlockFreed",
+				blockId >= device->allocator.blocks.length || !device->allocator.blocks.ptr[blockId].isActive
+			);
+		}
+	}
+
 	//handleNextFrame is a frame step the submit path drives, so it demands the device lock is already held
 
 	Test_assert(t, "frameNullDevice", !c::GraphicsDeviceRef_handleNextFrame(NULL, NULL, NULL));
@@ -791,6 +822,199 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			}
 		}
 	}
+
+	//copyBuffer: two regions of a pattern into a zeroed buffer, pulled back after its cpuData is scribbled over, so
+	// only the GPU copy can put the right bytes there; what no region covers has to stay zero.
+
+	{
+		c::U32 srcData[16], dstZero[16] = {};
+
+		for(c::U32 i = 0; i < 16; ++i)
+			srcData[i] = 0xA0000000u | i;
+
+		c::Buffer srcRef = c::Buffer_createRefConst(srcData, sizeof(srcData));
+		c::Buffer dstRef = c::Buffer_createRefConst(dstZero, sizeof(dstZero));
+
+		gfx::DeviceBuffer copySrc, copyDst, copyOther;
+		gfx::CommandList copyList;
+
+		Test_assert(t, "copyBufferSrc", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Copy src", &srcRef, copySrc, nullptr, e_rr
+		));
+
+		Test_assert(t, "copyBufferDst", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Copy dst", &dstRef, copyDst, nullptr, e_rr
+		));
+
+		Test_assert(t, "copyBufferOther", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_None, "Copy other", &dstRef, copyOther, nullptr, e_rr
+		));
+
+		if(
+			copySrc && copyDst && copyOther &&
+			Test_assert(t, "copyBufferList", dev.createCommandList(4 * c::KIBI, 16, 16, copyList, true, e_rr))
+		) {
+
+			//A refused copy invalidates its recording, which can then be neither ended nor begun again, so every
+			// refusal gets a command list of its own. Outside a scope is refused before anything else is checked.
+
+			{
+				gfx::CommandList noScope;
+
+				const c::Bool listMade = dev.createCommandList(4 * c::KIBI, 16, 16, noScope, true, e_rr);
+
+				if (Test_assert(t, "copyBufferNoScopeList", listMade)) {
+
+					Test_assert(t, "copyBufferNoScopeBegin", noScope.begin(true, e_rr));
+
+					Test_assert(t, "copyBufferNoScope", !c::CommandListRef_copyBuffer(
+						noScope.handle(), copySrc.handle(), copyDst.handle(), { 0, 0, 4 }, nullptr
+					));
+
+					(void) noScope.end(nullptr);
+				}
+			}
+
+			const struct { const c::C8 *name; bool same; c::CopyBufferRegion a, b; c::U32 n; } refused[] = {
+				{ "copyBufferEmpty",      false, { 0, 0, 0 },   {}, 1 },
+				{ "copyBufferUnaligned",  false, { 2, 0, 4 },   {}, 1 },
+				{ "copyBufferLength",     false, { 0, 0, 6 },   {}, 1 },
+				{ "copyBufferSrcOOB",     false, { 60, 0, 8 },  {}, 1 },
+				{ "copyBufferDstOOB",     false, { 0, 64, 4 },  {}, 1 },
+				{ "copyBufferSame",       true,  { 0, 32, 16 }, {}, 1 },
+				{ "copyBufferOverlap",    false, { 0, 8, 16 },  { 32, 16, 8 }, 2 }
+			};
+
+			for (const auto &r : refused) {
+
+				gfx::CommandList refusedList;
+
+				const c::Bool listMade = dev.createCommandList(4 * c::KIBI, 16, 16, refusedList, true, e_rr);
+
+				if(!Test_assert(t, "copyBufferRefusedList", listMade))
+					continue;
+
+				Test_assert(t, "copyBufferRefusedBegin", refusedList.begin(true, e_rr));
+
+				{
+					gfx::CommandScope scope = refusedList.scope({}, 1, {}, e_rr);
+
+					const gfx::DeviceBuffer &dst = r.same ? copySrc : copyDst;
+
+					Test_assert(t, r.name, r.n == 1 ?
+						!scope.copyBuffer(copySrc, dst, r.a, nullptr) :
+						!scope.copyBufferRegions(copySrc, dst, { r.a, r.b }, nullptr)
+					);
+				}
+
+				(void) refusedList.end(nullptr);
+			}
+
+			//The real one, with a second copy in its own scope so the copy write is followed by a copy read
+
+			Test_assert(t, "copyBufferRecord", copyList.begin(true, e_rr));
+
+			{
+				gfx::CommandScope scope = copyList.scope({}, 1, {}, e_rr);
+				Test_assert(t, "copyBufferScope", (c::Bool) scope);
+
+				Test_assert(t, "copyBufferRegions", scope.copyBufferRegions(
+					copySrc, copyDst, { { 0, 16, 16 }, { 40, 48, 8 } }, e_rr
+				));
+			}
+
+			{
+				gfx::CommandScope scope = copyList.scope({}, 2, {}, e_rr);
+				Test_assert(t, "copyBufferScope2", (c::Bool) scope);
+				Test_assert(t, "copyBufferChain", scope.copyBuffer(copyDst, copyOther, { 16, 0, 16 }, e_rr));
+			}
+
+			Test_assert(t, "copyBufferEnd", copyList.end(e_rr));
+			Test_assert(t, "copyBufferSubmit", dev.submit({ &copyList }, {}, 0, 0, e_rr));
+			Test_assert(t, "copyBufferWait", dev.wait(e_rr));
+
+			c::DeviceBuffer *dstPtr = copyDst.data();
+
+			for(c::U64 i = 0; i < sizeof(dstZero); ++i)
+				dstPtr->cpuData.ptrNonConst[i] = 0xCC;
+
+			c::U32 pulled = 0;
+			Test_assert(t, "copyBufferPull", copyDst.pullRegion(0, 0, Test_pullCallback, &pulled, e_rr));
+
+			gfx::CommandList pullList;
+
+			const c::Bool pullListMade = dev.createCommandList(4 * c::KIBI, 16, 16, pullList, true, e_rr);
+
+			if (Test_assert(t, "copyBufferPullList", pullListMade)) {
+				Test_assert(t, "copyBufferPullBegin", pullList.begin(true, e_rr));
+				Test_assert(t, "copyBufferPullEnd", pullList.end(e_rr));
+				Test_assert(t, "copyBufferPullSubmit", dev.submit({ &pullList }, {}, 0, 0, e_rr));
+			}
+
+			Test_assert(t, "copyBufferPullWait", dev.wait(e_rr));
+			Test_assert(t, "copyBufferPulled", pulled == 1);
+
+			//Words 4..7 from 0..3, words 12..13 from 10..11, zero everywhere else
+
+			const c::U32 *words = (const c::U32*) dstPtr->cpuData.ptr;
+			c::Bool matches = c::Buffer_length(dstPtr->cpuData) == sizeof(dstZero);
+
+			for(c::U32 i = 0; i < 16 && matches; ++i) {
+
+				const c::U32 expected =
+					i >= 4 && i < 8 ? srcData[i - 4] :
+					i >= 12 && i < 14 ? srcData[i - 2] : 0;
+
+				matches &= words[i] == expected;
+			}
+
+			Test_assert(t, "copyBufferContents", matches);
+		}
+	}
+
+	//An RGB9E5 texture, which every device has to sample: created with data, pulled back after its cpuData is
+	// scribbled over. Any U32 is a valid RGB9E5 texel, so the round trip has to be bit exact.
+
+	{
+		const c::U32 texels[4] = { 0x00000000u, 0x8401FF00u, 0xF8000001u, 0x47D3A2B1u };
+		c::Buffer texRef = c::Buffer_createRefConst(texels, sizeof(texels));
+
+		gfx::DeviceTexture shared;
+
+		Test_assert(t, "rgb9e5Create", dev.createTexture(
+			c::ETextureType_2D, c::ETextureFormatId_RGB9E5, c::EGraphicsResourceFlag_CPUBacked, 2, 2, 1,
+			"Execute RGB9E5", &texRef, shared, nullptr, e_rr
+		));
+
+		gfx::CommandList pullList;
+		const c::Bool listMade = dev.createCommandList(4 * c::KIBI, 16, 16, pullList, true, e_rr);
+
+		if (shared && Test_assert(t, "rgb9e5List", listMade)) {
+
+			c::DeviceTexture *texPtr = shared.data();
+
+			Test_assert(t, "rgb9e5Begin", pullList.begin(true, e_rr));
+			Test_assert(t, "rgb9e5End", pullList.end(e_rr));
+			Test_assert(t, "rgb9e5Upload", dev.submit({ &pullList }, {}, 0, 0, e_rr));
+			Test_assert(t, "rgb9e5UploadWait", dev.wait(e_rr));
+
+			for(c::U64 i = 0; i < c::Buffer_length(texPtr->cpuData); ++i)
+				texPtr->cpuData.ptrNonConst[i] = 0xCC;
+
+			c::U32 pulled = 0;
+			Test_assert(t, "rgb9e5Pull", shared.pullRegion(0, 0, 0, 0, 0, 0, Test_pullCallback, &pulled, e_rr));
+			Test_assert(t, "rgb9e5PullSubmit", dev.submit({ &pullList }, {}, 0, 0, e_rr));
+			Test_assert(t, "rgb9e5PullWait", dev.wait(e_rr));
+			Test_assert(t, "rgb9e5Pulled", pulled == 1);
+
+			c::Bool matches = c::Buffer_length(texPtr->cpuData) == sizeof(texels);
+
+			for(c::U32 i = 0; i < 4 && matches; ++i)
+				matches &= ((const c::U32*) texPtr->cpuData.ptr)[i] == texels[i];
+
+			Test_assert(t, "rgb9e5RoundTrip", matches);
+		}
+	}
 }
 
 // -- 30. Acceleration structures -------------------------------------------------
@@ -844,15 +1068,19 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 
 	if (plain) {
 
-		const c::BLASCreateInfo wrongUsage = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, plain.region()
+		const c::BLASGeometry wrongUsageGeometry = c::BLASGeometry_unindexed(
+			c::ETextureFormatId_RGBA32f, 0, 16, plain.region()
+		);
+
+		const c::BLASCreateInfo wrongUsage = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &wrongUsageGeometry
 		);
 
 		Test_assert(t, "blasWrongUsage", !dev.createBlas(wrongUsage, "Test BLAS", badBlas, nullptr));
 	}
 
-	const c::BLASCreateInfo zeroStride = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 0, positionData
+	const c::BLASGeometry zeroStrideGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 0, positionData);
+
+	const c::BLASCreateInfo zeroStride = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &zeroStrideGeometry
 	);
 
 	Test_assert(t, "blasZeroStride", !dev.createBlas(zeroStride, "Test BLAS", badBlas, nullptr));
@@ -860,10 +1088,13 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 	//An OMM index is per triangle, so asking for one without triangle indices has nothing to index against.
 	//Rejected regardless of device support, since it is malformed rather than unsupported.
 
-	const c::BLASCreateInfo ommWithoutIndices = c::BLASCreateInfo_indexedWithOmmIndicesExt(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData,
+	const c::BLASGeometry ommWithoutIndicesGeometry = c::BLASGeometry_indexedWithOmmIndicesExt(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData,
 		c::ETextureFormatId_Undefined, { 0 },
 		c::ETextureFormatId_R16u, positionData
+	);
+
+	const c::BLASCreateInfo ommWithoutIndices = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &ommWithoutIndicesGeometry
 	);
 
 	Test_assert(t, "blasOmmWithoutIndices", !dev.createBlas(ommWithoutIndices, "Test BLAS", badBlas, nullptr));
@@ -871,22 +1102,30 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 	//A micromap without an index buffer has nothing to link it to the triangles
 
 	{
-		c::BLASCreateInfo ommNoIndices = c::BLASCreateInfo_unindexed(
-			c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
+		c::BLASGeometry ommNoIndicesGeometry = c::BLASGeometry_unindexed(
+			c::ETextureFormatId_RGBA32f, 0, 16, positionData
 		);
 
-		ommNoIndices.ommMicromap = (c::OpacityMicromapRef*) positionData.buffer;        //Wrong type too, format first
+		//Wrong type too, format first
+
+		ommNoIndicesGeometry.ommMicromap = (c::OpacityMicromapRef*) positionData.buffer;
+
+		const c::BLASCreateInfo ommNoIndices = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &ommNoIndicesGeometry
+		);
 
 		Test_assert(t, "blasOmmMicromapWithoutFormat", !dev.createBlas(ommNoIndices, "Test BLAS", badBlas, nullptr));
 	}
 
 	//An OMM index format of Undefined means no OMM at all, so carrying a buffer anyway is contradictory.
 
-	c::BLASCreateInfo ommBufferNoFormat = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
+	c::BLASGeometry ommBufferNoFormatGeometry = c::BLASGeometry_unindexed(
+		c::ETextureFormatId_RGBA32f, 0, 16, positionData
 	);
 
-	ommBufferNoFormat.ommIndexBuffer = positionData;
+	ommBufferNoFormatGeometry.ommIndexBuffer = positionData;
+
+	const c::BLASCreateInfo ommBufferNoFormat = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &ommBufferNoFormatGeometry
+	);
 
 	Test_assert(t, "blasOmmBufferWithoutFormat", !dev.createBlas(ommBufferNoFormat, "Test BLAS", badBlas, nullptr));
 
@@ -966,9 +1205,9 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 		Test_assert(t, "ommRejectedNothing", !badOmm && !rawOmm);
 	}
 
-	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_unindexed(
-		c::ERTASBuildFlags_None, c::EBLASFlag_None, c::ETextureFormatId_RGBA32f, 0, 16, positionData
-	);
+	const c::BLASGeometry blasInfoGeometry = c::BLASGeometry_unindexed(c::ETextureFormatId_RGBA32f, 0, 16, positionData);
+
+	const c::BLASCreateInfo blasInfo = c::BLASCreateInfo_single(c::ERTASBuildFlags_None, &blasInfoGeometry);
 
 	if(!Test_assert(t, "createBlas", dev.createBlas(blasInfo, "Test BLAS", blas, e_rr)))
 		return;

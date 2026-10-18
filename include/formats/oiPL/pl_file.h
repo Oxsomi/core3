@@ -79,12 +79,20 @@ typedef enum ESamplerAddressMode {
 	ESamplerAddressMode_Count
 } ESamplerAddressMode;
 
+//The two integer borders are reserved rather than removed: their numbering is what oiPL and oiSP store, so
+// dropping them would renumber the white float one under every file already written.
+//Neither D3D12 path describes one as OxC3 is built. A heap sampler's D3D12_SAMPLER_DESC carries the border as
+// FLOAT[4], and the integer form needs D3D12_SAMPLER_DESC2 through ID3D12Device11::CreateSampler2; a root
+// signature static sampler needs version 1.2 and D3D12_STATIC_SAMPLER_DESC1.
+//Vulkan has both, so a sampler naming one would mean what it says on one backend and something else on the other.
+//Refused at creation until raising those two D3D12 requirements buys something worth the floor it raises.
+
 typedef enum ESamplerBorderColor {
-	ESamplerBorderColor_TransparentBlack,        //0.xxxx
-	ESamplerBorderColor_OpaqueBlackFloat,        //0.xxx, 1.f
-	ESamplerBorderColor_OpaqueBlackInt,          //0.xxx, 1
-	ESamplerBorderColor_OpaqueWhiteFloat,        //1.f.xxxx
-	ESamplerBorderColor_OpaqueWhiteInt,          //1.xxxx
+	ESamplerBorderColor_TransparentBlack,               //0.xxxx
+	ESamplerBorderColor_OpaqueBlackFloat,               //0.xxx, 1.f
+	ESamplerBorderColor_ReservedOpaqueBlackInt,         //0.xxx, 1
+	ESamplerBorderColor_OpaqueWhiteFloat,               //1.f.xxxx
+	ESamplerBorderColor_ReservedOpaqueWhiteInt,         //1.xxxx
 	ESamplerBorderColor_Count
 } ESamplerBorderColor;
 

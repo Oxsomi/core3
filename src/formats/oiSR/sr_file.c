@@ -577,6 +577,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 						alloc, ELogOptions_None, printedColon ? ", %.*s" : " : %.*s",
 						(int) CharString_length(iName), iName.ptr
 					);
+
 					printedColon = true;
 				}
 

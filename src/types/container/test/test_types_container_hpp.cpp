@@ -102,6 +102,12 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 
 		Test_assert(t, "List: reserve", list.reserve(128, e_rr));
 		Test_assert(t, "List: resize", list.resize(4, e_rr) && list.size() == 4);
+		Test_assert(t, "List: resizeUninitialized", list.resizeUninitialized(9, e_rr) && list.size() == 9);
+		Test_assert(t, "List: resizeUninitialized shrink", list.resizeUninitialized(4, e_rr) && list.size() == 4);
+
+		List<c::ListU32> raw(alloc);
+		Test_assert(t, "List: createUninitialized", raw.createUninitialized(64, e_rr) && raw.size() == 64);
+		Test_assert(t, "List: createUninitialized again", raw.createUninitialized(8, e_rr) && raw.size() == 8);
 		list.clear();
 		Test_assert(t, "List: clear", list.empty());
 

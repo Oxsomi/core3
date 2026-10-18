@@ -68,6 +68,11 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	if (!shFile || !shFile->entries.ptr)
 		retError(clean, Error_nullPointer(2, "SHFile_write()::shFile is required"));
 
+	//SHFile_read refuses a file without entrypoints, so one is never written.
+
+	if (!shFile->entries.length)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_write()::shFile has no entrypoints"));
+
 	U64 fileStart = *offset;
 
 	//Get header size
@@ -254,10 +259,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				U64 shaderBufferId = 0;
 
 				for (; shaderBufferId < shaderBufferList.length; ++shaderBufferId)
-					if(
-						shaderBufferList.ptr[shaderBufferId].hash == reg.shaderBuffer.hash &&
-						SBFile_equals(&shaderBufferList.ptr[shaderBufferId], &reg.shaderBuffer)
-					)
+					if(SBFile_equals(shaderBufferList.ptr + shaderBufferId, &reg.shaderBuffer))
 						break;
 
 				if (shaderBufferId >= (U16)(U16_MAX - 1))
@@ -454,6 +456,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			.version = ESHVersion_V1_2,
 			.extensionCount = ESHExtension_Count,
 			.vendorCount = ESHVendor_Count,
+			.extension2Count = ESHExtension2_Count,
 			.sizeTypes = sizeTypes,
 			.binaryCount = (U16) shFile->binaries.length,
 			.stageCount = (U16) shFile->entries.length,
@@ -532,6 +535,8 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			.extensions = binary.identifier.extensions,
 			.dormantExt = binary.dormantExtensions,
+			.extensions2 = binary.identifier.extensions2,
+			.dormantExt2 = binary.dormantExtensions2,
 
 			.registerCount = (U16)binary.registers.length,
 			.uniformCount = (U8)binary.identifier.uniforms.length
@@ -643,10 +648,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				U64 k = 0;
 
 				for (; k < shaderBufferList.length; ++k)
-					if(
-						shaderBufferList.ptr[k].hash == reg.shaderBuffer.hash &&
-						SBFile_equals(&shaderBufferList.ptr[k], &reg.shaderBuffer)
-					)
+					if(SBFile_equals(shaderBufferList.ptr + k, &reg.shaderBuffer))
 						break;
 
 				reg.reg.shaderBufferId = (U16) k;
@@ -712,6 +714,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 					gotoIfError3(clean, StreamCursor_append(
 						&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr
 					));
+
 					gotoIfError3(clean, StreamCursor_append(
 						&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr
 					));
