@@ -61,15 +61,6 @@ TListImpl(DevicePendingPull);
 TListImpl(GraphicsTiming);
 TListImpl(TimingEntry);
 
-//Append only within a frame: nothing erases a single resource, a frame is emptied whole once it completes.
-
-static const HashIndexInfo GraphicsDevice_inFlightIndexInfo = {
-	.hash = U64_hash,
-	.compare = U64_compare,
-	.stride = sizeof(RefPtr*),
-	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
-};
-
 //Frees a timings list filled by GraphicsDeviceRef_getTimings: its owned name copies, then the array itself.
 
 void ListGraphicsTiming_freeUnderlying(ListGraphicsTiming *timings, const Allocator *alloc) {
@@ -171,7 +162,7 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 
 				case ECommandOp_StartScope: {
 
-					const CommandScope scope = cl->activeScopes.ptr[scopeCounter++];
+					const CommandScope scope = cl->activeScopes.list.ptr[scopeCounter++];
 					curScopeTimed = (scope.flags & ECommandScopeInternalFlags_Timed) != 0;
 
 					if(curScopeTimed) {
@@ -470,14 +461,13 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
-		if(device->resourcesInFlight[i].length)
+		if(device->resourcesInFlight[i].list.length)
 			Log_warnLnx(
 			"GraphicsDevice_free detected resourcesInFlight still left on free. "
 			"This shouldn't be possible, as all resources should already be released!"
 		);
 
-		ListRefPtr_free(&device->resourcesInFlight[i], alloc);
-		HashIndex_free(&device->resourcesInFlightIndex[i], alloc);
+		HashSetRefPtr_free(&device->resourcesInFlight[i], alloc);
 	}
 
 	GraphicsDevice_freeResourceRegistry(device, alloc);
@@ -1161,15 +1151,8 @@ Bool GraphicsDeviceRef_create(
 
 	//Create in flight resource refs
 
-	for (U64 i = 0; i < device->framesInFlight; ++i) {
-
-		gotoIfError3(clean, ListRefPtr_reserve(&device->resourcesInFlight[i], 64, alloc, e_rr));
-
-		gotoIfError3(clean, HashIndex_reserve(
-			&device->resourcesInFlightIndex[i], &GraphicsDevice_inFlightIndexInfo,
-			device->resourcesInFlight[i].ptr, 64, alloc, e_rr
-		));
-	}
+	for (U64 i = 0; i < device->framesInFlight; ++i)
+		gotoIfError3(clean, HashSetRefPtr_reserve(&device->resourcesInFlight[i], 64, alloc, e_rr));
 
 	//Create extended device
 
@@ -1894,10 +1877,7 @@ Bool GraphicsDevice_isInFlight(const GraphicsDevice *device, RefPtr *resource) {
 	if(!device || !resource)
 		return false;
 
-	return HashIndex_find(
-		&device->resourcesInFlightIndex[device->fifId], &GraphicsDevice_inFlightIndexInfo,
-		device->resourcesInFlight[device->fifId].ptr, &resource
-	) != U64_MAX;
+	return HashSetRefPtr_find(&device->resourcesInFlight[device->fifId], &resource) != U64_MAX;
 }
 
 Bool GraphicsDevice_isInAnyFlight(const GraphicsDevice *device, RefPtr *resource) {
@@ -1905,16 +1885,9 @@ Bool GraphicsDevice_isInAnyFlight(const GraphicsDevice *device, RefPtr *resource
 	if(!device || !resource)
 		return false;
 
-	for (U64 i = 0; i < device->framesInFlight; ++i) {
-
-		const U64 found = HashIndex_find(
-			&device->resourcesInFlightIndex[i], &GraphicsDevice_inFlightIndexInfo,
-			device->resourcesInFlight[i].ptr, &resource
-		);
-
-		if(found != U64_MAX)
+	for (U64 i = 0; i < device->framesInFlight; ++i)
+		if(HashSetRefPtr_find(&device->resourcesInFlight[i], &resource) != U64_MAX)
 			return true;
-	}
 
 	return false;
 }
@@ -1927,14 +1900,9 @@ Bool GraphicsDevice_reserveInFlight(GraphicsDevice *device, const Allocator *all
 		retError(clean, Error_nullPointer(0, "GraphicsDevice_reserveInFlight()::device is required"));
 
 	{
-		ListRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
+		HashSetRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
 
-		gotoIfError3(clean, ListRefPtr_reserveForPush(inFlight, alloc, e_rr));
-
-		gotoIfError3(clean, HashIndex_reserve(
-			&device->resourcesInFlightIndex[device->fifId], &GraphicsDevice_inFlightIndexInfo,
-			inFlight->ptr, inFlight->length + 1, alloc, e_rr
-		));
+		gotoIfError3(clean, HashSetRefPtr_reserve(inFlight, inFlight->list.length + 1, alloc, e_rr));
 	}
 
 clean:
@@ -1950,20 +1918,7 @@ Bool GraphicsDevice_addInFlight(GraphicsDevice *device, RefPtr *resource, const 
 			!device ? 0 : 1, "GraphicsDevice_addInFlight()::device and resource are required"
 		));
 
-	gotoIfError3(clean, GraphicsDevice_reserveInFlight(device, alloc, e_rr));
-
-	{
-		ListRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
-		U64 existing = 0;
-
-		gotoIfError3(clean, HashIndex_insert(
-			&device->resourcesInFlightIndex[device->fifId], &GraphicsDevice_inFlightIndexInfo,
-			inFlight->ptr, &resource, inFlight->length, &existing, alloc, e_rr
-		));
-
-		if(existing == U64_MAX)
-			gotoIfError3(clean, ListRefPtr_pushBack(inFlight, resource, alloc, e_rr));
-	}
+	gotoIfError3(clean, HashSetRefPtr_insert(&device->resourcesInFlight[device->fifId], resource, NULL, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -1979,13 +1934,12 @@ Bool GraphicsDevice_clearInFlight(GraphicsDevice *device, U8 fifId, Error *e_rr)
 		));
 
 	{
-		ListRefPtr *inFlight = &device->resourcesInFlight[fifId];
+		HashSetRefPtr *inFlight = &device->resourcesInFlight[fifId];
 
-		for(U64 i = 0; i < inFlight->length; ++i)
-			RefPtr_dec(inFlight->ptrNonConst + i);
+		for(U64 i = 0; i < inFlight->list.length; ++i)
+			RefPtr_dec(inFlight->list.ptrNonConst + i);
 
-		gotoIfError3(clean, ListRefPtr_clear(inFlight, e_rr));
-		gotoIfError3(clean, HashIndex_clear(&device->resourcesInFlightIndex[fifId], e_rr));
+		gotoIfError3(clean, HashSetRefPtr_clear(inFlight, e_rr));
 	}
 
 clean:
@@ -2992,9 +2946,9 @@ Bool GraphicsDeviceRef_submitCommands(
 		CommandListRef *cmdRef = commandLists->ptr[j];
 		CommandList *cmd = CommandListRef_ptr(cmdRef);
 
-		for(U64 i = 0; i < cmd->resources.length; ++i) {
+		for(U64 i = 0; i < cmd->resources.list.length; ++i) {
 
-			RefPtr *ptr = cmd->resources.ptr[i];
+			RefPtr *ptr = cmd->resources.list.ptr[i];
 
 			if(GraphicsDevice_isInFlight(device, ptr))
 				continue;
@@ -3155,7 +3109,7 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
 
-		ListRefPtr *inFlight = &device->resourcesInFlight[i];
+		HashSetRefPtr *inFlight = &device->resourcesInFlight[i];
 
 		//The submit being recorded keeps its references: what it holds can still be in use on the CPU by the caller
 		// that triggered the flush (a pending buffer whose last reference is this list, a BLAS mid build).
@@ -3166,9 +3120,9 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 
 		if(midSubmit && i == device->fifId) {
 
-			for (U64 j = inFlight->length; j > 0; --j) {
+			for (U64 j = inFlight->list.length; j > 0; --j) {
 
-				RefPtr *res = inFlight->ptrNonConst[j - 1];
+				RefPtr *res = inFlight->list.ptrNonConst[j - 1];
 
 				if(
 					res->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer ||
@@ -3177,14 +3131,9 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 				)
 					continue;
 
-				//Swap erase keeps the index beside the list in step; walking down, the entry swapped in was visited.
+				//Walking down, the entry swapped into the hole was already visited.
 
-				gotoIfError3(clean, HashIndex_eraseSwap(
-					&device->resourcesInFlightIndex[i], &GraphicsDevice_inFlightIndexInfo, inFlight->ptr, j - 1, e_rr
-				));
-
-				inFlight->ptrNonConst[j - 1] = inFlight->ptr[inFlight->length - 1];
-				gotoIfError3(clean, ListRefPtr_popBack(inFlight, NULL, e_rr));
+				gotoIfError3(clean, HashSetRefPtr_eraseSwap(inFlight, j - 1, &res, e_rr));
 				RefPtr_dec(&res);
 			}
 

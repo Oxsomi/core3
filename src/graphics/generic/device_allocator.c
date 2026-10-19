@@ -347,9 +347,9 @@ Bool GraphicsDeviceRef_getMemoryStats(GraphicsDeviceRef *deviceRef, const Alloca
 	U64 categoryCount[EDeviceMemoryCategory_Count] = { 0 }, categoryBytes[EDeviceMemoryCategory_Count] = { 0 };
 	U64 blockBytes = 0, usedBytes = 0, attributedBytes = 0;
 
-	for(U64 i = 0; i < device->liveResources.length; ++i) {
+	for(U64 i = 0; i < device->liveResources.list.length; ++i) {
 
-		const LiveResource *live = &device->liveResources.ptr[i];
+		const LiveResource *live = &device->liveResources.list.ptr[i];
 		const GraphicsResource *res = LiveResource_res(live);
 		const U64 footprint = DeviceMemoryStats_footprint(&stats, &entries, live, res);
 		const EDeviceMemoryCategory category = DeviceMemoryStats_category(live, res);
@@ -435,9 +435,9 @@ Bool GraphicsDeviceRef_getMemoryStats(GraphicsDeviceRef *deviceRef, const Alloca
 	gotoIfError3(clean, JsonWriter_endArray(&w, e_rr));
 	gotoIfError3(clean, JsonWriter_keyArray(&w, "resources", e_rr));
 
-	for(U64 i = 0; i < device->liveResources.length; ++i) {
+	for(U64 i = 0; i < device->liveResources.list.length; ++i) {
 
-		const LiveResource *live = &device->liveResources.ptr[i];
+		const LiveResource *live = &device->liveResources.list.ptr[i];
 		const GraphicsResource *res = LiveResource_res(live);
 
 		gotoIfError3(clean, JsonWriter_beginObject(&w, e_rr));

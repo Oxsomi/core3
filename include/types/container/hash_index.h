@@ -32,12 +32,11 @@ typedef struct Allocator Allocator;
 typedef struct Error Error;
 
 //An open addressed index laid BESIDE a list the caller owns, owning slots and nothing else: no keys, no
-// values, no entries.
+// values, no entries. THashSet (hash_set.h) owns a list together with its index and is what callers use.
 //Iteration stays the caller's list in the caller's order, so the seed below can never reorder anything
 // observable, which is what lets it be on everywhere.
-//A zeroed HashIndex is a valid empty index, which the tracked allocator needs: its list is a statically
+//A zeroed HashIndex is a valid empty index, which the tracked allocator needs: its set is a statically
 // zeroed global already in use before anything could create one.
-//See docs/types.md for why it is shaped this way.
 
 //The load cap is checked before a probe walks, so an empty slot always exists and no loop needs a limit.
 

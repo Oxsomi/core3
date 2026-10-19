@@ -1532,7 +1532,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
-			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
+			CommandScope scope = commandList->activeScopes.list.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
 			//A scope may bracket its work in a timestamp pair and/or a named debug region;

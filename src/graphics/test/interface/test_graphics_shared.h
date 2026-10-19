@@ -98,6 +98,7 @@ void Test_graphicsOmmRayQuery(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsResourceRegistry(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsResourceRegistrySet(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPipelineCache(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef);

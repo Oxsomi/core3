@@ -24,7 +24,6 @@
 #include "graphics/generic/resource.h"
 #include "graphics/generic/device_allocator.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/device_internal.h"
 
 TListImpl(DeviceResourceVersion);
 
@@ -44,8 +43,6 @@ void GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef) {
 		return;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(resource->device);
-
-	GraphicsDevice_unregisterResource(device, resourceRef);
 
 	if(resource->allocated) {
 		DeviceMemoryAllocator_freeAllocation(&device->allocator, resource->blockId, resource->blockOffset);

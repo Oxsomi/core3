@@ -480,6 +480,7 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsRenderPass(t, deviceRef);
 	c::Test_graphicsTextureRef(t, deviceRef);
 	c::Test_graphicsResourceRegistry(t, deviceRef);
+	c::Test_graphicsResourceRegistrySet(t, deviceRef);
 	c::Test_graphicsSamplerAndData(t, deviceRef);
 	c::Test_graphicsPipelineLayout(t, deviceRef);
 	c::Test_graphicsShaderReflection(t, deviceRef);

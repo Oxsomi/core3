@@ -124,7 +124,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	}
 
 	c::Test_assert(t, "negEnd", negList.end(e_rr));
-	c::Test_assert(t, "refusedHidden", negList.data()->activeScopes.length == 1);
+	c::Test_assert(t, "refusedHidden", negList.data()->activeScopes.list.length == 1);
 
 	OwnedSHFile writeFile(dev.alloc());
 

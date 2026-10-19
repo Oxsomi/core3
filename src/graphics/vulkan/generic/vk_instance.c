@@ -21,6 +21,7 @@
 //graphics/vulkan/generic/vk_instance.c
 
 #include "types/container/list_impl.h"
+#include "types/container/hash_set_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/tlas.h"
@@ -273,6 +274,33 @@ TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
 TListImpl(VkAddressBinding);
 
+//The key is the entry's handle and type, so the entry itself is what hash and compare read, on both sides.
+
+static U64 VkAddressBinding_hash(const void *key, U64 seed, void *context) {
+
+	(void) context;
+
+	const VkAddressBinding *binding = (const VkAddressBinding*) key;
+	return Buffer_fnv1a64Single(binding->type, Buffer_fnv1a64Single(binding->handle, seed ^ Buffer_fnv1a64Offset));
+}
+
+static ECompareResult VkAddressBinding_compare(const void *a, const void *b, void *context) {
+
+	(void) context;
+
+	const VkAddressBinding *x = (const VkAddressBinding*) a, *y = (const VkAddressBinding*) b;
+	return x->handle == y->handle && x->type == y->type ? ECompareResult_Eq : ECompareResult_Lt;
+}
+
+static const HashIndexInfo VkAddressBinding_indexInfo = {
+	.hash = VkAddressBinding_hash,
+	.compare = VkAddressBinding_compare,
+	.stride = sizeof(VkAddressBinding),
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
+};
+
+THashSetImpl(VkAddressBinding, &VkAddressBinding_indexInfo);
+
 //VK_EXT_device_address_binding_report: keeps where each buffer and image is bound, for a lost device's fault
 // addresses. A rebind replaces, an unbind removes.
 
@@ -310,21 +338,26 @@ static VkBool32 VKAPI_PTR onAddressBinding(
 	if(acq < ELockAcquire_Success)
 		return VK_FALSE;
 
-	//TODO: a linear scan and popLocation on every bind and unbind, so N bindings are O(N^2).
-	//Should become a hash map keyed by handle and type once core3 has one (GitHub #40).
+	const VkAddressBinding bound = (VkAddressBinding) {
+		.handle = handle, .address = binding->baseAddress, .size = binding->size, .type = type
+	};
 
-	for(U64 i = 0; i < instanceExt->bindings.length; ++i)
-		if(instanceExt->bindings.ptr[i].handle == handle && instanceExt->bindings.ptr[i].type == type) {
-			ListVkAddressBinding_popLocation(&instanceExt->bindings, i, NULL, NULL);
-			break;
-		}
+	if(binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT) {
 
-	if(binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT)
-		ListVkAddressBinding_pushBack(
-			&instanceExt->bindings,
-			(VkAddressBinding) { .handle = handle, .address = binding->baseAddress, .size = binding->size, .type = type },
-			instance->alloc, NULL
-		);
+		U64 existing = U64_MAX;
+		const Bool added = HashSetVkAddressBinding_insert(&instanceExt->bindings, bound, &existing, instance->alloc, NULL);
+
+		if(added && existing != U64_MAX)
+			instanceExt->bindings.list.ptrNonConst[existing] = bound;
+	}
+
+	else {
+
+		const U64 i = HashSetVkAddressBinding_find(&instanceExt->bindings, &bound);
+
+		if(i != U64_MAX)
+			HashSetVkAddressBinding_eraseSwap(&instanceExt->bindings, i, NULL, NULL);
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&instanceExt->bindingLock);
@@ -343,11 +376,11 @@ U64 VkGraphicsInstance_nearestBindings(
 	if(acq < ELockAcquire_Success)
 		return 0;
 
-	const U64 count = instanceExt->bindings.length;
+	const U64 count = instanceExt->bindings.list.length;
 
 	for(U64 i = 0; i < count; ++i) {
 
-		const VkAddressBinding b = instanceExt->bindings.ptr[i];
+		const VkAddressBinding b = instanceExt->bindings.list.ptr[i];
 
 		if(b.address + b.size <= address && (!below->handle || b.address + b.size > below->address + below->size))
 			*below = b;
@@ -373,9 +406,9 @@ U64 VkGraphicsInstance_findBinding(VkGraphicsInstance *instanceExt, U64 address,
 
 	//The smallest range holding it, since an object may be bound inside another's range (a structure in its buffer)
 
-	for(U64 i = 0; i < instanceExt->bindings.length; ++i) {
+	for(U64 i = 0; i < instanceExt->bindings.list.length; ++i) {
 
-		const VkAddressBinding b = instanceExt->bindings.ptr[i];
+		const VkAddressBinding b = instanceExt->bindings.list.ptr[i];
 
 		if(address >= b.address && address - b.address < b.size && b.size < size) {
 
@@ -757,7 +790,7 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 	if(instanceExt->destroyMessenger && instanceExt->bindingMessenger)
 		instanceExt->destroyMessenger(instanceExt->instance, instanceExt->bindingMessenger, NULL);
 
-	ListVkAddressBinding_free((ListVkAddressBinding*) &instanceExt->bindings, inst->alloc);
+	HashSetVkAddressBinding_free((HashSetVkAddressBinding*) &instanceExt->bindings, inst->alloc);
 
 	//Instance creation can fail partway (e.g. no compatible driver);
 	// in that case the RefPtr is still dec'd, so the ext might not be initialized yet.

@@ -25,7 +25,7 @@
 #include "types/base/lock.h"
 #include "types/container/ref_ptr.h"
 #include "graphics/generic/resource.h"
-#include "types/container/hash_index.h"
+#include "types/container/hash_set.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -154,6 +154,7 @@ typedef struct DescriptorTableResourceRef {
 
 TList(DescriptorTableBinding);
 TList(DescriptorTableResourceRef);
+THashSet(DescriptorTableResourceRef);        //Keyed on the resource
 
 typedef struct DescriptorTable {
 
@@ -164,8 +165,7 @@ typedef struct DescriptorTable {
 	Bool acquiredAtomic;
 	U8 padding[6];
 
-	ListDescriptorTableResourceRef resources;        //All resources that are bound by the table
-	HashIndex resourceIndex;                         //Identity map over resources, so a bind or unbind is O(1)
+	HashSetDescriptorTableResourceRef resources;     //All resources that are bound by the table
 	ListDescriptorTableBinding bindings;
 	U8 padding1[56];
 

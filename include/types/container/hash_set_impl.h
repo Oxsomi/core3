@@ -24,6 +24,7 @@
 #include "types/container/hash_set.h"
 #include "types/base/error.h"
 #include "types/base/mathi.h"
+#include <stddef.h>
 
 //info is an expression for the const HashIndexInfo * of the key inside one entry, whose stride is sizeof(entry).
 

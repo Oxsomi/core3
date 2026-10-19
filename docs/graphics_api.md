@@ -63,7 +63,7 @@ gotoIfError3(clean, GraphicsInstance_create(
 
 Once this instance is acquired, it can be used to query devices and to detect what API the runtime supports.
 
-*Note: GraphicsInterface_create must be called before GraphicsInstance_makeType/GraphicsInstance_create; it initializes the interface (and with dynamic linking, discovers the graphics API dylibs in the app directory). GraphicsInterface_supportsApi and EGraphicsApi_resolve can be used to query what's available. For dynamic libraries it is important that GraphicsInterface_instance and Platform_instance are set to the final exe/dll's instance (GraphicsInterface_getTable handles this) to ensure the same exact settings and memory allocation is handled by the same instance.*
+*Note: GraphicsInterface_create must be called before GraphicsInstance_makeType/GraphicsInstance_create; it initializes the interface (and with dynamic linking, discovers the graphics API dylibs in the app directory). GraphicsInterface_supportsApi and EGraphicsApi_resolve can be used to query what's available. For dynamic libraries it is important that GraphicsInterface_instance and Platform_instance are set to the final exe/dll's instance (GraphicsInterface_getTable handles this) to ensure the same exact settings and memory allocation is handled by the same instance. It also hands over the host's hash seed (`Platform.hashSeed`).*
 
 ### Properties
 
@@ -258,7 +258,7 @@ For a binary that uses an extension OxC3 doesn't recognize yet, such as a vendor
 - info; physical device.
 - submitId; counter of how many times submit was called (can be used as frame id).
 - lastSubmit, firstSubmit; used to track when a submit was called.
-- pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit.
+- pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit. resourcesInFlight is a `HashSetRefPtr` per frame.
 - allocator; used to allocate memory.
 - lock; used to ensure flushes aren't done while a commit is busy for example.
 - staging, stagingAllocations; staging allocations are used if the resources that are being updated are already in flight, if the resource is a tiled texture (non linear texture) or if the device doesn't support ReBAR/shared memory (and so the GPU memory isn't accessible).
@@ -566,6 +566,7 @@ For a binary that uses an extension OxC3 doesn't recognize yet, such as a vendor
 - `GraphicsDeviceRef_listShaderTargets(dev, alloc, &list, e_rr)` lists the ASIC targets the driver can compile for besides the device itself (empty except on AMD's D3D12 today); the names can be passed back as an ISA target.
 - `GraphicsDeviceRef_selectShaderTarget(dev, &name, e_rr)` picks which target the NEXT device created in this process compiles for (empty name = the real GPU). Process wide; the driver reads it while initializing the adapter, so it cannot apply to a device that already exists (create one to enumerate, release it, create a second to compile with). A backend that only compiles for the device refuses any other name.
 - Internal, called by backends: `GraphicsDeviceRef_flushPendingPulls` (records the queued pullRegion reads after the frame's commands) and `GraphicsDeviceRef_resizeStagingBuffer` (resizes the staging buffer). The device also shrinks staging on its own: every 64 frames, if that window's peak use stayed at or below a quarter of a region, it shrinks to three regions of 4 MiB doubled until each holds twice the peak (uploads through a temporary buffer count toward the peak). Apps use `GraphicsDeviceRef_reserveReadback` instead of touching these.
+- Internal, called by backends: `GraphicsDevice_addInFlight`, `reserveInFlight`, `isInFlight`, `isInAnyFlight` and `clearInFlight` are the only way to touch `resourcesInFlight`; a frame holds one reference per resource.
 
 ### Device loss
 
@@ -701,12 +702,12 @@ For more info on commands check out the "Commands" section.
 - device; owning device.
 - state; if the command list has been opened before and if it's open or closed right now.
 - allowResize; if command list is allowed to resize if it runs out of memory.
-- resources; Which resources are in use by the command list.
+- resources; which resources are in use by the command list (a `HashSetRefPtr`).
 - data; The current recorded commands.
 - commandOps; The opcodes for which commands are recorded.
 - transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
 - lock; for allowing multiple threads to open the same command list (has to be closed by one thread first).
-- activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
+- activeScopes; scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer), keyed by scope id and never erased from while recording, so its order is the submit order.
 - pipeline; currently bound pipelines.
 - boundImages/boundImageCount/boundDepthFormat/boundSampleCount; currently bound images in the renderpass and/or render targets (DirectRendering). As well as the sample count that it was bound with.
 - tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.

@@ -21,7 +21,7 @@ Last updated: 2026-09-20 (v3.2.106). Update this table in the same PR as the fea
 | AllocationBuffer (GPU suballocator) | ✅ | Non-linear alignment supported |
 | JobQueue | ✅ | Deterministic single-thread mode |
 | Compression (Brotli) | 📄 | oiXX headers reserve flags; implementation is a disabled WIP. Readers must reject compressed files |
-| Hash set (THashSet over HashIndex) | ✅ | An owning list plus a Robin Hood index of its entries: seeded, displacement bounded, lookups inlined per key type. Consumed by the tracked allocator, command lists, descriptor tables and the device's in flight sets; format sites stay linear |
+| Hash set (THashSet) | ✅ | Robin Hood, seeded, worst case bounded |
 
 ## Formats
 

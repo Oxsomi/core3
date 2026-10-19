@@ -42,6 +42,9 @@ OXC3_TEST_MAIN(formats_obj) {
 	Test_objValidation(&t);
 	Test_objCoverageFlags(&t);
 	Test_objUvPrecision(&t);
+	Test_objDedupMany(&t);
+	Test_objMaterialsMany(&t);
+	Test_objMaterialLimit(&t);
 	Test_objWriteRoundTrip(&t);
 	Test_objWriteQuantized(&t);
 	Test_objWriteGeometryOnly(&t);
