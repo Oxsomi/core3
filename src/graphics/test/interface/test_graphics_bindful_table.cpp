@@ -1039,16 +1039,10 @@ extern "C" void Test_graphicsBindfulPushDescriptorBoundary(oxc::c::Test *t, oxc:
 	if(!Test_assert(t, "layoutCreate", dev.createDescriptorLayout(layoutInfo.list, "Push boundary layout", layout, e_rr)))
 		return;
 
-	//A device without VK_KHR_push_descriptor refuses a caller owned push descriptor layout outright, which is
-	// the documented gap rather than a failure of this module.
-	//Android emulators are the usual case, since gfxstream drops the extension from the guest.
-
-	if(!dev.createDescriptorLayout(pushInfo.list, "Push boundary push layout", pushLayout, nullptr)) {
-		c::Test_print(t, "Device has no push descriptor support, skipping push boundary tests");
+	if(!Test_assert(t, "pushLayoutCreate", dev.createDescriptorLayout(
+		pushInfo.list, "Push boundary push layout", pushLayout, e_rr
+	)))
 		return;
-	}
-
-	Test_assert(t, "pushLayoutCreate", pushLayout.valid());
 
 	c::DescriptorHeapInfo heapInfo = { .maxBuffersRW = 2, .maxDescriptorTables = 1 };
 

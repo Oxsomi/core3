@@ -96,15 +96,10 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 
 	DescriptorLayout pushLayout;
 
-	//Refused outright on a device without VK_KHR_push_descriptor, which is the documented gap rather than a
-	// failure: asserting first would record a red before the skip ever printed.
-
-	if(!dev.createDescriptorLayout(pushInfo.list, "Push descriptor layout", pushLayout, nullptr)) {
-		Test_print(t, "Push descriptor layouts unsupported on this device, skipping");
+	if(!Test_assert(t, "pushLayoutCreate", dev.createDescriptorLayout(
+		pushInfo.list, "Push descriptor layout", pushLayout, e_rr
+	)))
 		return;
-	}
-
-	Test_assert(t, "pushLayoutCreate", pushLayout.valid());
 
 	//A CBV's length has to be 256-byte aligned and match what reflection reported, exactly like module 47.
 
@@ -269,12 +264,10 @@ extern "C" void Test_graphicsBindfulPushTexture(oxc::c::Test *t, oxc::c::Graphic
 
 	DescriptorLayout pushLayout;
 
-	if(!dev.createDescriptorLayout(pushInfo.list, "Texture push layout", pushLayout, nullptr)) {
-		Test_print(t, "Push descriptor layouts unsupported on this device, skipping");
+	if(!Test_assert(t, "pushLayoutCreate", dev.createDescriptorLayout(
+		pushInfo.list, "Texture push layout", pushLayout, e_rr
+	)))
 		return;
-	}
-
-	Test_assert(t, "pushLayoutCreate", pushLayout.valid());
 
 	//R = x and G = y, so a texel that came from the wrong place shows up as the wrong coordinate rather
 	// than merely as a mismatch.

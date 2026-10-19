@@ -2273,10 +2273,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
 		//Push descriptors are a fast path, not a requirement, so a device without them is emulated rather than rejected.
-		//Only the globals constant buffer is ever pushed, so the 32 minimum is far more than OxC3 asks for;
-		// it's kept as the threshold so a driver advertising a token amount takes the emulated path instead.
+		//The threshold is what OxC3 actually asks for rather than the spec's 32 minimum: a push layout holds at
+		// most OXC3_MAX_PUSH_DESCRIPTORS descriptors, one per binding with arrays refused at creation, so a
+		// driver offering that many serves every layout the engine builds and the native path beats emulating it.
 
-		if(optExtensions[EOptExtensions_PushDescriptor] && pushDescriptor.maxPushDescriptors >= 32)
+		if(
+			optExtensions[EOptExtensions_PushDescriptor] &&
+			pushDescriptor.maxPushDescriptors >= OXC3_MAX_PUSH_DESCRIPTORS
+		)
 			capabilities.featuresExt |= EVkGraphicsFeatures_PerformantPushDescriptor;
 
 		//Enforce format support

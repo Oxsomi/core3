@@ -56,16 +56,18 @@ Because of this, a device needs the following requirements to be OxC3 compatible
     - Requires inherit alpha or opaque support.
     - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
 - Device extensions that can be queried (not all are supported yet):
-  - VK_KHR_push_descriptor (with maxPushDescriptors >= 32) as EVkGraphicsFeatures_PerformantPushDescriptor.
+  - VK_KHR_push_descriptor (with maxPushDescriptors >= OXC3_MAX_PUSH_DESCRIPTORS) as EVkGraphicsFeatures_PerformantPushDescriptor.
     Named for the performance rather than the capability: pushing descriptors always works, the flag only says
     the device does it natively instead of through the emulation described below.
     Vulkan only, because it's the only api where pushing descriptors isn't a given; D3D12 has root descriptors and
     Metal has argument buffers, so there'd be nothing to branch on there and it isn't a generic feature bit.
-    A device without it is not rejected. Only the globals constant buffer is ever pushed, and each frame in flight
-    owns that buffer for the lifetime of the device, so OxC3 allocates one descriptor set per frame instead, writes
-    each once and binds it unchanged from then on. There is no per frame update, so no set is ever rewritten while
-    still in flight. The sets are built on the first submit rather than at device creation, because the globals
-    buffers don't exist yet when the Vulkan device is initialised.
+    A device without it is not rejected; both kinds of push are emulated. The device's own globals buffer is
+    fixed for the whole frame, so each frame in flight gets one descriptor set for it, written once and bound
+    unchanged from then on; those sets are built on the first submit rather than at device creation, because
+    the globals buffers don't exist yet when the Vulkan device is initialised. A caller's push descriptors (and
+    the rotated copy's textures) change per work op, so every emission takes a set of its own from that frame's
+    descriptor pools, which are reset wholesale once the frame's fence proves the GPU done with them and grow
+    by appending another pool when one runs out.
     A one time performance warning is logged on the first submit that takes the emulated path.
     Android emulators are the common case, since gfxstream drops the extension from the guest even when the host
     driver exposes it.

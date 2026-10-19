@@ -88,6 +88,7 @@ TList(VkSemaphore);
 TList(VkResult);
 TList(VkSwapchainKHR);
 TList(VkPipelineStageFlags);
+TList(VkDescriptorPool);
 TList(VkQueryPool);
 TList(VkAccelerationStructureKHR);
 
@@ -184,6 +185,19 @@ typedef struct VkGraphicsDevice {
 
 	VkDescriptorPool cbufferPool;
 	VkDescriptorSet cbufferSets[MAX_FRAMES_IN_FLIGHT];
+
+	//The other half of that emulation, for a CALLER's push descriptors (and the device's own rotated copy,
+	// which pushes its two textures through the same mechanism).
+	//Those change per work op, so one pre-written set can't serve them the way cbufferSets serves the
+	// globals: each push takes a set of its own, allocated from the frame it was recorded in and reused
+	// only once that frame's fence says the GPU is done with it.
+	//A LIST per frame because a descriptor pool cannot grow: exhausting the active one appends another,
+	// and the whole list is reset in one go when the frame comes back around.
+	//pushPoolActive is the index currently being allocated from, so a reset is just setting it back to 0.
+
+	ListVkDescriptorPool pushPools[MAX_FRAMES_IN_FLIGHT];
+	U32 pushPoolActive[MAX_FRAMES_IN_FLIGHT];
+	U32 padding3;
 
 	//A set layout with no bindings, which fills the gaps in a pipeline layout's set list.
 	//On SPIR-V a binding's space IS its descriptor set index, so a pipeline layout has to place each
@@ -305,6 +319,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkDestroySemaphore destroySemaphore;
 	PFN_vkDestroyDescriptorSetLayout destroyDescriptorSetLayout;
 	PFN_vkDestroyDescriptorPool destroyDescriptorPool;
+	PFN_vkResetDescriptorPool resetDescriptorPool;
 	PFN_vkDestroyPipelineLayout destroyPipelineLayout;
 	PFN_vkDeviceWaitIdle deviceWaitIdle;
 	PFN_vkCreateCommandPool createCommandPool;
@@ -374,6 +389,18 @@ void VkGraphicsDevice_breadcrumb(
 	U32 slot,
 	U32 value,
 	VkPipelineStageFlags2 stage
+);
+
+//Hands out one descriptor set per emulated push from the current frame's pools, appending another pool when
+// the active one runs out. Only reached on a device without VK_KHR_push_descriptor.
+//The set is owned by the frame, not the caller: it stays valid until that frame is recycled and must not be
+// freed or kept past the submit that recorded it.
+
+Bool VkGraphicsDevice_allocPushDescriptorSet(
+	GraphicsDevice *device,
+	VkDescriptorSetLayout layout,
+	VkDescriptorSet *result,
+	Error *e_rr
 );
 
 typedef struct VkCommandBufferState {

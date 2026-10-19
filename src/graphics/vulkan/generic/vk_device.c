@@ -49,6 +49,7 @@ TListImpl(VkSemaphore);
 TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
+TListImpl(VkDescriptorPool);
 TListImpl(VkQueryPool);
 
 #define bindNextVkStruct(T, condition, ...) \
@@ -958,6 +959,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCreateDescriptorSetLayout, deviceExt->createDescriptorSetLayout);
 	getVkFunctionDevice(clean, vkCreatePipelineLayout, deviceExt->createPipelineLayout);
 	getVkFunctionDevice(clean, vkCreateDescriptorPool, deviceExt->createDescriptorPool);
+	getVkFunctionDevice(clean, vkResetDescriptorPool, deviceExt->resetDescriptorPool);
 	getVkFunctionDevice(clean, vkAllocateDescriptorSets, deviceExt->allocateDescriptorSets);
 	getVkFunctionDevice(clean, vkFreeCommandBuffers, deviceExt->freeCommandBuffers);
 	getVkFunctionDevice(clean, vkDestroyCommandPool, deviceExt->destroyCommandPool);
@@ -1534,6 +1536,12 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		if(deviceExt->cbufferPool)
 			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
 
+		//Same for the caller push emulation, except it is a list per frame rather than a single pool.
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			for(U64 j = 0; j < deviceExt->pushPools[i].length; ++j)
+				deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->pushPools[i].ptr[j], NULL);
+
 		if(deviceExt->emptySetLayout)
 			deviceExt->destroyDescriptorSetLayout(deviceExt->device, deviceExt->emptySetLayout, NULL);
 
@@ -1552,6 +1560,9 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	//The memory itself is the process's, freed once nothing on the device can still name it.
 
 	Platform_freePages(deviceExt->breadcrumbHost, GRAPHICS_BREADCRUMB_BYTES);
+
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+		ListVkDescriptorPool_free(&deviceExt->pushPools[i], alloc);
 
 	ListVkCommandAllocator_free(&deviceExt->commandPools, alloc);
 	ListVkSemaphore_free(&deviceExt->submitSemaphores, alloc);
@@ -1927,6 +1938,139 @@ clean:
 	return s_uccess;
 }
 
+//Sized for every descriptor type a push layout can hold: buffers, textures and, where the device has
+// raytracing, acceleration structures. createDescriptorLayout refuses a sampler in a push layout on every
+// backend, so no emulated set ever needs a SAMPLER or COMBINED_IMAGE_SAMPLER descriptor.
+//INPUT_ATTACHMENT is deliberately absent: the work op refuses a subpass input as a push descriptor, so no
+// set is ever allocated from a layout holding one. If that refusal is ever lifted, this list is the other
+// place that has to hear about it (the fresh-pool error below is what fires otherwise).
+//Over provisioned on purpose: one set holds at most OXC3_MAX_PUSH_DESCRIPTORS descriptors TOTAL, but a pool
+// has to name a count per type, and descriptors are small enough that reserving the max for each is cheaper
+// than being clever.
+//64 sets is a frame's worth for anything ordinary. Going past it appends another pool rather than failing,
+// so this is a stride and not a limit: the only cost of it being wrong is one more pool.
+
+#define VK_PUSH_POOL_SETS 64
+
+static Bool VkGraphicsDevice_addPushPool(
+	GraphicsDevice *device,
+	VkGraphicsDevice *deviceExt,
+	ListVkDescriptorPool *pools,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	VkDescriptorPool pool = NULL;
+
+	//Acceleration structures are the one type that can't simply be named: a pool size for them is only legal
+	// where the device has raytracing, so that entry sits last and is dropped by poolSizeCount otherwise.
+
+	const Bool hasRt = !!(device->info.capabilities.features & EGraphicsFeatures_Raytracing);
+	const U32 perType = VK_PUSH_POOL_SETS * OXC3_MAX_PUSH_DESCRIPTORS;
+
+	const VkDescriptorPoolSize sizes[5] = {
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,          .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,          .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,           .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,           .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, .descriptorCount = perType }
+	};
+
+	const VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = VK_PUSH_POOL_SETS,
+		.poolSizeCount = hasRt ? 5 : 4,
+		.pPoolSizes = sizes
+	};
+
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &pool), e_rr
+	));
+
+	gotoIfError3(clean, ListVkDescriptorPool_pushBack(pools, pool, alloc, e_rr));
+	pool = NULL;        //Owned by the list now, so the cleanup below must not double destroy it
+
+clean:
+
+	if(pool)
+		deviceExt->destroyDescriptorPool(deviceExt->device, pool, NULL);
+
+	return s_uccess;
+}
+
+Bool VkGraphicsDevice_allocPushDescriptorSet(
+	GraphicsDevice *device,
+	VkDescriptorSetLayout layout,
+	VkDescriptorSet *result,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	VkGraphicsDevice *deviceExt = NULL;
+	const Allocator *alloc = NULL;
+	ListVkDescriptorPool *pools = NULL;
+
+	if(!device || !layout || !result)
+		retError(clean, Error_nullPointer(
+			!device ? 0 : (!layout ? 1 : 2),
+			"VkGraphicsDevice_allocPushDescriptorSet()::device, layout and result are required"
+		));
+
+	deviceExt = GraphicsDevice_ext(device, Vk);
+	alloc = GraphicsDevice_getAlloc(device);
+	pools = &deviceExt->pushPools[device->fifId];
+
+	//Tracks whether the pool being tried was made a moment ago, because "exhausted" and "wrong shape for this
+	// layout" are the SAME VkResult. Appending pools on the second one would spin forever making pools that
+	// cannot serve the request either.
+
+	Bool freshPool = false;
+
+	for(;;) {
+
+		if(deviceExt->pushPoolActive[device->fifId] >= pools->length) {
+			gotoIfError3(clean, VkGraphicsDevice_addPushPool(device, deviceExt, pools, alloc, e_rr));
+			freshPool = true;
+		}
+
+		const VkDescriptorSetAllocateInfo allocInfo = (VkDescriptorSetAllocateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = pools->ptr[deviceExt->pushPoolActive[device->fifId]],
+			.descriptorSetCount = 1,
+			.pSetLayouts = &layout
+		};
+
+		const VkResult res = deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, result);
+
+		if(res == VK_SUCCESS)
+			break;
+
+		//A full pool is the expected end of that pool's life rather than a failure, and the spec allows both
+		// of these for it. Move to the next pool, making one if this was the last. Anything else is real.
+
+		if(res != VK_ERROR_OUT_OF_POOL_MEMORY && res != VK_ERROR_FRAGMENTED_POOL)
+			gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, res, e_rr));
+
+		//A pool that can't serve the layout when it is brand new is not exhausted, it is the wrong shape for it,
+		// and every pool this makes is identical. Report that rather than allocating pools until the host is out
+		// of memory.
+
+		if(freshPool)
+			retError(clean, Error_invalidState(
+				0,
+				"VkGraphicsDevice_allocPushDescriptorSet() a fresh pool couldn't serve this push descriptor layout, "
+				"so it needs a descriptor type the pool doesn't reserve (see VkGraphicsDevice_addPushPool)"
+			));
+
+		++deviceExt->pushPoolActive[device->fifId];
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -2132,6 +2276,19 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError3(clean, ListVkSwapchainKHR_clear(retiredChains, e_rr));
 	}
+
+	//An emulated push descriptor set lives exactly as long as the frame that recorded it, and the fence above
+	// is what proves the GPU is done reading it. So the frame's pools go back wholesale here rather than a set
+	// at a time, which is the entire reason they are per frame in the first place.
+	//No-op on a device with VK_KHR_push_descriptor, where nothing ever allocates one, and on the skip paths
+	// above: an unused slot has empty pools, and a failed submit left nothing on the GPU to outlive.
+
+	for(U64 i = 0; i < deviceExt->pushPools[device->fifId].length; ++i)
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetDescriptorPool(
+			deviceExt->device, deviceExt->pushPools[device->fifId].ptr[i], 0
+		), e_rr));
+
+	deviceExt->pushPoolActive[device->fifId] = 0;
 
 	//Read back and resolve the timestamps of the frame that used this slot framesInFlight submits ago, now that its
 	// fence has proven it done. A host read, no GPU copy: the fence is the barrier. Best effort, since a failed read
