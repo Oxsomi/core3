@@ -463,10 +463,7 @@ Bool CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pip
 		commandList, op, Buffer_createRefConst(commandOp, sizeof(commandOp)), 0, e_rr
 	));
 
-	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {                        //TODO: hashSet
-		RefPtr_inc(pipelineRef);        //CommandList will keep resource alive.
-		gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, pipelineRef, alloc, e_rr));
-	}
+	gotoIfError3(clean, CommandList_trackResource(commandList, pipelineRef, alloc, e_rr));
 
 	commandList->pipeline[type] = pipelineRef;
 
@@ -1500,19 +1497,7 @@ Bool CommandListRef_bindDescriptorTable(CommandListRef *commandListRef, Descript
 	// a table made for one dispatch can be let go by the caller as soon as it is bound, and the work ops of this
 	// recording still read it. end() skips what is already held.
 
-	//Reserved first, so the push after the reference is taken can't fail and leak it
-
-	if (!ListRefPtr_contains(commandList->resources, table, 0, NULL)) {
-
-		gotoIfError3(clean, ListRefPtr_reserve(
-			&commandList->resources, commandList->resources.length + 1, alloc, e_rr
-		));
-
-		if(!RefPtr_inc(table))
-			retError(clean, Error_invalidState(0, "CommandListRef_bindDescriptorTable() couldn't hold the table"));
-
-		gotoIfError3(clean, ListRefPtr_pushBack(&commandList->resources, table, alloc, e_rr));
-	}
+	gotoIfError3(clean, CommandList_trackResource(commandList, table, alloc, e_rr));
 
 	DescriptorTableRef *args[2] = { table, NULL };
 

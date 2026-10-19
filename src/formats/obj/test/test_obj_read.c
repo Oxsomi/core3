@@ -28,6 +28,7 @@
 #include "types/base/mathf.h"
 #include "types/container/memory_stream.h"
 #include "types/container/ref_ptr.h"
+#include "types/container/string.h"
 
 static MeshResult readObj(Test *t, const C8 *text, EMeshFlags flags, Bool attrs, Bool words) {
 	return Test_meshRead(t, Obj_read, text, CharString_calcStrLen(text, U64_MAX), flags, attrs, words, &t->err);
@@ -140,6 +141,24 @@ void Test_objDedup(Test *t) {
 		return;
 
 	Test_assert(t, "splitVertexCount", r.info.vertexCount == 6);
+
+	MeshResult_free(t, &r);
+
+	//Likewise a different uv, read while the corners still fit the scan the set does below its small limit.
+
+	const C8 *uvSplit =
+		"v 0 0 0\nv 1 0 0\nv 0 1 0\nv 1 1 0\n"
+		"vt 0 0\nvt 1 1\n"
+		"vn 0 0 1\n"
+		"f 1/1/1 2/1/1 3/1/1\n"
+		"f 2/2/1 4/2/1 3/2/1\n";
+
+	r = readObj(t, uvSplit, EMeshFlags_None, true, false);
+
+	if(!Test_assert(t, "readUvSplit", r.ok))
+		return;
+
+	Test_assert(t, "uvSplitVertexCount", r.info.vertexCount == 6);
 
 	MeshResult_free(t, &r);
 }
@@ -644,4 +663,227 @@ void Test_objUvPrecision(Test *t) {
 		Test_assert(t, "noUvsExact", r.info.maxUvError == 0);
 
 	MeshResult_free(t, &r);
+}
+
+//12000 distinct corners, every (v, vt, vn) of 50 positions, 40 uvs and 6 normals, so the set grows many times.
+
+#define OBJ_MANY_POSITIONS 50
+#define OBJ_MANY_UVS 40
+#define OBJ_MANY_NORMALS 6
+#define OBJ_MANY_CORNERS (OBJ_MANY_POSITIONS * OBJ_MANY_UVS * OBJ_MANY_NORMALS)
+#define OBJ_MANY_TRIANGLES (OBJ_MANY_CORNERS - 2 + OBJ_MANY_CORNERS / 3)
+
+static const F32 manyNormals[OBJ_MANY_NORMALS][3] = {
+	{ 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 }
+};
+
+//A corner id is also the vertex it has to become, since ids first appear in increasing order.
+
+static void manyCorner(U32 id, U32 triple[3]) {
+	triple[0] = id % OBJ_MANY_POSITIONS + 1;
+	triple[1] = (id / OBJ_MANY_POSITIONS) % OBJ_MANY_UVS + 1;
+	triple[2] = id / (OBJ_MANY_POSITIONS * OBJ_MANY_UVS) + 1;
+}
+
+//A strip numbers the corners in order, looking two older ones up with each new one.
+//Triangles across the whole range then repeat corners long after they arrived.
+
+static void manyTriangle(U32 i, U32 ids[3]) {
+
+	if(i < OBJ_MANY_CORNERS - 2) {
+		ids[0] = i;
+		ids[1] = i + 1;
+		ids[2] = i + 2;
+		return;
+	}
+
+	const U32 start = (i - (OBJ_MANY_CORNERS - 2)) * 5003 % OBJ_MANY_CORNERS;
+
+	ids[0] = start;
+	ids[1] = (start + 3571) % OBJ_MANY_CORNERS;
+	ids[2] = (start + 7919) % OBJ_MANY_CORNERS;
+}
+
+static Bool appendManyFace(Test *t, CharString *text, const U32 ids[3]) {
+
+	U32 c[3][3];
+
+	for(U8 i = 0; i < 3; ++i)
+		manyCorner(ids[i], c[i]);
+
+	return CharString_appendFormat(
+		t->alloc, text, &t->err, "f %u/%u/%u %u/%u/%u %u/%u/%u\n",
+		c[0][0], c[0][1], c[0][2], c[1][0], c[1][1], c[1][2], c[2][0], c[2][1], c[2][2]
+	);
+}
+
+void Test_objDedupMany(Test *t) {
+
+	Test_setModule(t, "OBJ/dedupMany");
+
+	CharString text = CharString_createNull();
+	Bool built = true;
+
+	for(U32 i = 0; i < OBJ_MANY_POSITIONS && built; ++i)
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "v %u 0 0\n", i);
+
+	for(U32 i = 0; i < OBJ_MANY_UVS && built; ++i)
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "vt %u 0\n", i);
+
+	built = built && CharString_appendFormat(
+		t->alloc, &text, &t->err, "vn 1 0 0\nvn -1 0 0\nvn 0 1 0\nvn 0 -1 0\nvn 0 0 1\nvn 0 0 -1\n"
+	);
+
+	for(U32 i = 0; i < OBJ_MANY_TRIANGLES && built; ++i) {
+
+		U32 ids[3];
+		manyTriangle(i, ids);
+
+		built = appendManyFace(t, &text, ids);
+	}
+
+	if(!Test_assert(t, "built", built)) {
+		CharString_free(&text, t->alloc);
+		return;
+	}
+
+	MeshResult r = readObj(t, text.ptr, EMeshFlags_None, true, false);
+	CharString_free(&text, t->alloc);
+
+	if(!Test_assert(t, "read", r.ok))
+		return;
+
+	Test_assert(t, "vertexCount", r.info.vertexCount == OBJ_MANY_CORNERS);
+	Test_assert(t, "indexCount", r.info.indexCount == OBJ_MANY_TRIANGLES * 3);
+
+	//Vertex k has to carry corner k's data, or a merged or misnumbered corner shows as a vertex holding another's.
+
+	Bool firstUse = true;
+
+	for(U32 k = 0; k < OBJ_MANY_CORNERS && firstUse; ++k) {
+
+		U32 c[3];
+		manyCorner(k, c);
+
+		const F32 *n = manyNormals[c[2] - 1];
+
+		firstUse =
+			MeshResult_position(&r, k)[0] == (F32) (c[0] - 1) &&
+			MeshResult_uv(&r, k, 0) == (F32) (c[1] - 1) &&
+			Test_nearNormal(MeshResult_normal(&r, k), n[0], n[1], n[2]);
+	}
+
+	Test_assert(t, "firstUseOrder", firstUse);
+
+	Bool repeated = true;
+
+	for(U32 i = 0; i < OBJ_MANY_TRIANGLES && repeated; ++i) {
+
+		U32 ids[3];
+		manyTriangle(i, ids);
+
+		const U32 *tri = MeshResult_triangle(&r, i);
+		repeated = tri[0] == ids[0] && tri[1] == ids[1] && tri[2] == ids[2];
+	}
+
+	Test_assert(t, "repeatedCorners", repeated);
+
+	MeshResult_free(t, &r);
+}
+
+void Test_objMaterialsMany(Test *t) {
+
+	Test_setModule(t, "OBJ/materialsMany");
+
+	const U32 count = 300;
+
+	//A face before the first usemtl is material 0, so the names take 1 to count, and a bare usemtl names 0 again.
+	//Each new name is followed by an earlier one, so numbers are read back after the set has grown past them.
+
+	CharString text = CharString_createNull();
+	Bool built = CharString_appendFormat(t->alloc, &text, &t->err, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+
+	for(U32 i = 0; i < count && built; ++i)
+		built = CharString_appendFormat(
+			t->alloc, &text, &t->err, "usemtl m%u\nf 1 2 3\nusemtl m%u\nf 1 2 3\n", i, i / 2
+		);
+
+	built = built && CharString_appendFormat(t->alloc, &text, &t->err, "usemtl\nf 1 2 3\n");
+
+	if(!Test_assert(t, "built", built)) {
+		CharString_free(&text, t->alloc);
+		return;
+	}
+
+	MeshResult r = readObj(t, text.ptr, EMeshFlags_None, false, true);
+	CharString_free(&text, t->alloc);
+
+	if(!Test_assert(t, "read", r.ok))
+		return;
+
+	Test_assert(t, "materialCount", r.info.materialCount == count + 1);
+	Test_assert(t, "triangleCount", Buffer_length(r.triangles) == (2 * (U64) count + 2) * sizeof(U32));
+
+	Bool firstUse = MeshTriangle_material(MeshResult_word(&r, 0)) == 0;
+
+	for(U32 i = 0; i < count && firstUse; ++i)
+		firstUse =
+			MeshTriangle_material(MeshResult_word(&r, 1 + 2 * i)) == i + 1 &&
+			MeshTriangle_material(MeshResult_word(&r, 2 + 2 * i)) == i / 2 + 1;
+
+	Test_assert(t, "firstUseOrder", firstUse);
+	Test_assert(t, "bareUsemtl", MeshTriangle_material(MeshResult_word(&r, 1 + 2 * count)) == 0);
+
+	MeshResult_free(t, &r);
+
+	//Without a face before it a bare usemtl is a name of its own, which another bare one names again.
+
+	const C8 *bare = "v 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl\nf 1 2 3\nusemtl a\nf 1 2 3\nusemtl\nf 1 2 3\n";
+	r = readObj(t, bare, EMeshFlags_None, false, true);
+
+	if(Test_assert(t, "readBare", r.ok)) {
+		Test_assert(t, "bareCount", r.info.materialCount == 2);
+		Test_assert(t, "bareFirst", MeshTriangle_material(MeshResult_word(&r, 0)) == 0);
+		Test_assert(t, "bareNamed", MeshTriangle_material(MeshResult_word(&r, 1)) == 1);
+		Test_assert(t, "bareAgain", MeshTriangle_material(MeshResult_word(&r, 2)) == 0);
+	}
+
+	MeshResult_free(t, &r);
+}
+
+void Test_objMaterialLimit(Test *t) {
+
+	Test_setModule(t, "OBJ/materialLimit");
+
+	//MeshTriangle_maxMaterials names are taken and one more is refused where it is named,
+	// even with no face after it to carry it into a triangle word.
+
+	CharString text = CharString_createNull();
+	Bool built = CharString_appendFormat(t->alloc, &text, &t->err, "v 0 0 0\nv 1 0 0\nv 0 1 0\n");
+
+	for(U32 i = 0; i < MeshTriangle_maxMaterials && built; ++i)
+		built = CharString_appendFormat(t->alloc, &text, &t->err, "usemtl m%u\n", i);
+
+	built = built && CharString_appendFormat(t->alloc, &text, &t->err, "f 1 2 3\n");
+
+	if(!Test_assert(t, "built", built)) {
+		CharString_free(&text, t->alloc);
+		return;
+	}
+
+	MeshResult r = readObj(t, text.ptr, EMeshFlags_None, false, true);
+
+	if(Test_assert(t, "readAtLimit", r.ok)) {
+		Test_assert(t, "limitCount", r.info.materialCount == MeshTriangle_maxMaterials);
+		Test_assert(t, "limitLast", MeshTriangle_material(MeshResult_word(&r, 0)) == MeshTriangle_maxMaterials - 1);
+	}
+
+	MeshResult_free(t, &r);
+
+	built = CharString_appendFormat(t->alloc, &text, &t->err, "usemtl oneMore\n");
+
+	if(Test_assert(t, "builtOneMore", built))
+		expectRefused(t, "pastLimit", text.ptr);
+
+	CharString_free(&text, t->alloc);
 }

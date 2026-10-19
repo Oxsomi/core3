@@ -21,6 +21,7 @@
 //graphics/generic/device_loss.c
 
 #include "types/container/list_impl.h"
+#include "types/container/hash_set_impl.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/device_internal.h"
 #include "graphics/generic/interface.h"
@@ -32,29 +33,13 @@
 #include "types/base/constants.h"
 
 TListImpl(LiveResource);
+THashSetImplKeyField(LiveResource, U64, resource);
 
 static void GraphicsDevice_logBreadcrumbs(GraphicsDevice *device);
-
-//TODO: a linear scan under the device lock on every free makes N frees O(N^2), and the registry is always on.
-//Should become a hash map keyed by the resource once core3 has one (GitHub #40).
 
 const GraphicsResource *LiveResource_res(const LiveResource *live) {
 	const UnifiedTexture *tex = TextureRef_getUnifiedTextureFast(live->resource);
 	return tex ? &tex->resource : &DeviceBufferRef_ptr(live->resource)->resource;
-}
-
-static LiveResource *GraphicsDevice_findLive(GraphicsDevice *device, const RefPtr *resource, U64 *index) {
-
-	for(U64 i = 0; i < device->liveResources.length; ++i)
-		if(device->liveResources.ptr[i].resource == resource) {
-
-			if(index)
-				*index = i;
-
-			return device->liveResources.ptrNonConst + i;
-		}
-
-	return NULL;
 }
 
 Bool GraphicsDevice_registerResource(
@@ -68,6 +53,7 @@ Bool GraphicsDevice_registerResource(
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDevice_getAlloc(device);
 	ELockAcquire acq = ELockAcquire_Invalid;
+	U64 existing = U64_MAX;
 
 	LiveResource live = (LiveResource) { .resource = resource, .apiObject = apiObject };
 
@@ -79,7 +65,13 @@ Bool GraphicsDevice_registerResource(
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "GraphicsDevice_registerResource() couldn't acquire the device lock"));
 
-	gotoIfError3(clean, ListLiveResource_pushBack(&device->liveResources, live, alloc, e_rr));
+	gotoIfError3(clean, HashSetLiveResource_insert(&device->liveResources, live, &existing, alloc, e_rr));
+
+	//A resource registers once, so a hit is a double registration, and clean frees the name the new entry would have owned.
+
+	if(existing != U64_MAX)
+		retError(clean, Error_alreadyDefined(1, "GraphicsDevice_registerResource()::resource is already registered"));
+
 	live.name = CharString_createNull();
 
 clean:
@@ -98,36 +90,31 @@ void GraphicsDevice_unregisterResource(GraphicsDevice *device, const RefPtr *res
 	if(acq < ELockAcquire_Success)
 		return;
 
-	//Every entry of the resource (a texture has one per image) moves to the freed ring, where the oldest makes room;
-	// an entry keeps its name there for a fault in its old memory to name.
+	//The entry moves to the freed ring, where the oldest makes room; it keeps its name there for a fault in its old
+	// memory to name.
 
-	//TODO: popLocation shifts the rest of the list, another O(N) per free on top of the scan.
-	//Goes away with the hash map above (GitHub #40).
+	LiveResource live = (LiveResource) { 0 };
+	const U64 i = HashSetLiveResource_find(&device->liveResources, &resource);
 
-	U64 i = 0;
-	LiveResource *live = NULL;
-
-	while((live = GraphicsDevice_findLive(device, resource, &i)) != NULL) {
+	if(i != U64_MAX && HashSetLiveResource_eraseSwap(&device->liveResources, i, &live, NULL)) {
 
 		FreedResource *freed = &device->freedResources[device->freedResourceNext];
 		device->freedResourceNext = (device->freedResourceNext + 1) % GRAPHICS_FREED_RESOURCES;
 
 		CharString_free(&freed->name, GraphicsDevice_getAlloc(device));
 
-		const GraphicsResource *res = LiveResource_res(live);
+		const GraphicsResource *res = LiveResource_res(&live);
 
 		*freed = (FreedResource) {
-			.apiObject = live->apiObject,
+			.apiObject = live.apiObject,
 			.address = res->deviceAddress,
 			.size = res->deviceAddress ? res->size : 0,
 			.blockOffset = res->blockOffset,
 			.freedAt = Time_now(),
-			.name = live->name,
+			.name = live.name,
 			.blockId = res->allocated ? res->blockId : U32_MAX,
 			.type = res->type
 		};
-
-		ListLiveResource_popLocation(&device->liveResources, i, NULL, NULL);
 	}
 
 	if(acq == ELockAcquire_Acquired)
@@ -200,9 +187,9 @@ Bool GraphicsDevice_describeResource(
 	if(acq < ELockAcquire_Success)
 		return false;
 
-	for(U64 i = 0; i < device->liveResources.length; ++i) {
+	for(U64 i = 0; i < device->liveResources.list.length; ++i) {
 
-		const FreedResource live = LiveResource_info(&device->liveResources.ptr[i]);
+		const FreedResource live = LiveResource_info(&device->liveResources.list.ptr[i]);
 
 		if(LiveResource_matches(&live, address, apiObject)) {
 			gotoIfError3(clean, LiveResource_describe(&live, address, str, alloc, e_rr));
@@ -247,13 +234,13 @@ Bool GraphicsDevice_describeNearest(
 	FreedResource below = { 0 }, above = { 0 };
 	Bool hasBelow = false, hasAbove = false;
 
-	for(U64 i = 0; i < device->liveResources.length + GRAPHICS_FREED_RESOURCES; ++i) {
+	for(U64 i = 0; i < device->liveResources.list.length + GRAPHICS_FREED_RESOURCES; ++i) {
 
-		const Bool isLive = i < device->liveResources.length;
+		const Bool isLive = i < device->liveResources.list.length;
 
 		const FreedResource r =
-			isLive ? LiveResource_info(&device->liveResources.ptr[i]) :
-			device->freedResources[i - device->liveResources.length];
+			isLive ? LiveResource_info(&device->liveResources.list.ptr[i]) :
+			device->freedResources[i - device->liveResources.list.length];
 
 		if(!r.size || (!isLive && !r.freedAt))
 			continue;
@@ -306,13 +293,13 @@ Bool GraphicsDeviceRef_findResourceByAddress(GraphicsDeviceRef *deviceRef, U64 a
 
 	Bool found = false;
 
-	for(U64 i = 0; i < device->liveResources.length; ++i) {
+	for(U64 i = 0; i < device->liveResources.list.length; ++i) {
 
-		const FreedResource live = LiveResource_info(&device->liveResources.ptr[i]);
+		const FreedResource live = LiveResource_info(&device->liveResources.list.ptr[i]);
 
 		if(LiveResource_matches(&live, address, 0)) {
 
-			*resource = device->liveResources.ptr[i].resource;
+			*resource = device->liveResources.list.ptr[i].resource;
 
 			if(offset)
 				*offset = address - live.address;
@@ -548,10 +535,10 @@ Bool GraphicsDeviceRef_isLost(GraphicsDeviceRef *deviceRef) {
 
 void GraphicsDevice_freeResourceRegistry(GraphicsDevice *device, const Allocator *alloc) {
 
-	for(U64 i = 0; i < device->liveResources.length; ++i)
-		CharString_free(&device->liveResources.ptrNonConst[i].name, alloc);
+	for(U64 i = 0; i < device->liveResources.list.length; ++i)
+		CharString_free(&device->liveResources.list.ptrNonConst[i].name, alloc);
 
-	ListLiveResource_free(&device->liveResources, alloc);
+	HashSetLiveResource_free(&device->liveResources, alloc);
 
 	for(U32 i = 0; i < GRAPHICS_FREED_RESOURCES; ++i)
 		CharString_free(&device->freedResources[i].name, alloc);

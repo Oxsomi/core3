@@ -30,8 +30,8 @@
 //Internal declarations shared between the generic device and the backends; not part of the public API.
 
 //Device loss diagnostics (docs/graphics_api.md, "Device loss").
-//A backend registers each buffer and texture it creates; GraphicsResource_free unregisters it. apiObject is the D3D12
-// resource's IUnknown or the Vulkan handle.
+//A backend registers each buffer and texture it creates, once; DeviceBuffer_free and UnifiedTexture_free unregister it
+// before its API object goes. apiObject is the D3D12 resource's IUnknown or the Vulkan handle.
 
 Bool GraphicsDevice_registerResource(
 	GraphicsDevice *device,

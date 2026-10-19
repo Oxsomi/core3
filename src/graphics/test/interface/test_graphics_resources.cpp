@@ -50,6 +50,22 @@ namespace {
 
 	using OwnedSHFile = oxc::gfx::OwnedList<oxc::c::SHFile>;
 	using OwnedLayoutInfo = oxc::gfx::OwnedList<oxc::c::DescriptorLayoutInfo>;
+
+	//The registry's index counts exactly what its list holds, and finds every entry on its own slot.
+
+	oxc::c::Bool registryAgrees(const oxc::c::GraphicsDevice *device) {
+
+		const oxc::c::HashSetLiveResource &live = device->liveResources;
+
+		if(live.index.count != live.list.length)
+			return false;
+
+		for(oxc::c::U64 i = 0; i < live.list.length; ++i)
+			if(oxc::c::HashSetLiveResource_find(&live, &live.list.ptr[i].resource) != i)
+				return false;
+
+		return true;
+	}
 }
 
 // -- Resource registry ------------------------------------------------------------
@@ -218,6 +234,135 @@ extern "C" void Test_graphicsResourceRegistry(oxc::c::Test *t, oxc::c::GraphicsD
 
 	Test_assert(t, "breadcrumbScopesRecorded", recorded);
 	Test_assert(t, "breadcrumbScopesEnded", recorded && ended);
+}
+
+// -- Resource registry set ---------------------------------------------------------
+
+//The registry is a set keyed on the resource. Buffers past the small mode and past the first slot array are registered,
+// then freed out of order so the swap erases move entries around: the index has to keep agreeing with the list, a
+// freed resource is no longer found, and the freed ring names the last one freed.
+//A resource registers once, so registering a live one again is refused and leaves the registry as it was.
+
+extern "C" void Test_graphicsResourceRegistrySet(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	c::Error *e_rr = &t->err;
+
+	Test_setModule(t, "Resource registry set");
+
+	Device dev = Device::share(deviceRef);
+	c::GraphicsDevice *device = RefPtr_data(deviceRef, c::GraphicsDevice);
+
+	static const c::U32 count = 64;
+
+	DeviceBuffer buffers[count];
+	char name[] = "Registry set 00";
+
+	const c::U64 baseline = device->liveResources.list.length;
+
+	Test_assert(t, "agreesBefore", registryAgrees(device));
+
+	for(c::U32 i = 0; i < count; ++i) {
+
+		name[13] = (char) ('0' + i / 10);
+		name[14] = (char) ('0' + i % 10);
+
+		if(!Test_assert(t, "createBuffer", dev.createBuffer(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderRWBindful, name, 256, buffers[i], nullptr, e_rr
+		)))
+			return;
+	}
+
+	Test_assert(t, "registeredAll", device->liveResources.list.length == baseline + count);
+	Test_assert(t, "agreesAfterGrowth", registryAgrees(device));
+
+	c::Bool allFound = true;
+
+	for(c::U32 i = 0; i < count; ++i) {
+
+		const c::WeakRefPtr *key = buffers[i].handle();
+		const c::U64 index = c::HashSetLiveResource_find(&device->liveResources, &key);
+
+		allFound &= index != c::U64_MAX && device->liveResources.list.ptr[index].resource == key;
+	}
+
+	Test_assert(t, "allFound", allFound);
+
+	//Registering a live resource again changes nothing, and the name the refused entry carried is freed.
+
+	const c::CharString duplicate = c::CharString_createRefCStrConst("Registry duplicate");
+
+	Test_assert(t, "doubleRegisterRefused", !c::GraphicsDevice_registerResource(
+		device, buffers[0].handle(), 0, &duplicate, nullptr
+	));
+
+	Test_assert(t, "doubleRegisterLeftNothing", (
+		device->liveResources.list.length == baseline + count && registryAgrees(device)
+	));
+
+	//Every third first, then the rest from the back
+
+	const c::WeakRefPtr *freedKeys[count];
+	c::U32 lastFreed = 0;
+
+	for(c::U32 i = 0; i < count; i += 3) {
+		freedKeys[i] = buffers[i].handle();
+		buffers[i].release();
+		lastFreed = i;
+	}
+
+	Test_assert(t, "agreesAfterThirds", registryAgrees(device));
+
+	for(c::U32 i = count; i > 0; --i) {
+
+		const c::U32 j = i - 1;
+
+		if(!(j % 3))
+			continue;
+
+		freedKeys[j] = buffers[j].handle();
+		buffers[j].release();
+		lastFreed = j;
+	}
+
+	Test_assert(t, "emptied", device->liveResources.list.length == baseline);
+	Test_assert(t, "agreesAfterAll", registryAgrees(device));
+
+	c::Bool noneFound = true;
+
+	for(c::U32 i = 0; i < count; ++i)
+		noneFound &= c::HashSetLiveResource_find(&device->liveResources, &freedKeys[i]) == c::U64_MAX;
+
+	Test_assert(t, "noneFound", noneFound);
+
+	//The ring holds the newest 32 frees, so the last one is named by its newest slot, and a lookup by its API object
+	// reports it as freed.
+
+	const c::FreedResource freed =
+		device->freedResources[(device->freedResourceNext + GRAPHICS_FREED_RESOURCES - 1) % GRAPHICS_FREED_RESOURCES];
+
+	name[13] = (char) ('0' + lastFreed / 10);
+	name[14] = (char) ('0' + lastFreed % 10);
+
+	Test_assert(t, "ringNamesLastFreed", (
+		freed.freedAt && freed.type == c::EResourceType_DeviceBuffer && c::CharString_equalsCStringSensitive(&freed.name, name)
+	));
+
+	const c::Allocator *alloc = c::GraphicsDeviceRef_getAlloc(deviceRef);
+	c::CharString str = c::CharString_createNull();
+
+	Test_assert(t, "ringDescribed", c::GraphicsDevice_describeResource(device, 0, freed.apiObject, &str, alloc, e_rr));
+
+	const c::CharString expectFreed = c::CharString_createRefCStrConst("freed");
+
+	Test_assert(t, "ringDescribedAsFreed", (
+		c::CharString_containsStringSensitive(&str, &expectFreed, 0, c::CharString_length(str)) &&
+		c::CharString_containsStringSensitive(&str, &freed.name, 0, c::CharString_length(str))
+	));
+
+	c::CharString_free(&str, alloc);
 }
 
 // -- 23. TextureRef predicates and accessors -------------------------------------

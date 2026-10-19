@@ -61,13 +61,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"));
 
-	Bool any = false;
-
-	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(ListRefPtr); ++i)
-		if (ListRefPtr_contains(device->resourcesInFlight[i], swapchainRef, 0, NULL)) {
-			any = true;
-			break;
-		}
+	const Bool any = GraphicsDevice_isInAnyFlight(device, swapchainRef);
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->lock);

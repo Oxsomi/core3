@@ -282,7 +282,7 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	Test_assert(t, "tableParent", tablePtr->parent == heap.handle());
 	Test_assert(t, "tableLayout", tablePtr->layout == layout.handle());
 	Test_assert(t, "tableBindingCount", tablePtr->bindings.length == 3);
-	Test_assert(t, "tableNoResources", !tablePtr->resources.length);
+	Test_assert(t, "tableNoResources", !tablePtr->resources.list.length);
 
 	//The heap was created with room for a single table, which is what maxDescriptorTables means.
 
@@ -324,7 +324,7 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	//maintainRef stays false, so the table doesn't take ownership of the resource.
 
 	Test_assert(t, "setSingle", table.set(2, 0, desc, false, e_rr));
-	Test_assert(t, "setSingleNoRef", !tablePtr->resources.length);
+	Test_assert(t, "setSingleNoRef", !tablePtr->resources.list.length);
 	Test_assert(t, "setSingleOOB", !table.set(2, 1, desc));
 	Test_assert(t, "unsetSingle", table.unset(2, 0, 1, e_rr));
 
@@ -333,7 +333,7 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 	//Binding 0 is the count 4 array, so arrayId 1 with 2 descriptors fits and arrayId 3 with 2 runs off the end.
 
 	Test_assert(t, "setMany", table.setRange(0, 1, { desc, desc }, false, e_rr));
-	Test_assert(t, "setManyNoRef", !tablePtr->resources.length);
+	Test_assert(t, "setManyNoRef", !tablePtr->resources.list.length);
 	Test_assert(t, "setManyOOB", !table.setRange(0, 3, { desc, desc }));
 	Test_assert(t, "unsetMany", table.unset(0, 1, 2, e_rr));
 
@@ -518,7 +518,7 @@ extern "C" void Test_graphicsDescriptorAlloc(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	//maintainRef was false throughout, so the table never took a reference of its own to give back.
 
-	Test_assert(t, "refillNoRefs", !tablePtr->resources.length);
+	Test_assert(t, "refillNoRefs", !tablePtr->resources.list.length);
 
 	//Now the same binding with the buffer genuinely in flight.
 	//maintainRef makes the table hold a reference for as long as the descriptor lives and a submitted command
@@ -564,20 +564,20 @@ extern "C" void Test_graphicsDescriptorAlloc(oxc::c::Test *t, oxc::c::GraphicsDe
 	//The list only keeps what its transitions named, so this is what makes the submit below put the buffer in
 	// flight instead of only the render target.
 
-	Test_assert(t, "inFlightTracked", c::ListRefPtr_contains(commandList.data()->resources, buffer.handle(), 0, nullptr));
+	Test_assert(t, "inFlightTracked", c::ListRefPtr_contains(commandList.data()->resources.list, buffer.handle(), 0, nullptr));
 
 	Test_assert(t, "inFlightSubmit", dev.submit({ &commandList }, {}, 0, 0, e_rr));
 
 	//Every descriptor points at the same buffer, so the table's resource list holds one entry with a count of 8.
 
 	Test_assert(t, "inFlightFill", Test_fillDescriptorBinding(t, table, desc, true, count) == 0xFF);
-	Test_assert(t, "inFlightRef", tablePtr->resources.length == 1);
+	Test_assert(t, "inFlightRef", tablePtr->resources.list.length == 1);
 
 	//Freed while the submit is still outstanding; the slots have to come back right away and the table has to
 	// let go of every reference it took, even though the device is still holding one of its own.
 
 	Test_assert(t, "inFlightFree", table.unset(0, 0, count, e_rr));
-	Test_assert(t, "inFlightNoRefs", !tablePtr->resources.length);
+	Test_assert(t, "inFlightNoRefs", !tablePtr->resources.list.length);
 
 	c::U64 duringId = c::U64_MAX;
 
@@ -590,12 +590,12 @@ extern "C" void Test_graphicsDescriptorAlloc(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	Test_assert(t, "inFlightWait", dev.wait(e_rr));
 	Test_assert(t, "afterWaitFill", Test_fillDescriptorBinding(t, table, desc, true, count) == 0xFF);
-	Test_assert(t, "afterWaitRef", tablePtr->resources.length == 1);
+	Test_assert(t, "afterWaitRef", tablePtr->resources.list.length == 1);
 
 	//Freed explicitly rather than left for the table's own free to release.
 	//Releasing on free is what the debug leak detector exists to report, so a test that relied on it warned on
 	// every run (8 descriptors, every device); the in flight half above already frees the same way.
 
 	Test_assert(t, "afterWaitFree", table.unset(0, 0, count, e_rr));
-	Test_assert(t, "afterWaitNoRefs", !tablePtr->resources.length);
+	Test_assert(t, "afterWaitNoRefs", !tablePtr->resources.list.length);
 }

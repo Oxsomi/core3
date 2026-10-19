@@ -31,7 +31,8 @@
 //  5. File (virtual)  - load section embedded via add_virtual_files,
 //                       has / getInfo / read / foreach / unload
 //  6. DynamicLibrary  - path validation (+ load/free when SUPPORTS_DYNAMIC_LINKING)
-//  7. Allocator       - the platform allocator meets OxC3's own alignment requirement
+//  7. Allocator       - the platform allocator meets OxC3's own alignment requirement, and in debug builds its
+//                       tracker refuses a free inside a live allocation and keeps one record per address
 //  8. Environment     - UTF-8 round trip, unset and empty, name validation, typed readers, the C++ layer
 //  9. Interrupts      - Platform_deferInterrupts nests, checked with a real SIGINT
 //
@@ -1475,6 +1476,49 @@ static void Test_allocatorAlignment(Test *t) {
 	Test_assert(t, "alignedTo16", allAligned);
 }
 
+//The tracker logs an error for both cases on purpose.
+//The addresses are inside a static array, which no real allocation can collide with, and the records and counters
+// end as they started, so the leak report at shutdown stays clean.
+
+static void Test_allocatorTracking(Test *t) {
+
+	Test_setModule(t, "Platform/Allocator");
+
+	#ifdef NDEBUG
+
+		Test_print(t, "Release builds keep no allocation records, skipping the tracker checks");
+
+	#else
+
+		static U8 block[64];
+
+		Test_print(t, "The allocation errors logged next are expected");
+
+		//A free inside a live allocation is refused, which leaves it tracked and freed by its own address
+
+		const U64 tracked = Platform_getActiveAllocations(0);
+
+		Test_assert(t, "trackBlock", Platform_onAllocate(block, sizeof(block), &t->err));
+		Test_assert(t, "interiorRefused", !Platform_onFree(block + 8, 8));
+		Test_assert(t, "interiorStillTracked", Platform_getActiveAllocations(0) == tracked + 1);
+		Test_assert(t, "freeByAddress", Platform_onFree(block, sizeof(block)));
+		Test_assert(t, "freeUntracked", Platform_getActiveAllocations(0) == tracked);
+
+		//An address allocated again while tracked (a free of it went unseen) keeps one record, the newer one's
+
+		const U64 large = Platform_getActiveAllocations(32);
+
+		Test_assert(t, "allocateSmall", Platform_onAllocate(block, 16, &t->err));
+		Test_assert(t, "allocateAgain", Platform_onAllocate(block, 48, &t->err));
+		Test_assert(t, "oneRecord", Platform_getActiveAllocations(0) == tracked + 1);
+		Test_assert(t, "newerRecord", Platform_getActiveAllocations(32) == large + 1);
+		Test_assert(t, "freeOnce", Platform_onFree(block, 48));
+		Test_assert(t, "freeTwiceRefused", !Platform_onFree(block, 48));
+		Test_assert(t, "noRecordLeft", Platform_getActiveAllocations(0) == tracked);
+
+	#endif
+}
+
 //Deferrals nest: an unmatched undefer leaves none rather than fewer than none, and an inner pair leaves the outer one.
 //The count is only observable through the handler, so a real SIGINT checks it: deferred, the handler only raises the
 // flag; not deferred, it ends the process, which fails the run.
@@ -1548,6 +1592,7 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	Test_resolution(&t);
 	Test_windowNullguards(&t);
 	Test_allocatorAlignment(&t);
+	Test_allocatorTracking(&t);
 	Test_platformEnv(&t);
 	Test_platformsEnvHpp(&t);
 

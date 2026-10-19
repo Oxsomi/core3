@@ -2285,8 +2285,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
@@ -2546,8 +2544,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				));
 			}
 
-			if(RefPtr_inc(swapchainRef))
-				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
+			if(!GraphicsDevice_isInFlight(device, swapchainRef) && RefPtr_inc(swapchainRef))
+				gotoIfError3(clean, GraphicsDevice_addInFlight(device, swapchainRef, alloc, e_rr));
 		}
 
 		if(dependency.imageMemoryBarrierCount)

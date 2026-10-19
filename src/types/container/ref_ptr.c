@@ -21,10 +21,14 @@
 //types/container/ref_ptr.c
 
 #include "types/container/list_impl.h"
+#include "types/container/hash_set_impl.h"
 #include "types/container/ref_ptr.h"
+#include "types/base/mathi.h"
 
 TListNamedImpl(ListRefPtr);
 TListNamedImpl(ListWeakRefPtr);
+
+THashSetImplKey(RefPtr, U64);
 
 Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 

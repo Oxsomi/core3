@@ -107,7 +107,7 @@ extern "C" void Test_graphicsCommandList(oxc::c::Test *t, oxc::c::GraphicsDevice
 	Test_assert(t, "allowResize", listPtr->allowResize);
 	Test_assert(t, "stateNew", listPtr->state == c::ECommandListState_New);
 	Test_assert(t, "noCommands", !listPtr->commandOps.length);
-	Test_assert(t, "noResources", !listPtr->resources.length);
+	Test_assert(t, "noResources", !listPtr->resources.list.length);
 
 	//release() is the wrapper's RefPtr_dec: it decs and empties the handle in one step.
 
@@ -172,7 +172,7 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 		CommandScope empty = commandList.scope({}, 1, {}, e_rr);
 		Test_assert(t, "startEmpty", (c::Bool) empty);
 		Test_assert(t, "endEmpty", empty.end(e_rr));
-		Test_assert(t, "emptyHidden", !ptr->activeScopes.length);
+		Test_assert(t, "emptyHidden", !ptr->activeScopes.list.length);
 		Test_assert(t, "emptyRewound", !ptr->commandOps.length);
 
 		CommandScope scope = commandList.scope({}, 2, {}, e_rr);
@@ -183,13 +183,26 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 
 		Test_assert(t, "transitionPending", ptr->pendingTransitions.length == 1);
 		Test_assert(t, "endClear", scope.end(e_rr));
-		Test_assert(t, "clearCommitted", ptr->activeScopes.length == 1);
-		Test_assert(t, "clearScopeId", ptr->activeScopes.length && ptr->activeScopes.ptr[0].scopeId == 2);
+		Test_assert(t, "clearCommitted", ptr->activeScopes.list.length == 1);
+		Test_assert(t, "clearScopeId", ptr->activeScopes.list.length && ptr->activeScopes.list.ptr[0].scopeId == 2);
 		Test_assert(t, "transitionKept", ptr->transitions.length == 1);
 
 		Test_assert(t, "end", commandList.end(e_rr));
-		Test_assert(t, "resourceTracked", ptr->resources.length == 1);
-		Test_assert(t, "resourceIsTarget", ptr->resources.length && ptr->resources.ptr[0] == target.handle());
+		Test_assert(t, "resourceTracked", ptr->resources.list.length == 1);
+		Test_assert(t, "resourceIsTarget", ptr->resources.list.length && ptr->resources.list.ptr[0] == target.handle());
+
+		//The index of each set is what the dedup and the scope id check read, so a drift from its list would make
+		//either answer for an entry that is not there.
+
+		Test_assert(t, "indicesAgreeWithLists", (
+			ptr->resources.index.count == ptr->resources.list.length &&
+			ptr->activeScopes.index.count == ptr->activeScopes.list.length
+		));
+
+		Test_assert(t, "setsFindEntries", (
+			c::HashSetRefPtr_find(&ptr->resources, &ptr->resources.list.ptr[0]) == 0 &&
+			c::HashSetCommandScope_find(&ptr->activeScopes, &ptr->activeScopes.list.ptr[0].scopeId) == 0
+		));
 	}
 
 	//A command outside a scope has nothing to be ordered against
@@ -238,6 +251,13 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 
 		CommandScope duplicate = commandList.scope({}, 2);
 		Test_assert(t, "duplicateId", !duplicate);
+
+		//A refused scope leaves nothing behind in either half.
+
+		Test_assert(t, "duplicateLeftNothing", (
+			commandList.data()->activeScopes.list.length == 1 &&
+			commandList.data()->activeScopes.index.count == 1
+		));
 	}
 
 	//Dependencies are resolved against the scopes that survived, which is what makes a hidden one interesting
@@ -260,7 +280,7 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 		CommandScope dropped = commandList.scope({}, 11, {}, e_rr);
 		Test_assert(t, "startDropped", (c::Bool) dropped);
 		Test_assert(t, "endDropped", dropped.end(e_rr));
-		Test_assert(t, "onlyLiveKept", ptr->activeScopes.length == 1);
+		Test_assert(t, "onlyLiveKept", ptr->activeScopes.list.length == 1);
 
 		//Unconditional is a hint, so a dropped scope is simply nothing to wait on
 
@@ -275,7 +295,7 @@ extern "C" void Test_graphicsCommandRecording(oxc::c::Test *t, oxc::c::GraphicsD
 		Test_assert(t, "dependsLive", (c::Bool) dep);
 		Test_assert(t, "clearDep", dep.clearImagef(c::F32x4_zero(), all, target.handle(), e_rr));
 		Test_assert(t, "endDep", dep.end(e_rr));
-		Test_assert(t, "depCommitted", ptr->activeScopes.length == 3);
+		Test_assert(t, "depCommitted", ptr->activeScopes.list.length == 3);
 
 		//...and one that got dropped is not, since there's nothing left to order against
 
@@ -345,7 +365,7 @@ extern "C" void Test_graphicsCommandValidation(oxc::c::Test *t, oxc::c::Graphics
 		//...but state alone doesn't modify a resource, so the scope is still dropped
 
 		Test_assert(t, "endScope", scope.end(e_rr));
-		Test_assert(t, "stateOnlyHidden", !commandList.data()->activeScopes.length);
+		Test_assert(t, "stateOnlyHidden", !commandList.data()->activeScopes.list.length);
 
 		//endScope consumed the invalid state, so the list is usable again
 
@@ -513,7 +533,7 @@ extern "C" void Test_graphicsCommandValidation(oxc::c::Test *t, oxc::c::Graphics
 			Test_assert(t, "copyBadLevel", !neg.copyImage(target.handle(), target2.handle(), badLevel));
 
 			Test_assert(t, "endScopeCopyNeg", neg.end(e_rr));
-			Test_assert(t, "copyNegHidden", !commandList.data()->activeScopes.length);
+			Test_assert(t, "copyNegHidden", !commandList.data()->activeScopes.list.length);
 
 			//A valid copy is a modify op, so its scope is the one that commits
 
@@ -521,7 +541,7 @@ extern "C" void Test_graphicsCommandValidation(oxc::c::Test *t, oxc::c::Graphics
 			Test_assert(t, "scopeCopyPos", (c::Bool) pos);
 			Test_assert(t, "copyValid", pos.copyImage(target.handle(), target2.handle(), whole, e_rr));
 			Test_assert(t, "endScopeCopyPos", pos.end(e_rr));
-			Test_assert(t, "copyCommitted", commandList.data()->activeScopes.length == 1);
+			Test_assert(t, "copyCommitted", commandList.data()->activeScopes.list.length == 1);
 		}
 
 	//Indirect draws validate their argument buffer before any render state, so the buffer rules are reachable

@@ -123,6 +123,7 @@ static_assert(sizeof(DxSwapchain) % 16 == 0, "DxSwapchain has to be a multiple o
 
 		Platform_instance = instance;
 		GraphicsInterface_instance = interf;
+		HashIndex_initSeed(instance->hashSeed);        //This module's own copy, see Platform.hashSeed
 
 		return (GraphicsInterfaceTable) {
 

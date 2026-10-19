@@ -147,6 +147,7 @@ void Test_SHFileRegisterAddStructuredBuffer(Test *t);
 void Test_SHFileRegisterAddAccelerationStructure(Test *t);
 void Test_SHFileRegisterBufferWriteFlagRejections(Test *t);
 void Test_SHFileRegisterConstantBufferSizeLimit(Test *t);
+void Test_SHFileRegisterHashCollisionKeepsBoth(Test *t);
 
 static inline Bool Test_SHFileCreate(Test *t, SHFile *sh) {
 	return SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, 0xCAFE, t->alloc, sh, &t->err);

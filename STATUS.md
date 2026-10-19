@@ -21,7 +21,7 @@ Last updated: 2026-09-20 (v3.2.106). Update this table in the same PR as the fea
 | AllocationBuffer (GPU suballocator) | ✅ | Non-linear alignment supported |
 | JobQueue | ✅ | Deterministic single-thread mode |
 | Compression (Brotli) | 📄 | oiXX headers reserve flags; implementation is a disabled WIP. Readers must reject compressed files |
-| Generic hash map | ❌→🚧 | Wanted by debug allocator, command-list dedup, compiler caches (TODOs in tree) |
+| Hash set (THashSet) | ✅ | Robin Hood, seeded, worst case bounded |
 
 ## Formats
 

@@ -124,6 +124,8 @@ typedef struct Platform {
 
 	SpinLock virtualSectionsLock;
 
+	U64 hashSeed;                       //HashIndex seed, adopted by modules that link their own types/container
+
 } Platform;
 
 extern Platform *Platform_instance;     //DLLs that call this need to also call Platform_create or get the same pointer passed.

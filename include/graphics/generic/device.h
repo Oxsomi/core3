@@ -28,6 +28,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/hash_set.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
@@ -181,7 +182,7 @@ TList(TimingEntry);
 // the API, so nothing is named for a debugger unless the device is a debug one.
 
 //Live entries read address, size, block and type from the resource itself: it unregisters under the device lock before
-// anything of it is freed, so an entry found under that lock is still whole. A texture has one entry per image.
+// anything of it is freed, so an entry found under that lock is still whole. A resource has one entry.
 
 typedef struct LiveResource {
 	WeakRefPtr *resource;                   //DeviceBufferRef or TextureRef
@@ -190,6 +191,7 @@ typedef struct LiveResource {
 } LiveResource;
 
 TList(LiveResource);
+THashSet(LiveResource);                     //Keyed on the resource
 
 //A freed resource can't be read any more, so it keeps a copy of what a loss would name it by.
 
@@ -248,7 +250,7 @@ typedef struct GraphicsDevice {
 
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
-	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight, TODO: HashMap
+	HashSetRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];  //Resources in flight, per frame
 
 	//Compacted size slots, handed out per BLAS built with AllowCompaction and returned when the compaction
 	//that reads one consumes it. Only the storage differs per backend, a query pool on Vulkan and a pair of
@@ -272,7 +274,7 @@ typedef struct GraphicsDevice {
 	//Every live buffer and texture, and the last GRAPHICS_FREED_RESOURCES freed ones since a fault in freed memory
 	//is exactly what a loss should name. Same contract as liveTlases: guarded by lock, no references held.
 
-	ListLiveResource liveResources;
+	HashSetLiveResource liveResources;
 	FreedResource freedResources[GRAPHICS_FREED_RESOURCES];
 	U32 freedResourceNext;
 	U32 lossPadding;
@@ -403,7 +405,7 @@ typedef struct GraphicsDevice {
 	ListU64 pipelineSizes;
 
 	AtomicI64 pipelineKnownIRBytes;         //The IR size of the pipelines in pipelineBytes, to compare the estimate with
-	U8 padding[16];
+	U8 padding[40];
 
 } GraphicsDevice;
 
@@ -610,6 +612,21 @@ Bool GraphicsDevice_resolveTimings(
 //True exactly once per device per message, so the caller logs on true and stays silent forever after.
 
 Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
+
+//A frame holds one entry and one reference per resource until it completes, so a caller adds a resource once
+// and takes or hands over exactly one reference for it.
+
+Bool GraphicsDevice_isInFlight(const GraphicsDevice *device, RefPtr *resource);
+Bool GraphicsDevice_isInAnyFlight(const GraphicsDevice *device, RefPtr *resource);        //Any frame, not just this one
+
+Bool GraphicsDevice_addInFlight(GraphicsDevice *device, RefPtr *resource, const Allocator *alloc, Error *e_rr);
+
+//Makes room for one more, so the add that follows cannot fail: that is what lets a backend record a command
+// first and retire what it reads afterwards, with no undo needed.
+
+Bool GraphicsDevice_reserveInFlight(GraphicsDevice *device, const Allocator *alloc, Error *e_rr);
+
+Bool GraphicsDevice_clearInFlight(GraphicsDevice *device, U8 fifId, Error *e_rr);        //Gives every reference back
 
 //The twin for a message that reports current LOAD rather than a fact about the device. logOnce is right where
 //the first line already says everything and the condition will never change; it is wrong where the useful

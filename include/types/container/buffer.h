@@ -125,8 +125,9 @@ static inline Bool Buffer_isUTF16(const Buffer buf, F32 threshold) { return Buff
 //    https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 //    https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 //
-//hash/crc32c: Hashmaps / performance critical hashing /
-//    fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries
+//hash/crc32c: performance critical hashing /
+//    fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries.
+//    Not for hash tables, see types/container/hash_index.h.
 //
 //hash/sha256: data integrity (encryption checksum / compression) when dealing with adversaries
 //
@@ -153,8 +154,24 @@ static inline U32 Buffer_crc32c(const Buffer buf) {
 static const U64 Buffer_fnv1a64Offset = 0xCBF29CE484222325;
 static const U64 Buffer_fnv1a64Prime = 0x00000100000001B3;
 
-U64 Buffer_fnv1a64Single(U64 a, U64 hash);
+static inline U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
+	return (a ^ hash) * Buffer_fnv1a64Prime;
+}
+
 U64 Buffer_fnv1a64(const Buffer buf, U64 hash);        //Put hash as Buffer_fnv1a64Offset if none
+
+//HashFunction shaped, key points at the value.
+//The seed xors into the fnv1a state, which costs no step and still moves every key.
+
+static inline U64 U32_hash(const void *key, U64 seed, void *context) {
+	(void) context;
+	return Buffer_fnv1a64Single(*(const U32*) key, seed ^ Buffer_fnv1a64Offset);
+}
+
+static inline U64 U64_hash(const void *key, U64 seed, void *context) {
+	(void) context;
+	return Buffer_fnv1a64Single(*(const U64*) key, seed ^ Buffer_fnv1a64Offset);
+}
 
 //MD5
 

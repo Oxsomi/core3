@@ -1958,7 +1958,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER }
 			};
 
-			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
+			CommandScope scope = commandList->activeScopes.list.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
 			//A scope may bracket its work in a timestamp pair and/or a named debug region;

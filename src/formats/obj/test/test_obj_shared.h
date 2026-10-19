@@ -37,6 +37,9 @@ void Test_objGeometryOnly(Test *t);
 void Test_objValidation(Test *t);
 void Test_objCoverageFlags(Test *t);
 void Test_objUvPrecision(Test *t);
+void Test_objDedupMany(Test *t);
+void Test_objMaterialsMany(Test *t);
+void Test_objMaterialLimit(Test *t);
 
 void Test_objWriteRoundTrip(Test *t);
 void Test_objWriteQuantized(Test *t);
