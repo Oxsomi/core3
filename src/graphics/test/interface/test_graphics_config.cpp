@@ -47,27 +47,6 @@ namespace oxc { namespace c {
 	#include "platforms/platform.h"
 }}
 
-//The bits DisableRt documents itself as clearing, kept next to the test rather than derived from the
-//implementation, so a change to either side has to be a deliberate change to both.
-
-#define TEST_CONFIG_RT_FEATURES (                        \
-	c::EGraphicsFeatures_Raytracing         |            \
-	c::EGraphicsFeatures_RayPipeline        |            \
-	c::EGraphicsFeatures_RayQuery           |            \
-	c::EGraphicsFeatures_RayMicromapOpacity |            \
-	c::EGraphicsFeatures_RayReorder         |            \
-	c::EGraphicsFeatures_RayValidation      |            \
-	c::EGraphicsFeatures_RayTriPosition                  \
-)
-
-#define TEST_CONFIG_RT_FEATURES2 (                       \
-	c::EGraphicsFeatures2_RayReorderActual   |           \
-	c::EGraphicsFeatures2_RayMicromapOpacityActual |     \
-	c::EGraphicsFeatures2_RayClusterAS       |           \
-	c::EGraphicsFeatures2_RayPartitionedTLAS |           \
-	c::EGraphicsFeatures2_RayIndirectASBuild             \
-)
-
 namespace {
 
 	//Creates a device with the given flags and buffering mode, or reports the failure and returns an empty
@@ -86,15 +65,38 @@ namespace {
 		oxc::c::EGraphicsDeviceFlags flags,
 		oxc::c::EGraphicsBufferingMode mode,
 		const oxc::c::C8 *assertName,
+		oxc::c::GraphicsDeviceCapFlags disabledCaps = {},
 		const oxc::c::DescriptorHeapInfo *reserve = nullptr
 	) noexcept {
 
 		using namespace oxc;
 
 		c::GraphicsDeviceRef *deviceRef = nullptr;
+		c::GraphicsDeviceInfo selected = *info;
+		c::ListGraphicsDeviceInfo infos{};
+		const c::GraphicsInstance *inst = c::instanceOf(instRef);
+
+		if(disabledCaps.features || disabledCaps.features2 || disabledCaps.dataTypes || disabledCaps.featuresExt) {
+
+			const c::Bool queried = c::GraphicsInstance_getDeviceInfos(inst, &infos, &disabledCaps, &t->err);
+			c::Bool found = false;
+
+			if(queried)
+				for(c::U64 i = 0; i < infos.length; ++i)
+					if(infos.ptr[i].id == info->id) {
+						selected = infos.ptr[i];
+						found = true;
+						break;
+					}
+
+			c::ListGraphicsDeviceInfo_free(&infos, c::Platform_instance->alloc);
+
+			if(!Test_assert(t, "configDisabledDeviceInfo", queried && found))
+				return gfx::Device();
+		}
 
 		if(!Test_assert(t, assertName, c::GraphicsDeviceRef_create(
-			instRef, info, flags, mode, nullptr, reserve, &deviceRef, &t->err
+			instRef, &selected, flags, mode, nullptr, reserve, &deviceRef, &t->err
 		)))
 			return gfx::Device();
 
@@ -128,36 +130,38 @@ extern "C" void Test_graphicsConfigVariants(
 
 	const c::GraphicsDeviceCapabilities base = baseDev.info().capabilities;
 
-	//39a. DisableRt clears the raytracing bits and nothing else.
+	//39a. Disabling raytracing clears the raytracing bits and nothing else.
 
 	{
 		Device rtOff = Test_createConfigDevice(
-			t, instRef, info, c::EGraphicsDeviceFlags_DisableRt, c::EGraphicsBufferingMode_Default, "configNoRtCreate"
+			t, instRef, info,
+			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configNoRtCreate",
+			c::GraphicsDeviceCapFlags { .features = c::EGraphicsFeatures_Raytracing }
 		);
 
 		if (rtOff) {
 
 			const c::GraphicsDeviceCapabilities caps = rtOff.info().capabilities;
 
-			Test_assert(t, "configNoRtFeatures", !(caps.features & TEST_CONFIG_RT_FEATURES));
-			Test_assert(t, "configNoRtFeatures2", !(caps.features2 & TEST_CONFIG_RT_FEATURES2));
+			Test_assert(t, "configNoRtFeatures", !(caps.flags.features & c::EGraphicsFeatures_RaytracingFeats));
+			Test_assert(t, "configNoRtFeatures2", !(caps.flags.features2 & c::EGraphicsFeatures2_RaytracingFeats));
 
-			//Everything outside the raytracing set has to survive, which is what makes this a test of the flag
+			//Everything outside the raytracing set has to survive, which is what makes this a test of the mask
 			// rather than a test that the device came up with fewer features.
 
 			Test_assert(
 				t, "configNoRtKeepsRest",
-				(caps.features  & ~(c::EGraphicsFeatures)  TEST_CONFIG_RT_FEATURES)  ==
-				(base.features  & ~(c::EGraphicsFeatures)  TEST_CONFIG_RT_FEATURES)
+				(caps.flags.features  & ~(c::EGraphicsFeatures)  c::EGraphicsFeatures_RaytracingFeats)  ==
+				(base.flags.features  & ~(c::EGraphicsFeatures)  c::EGraphicsFeatures_RaytracingFeats)
 			);
 
 			Test_assert(
 				t, "configNoRtKeepsRest2",
-				(caps.features2 & ~(c::EGraphicsFeatures2) TEST_CONFIG_RT_FEATURES2) ==
-				(base.features2 & ~(c::EGraphicsFeatures2) TEST_CONFIG_RT_FEATURES2)
+				(caps.flags.features2 & ~(c::EGraphicsFeatures2) c::EGraphicsFeatures2_RaytracingFeats) ==
+				(base.flags.features2 & ~(c::EGraphicsFeatures2) c::EGraphicsFeatures2_RaytracingFeats)
 			);
 
-			Test_assert(t, "configNoRtKeepsDataTypes", caps.dataTypes == base.dataTypes);
+			Test_assert(t, "configNoRtKeepsDataTypes", caps.flags.dataTypes == base.flags.dataTypes);
 
 			(void) rtOff.wait();
 		}
@@ -186,7 +190,7 @@ extern "C" void Test_graphicsConfigVariants(
 	//The negative first: a layout naming a sampler REF (one of the base device's) is refused, since no sampler of
 	// the device being created can exist yet.
 
-	if (base.features & c::EGraphicsFeatures_Bindless) {
+	if (base.flags.features & c::EGraphicsFeatures_Bindless) {
 
 		const c::Bool isSpirv = RefPtr_data(instRef, c::GraphicsInstance)->api == c::EGraphicsApi_Vulkan;
 		const c::EGfxBinaryType binaryType = isSpirv ? c::EGfxBinaryType_SPIRV : c::EGfxBinaryType_DXIL;
@@ -333,10 +337,10 @@ extern "C" void Test_graphicsConfigVariants(
 
 		Device reserved = Test_createConfigDevice(
 			t, instRef, info,
-			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configReserveCreate", &reserve
+			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configReserveCreate", {}, &reserve
 		);
 
-		if (reserved && (reserved.info().capabilities.features & c::EGraphicsFeatures_Bindless)) {
+		if (reserved && (reserved.info().capabilities.flags.features & c::EGraphicsFeatures_Bindless)) {
 
 			//A tiny bindful layout: one texture and one rw buffer, exactly what the reserve holds
 
@@ -388,7 +392,7 @@ extern "C" void Test_graphicsConfigVariants(
 				// table the default set took; the SAME creation there has to be refused, which is what
 				// proves the reserve did anything at all.
 
-				if (layout && (base.features & c::EGraphicsFeatures_Bindless)) {
+				if (layout && (base.flags.features & c::EGraphicsFeatures_Bindless)) {
 
 					DescriptorLayout baseLayout;
 					DescriptorTable baseTable;
@@ -406,30 +410,29 @@ extern "C" void Test_graphicsConfigVariants(
 		}
 	}
 
-	//39e. DisableBindless clears Bindless and, with it, DescriptorHeap.
-	//DescriptorHeap is the interesting half: it is a features2 bit that implies bindless, so a flag that only
-	// cleared the obvious bit would leave a device claiming heap indexing it can no longer set up.
+	//39e. Disabling Bindless also clears its dependent DescriptorHeap capability.
 
 	{
 		Device noBindless = Test_createConfigDevice(
 			t, instRef, info,
-			c::EGraphicsDeviceFlags_DisableBindless, c::EGraphicsBufferingMode_Default, "configNoBindlessCreate"
+			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configNoBindlessCreate",
+			c::GraphicsDeviceCapFlags { .features = c::EGraphicsFeatures_Bindless }
 		);
 
 		if (noBindless) {
 
 			const c::GraphicsDeviceCapabilities caps = noBindless.info().capabilities;
 
-			Test_assert(t, "configNoBindlessBit", !(caps.features & c::EGraphicsFeatures_Bindless));
-			Test_assert(t, "configNoBindlessHeap", !(caps.features2 & c::EGraphicsFeatures2_DescriptorHeap));
+			Test_assert(t, "configNoBindlessBit", !(caps.flags.features & c::EGraphicsFeatures_Bindless));
+			Test_assert(t, "configNoBindlessHeap", !(caps.flags.features2 & c::EGraphicsFeatures2_DescriptorHeap));
 
 			Test_assert(
 				t, "configNoBindlessKeepsRest",
-				(caps.features & ~(c::EGraphicsFeatures) c::EGraphicsFeatures_Bindless) ==
-				(base.features & ~(c::EGraphicsFeatures) c::EGraphicsFeatures_Bindless)
+				(caps.flags.features & ~(c::EGraphicsFeatures) c::EGraphicsFeatures_Bindless) ==
+				(base.flags.features & ~(c::EGraphicsFeatures) c::EGraphicsFeatures_Bindless)
 			);
 
-			Test_assert(t, "configNoBindlessKeepsDataTypes", caps.dataTypes == base.dataTypes);
+			Test_assert(t, "configNoBindlessKeepsDataTypes", caps.flags.dataTypes == base.flags.dataTypes);
 
 			//The whole bindful module on a device with bindless OFF: descriptor work must not need it.
 			//These are C entry points taking a GraphicsDeviceRef, so they are handed the wrapper's raw handle.
@@ -483,20 +486,48 @@ extern "C" void Test_graphicsConfigVariants(
 	{
 		Device both = Test_createConfigDevice(
 			t, instRef, info,
-			(c::EGraphicsDeviceFlags)(c::EGraphicsDeviceFlags_DisableRt | c::EGraphicsDeviceFlags_DisableBindless),
-			c::EGraphicsBufferingMode_Default, "configBothCreate"
+			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configBothCreate",
+			c::GraphicsDeviceCapFlags {
+				.features = (c::EGraphicsFeatures) (c::EGraphicsFeatures_Bindless | c::EGraphicsFeatures_Raytracing)
+			}
 		);
 
 		if (both) {
 
 			const c::GraphicsDeviceCapabilities caps = both.info().capabilities;
 
-			Test_assert(t, "configBothRt", !(caps.features & TEST_CONFIG_RT_FEATURES));
-			Test_assert(t, "configBothBindless", !(caps.features & c::EGraphicsFeatures_Bindless));
-			Test_assert(t, "configBothFeatures2", !(caps.features2 & TEST_CONFIG_RT_FEATURES2));
-			Test_assert(t, "configBothHeap", !(caps.features2 & c::EGraphicsFeatures2_DescriptorHeap));
+			Test_assert(t, "configBothRt", !(caps.flags.features & c::EGraphicsFeatures_RaytracingFeats));
+			Test_assert(t, "configBothBindless", !(caps.flags.features & c::EGraphicsFeatures_Bindless));
+			Test_assert(t, "configBothFeatures2", !(caps.flags.features2 & c::EGraphicsFeatures2_RaytracingFeats));
+			Test_assert(t, "configBothHeap", !(caps.flags.features2 & c::EGraphicsFeatures2_DescriptorHeap));
 
 			(void) both.wait();
+		}
+	}
+
+	//The Vulkan fallback must also serve custom runtime globals before any default layout has been bound.
+
+	if(c::instanceOf(instRef)->api == c::EGraphicsApi_Vulkan) {
+
+		Device emulatedPush = Test_createConfigDevice(
+			t, instRef, info,
+			c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, "configEmulatedPushCreate",
+			c::GraphicsDeviceCapFlags { .featuresExt = c::EVkGraphicsFeatures_PerformantPushDescriptor }
+		);
+
+		if(emulatedPush) {
+
+			Test_assert(t, "configEmulatedPushBit",
+				!(emulatedPush.info().capabilities.flags.featuresExt & c::EVkGraphicsFeatures_PerformantPushDescriptor)
+			);
+
+			Test_graphicsFrameGlobals(t, emulatedPush.handle());
+			Test_graphicsBindfulPushDescriptors(t, emulatedPush.handle());
+			Test_graphicsBindfulPushTexture(t, emulatedPush.handle());
+			Test_graphicsBindfulPushDescriptorBoundary(t, emulatedPush.handle());
+			Test_graphicsBindfulPushRollover(t, emulatedPush.handle());
+			(void) emulatedPush.wait();
+			Test_setModule(t, "GraphicsDevice/configVariants");
 		}
 	}
 
@@ -563,8 +594,8 @@ extern "C" void Test_graphicsConfigVariants(
 
 	Log::debugLn(
 		*alloc,
-		"-- configVariants: base features %08X, verified DisableRt, DisableBindless and buffering modes",
-		(c::U32) base.features
+		"-- configVariants: base features %08X, verified disabling rt/bindless, and buffering modes",
+		(c::U32) base.flags.features
 	);
 
 	(void) baseDev.wait();

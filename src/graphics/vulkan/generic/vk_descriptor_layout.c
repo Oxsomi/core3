@@ -129,13 +129,13 @@ VkShaderStageFlags vkGetShaderStagesDevice(const GraphicsDevice *device, U32 vis
 
 	VkShaderStageFlags stageFlags = vkGetShaderStages(vis);
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_RayPipeline))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_RayPipeline))
 		stageFlags &=~ (
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
 			VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR | VK_SHADER_STAGE_CALLABLE_BIT_KHR
 		);
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_MeshShader))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_MeshShader))
 		stageFlags &=~ (VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT);
 
 	return stageFlags;
@@ -360,10 +360,13 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 			}
 
-			//A push descriptor set layout can't have sets allocated from it, so when the extension is missing
-			// this stays a regular layout and the emulation allocates a set per frame in flight from it instead.
+			//A push descriptor set layout can't have sets allocated from it. Without native push descriptors,
+			// this stays a regular layout so emulation can allocate sets with a lifetime tied to their frame.
 
-			if(hasPushDescriptor && (device->info.capabilities.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor))
+			if(
+				hasPushDescriptor &&
+				(device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
+			)
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 
 			setPresent |= 1 << linkId;

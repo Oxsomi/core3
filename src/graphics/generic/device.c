@@ -61,6 +61,10 @@ TListImpl(DevicePendingPull);
 TListImpl(GraphicsTiming);
 TListImpl(TimingEntry);
 
+//Internal dependency normalization from device_info.c, also used after instance capability masking.
+
+void GraphicsDeviceInfo_fixCapabilities(GraphicsDeviceInfo *info, EGraphicsApi api);
+
 //Frees a timings list filled by GraphicsDeviceRef_getTimings: its owned name copies, then the array itself.
 
 void ListGraphicsTiming_freeUnderlying(ListGraphicsTiming *timings, const Allocator *alloc) {
@@ -950,7 +954,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 	//Which matters beyond the name itself, because the names ARE how a derived layout tells the runtime's
 	// own registers from a caller's (GraphicsDeviceRef_isRuntimeRegister).
 
-	if (info->capabilities.features & EGraphicsFeatures_Raytracing) {
+	if (info->capabilities.flags.features & EGraphicsFeatures_Raytracing) {
 
 		bindingNames[descBindings] = CharString_createRefCStrConst("_tlasExt");
 
@@ -1033,36 +1037,6 @@ Bool GraphicsDeviceRef_create(
 	device->flags = flags;
 	device->framesInFlight = (U8) bufferMode;
 
-	if(device->flags & EGraphicsDeviceFlags_DisableRt) {
-		device->info.capabilities.features &=~ (
-			EGraphicsFeatures_Raytracing         |
-			EGraphicsFeatures_RayPipeline        |
-			EGraphicsFeatures_RayQuery           |
-			EGraphicsFeatures_RayMicromapOpacity |
-			EGraphicsFeatures_RayReorder         |
-			EGraphicsFeatures_RayValidation      |
-			EGraphicsFeatures_RayTriPosition
-		);
-
-		device->info.capabilities.features2 &=~ (
-			EGraphicsFeatures2_RayReorderActual         |
-			EGraphicsFeatures2_RayMicromapOpacityActual |
-			EGraphicsFeatures2_RayClusterAS             |
-			EGraphicsFeatures2_RayPartitionedTLAS       |
-			EGraphicsFeatures2_RayIndirectASBuild       |
-			EGraphicsFeatures2_SoftwareRT
-		);
-	}
-
-	//Clearing the feature is what actually turns bindless off, since layouts, heaps and shader checks all test it.
-	//Leaving it set would let a descriptor layout or an oiSH ask for bindless that the device no longer sets up.
-	//DescriptorHeap always implies Bindless, so it can't survive bindless being turned off either.
-
-	if(device->flags & EGraphicsDeviceFlags_DisableBindless) {
-		device->info.capabilities.features &=~ EGraphicsFeatures_Bindless;
-		device->info.capabilities.features2 &=~ EGraphicsFeatures2_DescriptorHeap;
-	}
-
 	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && !isDebugInstance)
@@ -1078,7 +1052,9 @@ Bool GraphicsDeviceRef_create(
 		device->flags |= EGraphicsDeviceFlags_IsDebug;
 
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
-		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
+		device->info.capabilities.flags.features &=~ EGraphicsFeatures_RayValidation;
+
+	GraphicsDeviceInfo_fixCapabilities(&device->info, instance->api);
 
 	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
 		Log_warnLnx(
@@ -1156,13 +1132,13 @@ Bool GraphicsDeviceRef_create(
 
 	//Create extended device
 
-	gotoIfError3(clean, GraphicsDevice_initExt(instance, info, deviceRef, e_rr));
+	gotoIfError3(clean, GraphicsDevice_initExt(instance, &device->info, deviceRef, e_rr));
 
 	//Create the default descriptor heap, layout, table and pipeline layout.
-	//All of it is skipped if the device has no bindless, which includes the caller turning it off through the flag.
+	//All of it is skipped if the device has no bindless, including when the capability was disabled by the caller.
 	//TODO: Allow user to define the heap sizes too
 
-	if(device->info.capabilities.features & EGraphicsFeatures_Bindless) {
+	if(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless) {
 
 		//The layout is described first, because the heap is then sized to hold exactly it.
 		//The caller can hand over a layout of their own, otherwise OxC3's default is what the device runs with.
@@ -1361,6 +1337,10 @@ Bool GraphicsDeviceRef_create(
 			sizeof(CBufferData), &device->frameData[i], e_rr
 		));
 
+	//Finish backend setup after the default layouts and per-frame buffers exist.
+
+	gotoIfError3(clean, GraphicsDevice_finishInitExt(*deviceRef, e_rr));
+
 	//Load prebuilt shaders
 
 	gotoIfError3(clean, GraphicsDeviceRef_createPrebuiltShaders(*deviceRef, e_rr));
@@ -1467,9 +1447,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 			);
 
 			retError(clean, Error_invalidState(
-				0,
-				"GraphicsDeviceRef_checkShaderFeatures() binary uses bindless arrays, but bindless is unsupported "
-				"or was turned off with EGraphicsDeviceFlags_DisableBindless"
+				0, "GraphicsDeviceRef_checkShaderFeatures() binary uses bindless arrays, but it is unsupported or turned off"
 			));
 		}
 
@@ -1711,30 +1689,20 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(declared2 & ESHExtension2_ExperimentTier1)           tiers |= EGraphicsFeatures2_ExperimentTier1;
 	if(declared2 & ESHExtension2_ExperimentTier2)           tiers |= EGraphicsFeatures2_ExperimentTier2;
 
-	if((device->info.capabilities.features2 & tiers) != tiers)
+	if((device->info.capabilities.flags.features2 & tiers) != tiers)
 		retError(clean, Error_unsupportedOperation(
 			0,
 			"GraphicsDeviceRef_checkShaderFeatures() binary declares an experiment tier (ExperimentTier1 or "
 			"ExperimentTier2) that the device's driver doesn't claim"
 		));
 
-	//Bindless is the one feature a caller can take away from a device that has it,
-	// so it says as much instead of leaving it to the generic message below.
-
-	if((features & EGraphicsFeatures_Bindless) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
-		retError(clean, Error_invalidState(
-			0,
-			"GraphicsDeviceRef_checkShaderFeatures() binary needs bindless, but the device has no bindless layout "
-			"(unsupported or turned off with EGraphicsDeviceFlags_DisableBindless)"
-		));
-
-	if(!isUnsafe && (device->info.capabilities.features & features) != features)
+	if(!isUnsafe && (device->info.capabilities.flags.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
 
-	if(!isUnsafe && (device->info.capabilities.features2 & features2) != features2)
+	if(!isUnsafe && (device->info.capabilities.flags.features2 & features2) != features2)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features2 is missing"));
 
-	if(!isUnsafe && (device->info.capabilities.dataTypes & dataTypes) != dataTypes)
+	if(!isUnsafe && (device->info.capabilities.flags.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
 	//Reading an oiSH widens a was-everything mask to today's everything, so this comparison stays exact
@@ -1750,7 +1718,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if(binaryType == EGfxBinaryType_DXIL) {
 
-		if((device->info.capabilities.featuresExt & (U32)featuresDx) != (U32)featuresDx)
+		if((device->info.capabilities.flags.featuresExt & (U32)featuresDx) != (U32)featuresDx)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"));
 
 		if(!Buffer_length(bin->binaries[EGfxBinaryType_DXIL]))

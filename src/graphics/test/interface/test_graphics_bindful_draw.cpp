@@ -150,7 +150,7 @@ extern "C" void Test_graphicsBindfulDraw(oxc::c::Test *t, oxc::c::GraphicsDevice
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping bindful draw tests");
 		return;
 	}
@@ -550,7 +550,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping fixed function draw tests");
 		return;
 	}
@@ -903,7 +903,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 
 	for (c::U64 m = 0; m < 3; ++m) {
 
-		if(msaaTypes[m] && !(dev.info().capabilities.dataTypes & msaaTypes[m]))
+		if(msaaTypes[m] && !(dev.info().capabilities.flags.dataTypes & msaaTypes[m]))
 			continue;
 
 		//Declared per iteration, so each count gets its own target and pipeline and the previous pair is
@@ -964,7 +964,7 @@ extern "C" void Test_graphicsBindfulDrawFixed(oxc::c::Test *t, oxc::c::GraphicsD
 	// disagree. Position agnostic on purpose, since sample locations and the NDC y direction are not ours
 	// to pin down here.
 
-	const c::Bool canResolveDepth = (dev.info().capabilities.dataTypes & c::EGraphicsDataTypes_MSAA2x) != 0;
+	const c::Bool canResolveDepth = (dev.info().capabilities.flags.dataTypes & c::EGraphicsDataTypes_MSAA2x) != 0;
 
 	if (!canResolveDepth)
 		c::Test_print(t, "Device lacks 2x MSAA, skipping the depth resolve leg");

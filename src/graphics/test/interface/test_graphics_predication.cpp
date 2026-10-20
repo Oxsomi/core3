@@ -56,7 +56,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	//Without the capability the CONTRACT is refusal, not degradation: the predicate usage bit at buffer
 	// creation is the first gate, so that is what a capability-less device has to reject.
 
-	if(!(dev.info().capabilities.features2 & c::EGraphicsFeatures2_Predication)) {
+	if(!(dev.info().capabilities.flags.features2 & c::EGraphicsFeatures2_Predication)) {
 
 		const c::U64 zero = 0;
 		c::Buffer zeroData = c::Buffer_createRefConst(&zero, sizeof(zero));

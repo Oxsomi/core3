@@ -103,7 +103,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 
 	//A pool's memory isn't queryable; the descriptor heap extension's sizes estimate it where the device has them
 
-	if(device->info.capabilities.features2 & EGraphicsFeatures2_DescriptorHeap) {
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_DescriptorHeap) {
 
 		const VkPhysicalDeviceDescriptorHeapPropertiesEXT *sizes = &deviceExt->descriptorHeapProperties;
 

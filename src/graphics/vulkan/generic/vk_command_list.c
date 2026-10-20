@@ -75,10 +75,9 @@ static inline Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderin
 //A custom layout emits the bound table's sets against that layout and marks the default sets dirty, since
 // binding with an incompatible layout invalidates them; a default layout pipeline then rebinds them once.
 
-Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer, Error *e_rr);
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer);
 
-//Fallible only on a device without VK_KHR_push_descriptor, where emitting a caller's push descriptors has to
-// allocate a set for them. Everything else here is recording, which cannot fail.
+//Binding can fail when creating a texture view or allocating a set for emulated push descriptors.
 
 static Bool VkCommandBufferState_bindDescriptors(
 	VkCommandBufferState *temp,
@@ -100,8 +99,8 @@ static Bool VkCommandBufferState_bindDescriptors(
 
 		if (!temp->defaultDescriptorsBound) {
 
+			GraphicsDevice_rebindDescriptors(device, temp->buffer);
 			temp->defaultDescriptorsBound = true;
-			GraphicsDevice_rebindDescriptors(device, temp->buffer, NULL);
 
 			for(U8 i = 0; i < 3; ++i) {
 				temp->lastBoundTable[i] = NULL;
@@ -214,8 +213,8 @@ static Bool VkCommandBufferState_bindDescriptors(
 		temp->lastPushDescLayout[bindPointId] = *layoutExt;
 	}
 
-	//Push descriptors go out here for the same reasons, and buffer class only for the same reason D3D12 is:
-	// createDescriptorLayout refuses anything else, so the writes below only ever describe buffers and RTASes.
+	//Caller push descriptors go out here for the same reasons, with buffers, textures and acceleration
+	// structures each written using their native descriptor type.
 
 	if (temp->pushDescriptorCount && layout->info.pushDescriptors && (
 		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
@@ -290,10 +289,7 @@ static Bool VkCommandBufferState_bindDescriptors(
 				VkImageView view = NULL;
 				U32 viewId = U32_MAX;
 
-				if(!VkUnifiedTexture_getView(d, binding.registerType, &view, &viewId, NULL)) {
-					Log_errorLnx("VkUnifiedTexture_getView failed for a push descriptor, skipping the bind");
-					continue;
-				}
+				gotoIfError3(clean, VkUnifiedTexture_getView(d, binding.registerType, &view, &viewId, e_rr));
 
 				images[writeCount] = (VkDescriptorImageInfo) {
 					.imageView = view,
@@ -438,7 +434,7 @@ static VkPipelineStageFlags2 VkPipelineStage_fromMask(U32 stageMask, const Graph
 	VkPipelineStageFlags2 stages = 0;
 
 	const VkPipelineStageFlags2 geometry =
-		(device->info.capabilities.features & EGraphicsFeatures_GeometryShader) ?
+		(device->info.capabilities.flags.features & EGraphicsFeatures_GeometryShader) ?
 		VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT : 0;
 
 	const VkPipelineStageFlags2 tessEval =

@@ -121,6 +121,216 @@ namespace {
 
 }
 
+extern "C" void Test_graphicsCapabilityDisable(oxc::c::Test *t) {
+
+	using namespace oxc;
+
+	c::Test_setModule(t, "GraphicsDeviceInfo/disableCapability");
+
+	c::GraphicsDeviceInfo supported{};
+	supported.capabilities.flags = {
+		.features = (c::EGraphicsFeatures) c::U32_MAX,
+		.features2 = (c::EGraphicsFeatures2) ((1u << c::EGraphicsFeatures2_Count) - 1),
+		.dataTypes = (c::EGraphicsDataTypes) ((1u << c::EGraphicsDataTypes_Count) - 1),
+		.featuresExt = c::U32_MAX
+	};
+	supported.capabilities.experimentalFeatures = supported.capabilities.flags.features;
+	supported.capabilities.experimentalFeatures2 = supported.capabilities.flags.features2;
+	supported.capabilities.timestampPeriod = 1.5f;
+	supported.capabilities.waveSizeMin = 16;
+	supported.capabilities.waveSizeMax = 64;
+	supported.capabilities.waveSizeDefault = 32;
+	supported.capabilities.dedicatedMemory = 1024;
+	supported.capabilities.maxBufferSize = 512;
+
+	//Each name family must resolve to its own bits, including names used to force backend fallbacks.
+
+	const struct {
+		const c::C8 *name;
+		c::EGraphicsApi api;
+		c::GraphicsDeviceCapFlags removed;
+	} cases[] = {
+		{ "Bindless", c::EGraphicsApi_Vulkan, {
+			.features = c::EGraphicsFeatures_Bindless,
+			.features2 = c::EGraphicsFeatures2_DescriptorHeap
+		} },
+		{ "Raytracing", c::EGraphicsApi_Vulkan, {
+			.features = c::EGraphicsFeatures_RaytracingFeats,
+			.features2 = c::EGraphicsFeatures2_RaytracingFeats
+		} },
+		{ "SubgroupOperations", c::EGraphicsApi_Direct3D12, {
+			.features = (c::EGraphicsFeatures) (
+				c::EGraphicsFeatures_SubgroupOperations | c::EGraphicsFeatures_SubgroupArithmetic |
+				c::EGraphicsFeatures_SubgroupShuffle | c::EGraphicsFeatures_SubgroupQuad
+			),
+			.featuresExt = c::EDxGraphicsFeatures_WaveSize | c::EDxGraphicsFeatures_WaveSizeMinMax
+		} },
+		{ "CoopVec", c::EGraphicsApi_Direct3D12, {
+			.features = (c::EGraphicsFeatures) (c::EGraphicsFeatures_CoopVec | c::EGraphicsFeatures_CoopVecTraining)
+		} },
+		{ "MeshShader", c::EGraphicsApi_Vulkan, {
+			.features = (c::EGraphicsFeatures) (c::EGraphicsFeatures_MeshShader | c::EGraphicsFeatures_MeshTaskTexDeriv)
+		} },
+		{ "RayReorder", c::EGraphicsApi_Vulkan, {
+			.features = c::EGraphicsFeatures_RayReorder,
+			.features2 = c::EGraphicsFeatures2_RayReorderActual
+		} },
+		{ "RaySoftware", c::EGraphicsApi_Vulkan, { .features2 = c::EGraphicsFeatures2_RaySoftware } },
+		{ "Timestamps", c::EGraphicsApi_Vulkan, { .features2 = c::EGraphicsFeatures2_Timestamps } },
+		{ "I64", c::EGraphicsApi_Direct3D12, {
+			.dataTypes = (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_I64 | c::EGraphicsDataTypes_AtomicI64)
+		} },
+		{ "F64", c::EGraphicsApi_Vulkan, {
+			.dataTypes = (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F64 | c::EGraphicsDataTypes_AtomicF64)
+		} },
+		{ "PerformantPushDescriptor", c::EGraphicsApi_Vulkan, {
+			.featuresExt = c::EVkGraphicsFeatures_PerformantPushDescriptor
+		} },
+		{ "BufferDeviceAddress", c::EGraphicsApi_Vulkan, {
+			.features = c::EGraphicsFeatures_RaytracingFeats,
+			.features2 = (c::EGraphicsFeatures2) (
+				c::EGraphicsFeatures2_RaytracingFeats | c::EGraphicsFeatures2_DescriptorHeap
+			),
+			.featuresExt = c::EVkGraphicsFeatures_BufferDeviceAddress
+		} },
+		{ "MemoryPriority", c::EGraphicsApi_Vulkan, {
+			.featuresExt = c::EVkGraphicsFeatures_MemoryPriority | c::EVkGraphicsFeatures_PageableMemory
+		} },
+		{ "SubgroupSizeControl", c::EGraphicsApi_Vulkan, {
+			.featuresExt = c::EVkGraphicsFeatures_SubgroupSizeControl
+		} },
+		{ "SM6_6", c::EGraphicsApi_Direct3D12, {
+			.features = (c::EGraphicsFeatures) (
+				c::EGraphicsFeatures_ComputeDeriv | c::EGraphicsFeatures_MeshTaskTexDeriv |
+				c::EGraphicsFeatures_WriteMSTexture | c::EGraphicsFeatures_RayReorder |
+				c::EGraphicsFeatures_CoopVec | c::EGraphicsFeatures_CoopMat | c::EGraphicsFeatures_CoopFP8 |
+				c::EGraphicsFeatures_CoopVecTraining | c::EGraphicsFeatures_RayTriPosition
+			),
+			.features2 = (c::EGraphicsFeatures2) (
+				c::EGraphicsFeatures2_DescriptorHeap | c::EGraphicsFeatures2_RayReorderActual
+			),
+			.dataTypes = c::EGraphicsDataTypes_AtomicI64,
+			.featuresExt =
+				c::EDxGraphicsFeatures_SM6_6 | c::EDxGraphicsFeatures_SM6_7 | c::EDxGraphicsFeatures_SM6_8 |
+				c::EDxGraphicsFeatures_SM6_9 | c::EDxGraphicsFeatures_SM6_10 | c::EDxGraphicsFeatures_WaveSize |
+				c::EDxGraphicsFeatures_WaveSizeMinMax | c::EDxGraphicsFeatures_PAQ
+		} },
+		{ "SM6_7", c::EGraphicsApi_Direct3D12, {
+			.features = (c::EGraphicsFeatures) (
+				c::EGraphicsFeatures_WriteMSTexture | c::EGraphicsFeatures_RayReorder |
+				c::EGraphicsFeatures_CoopVec | c::EGraphicsFeatures_CoopMat | c::EGraphicsFeatures_CoopFP8 |
+				c::EGraphicsFeatures_CoopVecTraining | c::EGraphicsFeatures_RayTriPosition
+			),
+			.features2 = c::EGraphicsFeatures2_RayReorderActual,
+			.featuresExt =
+				c::EDxGraphicsFeatures_SM6_7 | c::EDxGraphicsFeatures_SM6_8 | c::EDxGraphicsFeatures_SM6_9 |
+				c::EDxGraphicsFeatures_SM6_10 | c::EDxGraphicsFeatures_WaveSizeMinMax
+		} },
+		{ "SM6_10", c::EGraphicsApi_Direct3D12, {
+			.features = (c::EGraphicsFeatures) (
+				c::EGraphicsFeatures_CoopVec | c::EGraphicsFeatures_CoopMat | c::EGraphicsFeatures_CoopFP8 |
+				c::EGraphicsFeatures_CoopVecTraining | c::EGraphicsFeatures_RayTriPosition
+			),
+			.featuresExt = c::EDxGraphicsFeatures_SM6_10
+		} },
+		{ "ReBAR", c::EGraphicsApi_Direct3D12, { .featuresExt = c::EDxGraphicsFeatures_ReBAR } }
+	};
+
+	for(const auto &test : cases) {
+
+		c::GraphicsDeviceInfo info = supported;
+		const c::CharString name = c::CharString_createRefCStrConst(test.name);
+
+		Test_assert(t, "recognizedName", c::GraphicsDeviceInfo_disableCapability(&info, test.api, name));
+		Test_assert(t, "recognizedAbsentName", c::GraphicsDeviceInfo_disableCapability(&info, test.api, name));
+
+		const c::GraphicsDeviceCapFlags flags = info.capabilities.flags;
+		const c::GraphicsDeviceCapFlags base = supported.capabilities.flags;
+
+		Test_assert(t, "disabledFeatureClosure", flags.features == (base.features & ~test.removed.features));
+		Test_assert(t, "disabledFeature2Closure", flags.features2 == (base.features2 & ~test.removed.features2));
+		Test_assert(t, "disabledDataTypeClosure", flags.dataTypes == (base.dataTypes & ~test.removed.dataTypes));
+		Test_assert(t, "disabledBackendFeature", flags.featuresExt == (base.featuresExt & ~test.removed.featuresExt));
+		Test_assert(t, "experimentalFeatureSubset", info.capabilities.experimentalFeatures == flags.features);
+		Test_assert(t, "experimentalFeature2Subset", info.capabilities.experimentalFeatures2 == flags.features2);
+		Test_assert(t, "disabledKeepsLimits",
+			info.capabilities.dedicatedMemory == 1024 && info.capabilities.maxBufferSize == 512
+		);
+
+		Test_assert(t, "disabledTimestampPeriod", info.capabilities.timestampPeriod ==
+			((test.removed.features2 & c::EGraphicsFeatures2_Timestamps) ? 0 : 1.5f)
+		);
+
+		if(test.removed.features & c::EGraphicsFeatures_SubgroupOperations)
+			Test_assert(t, "disabledSubgroupsClearWaveRange",
+				!info.capabilities.waveSizeMin && !info.capabilities.waveSizeMax
+			);
+
+		else if(test.api == c::EGraphicsApi_Vulkan && (test.removed.featuresExt & c::EVkGraphicsFeatures_SubgroupSizeControl))
+			Test_assert(t, "disabledSizeControlUsesNativeWave",
+				info.capabilities.waveSizeMin == 32 && info.capabilities.waveSizeMax == 32
+			);
+
+		else Test_assert(t, "disabledKeepsWaveRange",
+			info.capabilities.waveSizeMin == 16 && info.capabilities.waveSizeMax == 64
+		);
+	}
+
+	//Rejected requests must not normalize or otherwise change the supplied snapshot.
+
+	const struct { const c::C8 *name; c::EGraphicsApi api; } rejected[] = {
+		{ "", c::EGraphicsApi_Vulkan },
+		{ "bindless", c::EGraphicsApi_Vulkan },
+		{ "UnknownCapability", c::EGraphicsApi_Vulkan },
+		{ "ReBAR", c::EGraphicsApi_Vulkan },
+		{ "PerformantPushDescriptor", c::EGraphicsApi_Direct3D12 },
+		{ "Bindless", (c::EGraphicsApi) -1 },
+		{ "Bindless", c::EGraphicsApi_Count }
+	};
+
+	for(const auto &test : rejected) {
+
+		c::GraphicsDeviceInfo info = supported;
+		const c::CharString name = c::CharString_createRefCStrConst(test.name);
+
+		Test_assert(t, "rejectInvalidName", !c::GraphicsDeviceInfo_disableCapability(&info, test.api, name));
+		Test_assert(t, "invalidNamePreservesInfo", c::Buffer_eq(
+			c::Buffer_createRefConst(&info, sizeof(info)), c::Buffer_createRefConst(&supported, sizeof(supported))
+		));
+	}
+
+	c::GraphicsDeviceInfo info = supported;
+	Test_assert(t, "rejectNullInfo", !c::GraphicsDeviceInfo_disableCapability(
+		nullptr, c::EGraphicsApi_Vulkan, c::CharString_createRefCStrConst("Bindless")
+	));
+
+	Test_assert(t, "rejectNullName", !c::GraphicsDeviceInfo_disableCapability(
+		&info, c::EGraphicsApi_Vulkan, c::CharString_createNull()
+	));
+
+	Test_assert(t, "cppDisableCapability", gfx::disableCapability(info, c::EGraphicsApi_Vulkan, "Bindless"));
+	Test_assert(t, "cppDisabledCapabilityFlags",
+		!(info.capabilities.flags.features & c::EGraphicsFeatures_Bindless) &&
+		!(info.capabilities.flags.features2 & c::EGraphicsFeatures2_DescriptorHeap)
+	);
+
+	//Removing the last ray execution mode must clear acceleration structure and ray feature claims.
+
+	Test_assert(t, "disableRayQuery", c::GraphicsDeviceInfo_disableCapability(
+		&info, c::EGraphicsApi_Vulkan, c::CharString_createRefCStrConst("RayQuery")
+	));
+
+	Test_assert(t, "pipelineKeepsRaytracing", info.capabilities.flags.features & c::EGraphicsFeatures_Raytracing);
+	Test_assert(t, "disableRayPipeline", c::GraphicsDeviceInfo_disableCapability(
+		&info, c::EGraphicsApi_Vulkan, c::CharString_createRefCStrConst("RayPipeline")
+	));
+
+	Test_assert(t, "noRayExecutionClearsRaytracing",
+		!(info.capabilities.flags.features & c::EGraphicsFeatures_RaytracingFeats) &&
+		!(info.capabilities.flags.features2 & c::EGraphicsFeatures2_RaytracingFeats)
+	);
+}
+
 extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
 	using namespace oxc;
@@ -137,9 +347,9 @@ extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDevic
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	const c::EGraphicsFeatures f = caps.features;
-	const c::EGraphicsFeatures2 f2 = caps.features2;
-	const c::EGraphicsDataTypes d = caps.dataTypes;
+	const c::EGraphicsFeatures f = caps.flags.features;
+	const c::EGraphicsFeatures2 f2 = caps.flags.features2;
+	const c::EGraphicsDataTypes d = caps.flags.dataTypes;
 
 	// -- Invariants a reported capability set has to satisfy -----------------------------------------
 
@@ -202,7 +412,7 @@ extern "C" void Test_graphicsCapabilities(oxc::c::Test *t, oxc::c::GraphicsDevic
 
 	if (GraphicsInstanceRef_ptr(device->instance)->api == c::EGraphicsApi_Direct3D12) {
 
-		const c::U32 fx = caps.featuresExt;
+		const c::U32 fx = caps.flags.featuresExt;
 
 		if(fx & c::EDxGraphicsFeatures_SM6_10)
 			Test_assert(t, "sm610ImpliesSm69", (fx & c::EDxGraphicsFeatures_SM6_9) != 0);

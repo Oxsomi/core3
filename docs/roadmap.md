@@ -35,11 +35,6 @@ Last full revision: 2026-09-02.
   Vulkan backend was binding whichever came first instead of the stage's own (fixed in vk_graphics_pipeline.c
   by preferring the name the oiSH recorded, then the stage's execution model). That is a later layer than
   getFirstShaderEntry so it is not this bug, but the multi-entry premise itself is no longer a guess.
-- **Android emulator: push descriptor emulation.** gfxstream drops VK_KHR_push_descriptor from the guest even
-  where the host driver has it. Both kinds of push are emulated there (the device's own globals through one
-  pre-written set per frame in flight, a caller's push descriptors through a set per push out of per-frame
-  pools, see `docs/graphics_api.md`). The emulated path only runs where the extension is missing, so a pass
-  of the graphics interface tests on an actual emulator is what proves it; that run is still owed.
 - **AMD's driver fail-fasts tearing a virtual GPU down.** Targeting another ASIC for DXIL ISA works
   (`-asic <name>` resolves the name, hands it to the driver and re-runs itself so the adapter initializes as
   the target), but the second process dies with STATUS_STACK_BUFFER_OVERRUN on the way out, after the

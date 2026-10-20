@@ -29,6 +29,7 @@
 
 typedef enum ETextureFormat ETextureFormat;
 typedef enum EDepthStencilFormat EDepthStencilFormat;
+typedef struct CharString CharString;
 
 typedef enum EGraphicsDeviceType {
 	EGraphicsDeviceType_Dedicated,
@@ -123,7 +124,9 @@ typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_SM6_7                   = 1 << 17,
 	EDxGraphicsFeatures_SM6_8                   = 1 << 18,
 	EDxGraphicsFeatures_SM6_9                   = 1 << 19,
-	EDxGraphicsFeatures_SM6_10                  = 1 << 20
+	EDxGraphicsFeatures_SM6_10                  = 1 << 20,
+
+	EDxGraphicsFeatures_Count                   = 21
 
 } EDxGraphicsFeatures;
 
@@ -137,14 +140,14 @@ typedef enum EVkGraphicsFeatures {
 	EVkGraphicsFeatures_DriverProperties         = 1 << 3,
 	EVkGraphicsFeatures_MemoryBudget             = 1 << 4,
 
-	//VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer can be pushed
+	//VK_KHR_push_descriptor with at least OXC3_MAX_PUSH_DESCRIPTORS descriptors, so the globals buffer can be pushed
 	// straight into the command buffer instead of being bound from a set allocated to hold it.
 	//Named for the performance, not the capability: pushing descriptors always works, this only says the device
 	// does it natively rather than through the emulation below.
 	//Vulkan only, because it's the only api where this isn't a given; D3D12 has root descriptors and Metal has
 	// argument buffers, so there's nothing for a caller to branch on outside of Vulkan.
 	//When it's absent OxC3 uses one descriptor set per frame in flight instead,
-	// which trades a push per frame for an allocation and a write at first submit.
+	// which trades a push per frame for an allocation and a write during device creation.
 	//Android emulators are the common case, since gfxstream drops the extension from the guest even when the
 	// host driver exposes it.
 
@@ -180,7 +183,9 @@ typedef enum EVkGraphicsFeatures {
 	//VK_EXT_subgroup_size_control with compute among its stages: a compute pipeline asks for the subgroup size its
 	// entry's [WaveSize] names, so the range in GraphicsDeviceCapabilities is the device's whole range.
 
-	EVkGraphicsFeatures_SubgroupSizeControl      = 1 << 12
+	EVkGraphicsFeatures_SubgroupSizeControl      = 1 << 12,
+
+	EVkGraphicsFeatures_Count                    = 13
 
 } EVkGraphicsFeatures;
 
@@ -219,6 +224,11 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_RayReorder                = 1 << 13,
 	EGraphicsFeatures_RayValidation             = 1 << 14,         //Debugging for raytracing validation
 
+	EGraphicsFeatures_RaytracingFeats           =
+		EGraphicsFeatures_Raytracing | EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery |
+		EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayTriPosition | EGraphicsFeatures_RayReorder |
+		EGraphicsFeatures_RayValidation,
+
 	//LUID for sharing devices
 
 	EGraphicsFeatures_LUID                      = 1 << 15,
@@ -229,8 +239,7 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_LogicOp                   = 1 << 17,
 	EGraphicsFeatures_DualSrcBlend              = 1 << 18,
 
-	//SV_Barycentrics in fragment shaders (SM6.1 / VK_KHR_fragment_shader_barycentric)
-	EGraphicsFeatures_Barycentrics              = 1 << 19,
+	EGraphicsFeatures_Barycentrics              = 1 << 19,        //SV_Barycentrics (SM6.1, VK_KHR_fragment_shader_barycentric)
 	EGraphicsFeatures_SwapchainCompute          = 1 << 20,        //isComputeExt in createSwapchain is supported
 
 	EGraphicsFeatures_ComputeDeriv              = 1 << 21,        //Compute derivatives (ddx/ddy)
@@ -249,15 +258,19 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_CoopMat                   = 1 << 27,        //Cooperative matrix (subgroup GEMM)
 	EGraphicsFeatures_CoopFP8                   = 1 << 28,        //FP8 (e4m3/e5m2) cooperative type support
 	EGraphicsFeatures_CoopVecTraining           = 1 << 29,        //CoopVec training (outer-product / reduce-sum accumulate)
+
 	//Quad subgroup ops (QuadReadAcrossX/Y/Diagonal, QuadReadLaneAt).
 	//Reported separately from SubgroupShuffle by Vulkan, and separate hardware from ComputeDeriv:
 	// quad ops in a COMPUTE shader need both this and ComputeDeriv, in a pixel shader only this.
+
 	EGraphicsFeatures_SubgroupQuad              = 1 << 30,
 
 	//Spelled as a subtraction rather than as -2147483648, which is a unary minus on a constant too large for
 	// int and so an unsigned one; msvc rejects that under C4146 while clang stays quiet.
 
-	EGraphicsFeatures_Reserved                  = -2147483647 - 1  //Reserved for safety enum reasons
+	EGraphicsFeatures_Reserved                  = -2147483647 - 1,  //Reserved for safety enum reasons
+
+	EGraphicsFeatures_Count                     = 32
 
 } EGraphicsFeatures;
 
@@ -344,7 +357,7 @@ typedef enum EGraphicsFeatures2 {
 	//An NV driver too old to expose ray query reads as a false positive, which costs that install the faster
 	// arm and nothing else.
 
-	EGraphicsFeatures2_SoftwareRT               = 1 << 10,
+	EGraphicsFeatures2_RaySoftware              = 1 << 10,
 
 	//A lost device reports what it faulted on, addresses included (docs/graphics_api.md, "Device loss").
 	//DRED on D3D12, VK_EXT_device_fault on Vulkan.
@@ -365,7 +378,13 @@ typedef enum EGraphicsFeatures2 {
 	//Vulkan only, as D3D12 has no such extension.
 
 	EGraphicsFeatures2_ExperimentTier1          = 1 << 13,
-	EGraphicsFeatures2_ExperimentTier2          = 1 << 14
+	EGraphicsFeatures2_ExperimentTier2          = 1 << 14,
+
+	EGraphicsFeatures2_RaytracingFeats           =
+		EGraphicsFeatures2_RayReorderActual | EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS |
+		EGraphicsFeatures2_RayIndirectASBuild | EGraphicsFeatures2_RayMicromapOpacityActual | EGraphicsFeatures2_RaySoftware,
+
+	EGraphicsFeatures2_Count                    = 15
 
 } EGraphicsFeatures2;
 
@@ -428,18 +447,29 @@ typedef enum EGraphicsDataTypes {
 	// render targets, so anything that produces the format rather than consuming it has to check this and
 	// carry a fallback.
 
-	EGraphicsDataTypes_WriteRGB9E5              = 1 << 19
+	EGraphicsDataTypes_WriteRGB9E5              = 1 << 19,
+
+	EGraphicsDataTypes_Count                    = 20
 
 } EGraphicsDataTypes;
+
+typedef struct GraphicsDeviceCapFlags {
+
+	EGraphicsFeatures features;
+	EGraphicsFeatures2 features2;
+
+	EGraphicsDataTypes dataTypes;
+	U32 featuresExt;                //Extended device features, API dependent
+
+} GraphicsDeviceCapFlags;
 
 //This struct represents the abilities a graphics device has.
 
 typedef struct GraphicsDeviceCapabilities {
 
-	EGraphicsFeatures features;
-	EGraphicsFeatures2 features2;
+	GraphicsDeviceCapFlags flags;
 
-	//Subset of `features` that is experimental/preview on this device+build
+	//Subsets of flags.features and flags.features2 that are experimental/preview on this device+build
 	// (not final; can change or be removed across SDK/driver updates).
 	//On D3D12 the SM6.10-gated cooperative features land here
 	// (enabled via the preview SDK + D3D12ExperimentalShaderModels + Developer Mode).
@@ -447,16 +477,16 @@ typedef struct GraphicsDeviceCapabilities {
 	EGraphicsFeatures experimentalFeatures;
 	EGraphicsFeatures2 experimentalFeatures2;
 
-	EGraphicsDataTypes dataTypes;
-	U32 featuresExt;                //Extended device features, API dependent
-	
 	F32 timestampPeriod;            //Nanoseconds per GPU timestamp tick under EGraphicsFeatures2_Timestamps, else 0
 
 	//The wave sizes a compute shader's [WaveSize] can name, in lanes: every power of two from min to max.
 	//On Vulkan without EVkGraphicsFeatures_SubgroupSizeControl both are the device's one subgroup size.
+	//Both are zero when SubgroupOperations is disabled. waveSizeDefault is Vulkan's native subgroup size,
+	// or zero for an api without a fixed subgroup size.
 
 	U8 waveSizeMin, waveSizeMax;
-	U16 padding;
+	U8 waveSizeDefault;
+	U8 padding;
 
 	U64 dedicatedMemory;            //Memory accessible directly to the device
 	U64 sharedMemory;               //Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)
@@ -503,6 +533,26 @@ typedef enum EGraphicsApi {
 } EGraphicsApi;
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities);
+
+//Every capability bit by name, bit indexed: entry i names 1 << i, and a bit with nothing behind it is named
+// ReservedN so the tables stay dense and a name can never silently resolve to the wrong bit.
+//The names are the enum's own, minus the prefix, so EGraphicsFeatures_Raytracing is "Raytracing".
+//featuresExt is api dependent, which is why it takes two tables rather than one.
+
+extern const C8 *EGraphicsFeatures_names[EGraphicsFeatures_Count];
+extern const C8 *EGraphicsFeatures2_names[EGraphicsFeatures2_Count];
+extern const C8 *EGraphicsDataTypes_names[EGraphicsDataTypes_Count];
+extern const C8 *EVkGraphicsFeatures_names[EVkGraphicsFeatures_Count];
+extern const C8 *EDxGraphicsFeatures_names[EDxGraphicsFeatures_Count];
+
+//Clears a capability by its case-sensitive enum suffix, plus capabilities that depend on it.
+//Apply this to queried device info before passing it to GraphicsDeviceRef_create.
+//Only the selected api's names resolve against flags.featuresExt.
+//Disabling a D3D12 shader model also disables higher models and features requiring them.
+//Returns true for a recognized name, including one already disabled; false for NULL deviceInfo, an empty
+// or NULL name, an invalid api, or an unknown name. False leaves the device info unchanged.
+
+Bool GraphicsDeviceInfo_disableCapability(GraphicsDeviceInfo *deviceInfo, EGraphicsApi api, CharString name);
 
 //If a texture and render texture can be created with the format.
 Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format);

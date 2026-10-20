@@ -191,7 +191,7 @@ extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		return;
 	}
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping draw execution tests");
 		return;
 	}
@@ -351,7 +351,7 @@ extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	// rasterizer's business and differs between implementations, but "some but not all" separates a wireframe
 	// that took effect from one that was silently ignored, which would fill all 64 exactly as the flat draw did.
 
-	if(dev.info().capabilities.features & c::EGraphicsFeatures_Wireframe) {
+	if(dev.info().capabilities.flags.features & c::EGraphicsFeatures_Wireframe) {
 
 		c::PipelineGraphicsInfo wireInfo = flatInfo;
 		wireInfo.rasterizer.flags = (c::U16)(wireInfo.rasterizer.flags | c::ERasterizerFlags_IsWireframeExt);
@@ -448,7 +448,7 @@ extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	//The gate is required: Vulkan reports logicOp false on most mobile GPUs and MoltenVK, and the pipeline
 	// create would fail there rather than skip.
 
-	if(!(dev.info().capabilities.features & c::EGraphicsFeatures_LogicOp))
+	if(!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_LogicOp))
 		c::Test_print(t, "Device doesn't support logicOp, skipping logic op test");
 
 	else {
@@ -500,7 +500,7 @@ extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	//This is also the runtime proof of the dual source reflection path: both outputs sit at LOCATION 0 on
 	// SPIR-V, told apart by the Index decoration the DUAL_SRC macros apply.
 
-	if(dev.info().capabilities.features & c::EGraphicsFeatures_DualSrcBlend) {
+	if(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DualSrcBlend) {
 
 		c::PipelineGraphicsInfo dualInfo = flatInfo;
 		dualInfo.blendState = {
@@ -742,7 +742,7 @@ extern "C" void Test_graphicsShaderDraw(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		{ c::EMSAASamples_x8Ext, c::EGraphicsDataTypes_MSAA8x }
 	};
 
-	const c::EGraphicsDataTypes msaaTypes = dev.info().capabilities.dataTypes;
+	const c::EGraphicsDataTypes msaaTypes = dev.info().capabilities.flags.dataTypes;
 	c::U32 msaaRun = 0, msaaSkipped = 0;
 
 	for (c::U64 m = 0; m < sizeof(msaaCases) / sizeof(msaaCases[0]); ++m) {

@@ -220,6 +220,152 @@ extern "C" void Test_graphicsBindfulPushDescriptors(oxc::c::Test *t, oxc::c::Gra
 		}
 }
 
+//More pushes than fit in one emulation pool, followed by enough asynchronous submits to reuse every
+// frame's pools. Each push writes a different range, so retaining only the latest descriptor values
+// cannot accidentally produce the expected output.
+
+extern "C" void Test_graphicsBindfulPushRollover(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
+
+	using namespace oxc;
+	using namespace oxc::gfx;
+
+	Test_setModule(t, "Bindful/pushRollover");
+
+	c::Error *e_rr = &t->err;
+	const c::Allocator *alloc = c::Platform_instance->alloc;
+	Device dev = Device::share(deviceRef);
+	OwnedSHFile shader(alloc);
+
+	if(!TestShaders_loadFile(t, "//OxC3_gtest/test_shaders/test_bindful_pushdesc.oiSH", &shader.list)) {
+		Test_print(t, "Test shaders unavailable (built without shader compiler), skipping push rollover tests");
+		return;
+	}
+
+	const c::U32 entryId = TestShaders_entry(t, deviceRef, &shader.list, "main");
+
+	if(entryId == c::U32_MAX)
+		return;
+
+	OwnedLayoutInfo layoutInfo(alloc), pushInfo(alloc);
+
+	if(!Test_assert(t, "detectLayout", dev.detectLayout(
+		shader.list, entryId, layoutInfo.list, nullptr, nullptr, { "params", "output" }, &pushInfo.list,
+		c::EDescriptorLayoutFlags_None, (c::EDetectDescriptorLayoutFlags) 0, e_rr
+	)))
+		return;
+
+	DescriptorLayout pushLayout;
+
+	if(!Test_assert(t, "pushLayoutCreate", dev.createDescriptorLayout(
+		pushInfo.list, "Push rollover descriptor layout", pushLayout, e_rr
+	)))
+		return;
+
+	c::PipelineLayoutInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.pushDescriptors = pushLayout.handle();
+	PipelineLayout pipelineLayout;
+
+	if(!Test_assert(t, "pipelineLayoutCreate", dev.createPipelineLayout(
+		pipelineLayoutInfo, "Push rollover pipeline layout", pipelineLayout, e_rr
+	)))
+		return;
+
+	Pipeline pipeline;
+
+	if(!Test_assert(t, "pipelineCreate", dev.createComputePipeline(
+		shader.list, "main", "Push rollover pipeline", pipeline, {}, &pipelineLayout, e_rr
+	)))
+		return;
+
+	//Vulkan's emulation pool holds 64 sets. Each CBV is an aligned slice of the same buffer, and each
+	// dispatch reads different constants; sharing the resource cannot justify sharing its descriptor set.
+
+	constexpr c::U32 dispatchCount = 65;
+	c::U32 params[dispatchCount][64]{};
+
+	for(c::U32 i = 0; i < dispatchCount; ++i) {
+		params[i][0] = i + 1;
+		params[i][1] = i * 3 + 5;
+		params[i][2] = i ^ 0x55u;
+		params[i][3] = i * 64;
+	}
+
+	c::Buffer paramRef = c::Buffer_createRefConst(params, sizeof(params));
+	DeviceBuffer constants, output;
+
+	if(!Test_assert(t, "constantsCreate", dev.createBufferData(
+		c::EDeviceBufferUsage_Uniform, c::EGraphicsResourceFlag_None,
+		"Push rollover constants", &paramRef, constants, nullptr, e_rr
+	)))
+		return;
+
+	if(!Test_assert(t, "outputCreate", dev.createBuffer(
+		c::EDeviceBufferUsage_None,
+		(c::EGraphicsResourceFlag)(c::EGraphicsResourceFlag_ShaderWrite | c::EGraphicsResourceFlag_CPUBacked),
+		"Push rollover output", dispatchCount * 64 * sizeof(c::U32), output, nullptr, e_rr
+	)))
+		return;
+
+	CommandList commandList, emptyList;
+
+	if(
+		!Test_assert(t, "listCreate", dev.createCommandList(64 * c::KIBI, 256, 16, commandList, true, e_rr)) ||
+		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
+	)
+		return;
+
+	if(
+		!Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr)) ||
+		!Test_assert(t, "endEmpty", emptyList.end(e_rr)) ||
+		!Test_assert(t, "begin", commandList.begin(true, e_rr))
+	)
+		return;
+
+	const c::Descriptor outputDesc = c::Descriptor_buffer(output.handle(), 0, 0, nullptr, 0);
+
+	{
+		CommandScope scope = commandList.scope({}, 1, {}, e_rr);
+
+		if(
+			!Test_assert(t, "scope", (c::Bool) scope) ||
+			!Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr))
+		)
+			return;
+
+		for(c::U32 i = 0; i < dispatchCount; ++i) {
+			const c::Descriptor paramDesc = c::Descriptor_buffer(constants.handle(), i * 256, (i + 1) * 256, nullptr, 0);
+
+			if(
+				!Test_assert(t, "setPush", scope.setPushDescriptors({ paramDesc, outputDesc }, e_rr)) ||
+				!Test_assert(t, "dispatch", scope.dispatch1D(1, e_rr))
+			)
+				return;
+		}
+
+		if(!Test_assert(t, "scopeEnd", scope.end(e_rr)))
+			return;
+	}
+
+	if(!Test_assert(t, "end", commandList.end(e_rr)))
+		return;
+
+	for(c::U32 frame = 0; frame < dev.framesInFlight() * 2u + 1; ++frame)
+		if(!Test_assert(t, "submitRollover", dev.submit({ &commandList }, {}, -1, 0, e_rr)))
+			return;
+
+	if(!Test_assert(t, "wait", dev.wait(e_rr)) || !TestShaders_pullBuffer(t, deviceRef, emptyList.handle(), output.handle()))
+		return;
+
+	const c::U32 *values = (const c::U32*) output.data()->cpuData.ptr;
+	c::Bool match = true;
+
+	for(c::U32 i = 0; i < dispatchCount; ++i)
+		for(c::U32 j = 0; j < 64; ++j)
+			match &= values[i * 64 + j] == ((j * params[i][0] + params[i][1]) ^ params[i][2]);
+
+	Test_assert(t, "pushRolloverResults", match);
+}
+
 //A texture push descriptor, which is the half a root descriptor cannot hold.
 //D3D12 gives it a single entry descriptor table filled from the bound heap's push ring and Vulkan pushes an
 // image descriptor; the buffer beside it stays a root descriptor on both, so one dispatch covers both forms.

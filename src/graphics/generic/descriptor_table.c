@@ -1025,7 +1025,7 @@ Bool DescriptorTableRef_setDescriptors(
 							"DescriptorTableRef_setDescriptors() RWTextures aren't allowed to have more than 1 mip selected"
 						));
 
-					if(tex.sampleCount && !(device->info.capabilities.features & EGraphicsFeatures_WriteMSTexture))
+					if(tex.sampleCount && !(device->info.capabilities.flags.features & EGraphicsFeatures_WriteMSTexture))
 						retError(clean, Error_unsupportedOperation(
 							0, "DescriptorTableRef_setDescriptors() RWTexture2DMS is unsupported on this device"
 						));

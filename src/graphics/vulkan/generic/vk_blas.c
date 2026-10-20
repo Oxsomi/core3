@@ -450,7 +450,7 @@ Bool VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	//build and read back once the submit containing both has completed.
 
 	const Bool compactable = (blas->base.flags & ERTASBuildFlags_AllowCompaction) && !blas->base.isCompacted;
-	const Bool noQuery = device->info.capabilities.featuresExt & EVkGraphicsFeatures_NoCompactionQuery;
+	const Bool noQuery = device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_NoCompactionQuery;
 
 	if(compactable && noQuery) {
 		blas->base.isCompacted = true;

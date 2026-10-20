@@ -649,7 +649,7 @@ Bool DescriptorBinding_validate(
 
 	if(
 		type == EGfxRegisterType_AccelerationStructure &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_Raytracing)
 	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings has an RTAS, but device doesn't have RT"
@@ -717,7 +717,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	if(
 		(info->flags & EDescriptorLayoutFlags_AllowBindlessAny) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless)
 	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.flags can't include bindless if bindless feature is missing"

@@ -61,26 +61,24 @@ typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 TListNamed(SpinLock*, ListSpinLockPtr);
 
 typedef enum EGraphicsDeviceFlags {
+
 	EGraphicsDeviceFlags_None            = 0,
 	EGraphicsDeviceFlags_IsVerbose       = 1 << 0,    //Device creation is verbose
 	EGraphicsDeviceFlags_IsDebug         = 1 << 1,    //Debug features such as API/RT validation, debug marker/names
-	EGraphicsDeviceFlags_DisableRt       = 1 << 2,    //Don't allow raytracing to be enabled (might reduce driver overhead)
-	EGraphicsDeviceFlags_DisableDebug    = 1 << 3,    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
-	EGraphicsDeviceFlags_DisableBindless = 1 << 4,    //No bindless layout, even where the device supports it
+	EGraphicsDeviceFlags_DisableDebug    = 1 << 2,    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
 
 	//Adds the bindless _samplers[] array to the default layout.
-	//Opt in because that array owns a descriptor set to itself on Vulkan (set 0, while every resource
-	// array shares set 1) and forces a sampler heap on both backends, and a shader only needs it to index
-	// samplers dynamically.
+	//Opt in because that array owns a descriptor set to itself on Vulkan (set 0, while every resource array shares set 1)
+	// and forces a sampler heap on both backends, and a shader only needs it to index samplers dynamically.
 	//Static samplers cover the ordinary case at no cost; see DescriptorLayoutInfo::immutableSamplers.
 
-	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 5,
+	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 3,
 
 	//Breadcrumbs: every scope records on the GPU when it began and ended, into memory the process owns, so a lost
 	// device can still say which scopes it was in (docs/graphics_api.md, "Device loss"). Two small writes a scope.
 	//On by default on a debug device.
 
-	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6,
+	EGraphicsDeviceFlags_Breadcrumbs = 1 << 4,
 
 	//Takes binaries marked [[oxc::extension("UnsafeExperimentExecution")]] (ESHExtension_UnsafeExperimentExecution),
 	// unvalidated and without checking the device supports what they declare, which no other device does.
@@ -88,13 +86,13 @@ typedef enum EGraphicsDeviceFlags {
 	// tier its driver claims for instance (EGraphicsFeatures2_ExperimentTier1). Creating such a device logs a warning
 	// saying so.
 
-	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 7,
+	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 5,
 
 	//Takes binaries marked [[oxc::extension("UnsafeExtensionExecution")]] (ESHExtension_UnsafeExtensionExecution), which
 	// use extensions OxC3 doesn't recognize and so can't check the device for. Their recognized extensions are still
 	// checked. Creating such a device logs a warning saying so.
 
-	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 8
+	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 6
 
 } EGraphicsDeviceFlags;
 
@@ -453,7 +451,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 
 //bindlessLayout describes the device's bindless descriptor layout, table and pipeline layout.
 //NULL means GraphicsDevice_defaultBindlessLayout, which is what OxC3's own shaders are compiled against.
-//It is ignored if the device lacks EGraphicsFeatures_Bindless or if EGraphicsDeviceFlags_DisableBindless is set,
+//It is ignored if the device lacks EGraphicsFeatures_Bindless,
 // in which case there is no default table or pipeline layout and every pipeline has to bring its own.
 //The device copies it, so the caller keeps ownership and can free it right after.
 //Its flags are taken as given, so EDescriptorLayoutFlags_AllowBindlessOnArrays has to be set to allocate bindlessly.

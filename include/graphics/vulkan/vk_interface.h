@@ -195,6 +195,8 @@
 		Error *e_rr
 	);
 
+	Bool VkGraphicsDevice_finishInit(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
 	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool VkGraphicsDevice_loadPipelineCache(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr);

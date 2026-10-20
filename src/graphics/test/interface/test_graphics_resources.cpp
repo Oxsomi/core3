@@ -472,7 +472,7 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	//An exposed render target gets real, distinct handles that resolve in the default table
 
-	if (dev.info().capabilities.features & c::EGraphicsFeatures_Bindless) {
+	if (dev.info().capabilities.flags.features & c::EGraphicsFeatures_Bindless) {
 
 		RenderTexture exposed;
 

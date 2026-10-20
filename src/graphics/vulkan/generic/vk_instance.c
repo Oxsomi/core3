@@ -186,6 +186,7 @@ static_assert(sizeof(VkSwapchain) % 16 == 0, "VkSwapchain has to be a multiple o
 			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = VkGraphicsDevice_init,
+			.deviceFinishInit = VkGraphicsDevice_finishInit,
 			.deviceWait = VkGraphicsDeviceRef_wait,
 			.deviceReportLoss = VkGraphicsDeviceRef_reportLoss,
 			.deviceFree = VkGraphicsDevice_free,
@@ -1705,7 +1706,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		// graphics and compute queues. timestampPeriod is the nanoseconds per tick used to convert results.
 
 		if(limits.timestampComputeAndGraphics) {
-			capabilities.features2 |= EGraphicsFeatures2_Timestamps;
+			capabilities.flags.features2 |= EGraphicsFeatures2_Timestamps;
 			capabilities.timestampPeriod = limits.timestampPeriod;
 		}
 
@@ -1713,64 +1714,64 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		// predication only offers this polarity and the API stays the intersection.
 
 		if(optExtensions[EOptExtensions_ConditionalRendering] && condRenderFeat.conditionalRendering)
-			capabilities.features2 |= EGraphicsFeatures2_Predication;
+			capabilities.flags.features2 |= EGraphicsFeatures2_Predication;
 
 		//Device loss diagnostics. The binding report needs the instance's messenger to arrive anywhere.
 
 		if(optExtensions[EOptExtensions_DeviceFault] && faultFeat.deviceFault)
-			capabilities.features2 |= EGraphicsFeatures2_DeviceFault;
+			capabilities.flags.features2 |= EGraphicsFeatures2_DeviceFault;
 
 		if(optExtensions[EOptExtensions_BufferMarker])
-			capabilities.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
+			capabilities.flags.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
 
 		//The driver's own claim, taken as it is (EGraphicsFeatures2_ExperimentTier1).
 
 		if(optExtensions[EOptExtensions_ExperimentTier1])
-			capabilities.features2 |= EGraphicsFeatures2_ExperimentTier1;
+			capabilities.flags.features2 |= EGraphicsFeatures2_ExperimentTier1;
 
 		if(optExtensions[EOptExtensions_ExperimentTier2])
-			capabilities.features2 |= EGraphicsFeatures2_ExperimentTier2;
+			capabilities.flags.features2 |= EGraphicsFeatures2_ExperimentTier2;
 
 		if(optExtensions[EOptExtensions_ExternalMemoryHost])
-			capabilities.featuresExt |= EVkGraphicsFeatures_ExternalHostMemory;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_ExternalHostMemory;
 
 		if(optExtensions[EOptExtensions_MemoryPriority] && memPriorityFeat.memoryPriority)
-			capabilities.featuresExt |= EVkGraphicsFeatures_MemoryPriority;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_MemoryPriority;
 
 		if(
-			(capabilities.featuresExt & EVkGraphicsFeatures_MemoryPriority) &&
+			(capabilities.flags.featuresExt & EVkGraphicsFeatures_MemoryPriority) &&
 			optExtensions[EOptExtensions_PageableMemory] && pageableFeat.pageableDeviceLocalMemory
 		)
-			capabilities.featuresExt |= EVkGraphicsFeatures_PageableMemory;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_PageableMemory;
 
 		if(
 			optExtensions[EOptExtensions_DeviceAddressBindingReport] && bindingReportFeat.reportAddressBinding &&
 			instanceExt->bindingMessenger
 		)
-			capabilities.featuresExt |= EVkGraphicsFeatures_AddressBindingReport;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_AddressBindingReport;
 
 		//Query features
 
 		if(features.logicOp)
-			capabilities.features |= EGraphicsFeatures_LogicOp;
+			capabilities.flags.features |= EGraphicsFeatures_LogicOp;
 
 		if(features.dualSrcBlend)
-			capabilities.features |= EGraphicsFeatures_DualSrcBlend;
+			capabilities.flags.features |= EGraphicsFeatures_DualSrcBlend;
 
 		if(features.shaderStorageImageMultisample)
-			capabilities.features |= EGraphicsFeatures_WriteMSTexture;
+			capabilities.flags.features |= EGraphicsFeatures_WriteMSTexture;
 
 		if(features.fillModeNonSolid)
-			capabilities.features |= EGraphicsFeatures_Wireframe;
+			capabilities.flags.features |= EGraphicsFeatures_Wireframe;
 
 		if(deviceAddress.bufferDeviceAddress)
-			capabilities.featuresExt |= EVkGraphicsFeatures_BufferDeviceAddress;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_BufferDeviceAddress;
 
 		if(optExtensions[EOptExtensions_Maintenance4])
-			capabilities.featuresExt |= EVkGraphicsFeatures_Maintenance4;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_Maintenance4;
 
 		if(optExtensions[EOptExtensions_MemoryBudget])
-			capabilities.featuresExt |= EVkGraphicsFeatures_MemoryBudget;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_MemoryBudget;
 
 		//Force enable synchronization
 
@@ -1848,17 +1849,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			optExtensions[EOptExtensions_DepthStencilResolve] &&
 			dynamicRendering.dynamicRendering
 		)
-			capabilities.features |= EGraphicsFeatures_DirectRendering;
+			capabilities.flags.features |= EGraphicsFeatures_DirectRendering;
 
 		//Shader types
 
 		if(features.geometryShader)
-			capabilities.features |= EGraphicsFeatures_GeometryShader;
+			capabilities.flags.features |= EGraphicsFeatures_GeometryShader;
 
 		//Multi draw
 
 		if(limits.maxDrawIndirectCount >= GIBI && optExtensions[EOptExtensions_MultiDrawIndirectCount])
-			capabilities.features |= EGraphicsFeatures_MultiDrawIndirectCount;
+			capabilities.flags.features |= EGraphicsFeatures_MultiDrawIndirectCount;
 
 		//Subgroup operations
 
@@ -1877,33 +1878,34 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			if(subgroup.subgroupSize < 4 || subgroup.subgroupSize > 128)
 				deviceUnsupported("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
 
-			capabilities.features |= EGraphicsFeatures_SubgroupOperations;
+			capabilities.flags.features |= EGraphicsFeatures_SubgroupOperations;
 
 			//The wave sizes a compute shader's [WaveSize] can name: the device's whole range where a compute pipeline
 			// can ask for one, else its one subgroup size.
 			//HLSL names 4 to 128 lanes, so a range reaching past them is held to them.
 
 			capabilities.waveSizeMin = capabilities.waveSizeMax = (U8) subgroup.subgroupSize;
+			capabilities.waveSizeDefault = (U8) subgroup.subgroupSize;
 
 			if(
 				optExtensions[EOptExtensions_SubgroupSizeControl] && subgroupSizeFeat.subgroupSizeControl &&
 				(subgroupSizeProp.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT) &&
 				subgroupSizeProp.minSubgroupSize <= subgroupSizeProp.maxSubgroupSize
 			) {
-				capabilities.featuresExt |= EVkGraphicsFeatures_SubgroupSizeControl;
+				capabilities.flags.featuresExt |= EVkGraphicsFeatures_SubgroupSizeControl;
 				capabilities.waveSizeMin = (U8) U32_clamp(subgroupSizeProp.minSubgroupSize, 4, 128);
 				capabilities.waveSizeMax = (U8) U32_clamp(subgroupSizeProp.maxSubgroupSize, 4, 128);
 			}
 		}
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)
-			capabilities.features |= EGraphicsFeatures_SubgroupArithmetic;
+			capabilities.flags.features |= EGraphicsFeatures_SubgroupArithmetic;
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
-			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
+			capabilities.flags.features |= EGraphicsFeatures_SubgroupShuffle;
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_QUAD_BIT)
-			capabilities.features |= EGraphicsFeatures_SubgroupQuad;
+			capabilities.flags.features |= EGraphicsFeatures_SubgroupQuad;
 
 		//Multi view
 
@@ -1911,7 +1913,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			multiViewFeat.multiview &&
 			multiViewProp.maxMultiviewViewCount >= 6 && multiViewProp.maxMultiviewInstanceIndex >= 134217727
 		)
-			capabilities.features |= EGraphicsFeatures_Multiview;
+			capabilities.flags.features |= EGraphicsFeatures_Multiview;
 
 		//VRS
 
@@ -1925,7 +1927,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			vrsProp.maxFragmentShadingRateRasterizationSamples >= 4 &&
 			vrsProp.fragmentShadingRateWithSampleMask
 		)
-			capabilities.features |= EGraphicsFeatures_VariableRateShading;
+			capabilities.flags.features |= EGraphicsFeatures_VariableRateShading;
 
 		//Mesh shaders
 
@@ -1956,14 +1958,14 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI ||
 			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI
 		))
-			capabilities.features |= EGraphicsFeatures_MeshShader;
+			capabilities.flags.features |= EGraphicsFeatures_MeshShader;
 
 		//Mesh shaders are compiled against SPIRV 1.4, which brings the two below with it, same as raytracing.
 		//Without them the device would advertise mesh shaders and then fail creation on an extension it never
 		// offered, so the feature is dropped instead.
 
 		if(!optExtensions[EOptExtensions_Spirv14] || !optExtensions[EOptExtensions_ShaderFloatControls])
-			capabilities.features &= ~(EGraphicsFeatures)EGraphicsFeatures_MeshShader;
+			capabilities.flags.features &= ~(EGraphicsFeatures)EGraphicsFeatures_MeshShader;
 
 		//The preference and hint properties gate nothing above: prefersCompactPrimitiveOutput and the
 		// maxPreferred* invocation counts are scheduling advice, and the output granularities only say how
@@ -1974,7 +1976,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//Raytracing
 
 		if(rtValidation.rayTracingValidation)
-			capabilities.features |= EGraphicsFeatures_RayValidation;
+			capabilities.flags.features |= EGraphicsFeatures_RayValidation;
 
 		//Both derivative group modes count, since which one a shader needs is DXC's choice rather than ours:
 		// it emits the quad group for an even 2D thread group and the linear group otherwise.
@@ -1987,27 +1989,27 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		// so this must stay an AND to match the request.
 
 		if(computeDeriv.computeDerivativeGroupLinear && computeDeriv.computeDerivativeGroupQuads)
-			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
+			capabilities.flags.features |= EGraphicsFeatures_ComputeDeriv;
 
 		//Not gated on raytracing either:
 		// barycentrics is a fragment-shader feature.
 
 		if(fragBaryFeat.fragmentShaderBarycentric)
-			capabilities.features |= EGraphicsFeatures_Barycentrics;
+			capabilities.flags.features |= EGraphicsFeatures_Barycentrics;
 
 		//Cooperative vectors/matrix (linalg) aren't gated on raytracing, so set them here rather than in the RT block.
 		//Base tier of each is FP16 + INT8; CoopFP8 is the additive FP8 tier; training exposes the outer-product/reduce ops.
 		if(coopVectorFeat.cooperativeVector)
-			capabilities.features |= EGraphicsFeatures_CoopVec;
+			capabilities.flags.features |= EGraphicsFeatures_CoopVec;
 
 		if(coopVectorFeat.cooperativeVectorTraining)
-			capabilities.features |= EGraphicsFeatures_CoopVecTraining;
+			capabilities.flags.features |= EGraphicsFeatures_CoopVecTraining;
 
 		if(coopMatrixFeat.cooperativeMatrix)
-			capabilities.features |= EGraphicsFeatures_CoopMat;
+			capabilities.flags.features |= EGraphicsFeatures_CoopMat;
 
 		if(shaderFloat8Feat.shaderFloat8)
-			capabilities.features |= EGraphicsFeatures_CoopFP8;
+			capabilities.flags.features |= EGraphicsFeatures_CoopFP8;
 
 		if(!optExtensions[EOptExtensions_DeferredHostOperations])
 			optExtensions[EOptExtensions_RayAcceleration] = false;
@@ -2102,17 +2104,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				//Enable extension
 
 				if(optExtensions[EOptExtensions_RayQuery])
-					capabilities.features |= EGraphicsFeatures_RayQuery;
+					capabilities.flags.features |= EGraphicsFeatures_RayQuery;
 
 				if(optExtensions[EOptExtensions_RayPipeline])
-					capabilities.features |= EGraphicsFeatures_RayPipeline;
+					capabilities.flags.features |= EGraphicsFeatures_RayPipeline;
 
 				if(optExtensions[EOptExtensions_RayQuery] || optExtensions[EOptExtensions_RayPipeline]) {
 
-					capabilities.features |= EGraphicsFeatures_Raytracing;
+					capabilities.flags.features |= EGraphicsFeatures_Raytracing;
 
 					if(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenASQueryReset(&driver))
-						capabilities.featuresExt |= EVkGraphicsFeatures_NoCompactionQuery;
+						capabilities.flags.featuresExt |= EVkGraphicsFeatures_NoCompactionQuery;
 
 					//RayReorder = the SER API is available (valid to call, possibly a no-op).
 					//RayReorderActual = the driver hints it actually reorders, so it's worth restructuring shaders for.
@@ -2130,10 +2132,10 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					#ifdef VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME
 						if(rayReorderFeat.rayTracingInvocationReorder) {
 
-							capabilities.features |= EGraphicsFeatures_RayReorder;
+							capabilities.flags.features |= EGraphicsFeatures_RayReorder;
 
 							if(rayReorderProp.rayTracingInvocationReorderReorderingHint)
-								capabilities.features2 |= EGraphicsFeatures2_RayReorderActual;
+								capabilities.flags.features2 |= EGraphicsFeatures2_RayReorderActual;
 						}
 					#endif
 
@@ -2141,26 +2143,26 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						rayOpacityMicroFeat.micromap && deviceAddressCommandsFeat.deviceAddressCommands &&
 						indexTypeUint8Feat.indexTypeUint8
 					)
-						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+						capabilities.flags.features |= EGraphicsFeatures_RayMicromapOpacity;
 
 					if(
 						rayPositionFetchFeat.rayTracingPositionFetch &&
 						!(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenPositionFetch(&driver))
 					)
-						capabilities.features |= EGraphicsFeatures_RayTriPosition;
+						capabilities.flags.features |= EGraphicsFeatures_RayTriPosition;
 
 					//Mega geometry (RTXMG); Vulkan splits it into cluster acceleration structures and partitioned TLAS
 
 					if(rayClusterASFeat.clusterAccelerationStructure)
-						capabilities.features2 |= EGraphicsFeatures2_RayClusterAS;
+						capabilities.flags.features2 |= EGraphicsFeatures2_RayClusterAS;
 
 					if(rayPartitionedTLASFeat.partitionedAccelerationStructure)
-						capabilities.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
+						capabilities.flags.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
 
 					//GPU-driven AS builds; Vulkan only (see EGraphicsFeatures2_RayIndirectASBuild)
 
 					if(rtasFeat.accelerationStructureIndirectBuild)
-						capabilities.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
+						capabilities.flags.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
 				}
 			}
 		}
@@ -2168,44 +2170,44 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//Get data types
 
 		if(float16.shaderFloat16)
-			capabilities.dataTypes |= EGraphicsDataTypes_F16;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_F16;
 
 		if(features.shaderInt64)
-			capabilities.dataTypes |= EGraphicsDataTypes_I64;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_I64;
 
 		if(features.shaderFloat64)
-			capabilities.dataTypes |= EGraphicsDataTypes_F64;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_F64;
 
 		//Vulkan always supports compute to swapchain
 
-		capabilities.features |= EGraphicsFeatures_SwapchainCompute;
+		capabilities.flags.features |= EGraphicsFeatures_SwapchainCompute;
 
 		//Atomics
 
 		if(atomics64.shaderBufferInt64Atomics)
-			capabilities.dataTypes |= EGraphicsDataTypes_AtomicI64;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_AtomicI64;
 
 		if(atomicsF32.shaderBufferFloat32AtomicAdd && atomicsF32.shaderBufferFloat32Atomics)
-			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF32;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_AtomicF32;
 
 		if(atomicsF32.shaderBufferFloat64AtomicAdd && atomicsF32.shaderBufferFloat64Atomics)
-			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF64;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_AtomicF64;
 
 		//Compression
 
 		if(features.textureCompressionASTC_LDR)
-			capabilities.dataTypes |= EGraphicsDataTypes_ASTC;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_ASTC;
 
 		if(features.textureCompressionBC)
-			capabilities.dataTypes |= EGraphicsDataTypes_BCn;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_BCn;
 
 		//MSAA
 
 		if(allMSAA & VK_SAMPLE_COUNT_2_BIT)
-			capabilities.dataTypes |= EGraphicsDataTypes_MSAA2x;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_MSAA2x;
 
 		if(allMSAA & VK_SAMPLE_COUNT_8_BIT)
-			capabilities.dataTypes |= EGraphicsDataTypes_MSAA8x;
+			capabilities.flags.dataTypes |= EGraphicsDataTypes_MSAA8x;
 
 		//Enforce support for the least descriptors.
 		//Named one by one rather than as a single "binding tier" verdict,
@@ -2252,7 +2254,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			limits.maxDescriptorSetSampledImages >= 250 * KIBI &&
 			limits.maxDescriptorSetStorageImages >= 250 * KIBI
 		)
-			capabilities.features |= EGraphicsFeatures_Bindless;
+			capabilities.flags.features |= EGraphicsFeatures_Bindless;
 
 		//Full bindless (descriptor heap); requires regular bindless too so the feature implies the same on both APIs
 
@@ -2260,17 +2262,17 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		// advertise the dependency simply doesn't get the feature.
 
 		if(
-			(capabilities.features & EGraphicsFeatures_Bindless) &&
+			(capabilities.flags.features & EGraphicsFeatures_Bindless) &&
 			optExtensions[EOptExtensions_DescriptorHeap] &&
 			optExtensions[EOptExtensions_Maintenance5] &&
 			descriptorHeapFeat.descriptorHeap
 		)
-			capabilities.features2 |= EGraphicsFeatures2_DescriptorHeap;
+			capabilities.flags.features2 |= EGraphicsFeatures2_DescriptorHeap;
 
 		//Pipeline executable introspection (live ISA disassembly + VGPR/SGPR statistics)
 
 		if(optExtensions[EOptExtensions_PipelineExecutableProperties] && pipelineExecutableProps.pipelineExecutableInfo)
-			capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
+			capabilities.flags.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
 		//Push descriptors are a fast path, not a requirement, so a device without them is emulated rather than rejected.
 		//The threshold is what OxC3 actually asks for rather than the spec's 32 minimum: a push layout holds at
@@ -2281,7 +2283,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			optExtensions[EOptExtensions_PushDescriptor] &&
 			pushDescriptor.maxPushDescriptors >= OXC3_MAX_PUSH_DESCRIPTORS
 		)
-			capabilities.featuresExt |= EVkGraphicsFeatures_PerformantPushDescriptor;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_PerformantPushDescriptor;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.
@@ -2506,7 +2508,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			instanceExt->getPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
 
 			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
-				capabilities.dataTypes |= optionalFormats[k].optFormat;
+				capabilities.flags.dataTypes |= optionalFormats[k].optFormat;
 		}
 
 		//Linear filtering, which the loop above can't express: a bit here means EVERY format in its family
@@ -2550,20 +2552,20 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			}
 
 			if(all)
-				capabilities.dataTypes |= filterFamilies[k].bit;
+				capabilities.flags.dataTypes |= filterFamilies[k].bit;
 		}
 
 		//Grab LUID/UUID
 
 		if(id.deviceLUIDValid)
-			capabilities.features |= EGraphicsFeatures_LUID;
+			capabilities.flags.features |= EGraphicsFeatures_LUID;
 
 		//API dependent stuff for the runtime
 
 		if(perfQuery.performanceCounterQueryPools)
-			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
+			capabilities.flags.featuresExt |= EVkGraphicsFeatures_PerfQuery;
 
-		capabilities.dataTypes |= EGraphicsDataTypes_I16;
+		capabilities.flags.dataTypes |= EGraphicsDataTypes_I16;
 
 		capabilities.maxBufferSize = maxBufferSize.maxBufferSize ? maxBufferSize.maxBufferSize : 256 * MIBI;
 		capabilities.maxAllocationSize = memorySizeAndDescriptorSets.maxMemoryAllocationSize;
@@ -2596,7 +2598,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
 			);
 
-			info->capabilities.featuresExt |= EVkGraphicsFeatures_DriverProperties;
+			info->capabilities.flags.featuresExt |= EVkGraphicsFeatures_DriverProperties;
 		}
 
 		++j;

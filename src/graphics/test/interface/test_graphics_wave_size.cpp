@@ -124,7 +124,7 @@ extern "C" void Test_graphicsWaveSize(oxc::c::Test *t, oxc::c::GraphicsDeviceRef
 	Device dev = Device::share(deviceRef);
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if(!(caps.features & c::EGraphicsFeatures_SubgroupOperations)) {
+	if(!(caps.flags.features & c::EGraphicsFeatures_SubgroupOperations)) {
 		c::Test_print(t, "Device has no subgroup operations, skipping");
 		return;
 	}
@@ -183,7 +183,7 @@ extern "C" void Test_graphicsWaveSize(oxc::c::Test *t, oxc::c::GraphicsDeviceRef
 
 		const c::U32 model = ranged ? c::EDxGraphicsFeatures_WaveSizeMinMax : c::EDxGraphicsFeatures_WaveSize;
 		const c::U8 picked = c::GraphicsDeviceCapabilities_pickWaveSize(&caps, waveSize, caps.waveSizeMin);
-		const c::Bool runs = picked && (!isD3D12 || (caps.featuresExt & model));
+		const c::Bool runs = picked && (!isD3D12 || (caps.flags.featuresExt & model));
 
 		const c::U32 entryId = dev.getFirstShaderEntry(file.list, test->entry, c::ESHExtension_None, c::ESHExtension_None);
 

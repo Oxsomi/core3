@@ -134,7 +134,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	#if D3D12_SDK_VERSION >= 618
-		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
+		if(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_TightAlignment) {
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
 
 			//Tight alignment lets D3D12 pick a smaller alignment; an explicit 64 KiB placement alignment is
@@ -208,7 +208,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	if(
 		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
-		(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity)
+		(device->info.capabilities.flags.features & EGraphicsFeatures_RayMicromapOpacity)
 	) {
 
 		const U32 sdkVersion =
@@ -371,7 +371,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	const Bool cpuAccessible = !(buf->usage & EDeviceBufferUsage_ASExt);
 
 	if (
-		cpuAccessible && (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
+		cpuAccessible && (
+			!(block.allocationTypeExt & 1) || (device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReBAR)
+		)
 	)
 		gotoIfError3(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
 			bufExt->buffer, 0, NULL, (void**) &buf->resource.mappedMemoryExt
@@ -386,7 +388,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	if(
 		cpuAccessible &&
-		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
+		(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
 	)
 		gotoIfError3(clean, dxCheck(bufExt->buffer->lpVtbl->QueryInterface(

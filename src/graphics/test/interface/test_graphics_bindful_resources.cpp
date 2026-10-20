@@ -795,7 +795,7 @@ extern "C" void Test_graphicsBindfulSharedRegister(oxc::c::Test *t, oxc::c::Grap
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping shared register tests");
 		return;
 	}
@@ -972,7 +972,7 @@ extern "C" void Test_graphicsBindfulSamplerCmp(oxc::c::Test *t, oxc::c::Graphics
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping comparison sampler tests");
 		return;
 	}
@@ -1595,12 +1595,12 @@ extern "C" void Test_graphicsBindfulAtomicFloat(oxc::c::Test *t, oxc::c::Graphic
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if(caps.dataTypes & c::EGraphicsDataTypes_AtomicF32)
+	if(caps.flags.dataTypes & c::EGraphicsDataTypes_AtomicF32)
 		TestBindful_atomicFloatWithWidth(t, dev, false);
 
 	else c::Test_print(t, "Device lacks 32 bit float atomics, skipping that width");
 
-	if(caps.dataTypes & c::EGraphicsDataTypes_AtomicF64)
+	if(caps.flags.dataTypes & c::EGraphicsDataTypes_AtomicF64)
 		TestBindful_atomicFloatWithWidth(t, dev, true);
 
 	else c::Test_print(t, "Device lacks 64 bit float atomics, skipping that width");

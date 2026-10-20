@@ -307,12 +307,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	GraphicsDevice *dev = GraphicsDeviceRef_ptr(deviceRef);
 
-	if(!(dev->info.capabilities.features & EGraphicsFeatures_RayPipeline))
+	if(!(dev->info.capabilities.flags.features & EGraphicsFeatures_RayPipeline))
 		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't be called if RayPipeline isn't supported"
 		));
 
-	if(anyOpacityMicromapExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
+	if(anyOpacityMicromapExt && !(dev->info.capabilities.flags.features & EGraphicsFeatures_RayMicromapOpacity))
 		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing() can't allow opacity micromaps if the feature isn't supported"
@@ -340,9 +340,6 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	if(!layout)
 		layout = GraphicsDeviceRef_ptr(deviceRef)->defaultPipelineLayout;
-
-	//A device without bindless has no default pipeline layout, and the backends dereference it unconditionally.
-	//EGraphicsDeviceFlags_DisableBindless puts any device in that state, so the pipeline has to bring its own.
 
 	if(!layout)
 		retError(clean, Error_nullPointer(

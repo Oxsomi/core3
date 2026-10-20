@@ -604,7 +604,7 @@ static void TestShaders_ommMicromapArrayWithFormat(
 			t, "ommArrayHintOnce",
 			!!(c::AtomicI64_load(&c::deviceOf(dev.handle())->runtimeMessages) &
 			(c::I64) c::EGraphicsDeviceMessage_OmmLikelyEmulated) ==
-			!(caps.features2 & c::EGraphicsFeatures2_RayMicromapOpacityActual)
+			!(caps.flags.features2 & c::EGraphicsFeatures2_RayMicromapOpacityActual)
 		);
 	}
 }
@@ -622,7 +622,7 @@ static void TestShaders_omm(
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
+	if (!(caps.flags.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
 		c::Test_print(
 			t, "Device lacks opacity micromaps (Vulkan needs VK_KHR_opacity_micromap), skipping OMM trace tests"
 		);
@@ -674,7 +674,7 @@ static void TestShaders_raysWithFile(
 
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayPipeline)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_RayPipeline)) {
 		c::Test_print(t, "Device lacks raytracing pipelines, skipping ray trace tests");
 		return;
 	}
@@ -1020,7 +1020,7 @@ extern "C" void Test_graphicsShaderRays(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if(!(caps.features & c::EGraphicsFeatures_RayReorder))
+	if(!(caps.flags.features & c::EGraphicsFeatures_RayReorder))
 		return;
 
 	if (caps.experimentalFeatures & c::EGraphicsFeatures_RayReorder) {

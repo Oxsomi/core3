@@ -689,7 +689,7 @@ Bool CommandListRef_startScope(
 		// predicate guards correctness. A caller that wants the run-anyway degradation branches on
 		// EGraphicsFeatures2_Predication and passes no predicate.
 
-		if(!(GraphicsDeviceRef_ptr(device)->info.capabilities.features2 & EGraphicsFeatures2_Predication))
+		if(!(GraphicsDeviceRef_ptr(device)->info.capabilities.flags.features2 & EGraphicsFeatures2_Predication))
 			retError(clean, Error_unsupportedOperation(
 				3, "CommandListRef_startScope()::predicate requires EGraphicsFeatures2_Predication"
 			));

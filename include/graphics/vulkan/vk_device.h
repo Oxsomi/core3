@@ -178,10 +178,9 @@ typedef struct VkGraphicsDevice {
 	U16 subgroupSize;
 	U16 maxComputeWorkgroupSubgroups;
 
-	//Push descriptor emulation, only allocated on a device that lacks VK_KHR_push_descriptor.
+	//Push descriptor emulation, allocated when VK_KHR_push_descriptor is unavailable or disabled.
 	//One set per frame in flight, each pointing at that frame's globals buffer for the lifetime of the device,
-	// so they're written once at first use and only bound afterwards.
-	//cbufferPool doubles as the "already emulated" marker, since it's the first thing created.
+	// written during device finalization and only bound afterwards.
 
 	VkDescriptorPool cbufferPool;
 	VkDescriptorSet cbufferSets[MAX_FRAMES_IN_FLIGHT];
@@ -197,6 +196,7 @@ typedef struct VkGraphicsDevice {
 
 	ListVkDescriptorPool pushPools[MAX_FRAMES_IN_FLIGHT];
 	U32 pushPoolActive[MAX_FRAMES_IN_FLIGHT];
+	U32 pushPoolSetCount[MAX_FRAMES_IN_FLIGHT];
 	U32 padding3;
 
 	//A set layout with no bindings, which fills the gaps in a pipeline layout's set list.
@@ -392,7 +392,7 @@ void VkGraphicsDevice_breadcrumb(
 );
 
 //Hands out one descriptor set per emulated push from the current frame's pools, appending another pool when
-// the active one runs out. Only reached on a device without VK_KHR_push_descriptor.
+// the active one runs out. Reached when VK_KHR_push_descriptor is unavailable or disabled.
 //The set is owned by the frame, not the caller: it stays valid until that frame is recycled and must not be
 // freed or kept past the submit that recorded it.
 

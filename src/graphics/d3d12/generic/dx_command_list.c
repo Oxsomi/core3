@@ -1836,7 +1836,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					++deviceExt->dispatchRaysIndirectCursor;
 
 					const U64 argOffset = (U64) slot * stride;
-					const Bool wbi = !!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate);
+					const Bool wbi = !!(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate);
 
 					DxDeviceBuffer *argsBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(argsRef), Dx);
 					DxDeviceBuffer *callerBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);

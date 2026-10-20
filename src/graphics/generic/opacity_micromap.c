@@ -133,7 +133,7 @@ Bool GraphicsDeviceRef_createOpacityMicromapExt(
 			3, 0, "GraphicsDeviceRef_createOpacityMicromapExt()::micromapRef must be an empty pointer"
 		));
 
-	const EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
+	const EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.flags.features;
 
 	if(!(feat & EGraphicsFeatures_RayMicromapOpacity))
 		retError(clean, Error_unsupportedOperation(

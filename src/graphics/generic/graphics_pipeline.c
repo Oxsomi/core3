@@ -116,7 +116,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 		default:                                                              break;
 	}
 
-	if(dataTypeCheck && !(device->info.capabilities.dataTypes & dataTypeCheck))
+	if(dataTypeCheck && !(device->info.capabilities.flags.dataTypes & dataTypeCheck))
 		retError(clean, Error_unsupportedOperation(
 			1,
 			"GraphicsDeviceRef_createPipelineGraphics()::info uses an MSAA variant that's not supported "
@@ -125,7 +125,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	//Validate render pass / attachments
 
-	if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
+	if (!(device->info.capabilities.flags.features & EGraphicsFeatures_DirectRendering)) {
 
 		//Force renderPass definition and no direct rendering stuff
 
@@ -216,7 +216,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	if(
 		((stageFlags >> EPipelineStage_GeometryExt) & 1) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_GeometryShader)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_GeometryShader)
 	)
 		retError(clean, Error_unsupportedOperation(
 			11,
@@ -297,7 +297,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	if(
 		(info->rasterizer.flags & ERasterizerFlags_IsWireframeExt) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Wireframe)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_Wireframe)
 	)
 		retError(clean, Error_unsupportedOperation(
 			4,
@@ -327,7 +327,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 			"GraphicsDeviceRef_createPipelineGraphics()::info depthTest is off but depthCompare was set"
 		));
 
-	if(info->blendState.logicOpExt && !(device->info.capabilities.features & EGraphicsFeatures_LogicOp))
+	if(info->blendState.logicOpExt && !(device->info.capabilities.flags.features & EGraphicsFeatures_LogicOp))
 		retError(clean, Error_unsupportedOperation(
 			8,
 			"GraphicsDeviceRef_createPipelineGraphics()::info.blendState.logicOpExt "
@@ -382,7 +382,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 			"GraphicsDeviceRef_createPipelineGraphics()::info.depthStencil.stencilDepthFail is out of bounds"
 		));
 
-	Bool dualBlend = device->info.capabilities.features & EGraphicsFeatures_DualSrcBlend;
+	Bool dualBlend = device->info.capabilities.flags.features & EGraphicsFeatures_DualSrcBlend;
 
 	for(U64 j = 0; j < 8; ++j) {
 
@@ -468,9 +468,6 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	if(!layout)
 		layout = device->defaultPipelineLayout;
-
-	//A device without bindless has no default pipeline layout, and the backends dereference it unconditionally.
-	//EGraphicsDeviceFlags_DisableBindless puts any device in that state, so the pipeline has to bring its own.
 
 	if(!layout)
 		retError(clean, Error_nullPointer(

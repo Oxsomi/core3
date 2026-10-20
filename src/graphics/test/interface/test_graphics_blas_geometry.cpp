@@ -86,7 +86,7 @@ extern "C" void Test_graphicsBlasGeometry(oxc::c::Test *t, oxc::c::GraphicsDevic
 	//Inline raytracing rather than a ray pipeline, since the index is readable through RayQuery and a device
 	// may have one without the other.
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_RayQuery)) {
 		c::Test_print(t, "Device lacks ray queries, skipping multi geometry BLAS tests");
 		return;
 	}
@@ -411,7 +411,7 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_RayQuery)) {
 		c::Test_print(t, "Device lacks ray queries, skipping shared scratch BLAS tests");
 		return;
 	}

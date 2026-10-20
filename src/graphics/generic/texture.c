@@ -583,19 +583,19 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 			1, 0, "UnifiedTexture_create()::texturePtr->type only supports 2D for now" //TODO:
 		));
 
-	if(texture.sampleCount == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
+	if(texture.sampleCount == EMSAASamples_x2Ext && !(device->info.capabilities.flags.dataTypes & EGraphicsDataTypes_MSAA2x))
 		retError(clean, Error_unsupportedOperation(
 			1, "UnifiedTexture_create()::texturePtr->sampleCount MSAA2x is unsupported"
 		));
 
-	if(texture.sampleCount == EMSAASamples_x8Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA8x))
+	if(texture.sampleCount == EMSAASamples_x8Ext && !(device->info.capabilities.flags.dataTypes & EGraphicsDataTypes_MSAA8x))
 		retError(clean, Error_unsupportedOperation(
 			2, "UnifiedTexture_create()::texturePtr->sampleCount MSAA8x is unsupported"
 		));
 
 	if(
 		texture.sampleCount && (texture.resource.flags & EGraphicsResourceFlag_ShaderWrite) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_WriteMSTexture)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_WriteMSTexture)
 	)
 		retError(clean, Error_unsupportedOperation(
 			4,
