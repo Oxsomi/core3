@@ -567,7 +567,9 @@ static void Test_streamPullDone(void *resource, c::Bool ok, void *context) {
 //A readback whose destination is a STREAM. The buffer is deliberately not CPUBacked, since skipping the host
 //copy the size of the resource is the reason the entry point exists.
 
-static void Test_streamPullRegion(c::Test *t, const StreamFixture &fx, gfx::DeviceBuffer &input, c::U64 elemsSize) {
+static void Test_streamPullRegion(
+	c::Test *t, const StreamFixture &fx, gfx::DeviceBuffer &input, const TestStreamElem *elems, c::U64 elemsSize
+) {
 
 	c::Error *e_rr = &t->err;
 
@@ -584,6 +586,8 @@ static void Test_streamPullRegion(c::Test *t, const StreamFixture &fx, gfx::Devi
 	//The shader reads whatever the table's input slot holds, so this leg names its own input instead of taking
 	// the one an earlier leg left behind.
 	//That buffer outlives the table's use of it, so no reference is maintained.
+	//Its contents are the source it was filled from, which the partial update rewrote in place, so the
+	// expected values below come from that source rather than from the original pattern.
 
 	const c::Descriptor inputDesc = c::Descriptor_buffer(input.handle(), 0, 0, NULL, 0);
 
@@ -656,7 +660,7 @@ static void Test_streamPullRegion(c::Test *t, const StreamFixture &fx, gfx::Devi
 			c::Bool allMatch = true;
 
 			for(c::U32 i = 0; i < 64; ++i)
-				allMatch &= got[i].a == i * 2 && got[i].b == i * 7 + 100;
+				allMatch &= got[i].a == elems[i].a * 2 && got[i].b == elems[i].b + 100;
 
 			Test_assert(t, "pullStreamContents", allMatch);
 		}
@@ -905,7 +909,7 @@ extern "C" void Test_graphicsBufferStream(oxc::c::Test *t, oxc::c::GraphicsDevic
 	Test_streamDedicatedStaging(t, fx);
 	Test_streamOddLength(t, fx, sizeof(elems));
 	Test_streamSourceReleased(t, fx, elems, sizeof(elems));
-	Test_streamPullRegion(t, fx, input, sizeof(elems));
+	Test_streamPullRegion(t, fx, input, elems, sizeof(elems));
 
 	//The input above was created WITH keepSource, which is why its partial update worked at all.
 
