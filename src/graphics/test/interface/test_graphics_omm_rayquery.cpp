@@ -142,12 +142,12 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if (!(caps.features & c::EGraphicsFeatures_RayQuery)) {
+	if (!(caps.flags.features & c::EGraphicsFeatures_RayQuery)) {
 		c::Test_print(t, "Device lacks ray queries, skipping OMM ray query tests");
 		return;
 	}
 
-	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
+	if (!(caps.flags.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
 		c::Test_print(
 			t, "Device lacks opacity micromaps (Vulkan needs VK_KHR_opacity_micromap), skipping OMM ray query tests"
 		);
@@ -349,7 +349,7 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 	if (!Test_assert(t, "ommRqComputeEntry", entryId != c::U32_MAX))
 		return;
 
-	const c::Bool hasRayPipeline = !!(caps.features & c::EGraphicsFeatures_RayPipeline);
+	const c::Bool hasRayPipeline = !!(caps.flags.features & c::EGraphicsFeatures_RayPipeline);
 	c::U32 raygenId = c::U32_MAX;
 
 	if (hasRayPipeline) {

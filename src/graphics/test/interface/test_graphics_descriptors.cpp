@@ -104,7 +104,7 @@ extern "C" void Test_graphicsDescriptorTable(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	Device dev = Device::share(deviceRef);
 
-	const c::Bool hasBindless = (dev.info().capabilities.features & c::EGraphicsFeatures_Bindless) != 0;
+	const c::Bool hasBindless = (dev.info().capabilities.flags.features & c::EGraphicsFeatures_Bindless) != 0;
 
 	//Declared in the order the destructors have to unwind in reverse.
 	//The table reads the layout while it's being freed but never took a ref on it, so it has to go first.

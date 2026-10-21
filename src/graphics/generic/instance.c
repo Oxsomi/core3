@@ -42,28 +42,130 @@
 #include "graphics/generic/command_list.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
+#include "platforms/platform.h"
+#include "platforms/logx.h"
+#include "types/container/string_helper.h"
 
 TListImpl(GraphicsDeviceInfo);
 
-//Lives in device_info.c but isn't API: it fills in the capability bits neither backend can report.
+//Internal capability derivation and dependency normalization, shared with device creation in device.c.
 
 void GraphicsDeviceInfo_deriveCapabilities(GraphicsDeviceInfo *deviceInfo);
+void GraphicsDeviceInfo_fixCapabilities(GraphicsDeviceInfo *info, EGraphicsApi api);
+
+//A comma separated list of capability names to clear from every device queried, so a fallback can be run on
+// hardware that has the feature behind it.
+//Names come from the tables in device_info.c.
+//A name that resolves to nothing is logged rather than dropped: a typo would otherwise leave the capability in
+// place and silently test the path it was meant to disable.
+
+#define OXC3_DISABLE_CAPABILITIES_ENV "OXC3_DISABLE_CAPABILITIES"
+
+//Spaces around a name are trimmed, so "a, b" names the same pair as "a,b"
+
+static CharString GraphicsDevice_trimCapabilityName(CharString str) {
+
+	const C8 *ptr = str.ptr;
+	U64 len = CharString_length(str);
+
+	while(len && (*ptr == ' ' || *ptr == '\t')) {
+		++ptr;
+		--len;
+	}
+
+	while(len && (ptr[len - 1] == ' ' || ptr[len - 1] == '\t'))
+		--len;
+
+	return CharString_createRefSizedConst(ptr, len, false);
+}
+
+static Bool GraphicsDevice_disableCapabilitiesFromEnv(
+	GraphicsDeviceInfo *deviceInfo, EGraphicsApi api, const Allocator *alloc, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	//The splits are refs into env, so the list has to be freed before it
+
+	CharString env = CharString_createNull();
+	ListCharString names = (ListCharString) { 0 };
+
+	gotoIfError3(clean, Platform_getEnv(
+		CharString_createRefCStrConst(OXC3_DISABLE_CAPABILITIES_ENV), alloc, &env, e_rr
+	));
+
+	if(!CharString_length(env))
+		goto clean;
+
+	gotoIfError3(clean, CharString_splitSensitive(
+		&(CharStringSplit) { .s = &env, .allocator = alloc, .result = &names }, ',', e_rr
+	));
+
+	for (U64 i = 0; i < names.length; ++i) {
+
+		const CharString name = GraphicsDevice_trimCapabilityName(names.ptr[i]);
+
+		if(!CharString_length(name))
+			continue;
+
+		if(GraphicsDeviceInfo_disableCapability(deviceInfo, api, name))
+			Log_performanceLnx(
+				OXC3_DISABLE_CAPABILITIES_ENV " cleared %.*s from the device",
+				(I32) CharString_length(name), name.ptr
+			);
+
+		else Log_warnLnx(
+			OXC3_DISABLE_CAPABILITIES_ENV " names \"%.*s\", which is not a capability of this api, so it does nothing",
+			(I32) CharString_length(name), name.ptr
+		);
+	}
+
+clean:
+
+	ListCharString_free(&names, alloc);
+	CharString_free(&env, alloc);
+	return s_uccess;
+}
 
 //The only way device infos are allowed to leave this file, so nothing can hand out an adapter whose derived
 // bits were never filled in and a search sees the same capabilities a created device will report.
 
 static Bool GraphicsInstance_getDeviceInfosDerived(
-	const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr
+	const GraphicsInstance *inst,
+	ListGraphicsDeviceInfo *infos,
+	const GraphicsDeviceCapFlags *disabledCaps,
+	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
+	Bool queried = false;
 
 	gotoIfError3(clean, GraphicsInstance_getDeviceInfosExt(inst, infos, e_rr));
+	queried = true;
 
-	for(U64 i = 0; i < infos->length; ++i)
-		GraphicsDeviceInfo_deriveCapabilities(&infos->ptrNonConst[i]);
+	//Derive from hardware reports before masking so explicitly disabled derived bits stay disabled.
+
+	for(U64 i = 0; i < infos->length; ++i) {
+
+		GraphicsDeviceInfo *info = &infos->ptrNonConst[i];
+
+		GraphicsDeviceInfo_deriveCapabilities(info);
+
+		if(disabledCaps) {
+			info->capabilities.flags.features &= ~disabledCaps->features;
+			info->capabilities.flags.features2 &= ~disabledCaps->features2;
+			info->capabilities.flags.dataTypes &= ~disabledCaps->dataTypes;
+			info->capabilities.flags.featuresExt &= ~disabledCaps->featuresExt;
+		}
+
+		gotoIfError3(clean, GraphicsDevice_disableCapabilitiesFromEnv(info, inst->api, inst->alloc, e_rr));
+		GraphicsDeviceInfo_fixCapabilities(info, inst->api);
+	}
 
 clean:
+	if(!s_uccess && queried)
+		ListGraphicsDeviceInfo_free(infos, inst->alloc);
+
 	return s_uccess;
 }
 
@@ -84,6 +186,7 @@ const C8 *EGraphicsApi_name[EGraphicsApi_Count] = {
 Bool GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
 	const GraphicsDeviceCapabilities *requiredCapabilities,
+	const GraphicsDeviceCapFlags *disabledCaps,
 	U64 vendorMask,
 	U64 deviceTypeMask,
 	GraphicsDeviceInfo *deviceInfo,
@@ -96,16 +199,16 @@ Bool GraphicsInstance_getPreferredDevice(
 
 	if(!inst || !deviceInfo)
 		retError(clean, Error_nullPointer(
-			!inst ? 0 : 4,
-			"GraphicsInstance_getPreferredDevice()::inst, requiredCapabilities and deviceInfo are required"
+			!inst ? 0 : 5,
+			"GraphicsInstance_getPreferredDevice()::inst and deviceInfo are required"
 		));
 
 	if(deviceInfo->name[0])
 		retError(clean, Error_invalidParameter(
-			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
+			5, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
 		));
 
-	gotoIfError3(clean, GraphicsInstance_getDeviceInfosDerived(inst, &tmp, e_rr));
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosDerived(inst, &tmp, disabledCaps, e_rr));
 
 	U64 preferredDedicated = 0;
 	U64 preferredNonDedicated = 0;
@@ -127,16 +230,19 @@ Bool GraphicsInstance_getPreferredDevice(
 
 		if(requiredCapabilities) {
 
-			if((info.capabilities.dataTypes & requiredCapabilities->dataTypes) != requiredCapabilities->dataTypes)
+			const GraphicsDeviceCapFlags required = requiredCapabilities->flags;
+			const GraphicsDeviceCapFlags available = info.capabilities.flags;
+
+			if((available.dataTypes & required.dataTypes) != required.dataTypes)
 				continue;
 
-			if((info.capabilities.features & requiredCapabilities->features) != requiredCapabilities->features)
+			if((available.features & required.features) != required.features)
 				continue;
 
-			if((info.capabilities.features2 & requiredCapabilities->features2) != requiredCapabilities->features2)
+			if((available.features2 & required.features2) != required.features2)
 				continue;
 
-			if((info.capabilities.featuresExt & requiredCapabilities->featuresExt) != requiredCapabilities->featuresExt)
+			if((available.featuresExt & required.featuresExt) != required.featuresExt)
 				continue;
 
 			if(
@@ -521,7 +627,12 @@ U64 GraphicsInstance_getValidationWarnings(GraphicsInstance *inst) {
 	return !inst ? 0 : (U64) AtomicI64_load(&inst->validationWarnings);
 }
 
-Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr) {
+Bool GraphicsInstance_getDeviceInfos(
+	const GraphicsInstance *inst,
+	ListGraphicsDeviceInfo *infos,
+	const GraphicsDeviceCapFlags *disabledCaps,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -530,7 +641,7 @@ Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsD
 			!inst ? 0 : 1, "GraphicsInstance_getDeviceInfos()::inst and infos are required"
 		));
 
-	gotoIfError3(clean, GraphicsInstance_getDeviceInfosDerived(inst, infos, e_rr));
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosDerived(inst, infos, disabledCaps, e_rr));
 
 clean:
 	return s_uccess;

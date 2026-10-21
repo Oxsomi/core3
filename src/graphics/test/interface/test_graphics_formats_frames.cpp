@@ -249,7 +249,7 @@ extern "C" void Test_graphicsFormatRoundTrip(oxc::c::Test *t, oxc::c::GraphicsDe
 
 		const TestOptionalFormat opt = testOptionalFormats[i];
 
-		if(!(caps.dataTypes & opt.dataType)) {
+		if(!(caps.flags.dataTypes & opt.dataType)) {
 			++optionalSkipped;
 			continue;
 		}

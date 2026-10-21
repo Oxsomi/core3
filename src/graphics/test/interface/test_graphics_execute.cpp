@@ -129,7 +129,7 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 
 	const c::Bool hasBudget =
 		dev.api() != c::EGraphicsApi_Vulkan ||
-		(dev.info().capabilities.featuresExt & c::EVkGraphicsFeatures_MemoryBudget);
+		(dev.info().capabilities.flags.featuresExt & c::EVkGraphicsFeatures_MemoryBudget);
 
 	if (hasBudget) {
 
@@ -517,7 +517,7 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 			//Compressed formats go through the same math in block rows, proven end to end with BC7
 
-			if (dev.info().capabilities.dataTypes & c::EGraphicsDataTypes_BCn) {
+			if (dev.info().capabilities.flags.dataTypes & c::EGraphicsDataTypes_BCn) {
 
 				gfx::DeviceTexture bcTex;
 
@@ -613,7 +613,7 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 				4, 4, c::EDepthStencilFormat_D32, false, "Execute depth", depth, c::EMSAASamples_Off, e_rr
 			));
 
-			if (depth && (dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+			if (depth && (dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 
 				gfx::CommandList depthList;
 
@@ -685,7 +685,7 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 			if (c::GraphicsDeviceInfo_supportsDepthStencilFormat(
 				&dev.info(), c::EDepthStencilFormat_D32S8X24Ext
-			) && (dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+			) && (dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 
 				gfx::DepthStencil stencilTex;
 				gfx::CommandList stencilList;
@@ -1030,7 +1030,7 @@ extern "C" void Test_graphicsAccelerationStructures(oxc::c::Test *t, oxc::c::Gra
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if(!(dev.info().capabilities.features & c::EGraphicsFeatures_Raytracing)) {
+	if(!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_Raytracing)) {
 		c::Test_print(t, "Device lacks raytracing, skipping acceleration structure tests");
 		return;
 	}

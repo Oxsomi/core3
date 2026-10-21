@@ -129,13 +129,13 @@ VkShaderStageFlags vkGetShaderStagesDevice(const GraphicsDevice *device, U32 vis
 
 	VkShaderStageFlags stageFlags = vkGetShaderStages(vis);
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_RayPipeline))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_RayPipeline))
 		stageFlags &=~ (
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
 			VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR | VK_SHADER_STAGE_CALLABLE_BIT_KHR
 		);
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_MeshShader))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_MeshShader))
 		stageFlags &=~ (VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT);
 
 	return stageFlags;
@@ -272,21 +272,15 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	U8 setPresent = 0;
 	Bool hasPushDescriptor = info.flags & EDescriptorLayoutFlags_HasPushDescriptors;
 
-	//The device's own globals layout carries its own emulation (one set per frame in flight, written once
-	// and bound unchanged), which works only because that buffer is fixed for the frame.
-	//A caller's push descriptors change per work op, so they need a set allocated per push from a per frame
-	// pool, which doesn't exist yet. Until it does this is refused rather than silently pushing nothing.
-	//Android emulators are the case that hits this, since gfxstream drops the extension from the guest.
-
-	if(
-		hasPushDescriptor && !(info.flags & EDescriptorLayoutFlags_InternalWeakDeviceRef) &&
-		!(device->info.capabilities.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
-	)
-		retError(clean, Error_unsupportedOperation(
-			1,
-			"GraphicsDeviceRef_createDescriptorLayout() this device has no VK_KHR_push_descriptor, and the "
-			"emulated path for caller owned push descriptor layouts isn't implemented yet"
-		));
+	//Both kinds of push descriptor are emulated where VK_KHR_push_descriptor is missing, which is what keeps
+	// android emulators usable: gfxstream drops the extension from the guest.
+	//The device's own globals layout gets one set per frame in flight, written once and bound unchanged,
+	// which works because that buffer is fixed for the frame (see vk_device.c).
+	//A caller's push descriptors (and the rotated copy's textures) change per work op, so they instead take a
+	// set per push out of that frame's pools (VkGraphicsDevice_allocPushDescriptorSet), recycled when the
+	// frame comes back around.
+	//Either way the layout below stays a REGULAR set layout rather than a push one, which is what makes sets
+	// allocatable from it at all.
 
 	for (U64 i = 0; i < sortedList.length; ++i) {
 
@@ -366,10 +360,13 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 			}
 
-			//A push descriptor set layout can't have sets allocated from it, so when the extension is missing
-			// this stays a regular layout and the emulation allocates a set per frame in flight from it instead.
+			//A push descriptor set layout can't have sets allocated from it. Without native push descriptors,
+			// this stays a regular layout so emulation can allocate sets with a lifetime tied to their frame.
 
-			if(hasPushDescriptor && (device->info.capabilities.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor))
+			if(
+				hasPushDescriptor &&
+				(device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
+			)
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 
 			setPresent |= 1 << linkId;

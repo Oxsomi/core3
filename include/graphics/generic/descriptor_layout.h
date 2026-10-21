@@ -37,8 +37,9 @@ typedef enum EGfxRegisterType EGfxRegisterType;
 
 typedef RefPtr GraphicsDeviceRef;
 
-//How many push descriptors one layout may hold. On D3D12 each is a root descriptor costing 2 of the root
-//signature's 64 DWORDs, and Vulkan only guarantees a maxPushDescriptors at all where the extension exists.
+//How many push descriptors one layout may hold, one per binding since a push binding can't be an array.
+//On D3D12 each is a root descriptor costing 2 of the root signature's 64 DWORDs, and Vulkan only takes the
+//native path where the driver's maxPushDescriptors covers this many.
 
 #define OXC3_MAX_PUSH_DESCRIPTORS 8
 

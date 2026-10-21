@@ -1090,7 +1090,7 @@ Bool CommandListRef_drawIndirectCountExt(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 	gotoIfError3(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, maxDrawCalls, indexed, e_rr));
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_MultiDrawIndirectCount))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_MultiDrawIndirectCount))
 		retError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_drawIndirectCountExt() requires multiDrawIndirectCount extension, which was missing!"
 		));

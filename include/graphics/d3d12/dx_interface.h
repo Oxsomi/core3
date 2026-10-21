@@ -207,6 +207,8 @@
 		Error *e_rr
 	);
 
+	Bool D3D12GraphicsDevice_finishInit(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
 	U64 D3D12GraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool D3D12GraphicsDevice_loadPipelineCache(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr);

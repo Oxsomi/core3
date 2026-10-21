@@ -36,7 +36,7 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap
 ) {
 
-	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
+	Bool hasReBAR = device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReBAR;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
 	Bool forceCpuSided = *cpuSided;
 
@@ -72,7 +72,7 @@ D3D12_HEAP_DESC getDxHeapDesc(
 		.Alignment = heapAlignment
 	};
 
-	if (!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
+	if (!(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
 		switch (resourceType) {
 
 			case EResourceType_DeviceTexture:
@@ -103,11 +103,11 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	// hardcoded WRITE_COMBINE is wrong on those and the debug layer rightly warns on every heap created with it.
 	//The ReBAR path above keeps its explicit L1 + WRITE_COMBINE, which is the point of ReBAR.
 
-	if (!isGpu && !readback && (device->info.capabilities.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA))
+	if (!isGpu && !readback && (device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA))
 		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
 
 	if (
-		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
+		(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
 	)
 		heapDesc.Flags |= D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
@@ -167,7 +167,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	GraphicsDevice *device = allocator->device;
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
+	Bool hasReBAR = device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReBAR;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
 	const Bool readback = req.flags & EDxBlockFlags_Readback;
@@ -190,7 +190,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	U8 heapType = 0;
 
-	if(!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
+	if(!(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
 		heapType = (U8) resourceType;
 
 	//Readback memory can never share a block with upload or device memory

@@ -121,7 +121,7 @@ Bool GraphicsDeviceRef_createBLAS(
 			3, 0, "GraphicsDeviceRef_createBLAS()::*blasRef not NULL, indicates memleak"
 		));
 
-	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
+	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.flags.features;
 
 	if(!(feat & EGraphicsFeatures_Raytracing))
 		retError(clean, Error_unsupportedOperation(
@@ -329,7 +329,7 @@ Bool GraphicsDeviceRef_createBLAS(
 					// way the free special indices would (see EGraphicsFeatures2_RayMicromapOpacityActual).
 
 					if(
-						!(GraphicsDeviceRef_ptr(dev)->info.capabilities.features2 &
+						!(GraphicsDeviceRef_ptr(dev)->info.capabilities.flags.features2 &
 						EGraphicsFeatures2_RayMicromapOpacityActual) &&
 						GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(dev), EGraphicsDeviceMessage_OmmLikelyEmulated)
 					)

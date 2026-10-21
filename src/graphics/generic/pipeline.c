@@ -128,7 +128,10 @@ Bool GraphicsDeviceRef_getPipelineExecutables(
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(pipeline);
 
-	if(!(GraphicsDeviceRef_ptr(pipelinePtr->device)->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo))
+	if (!(
+		GraphicsDeviceRef_ptr(pipelinePtr->device)->info.capabilities.flags.features2 &
+		EGraphicsFeatures2_PipelineExecutableInfo
+	))
 		retError(clean, Error_unsupportedOperation(
 			0, "GraphicsDeviceRef_getPipelineExecutables() device lacks EGraphicsFeatures2_PipelineExecutableInfo"
 		));

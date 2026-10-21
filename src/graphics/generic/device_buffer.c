@@ -513,7 +513,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 
 	Bool isRTBufferType = usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt);
 
-	if (isRTBufferType && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
+	if (isRTBufferType && !(device->info.capabilities.flags.features & EGraphicsFeatures_Raytracing))
 		retError(clean, Error_invalidState(
 			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
 		));
@@ -521,7 +521,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 	//Refused rather than silently dropped: a predicate buffer on a device that cannot predicate would
 	// otherwise carry a usage bit no backend honors, and the surprise surfaces later at startScope.
 
-	if((usage & EDeviceBufferUsage_Predicate) && !(device->info.capabilities.features2 & EGraphicsFeatures2_Predication))
+	if((usage & EDeviceBufferUsage_Predicate) && !(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Predication))
 		retError(clean, Error_invalidState(
 			3, "GraphicsDeviceRef_createBufferIntern() predicate buffer requires the Predication feature"
 		));

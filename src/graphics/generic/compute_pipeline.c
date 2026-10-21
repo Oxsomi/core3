@@ -113,9 +113,6 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	if(!layout)
 		layout = device->defaultPipelineLayout;
 
-	//A device without bindless has no default pipeline layout, and the backends dereference it unconditionally.
-	//EGraphicsDeviceFlags_DisableBindless puts any device in that state, so the pipeline has to bring its own.
-
 	if(!layout)
 		retError(clean, Error_nullPointer(
 			6,

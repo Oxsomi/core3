@@ -631,7 +631,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	if(
 		(pipeline->flags & EPipelineFlags_CaptureISA) &&
-		(device->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
+		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
 	)
 		createFlags =
 			VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |

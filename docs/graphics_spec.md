@@ -56,19 +56,24 @@ Because of this, a device needs the following requirements to be OxC3 compatible
     - Requires inherit alpha or opaque support.
     - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
 - Device extensions that can be queried (not all are supported yet):
-  - VK_KHR_push_descriptor (with maxPushDescriptors >= 32) as EVkGraphicsFeatures_PerformantPushDescriptor.
+  - VK_KHR_push_descriptor (with maxPushDescriptors >= OXC3_MAX_PUSH_DESCRIPTORS) as EVkGraphicsFeatures_PerformantPushDescriptor.
     Named for the performance rather than the capability: pushing descriptors always works, the flag only says
     the device does it natively instead of through the emulation described below.
     Vulkan only, because it's the only api where pushing descriptors isn't a given; D3D12 has root descriptors and
     Metal has argument buffers, so there'd be nothing to branch on there and it isn't a generic feature bit.
-    A device without it is not rejected. Only the globals constant buffer is ever pushed, and each frame in flight
-    owns that buffer for the lifetime of the device, so OxC3 allocates one descriptor set per frame instead, writes
-    each once and binds it unchanged from then on. There is no per frame update, so no set is ever rewritten while
-    still in flight. The sets are built on the first submit rather than at device creation, because the globals
-    buffers don't exist yet when the Vulkan device is initialised.
-    A one time performance warning is logged on the first submit that takes the emulated path.
+    A device without it is not rejected; both kinds of push are emulated. The device's own globals buffer is
+    fixed for the whole frame, so each frame in flight gets one descriptor set for it, written once and bound
+    unchanged from then on; backend finalization builds those sets during device creation, after the shared
+    code creates the globals buffers and layouts. Allocation failure fails device creation. A caller's push
+    descriptors (and the rotated copy's textures) change per work op, so every emission takes a set of its own from that frame's
+    descriptor pools, which are reset wholesale once the frame's fence proves the GPU done with them and grow
+    by appending another pool when one runs out.
+    A one-time performance warning is logged when the emulated globals sets are created.
     Android emulators are the common case, since gfxstream drops the extension from the guest even when the host
     driver exposes it.
+    Setting OXC3_DISABLE_CAPABILITIES=PerformantPushDescriptor runs the emulation on a device that has the
+    extension, which is how it is tested without an emulator. That variable is not specific to this feature or
+    to Vulkan: see "Disabling capabilities" below.
   - Debug build only:
     - VK_EXT_debug_marker as internal flag
   - VK_KHR_shader_float16_int8 as F16
@@ -216,7 +221,7 @@ Bindless.
 It also excluded them from running OxC3 at all, but that is a placement choice rather than a consequence:
 maxSamplerAllocationCount is checked with the hard minimum spec limits, where a miss rejects the device,
 even though the value itself is derived from the bindless sampler heap. The bindful path needs only the
-baseline further down (16 per stage, 80 per set), and EGraphicsDeviceFlags_DisableBindless exists, so a
+baseline further down (16 per stage, 80 per set), and bindless can be disabled before device creation, so a
 device that cannot host the heap could still run bindfully. Moving that one requireLimit into the Bindless
 capability check would turn a rejection into a missing feature bit. That applies to a future native
 Metal backend and to Vulkan through MoltenVK alike, since MoltenVK reports Metal's argument buffer
@@ -256,6 +261,15 @@ Geometry shaders aren't always supported. They're only supported if there's hard
 #### Raytracing
 
 Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_KHR_ray_tracing_pipeline or VK_KHR_ray_query to be set.
+
+OxC3 requests Vulkan 1.1. On that API path, enabling
+[`VK_KHR_acceleration_structure`](https://docs.vulkan.org/refpages/latest/refpages/source/VK_KHR_acceleration_structure.html)
+also requires the
+`VK_EXT_descriptor_indexing`, `VK_KHR_buffer_device_address` and `VK_KHR_deferred_host_operations` extension
+names. The descriptor-indexing extension name therefore remains enabled when `Bindless` is disabled but
+raytracing is retained; the optional descriptor-indexing feature bits remain gated by `Bindless`. Vulkan 1.2
+provides the descriptor-indexing and buffer-device-address dependencies in core, so those extension names
+are not a universal acceleration-structure requirement.
 
 - Limits of:
 - VK_KHR_acceleration_structure:
@@ -438,7 +452,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EGraphicsFeatures_SubgroupOperations, EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe, EGraphicsFeatures_Multiview, EGraphicsFeatures_DebugMarkers are enabled by default.
+- EGraphicsFeatures_SubgroupOperations, EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_SubgroupQuad, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_LUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend, EGraphicsFeatures_Wireframe and EGraphicsFeatures_Multiview are reported before capability exclusions. Debug markers have no public capability bit.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of Direct3D12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
 - EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.
@@ -488,10 +502,22 @@ There are specific extensions that are not relevant to other extensions, hence t
 
 ## Derived capabilities
 
-Most capability bits map onto something an API reports. These do not: no API exposes them, so OxC3 works them out from bits that are reported. `GraphicsDeviceInfo_deriveCapabilities` fills them in for every device the instance hands out, which is what lets `GraphicsInstance_getPreferredDevice` filter on them like on any other bit; a device created with `EGraphicsDeviceFlags_DisableRt` has the raytracing ones cleared along with the rest.
+Most capability bits map onto something an API reports. These do not: no API exposes them, so OxC3 works them out from bits that are reported. `GraphicsDeviceInfo_deriveCapabilities` fills them in for every device the instance hands out, which is what lets `GraphicsInstance_getPreferredDevice` filter on them like on any other bit.
 
 - **RayMicromapOpacityActual** (features2): whether opacity micromaps are worth building a real micromap object for, as opposed to being accepted by the API and emulated. D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesKHR is a single bool, and the subdivision level properties are no help either (an Ampere 3080 reports the spec maximum of 12/12, the same as hardware that has the units). Derivation: on NVIDIA the bit requires RayReorderActual, since the SER reordering hardware and the OMM engines shipped in the same generation; every other vendor is taken at its word. Deliberately not a device ID table, so an unknown future GPU that reports reordering is treated as capable rather than falling off the end of a lookup, and it needs no vendor SDK. It is a HEURISTIC: treat a set bit as "worth it", not as a guarantee, and note that special-index-only OMM costs nothing either way so it is always fine to use.
-- **SoftwareRT** (features2): ray traversal runs on the shader cores rather than dedicated units. Derivation: NVIDIA with a ray pipeline but no ray query, the set NVIDIA ships on parts without RT cores (D3D12 draws the same line at raytracing tier 1.0). A HEURISTIC too: an NVIDIA driver too old to expose ray query reads as a false positive.
+- **RaySoftware** (features2): ray traversal runs on the shader cores rather than dedicated units. Derivation: NVIDIA with a ray pipeline but no ray query, the set NVIDIA ships on parts without RT cores (D3D12 draws the same line at raytracing tier 1.0). A HEURISTIC too: an NVIDIA driver too old to expose ray query reads as a false positive.
+
+## Disabling capabilities
+
+A device's capability bits live in `GraphicsDeviceCapabilities.flags`, a `GraphicsDeviceCapFlags` containing `features`, `features2`, `dataTypes` and API-dependent `featuresExt`. Pass an optional `disabledCaps` mask to `GraphicsInstance_getDeviceInfos` or `GraphicsInstance_getPreferredDevice`; set bits are removed before required-capability filtering. `NULL` means no explicit exclusions. A caller can also clear bits in a queried `GraphicsDeviceInfo` before passing it to `GraphicsDeviceRef_create`, which normalizes dependencies in its own copy and gives that copy to the backend. Changing an info does not change existing devices.
+
+`GraphicsDeviceInfo_disableCapability` clears a bit by name and normalizes its dependencies. Names are case-sensitive enum names minus the prefix (`Raytracing`, `F16`, `PerformantPushDescriptor`), listed in the bit-indexed `EGraphicsFeatures_names`, `EGraphicsFeatures2_names`, `EGraphicsDataTypes_names`, `EVkGraphicsFeatures_names` and `EDxGraphicsFeatures_names` tables. It returns true for recognized names, even if already disabled, and false without mutation for invalid inputs or unknown names. Experimental sets remain subsets of enabled features. `featuresExt` is API dependent, so only the running API's names resolve against it.
+
+Derivation runs on the hardware report before any masks. Normalization then only removes capabilities: disabling `Raytracing` clears the entire ray family, disabling `Bindless` clears `DescriptorHeap`, and other prerequisite relationships are kept consistent. Disabling `RayQuery` cannot make hardware traversal look like software traversal, and explicitly disabled derived bits stay disabled. Features whose fallback is unavailable can still cause an operation to report unsupported; exclusions do not relax OxC3's minimum physical-device requirements.
+
+Backend prerequisites remain consistent too. On Vulkan, removing `BufferDeviceAddress` clears raytracing and `DescriptorHeap`, removing `MemoryPriority` clears `PageableMemory`, and removing `SubgroupSizeControl` narrows the wave range to the preserved `waveSizeDefault`. On D3D12, removing a shader model lowers the reported model ceiling and clears features requiring that model or a higher one. Removing `SubgroupOperations` clears its dependent operations and zeroes the wave range; removing `Timestamps` zeroes `timestampPeriod`. Normalization never restores a disabled bit.
+
+`OXC3_DISABLE_CAPABILITIES` is a comma-separated list of those names added to every query's explicit mask: `OXC3_DISABLE_CAPABILITIES=PerformantPushDescriptor` runs the Vulkan push descriptor emulation on a desktop GPU. Spaces and tabs around names are trimmed and empty entries are ignored. A name that resolves to nothing is logged rather than silently dropped, since a typo would otherwise test the path it was meant to disable.
 
 ## List of Metal requirements
 

@@ -583,7 +583,7 @@ extern "C" void Test_graphicsRenderPass(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	Device dev = Device::share(deviceRef);
 
-	if(!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if(!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		Test_print(t, "Device lacks direct rendering, skipping render pass tests");
 		return;
 	}

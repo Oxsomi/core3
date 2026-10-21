@@ -81,7 +81,7 @@ extern "C" void Test_graphicsBindfulRays(oxc::c::Test *t, oxc::c::GraphicsDevice
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayPipeline)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_RayPipeline)) {
 		c::Test_print(t, "Device lacks raytracing pipelines, skipping bindful ray trace tests");
 		return;
 	}
@@ -678,12 +678,12 @@ extern "C" void Test_graphicsBindfulOmm(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	const c::GraphicsDeviceCapabilities caps = dev.info().capabilities;
 
-	if (!(caps.features & c::EGraphicsFeatures_RayPipeline)) {
+	if (!(caps.flags.features & c::EGraphicsFeatures_RayPipeline)) {
 		c::Test_print(t, "Device lacks raytracing pipelines, skipping bindful micromap tests");
 		return;
 	}
 
-	if (!(caps.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
+	if (!(caps.flags.features & c::EGraphicsFeatures_RayMicromapOpacity)) {
 		c::Test_print(
 			t, "Device lacks opacity micromaps (Vulkan needs VK_KHR_opacity_micromap), skipping bindful micromap tests"
 		);
@@ -813,12 +813,12 @@ extern "C" void Test_graphicsBindfulRayQueryGraphics(oxc::c::Test *t, oxc::c::Gr
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_RayQuery)) {
 		c::Test_print(t, "Device lacks ray query, skipping graphics stage ray query tests");
 		return;
 	}
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping graphics stage ray query tests");
 		return;
 	}

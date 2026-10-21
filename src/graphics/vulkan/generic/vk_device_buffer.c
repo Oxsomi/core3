@@ -189,7 +189,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	if (buf->usage & EDeviceBufferUsage_ASReadExt)
 		requirements.memoryRequirements.alignment = U64_max(
-			(device->info.capabilities.features & EGraphicsFeatures_RayMicromapOpacity) ? 128 : 16,
+			(device->info.capabilities.flags.features & EGraphicsFeatures_RayMicromapOpacity) ? 128 : 16,
 			requirements.memoryRequirements.alignment
 		);
 

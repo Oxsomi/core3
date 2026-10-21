@@ -583,6 +583,151 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsConfigVariants(t, instRef, info);
 }
 
+static void Test_graphicsDisabledQueries(
+	c::Test *t, const c::GraphicsInstance *inst, const c::ListGraphicsDeviceInfo *available
+) {
+
+	c::Test_setModule(t, "GraphicsInstance/disabledCapabilities");
+
+	const c::GraphicsDeviceCapFlags disabled = {
+		.features = (c::EGraphicsFeatures) (c::EGraphicsFeatures_Bindless | c::EGraphicsFeatures_Raytracing),
+		.features2 = c::EGraphicsFeatures2_Timestamps,
+		.dataTypes = (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_F64 | c::EGraphicsDataTypes_I64),
+		.featuresExt = c::U32_MAX
+	};
+
+	c::ListGraphicsDeviceInfo masked{};
+	c::ListGraphicsDeviceInfo unmasked{};
+	c::ListGraphicsDeviceInfo derivedMasked{};
+	c::GraphicsDeviceInfo preferred{};
+
+	if(Test_assert(t, "getMaskedInfos", c::GraphicsInstance_getDeviceInfos(inst, &masked, &disabled, &t->err))) {
+
+		Test_assert(t, "maskKeepsAdapters", masked.length == available->length);
+
+		for(c::U64 i = 0; i < masked.length; ++i) {
+
+			const c::GraphicsDeviceInfo *info = &masked.ptr[i];
+			const c::GraphicsDeviceInfo *original = nullptr;
+
+			for(c::U64 j = 0; j < available->length; ++j)
+				if(available->ptr[j].id == info->id) {
+					original = &available->ptr[j];
+					break;
+				}
+
+			if(!Test_assert(t, "maskedAdapterIdentity", original != nullptr))
+				continue;
+
+			const c::GraphicsDeviceCapFlags flags = info->capabilities.flags;
+			const c::GraphicsDeviceCapFlags base = original->capabilities.flags;
+
+			Test_assert(t, "queryDisabledFeatures", !(flags.features &
+				(c::EGraphicsFeatures_Bindless | c::EGraphicsFeatures_RaytracingFeats)
+			));
+
+			Test_assert(t, "queryDisabledFeatures2", !(flags.features2 & (
+				c::EGraphicsFeatures2_DescriptorHeap | c::EGraphicsFeatures2_RaytracingFeats |
+				c::EGraphicsFeatures2_Timestamps
+			)));
+
+			Test_assert(t, "queryDisabledDataTypes", !(flags.dataTypes & (
+				c::EGraphicsDataTypes_F64 | c::EGraphicsDataTypes_I64 |
+				c::EGraphicsDataTypes_AtomicF64 | c::EGraphicsDataTypes_AtomicI64
+			)));
+
+			Test_assert(t, "queryDisabledBackendFeatures", !flags.featuresExt);
+			Test_assert(t, "queryDoesNotAddFeatures",
+				!(flags.features & ~base.features) && !(flags.features2 & ~base.features2) &&
+				!(flags.dataTypes & ~base.dataTypes)
+			);
+
+			Test_assert(t, "queryClearsTimestampPeriod", !info->capabilities.timestampPeriod);
+			Test_assert(t, "queryKeepsMemoryLimits",
+				info->capabilities.dedicatedMemory == original->capabilities.dedicatedMemory &&
+				info->capabilities.maxBufferSize == original->capabilities.maxBufferSize
+			);
+		}
+	}
+
+	if(Test_assert(t, "getPreferredMasked", c::GraphicsInstance_getPreferredDevice(
+		inst, nullptr, &disabled, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, &preferred, &t->err
+	)))
+		Test_assert(t, "preferredUsesMaskedFlags",
+			!(preferred.capabilities.flags.features & disabled.features) &&
+			!(preferred.capabilities.flags.features2 & disabled.features2) &&
+			!(preferred.capabilities.flags.dataTypes & disabled.dataTypes) &&
+			!preferred.capabilities.flags.featuresExt
+		);
+
+	const c::GraphicsDeviceCapabilities required = { .flags = { .features = c::EGraphicsFeatures_Bindless } };
+	c::Error rejectedError = c::Error_none();
+	preferred = {};
+
+	Test_assert(t, "requiredDisabledRejected", !c::GraphicsInstance_getPreferredDevice(
+		inst, &required, &disabled, c::GraphicsInstance_vendorMaskAll,
+		c::GraphicsInstance_deviceTypeAll, &preferred, &rejectedError
+	));
+
+	Test_assert(t, "requiredDisabledReason", rejectedError.genericError == c::EGenericError_NotFound);
+	Test_assert(t, "requiredDisabledNoDevice", !preferred.name[0]);
+
+	//Derived hardware hints stay disabled while their underlying raytracing APIs remain available.
+
+	const c::GraphicsDeviceCapFlags derivedDisabled = {
+		.features2 = (c::EGraphicsFeatures2) (
+			c::EGraphicsFeatures2_RayMicromapOpacityActual | c::EGraphicsFeatures2_RaySoftware
+		)
+	};
+
+	if(Test_assert(t, "getDerivedMaskedInfos", c::GraphicsInstance_getDeviceInfos(
+		inst, &derivedMasked, &derivedDisabled, &t->err
+	))) {
+
+		Test_assert(t, "derivedMaskKeepsAdapters", derivedMasked.length == available->length);
+
+		for(c::U64 i = 0; i < derivedMasked.length; ++i)
+			for(c::U64 j = 0; j < available->length; ++j)
+				if(derivedMasked.ptr[i].id == available->ptr[j].id) {
+
+					const c::GraphicsDeviceCapFlags actual = derivedMasked.ptr[i].capabilities.flags;
+					const c::GraphicsDeviceCapFlags original = available->ptr[j].capabilities.flags;
+
+					Test_assert(t, "derivedHintsStayDisabled", !(actual.features2 & derivedDisabled.features2));
+					Test_assert(t, "derivedMaskKeepsApis", actual.features == original.features);
+					Test_assert(t, "derivedMaskKeepsOtherHints",
+						actual.features2 == (original.features2 & ~derivedDisabled.features2)
+					);
+
+					break;
+				}
+	}
+
+	if(Test_assert(t, "getUnmaskedInfos", c::GraphicsInstance_getDeviceInfos(inst, &unmasked, nullptr, &t->err))) {
+
+		Test_assert(t, "queryMaskIsLocal", unmasked.length == available->length);
+
+		for(c::U64 i = 0; i < unmasked.length; ++i)
+			for(c::U64 j = 0; j < available->length; ++j)
+				if(unmasked.ptr[i].id == available->ptr[j].id) {
+
+					const c::GraphicsDeviceCapFlags a = unmasked.ptr[i].capabilities.flags;
+					const c::GraphicsDeviceCapFlags b = available->ptr[j].capabilities.flags;
+
+					Test_assert(t, "queryPreservesPhysicalCapabilities",
+						a.features == b.features && a.features2 == b.features2 &&
+						a.dataTypes == b.dataTypes && a.featuresExt == b.featuresExt
+					);
+
+					break;
+				}
+	}
+
+	c::ListGraphicsDeviceInfo_free(&masked, t->alloc);
+	c::ListGraphicsDeviceInfo_free(&unmasked, t->alloc);
+	c::ListGraphicsDeviceInfo_free(&derivedMasked, t->alloc);
+}
+
 static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
 	c::Test_setModule(t, "GraphicsDevice");
@@ -619,15 +764,15 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
 	//getDeviceInfos validation
 
-	Test_assert(t, "getDeviceInfosNullResult", !c::GraphicsInstance_getDeviceInfos(inst, NULL, NULL));
-	Test_assert(t, "getDeviceInfosNullInst", !c::GraphicsInstance_getDeviceInfos(NULL, &infos, NULL));
+	Test_assert(t, "getDeviceInfosNullResult", !c::GraphicsInstance_getDeviceInfos(inst, NULL, NULL, NULL));
+	Test_assert(t, "getDeviceInfosNullInst", !c::GraphicsInstance_getDeviceInfos(NULL, &infos, NULL, NULL));
 
 	//getPreferredDevice validation
 
 	c::GraphicsDeviceInfo preferred {};
 
 	Test_assert(t, "getPreferredNullInfo", !c::GraphicsInstance_getPreferredDevice(
-		inst, NULL, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, NULL, NULL
+		inst, NULL, NULL, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, NULL, NULL
 	));
 
 	//A GPU (or software rasterizer like lavapipe) is never guaranteed here, so a machine without one has to stay green.
@@ -636,7 +781,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	//Any other error means adapters were enumerated but every one of them failed OxC3's requirements.
 	//That is a real result to fail on, and the device selection log right above names each requirement that went unmet.
 
-	if (!c::GraphicsInstance_getDeviceInfos(inst, &infos, &t->err) || !infos.length) {
+	if (!c::GraphicsInstance_getDeviceInfos(inst, &infos, NULL, &t->err) || !infos.length) {
 
 		if (t->err.genericError == c::EGenericError_NotFound) {
 			c::Test_print(t, "No graphics adapter present, skipping device tests");
@@ -647,6 +792,9 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 		Test_assert(t, "deviceEnumeration", false);
 		goto clean;
 	}
+
+	Test_graphicsDisabledQueries(t, inst, &infos);
+	c::Test_setModule(t, "GraphicsDevice");
 
 	//Device creation loads the prebuilt shaders from the //OxC3_graphics section,
 	// which are only packaged when the build has the shader compiler enabled.
@@ -668,7 +816,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	}
 
 	Test_assert(t, "getPreferredDevice", c::GraphicsInstance_getPreferredDevice(
-		inst, NULL, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, &preferred, &t->err
+		inst, NULL, NULL, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, &preferred, &t->err
 	));
 
 	//LUID is host side identity rather than anything a shader can observe, so this is the only place it can be
@@ -688,7 +836,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
 			const c::GraphicsDeviceInfo *b = &infos.ptr[j];
 
-			if((a->capabilities.features & b->capabilities.features) & c::EGraphicsFeatures_LUID)
+			if((a->capabilities.flags.features & b->capabilities.flags.features) & c::EGraphicsFeatures_LUID)
 				Test_assert(t, "luidUnique", a->luid != b->luid);
 
 			Test_assert(t, "uuidUnique", a->uuid[0] != b->uuid[0] || a->uuid[1] != b->uuid[1]);
@@ -832,6 +980,7 @@ OXC3_TEST_ENTRY(graphics_interface) {
 	Test_textureRange(&t);
 	Test_graphicsDefaultBindlessLayout(&t);
 	Test_graphicsNullDevice(&t);
+	Test_graphicsCapabilityDisable(&t);
 	Test_graphicsDevice(&t);
 
 	//We might have instantiated a list with some capacity, make sure we get rid of it so the counter doesn't false positive.

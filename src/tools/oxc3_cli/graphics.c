@@ -100,7 +100,7 @@
 
 			//Enumeration can fail per-API on headless CI; like instance creation, that shouldn't abort the whole run.
 
-			if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, &err)) {
+			if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, NULL, &err)) {
 				Log_debugLnx("Couldn't enumerate %s devices (driver error / headless); skipping", EGraphicsApi_name[api]);
 				err = Error_none();
 				ListGraphicsDeviceInfo_free(&infos, alloc);
@@ -263,7 +263,7 @@
 			//Enumeration can fail per-API (e.g. a driver that creates an instance but errors listing adapters on
 			// headless CI); like instance creation above, that shouldn't abort the whole informational listing.
 
-			if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, &err)) {
+			if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, NULL, &err)) {
 				Log_debugLnx("Couldn't enumerate %s devices (driver error / headless); skipping", EGraphicsApi_name[api]);
 				err = Error_none();
 				ListGraphicsDeviceInfo_free(&infos, alloc);

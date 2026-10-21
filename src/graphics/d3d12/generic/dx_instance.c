@@ -184,6 +184,7 @@ static_assert(sizeof(DxSwapchain) % 16 == 0, "DxSwapchain has to be a multiple o
 			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = D3D12GraphicsDevice_init,
+			.deviceFinishInit = D3D12GraphicsDevice_finishInit,
 			.deviceWait = D3D12GraphicsDeviceRef_wait,
 			.deviceReportLoss = D3D12GraphicsDeviceRef_reportLoss,
 			.deviceFree = D3D12GraphicsDevice_free,
@@ -742,27 +743,46 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		GraphicsDeviceCapabilities caps = (GraphicsDeviceCapabilities) { 0 };
 
-		caps.features |=
+		caps.flags.features |=
 			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount |
 			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
 			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend |
 			EGraphicsFeatures_Multiview | EGraphicsFeatures_SubgroupOperations | EGraphicsFeatures_SubgroupQuad;
 
-		caps.dataTypes |=
+		caps.flags.dataTypes |=
 			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
 			EGraphicsDataTypes_D32S8;
 
 		if(vendorId != EGraphicsVendorId_AMD)            //AMD creates D24X8 and S8X24 internally, don't want to report D24S8.
-			caps.dataTypes |= EGraphicsDataTypes_D24S8;
+			caps.flags.dataTypes |= EGraphicsDataTypes_D24S8;
 
-		caps.features |= EGraphicsFeatures_DirectRendering;
+		caps.flags.features |= EGraphicsFeatures_DirectRendering;
+
+		//D3D12 pipeline introspection comes from AMD's driver extension, queried on this temporary device.
+		//The adapter must be AMD even when an AMD driver is installed alongside another vendor's GPU.
+
+		Bool isAmd = vendorId == EGraphicsVendorId_AMD;
+
+		#ifdef _HAS_AMD_AGS
+			isAmd &= !!(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs);
+		#endif
+
+		if(isAmd) {
+
+			DxAmdShaderAnalyzer analyzer = (DxAmdShaderAnalyzer) { 0 };
+
+			if(DxAmdShaderAnalyzer_init((ID3D12Device*) device, &analyzer))
+				caps.flags.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
+
+			DxAmdShaderAnalyzer_free(&analyzer);
+		}
 
 		//Timestamps: D3D12 supports timestamp queries on the direct and compute queues on every device.
 		//The period is only reported by a live command queue, so a direct queue is created on the temporary device
 		// for the query and released straight after; device_info.h promises the period wherever the feature is set.
 		//A queue that fails to create leaves it 0 here, and device create fills it from its own graphics queue.
 
-		caps.features2 |= EGraphicsFeatures2_Timestamps;
+		caps.flags.features2 |= EGraphicsFeatures2_Timestamps;
 
 		{
 			D3D12_COMMAND_QUEUE_DESC queueInfo = (D3D12_COMMAND_QUEUE_DESC) {
@@ -785,7 +805,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		}
 
 		if(independentDevices)
-			caps.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
 
 		D3D12_FEATURE_DATA_D3D12_OPTIONS opt0 = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS1 opt1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
@@ -823,13 +843,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		}
 
 		if(opt0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3)
-			caps.features |= EGraphicsFeatures_Bindless;
+			caps.flags.features |= EGraphicsFeatures_Bindless;
 
 		if(opt0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2)
-			caps.featuresExt |= EDxGraphicsFeatures_AllowCombineHeaps;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_AllowCombineHeaps;
 
 		if(opt0.DoublePrecisionFloatShaderOps)
-			caps.dataTypes |= EGraphicsDataTypes_F64;
+			caps.flags.dataTypes |= EGraphicsDataTypes_F64;
 
 		//The subgroup size lives in the same struct, so it's checked here too rather than off a zeroed query.
 
@@ -855,42 +875,42 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS3, &opt3, sizeof(opt3))) &&
 			(opt3.WriteBufferImmediateSupportFlags & D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT)   //DRI records on the direct queue
 		)
-			caps.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
+			caps.flags.features2 |= EGraphicsFeatures2_WriteBufferImmediate;
 
 		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasDRED)
-			caps.features2 |= EGraphicsFeatures2_DeviceFault;
+			caps.flags.features2 |= EGraphicsFeatures2_DeviceFault;
 
 		//Predication is core D3D12 (SetPredication), so every device carries the capability.
 
-		caps.features2 |= EGraphicsFeatures2_Predication;
+		caps.flags.features2 |= EGraphicsFeatures2_Predication;
 
 		//SV_Barycentrics / GetAttributeAtVertex.
 		//No shader-model gate needed:
 		// the SM6.5 baseline above already exceeds the SM6.1 the semantic requires.
 
 		if(opt3.BarycentricsSupported)
-			caps.features |= EGraphicsFeatures_Barycentrics;
+			caps.flags.features |= EGraphicsFeatures_Barycentrics;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS4, &opt4, sizeof(opt4))) &&
 			opt4.Native16BitShaderOpsSupported
 		)
-			caps.dataTypes |= EGraphicsDataTypes_F16 | EGraphicsDataTypes_I16;
+			caps.flags.dataTypes |= EGraphicsDataTypes_F16 | EGraphicsDataTypes_I16;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS5, &opt5, sizeof(opt5))) &&
 			opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0
 		) {
-			caps.features |= EGraphicsFeatures_RayPipeline | EGraphicsFeatures_Raytracing;
+			caps.flags.features |= EGraphicsFeatures_RayPipeline | EGraphicsFeatures_Raytracing;
 
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1)
-				caps.features |= EGraphicsFeatures_RayQuery;
+				caps.flags.features |= EGraphicsFeatures_RayQuery;
 
 			//DXR 1.2 natively supports SER (shader execution reordering, dx::HitObject) and opacity micromaps,
 			// vendor-neutrally.
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
 
-				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
+				caps.flags.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
 
 				//RayReorder above only means the SER API is available (it can be a no-op).
 				//OPTIONS22 reports whether the device actually reorders,
@@ -903,7 +923,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					)) &&
 					opt22.ShaderExecutionReorderingActuallyReorders
 				)
-					caps.features2 |= EGraphicsFeatures2_RayReorderActual;
+					caps.flags.features2 |= EGraphicsFeatures2_RayReorderActual;
 			}
 		}
 
@@ -911,13 +931,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS6, &opt6, sizeof(opt6))) &&
 			opt6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1
 		)
-			caps.features |= EGraphicsFeatures_VariableRateShading;
+			caps.flags.features |= EGraphicsFeatures_VariableRateShading;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS7, &opt7, sizeof(opt7))) &&
 			opt7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1
 		)
-			caps.features |= EGraphicsFeatures_MeshShader;
+			caps.flags.features |= EGraphicsFeatures_MeshShader;
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS8, &opt8, sizeof(opt8))))
 			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_OPTIONS8", i);
@@ -928,10 +948,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &opt9, sizeof(opt9))) &&
 			opt9.AtomicInt64OnTypedResourceSupported && opt9.AtomicInt64OnGroupSharedSupported
 		)
-			caps.dataTypes |= EGraphicsDataTypes_AtomicI64;
+			caps.flags.dataTypes |= EGraphicsDataTypes_AtomicI64;
 
 		if(opt9.DerivativesInMeshAndAmplificationShadersSupported)
-			caps.features |= EGraphicsFeatures_MeshTaskTexDeriv;
+			caps.flags.features |= EGraphicsFeatures_MeshTaskTexDeriv;
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))))
 			deviceUnsupported("D3D12: Unsupported device %"PRIu64", couldn't query D3D12_OPTIONS12", i);
@@ -942,25 +962,25 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS14, &opt14, sizeof(opt14))) &&
 			opt14.WriteableMSAATexturesSupported
 		)
-			caps.features |= EGraphicsFeatures_WriteMSTexture;
+			caps.flags.features |= EGraphicsFeatures_WriteMSTexture;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS16, &opt16, sizeof(opt16))) &&
 			opt16.GPUUploadHeapSupported
 		)
-			caps.featuresExt |= EDxGraphicsFeatures_ReBAR;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_ReBAR;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS17, &opt17, sizeof(opt17))) &&
 			opt17.ManualWriteTrackingResourceSupported
 		)
-			caps.featuresExt |= EDxGraphicsFeatures_ReportReBARWrites;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_ReportReBARWrites;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&
 			hwCopy.Supported
 		)
-			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
 
 		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;    //Nice way of querying..
 
@@ -1002,42 +1022,42 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if (highestModel >= D3D_SHADER_MODEL_6_6) {
 
-			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ | EDxGraphicsFeatures_SM6_6;
-			caps.features |= EGraphicsFeatures_ComputeDeriv;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ | EDxGraphicsFeatures_SM6_6;
+			caps.flags.features |= EGraphicsFeatures_ComputeDeriv;
 
 			//Full bindless: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap).
 			//Requires binding tier 3 (EGraphicsFeatures_Bindless, set from OPTIONS above) on top of the shader model.
 
-			if(caps.features & EGraphicsFeatures_Bindless)
-				caps.features2 |= EGraphicsFeatures2_DescriptorHeap;
+			if(caps.flags.features & EGraphicsFeatures_Bindless)
+				caps.flags.features2 |= EGraphicsFeatures2_DescriptorHeap;
 		}
 
 		if(highestModel >= D3D_SHADER_MODEL_6_7)
-			caps.featuresExt |= EDxGraphicsFeatures_SM6_7;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_SM6_7;
 
 		if(highestModel >= D3D_SHADER_MODEL_6_8)
-			caps.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax | EDxGraphicsFeatures_SM6_8;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax | EDxGraphicsFeatures_SM6_8;
 
 		if(highestModel >= D3D_SHADER_MODEL_6_9)
-			caps.featuresExt |= EDxGraphicsFeatures_SM6_9;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_SM6_9;
 
 		#if D3D12_SDK_VERSION >= 618
 
 			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 				device, D3D12_FEATURE_D3D12_TIGHT_ALIGNMENT, &tightAlignment, sizeof(tightAlignment)
 			)) && tightAlignment.SupportTier >= D3D12_TIGHT_ALIGNMENT_TIER_1)
-				caps.featuresExt |= EDxGraphicsFeatures_TightAlignment;
+				caps.flags.featuresExt |= EDxGraphicsFeatures_TightAlignment;
 
 		#endif
 
 		#if D3D12_PREVIEW_SDK_VERSION >= 720
 			if (highestModel >= D3D_SHADER_MODEL_6_10) {
 
-				caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
+				caps.flags.featuresExt |= EDxGraphicsFeatures_SM6_10;
 
 				//Ray tri vertex position fetch is an SM6.9 raytracing feature; still proxied off SM6.10 (no query wired).
 
-				caps.features |= EGraphicsFeatures_RayTriPosition;
+				caps.flags.features |= EGraphicsFeatures_RayTriPosition;
 				caps.experimentalFeatures |= EGraphicsFeatures_RayTriPosition;
 
 				//Cooperative vectors/matrix (DXIL "Linear Algebra") need the real linalg tier query IN ADDITION to the
@@ -1129,7 +1149,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					)
 						coopFeatures |= EGraphicsFeatures_CoopMat;
 
-					caps.features |= coopFeatures;
+					caps.flags.features |= coopFeatures;
 					caps.experimentalFeatures |= coopFeatures;
 				}
 			}
@@ -1142,7 +1162,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					device, D3D12_FEATURE_ASYNC_COMMANDS, &asyncCmds, sizeof(asyncCmds)
 				)) && asyncCmds.Supported
 			)
-				caps.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
+				caps.flags.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
 		#endif
 
 		//SER's API claim (DXR tier 1.2, set above) is only usable from a shader written at SM6.9,
@@ -1150,18 +1170,18 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//A device below that ceiling claims an API no shader can reach, so the claim is withdrawn.
 		//Where it holds, it stays experimental while SM6.9 itself is preview only.
 
-		if (caps.features & EGraphicsFeatures_RayReorder) {
+		if (caps.flags.features & EGraphicsFeatures_RayReorder) {
 
-			if(!(caps.featuresExt & EDxGraphicsFeatures_SM6_9)) {
-				caps.features &= ~EGraphicsFeatures_RayReorder;
-				caps.features2 &= ~EGraphicsFeatures2_RayReorderActual;
+			if(!(caps.flags.featuresExt & EDxGraphicsFeatures_SM6_9)) {
+				caps.flags.features &= ~EGraphicsFeatures_RayReorder;
+				caps.flags.features2 &= ~EGraphicsFeatures2_RayReorderActual;
 			}
 
 			else {
 
 				caps.experimentalFeatures |= EGraphicsFeatures_RayReorder;
 
-				if(caps.features2 & EGraphicsFeatures2_RayReorderActual)
+				if(caps.flags.features2 & EGraphicsFeatures2_RayReorderActual)
 					caps.experimentalFeatures2 |= EGraphicsFeatures2_RayReorderActual;
 			}
 		}
@@ -1178,7 +1198,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//Coherent UMA snoops the CPU caches for free, which flips what page property upload memory wants
 
 		if(hasArch && arch.CacheCoherentUMA)
-			caps.featuresExt |= EDxGraphicsFeatures_CacheCoherentUMA;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_CacheCoherentUMA;
 
 		//Asked of the factory rather than the adapter, since DXGI decides whether a flip can tear
 
@@ -1190,7 +1210,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			)) &&
 			allowTearing
 		)
-			caps.featuresExt |= EDxGraphicsFeatures_AllowTearing;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_AllowTearing;
 
 		U64 sharedMem = desc.SharedSystemMemory;
 		U64 dedicatedMem = desc.DedicatedVideoMemory;
@@ -1297,7 +1317,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			(format.Support1 & mask1) == mask1
 		)
-			caps.dataTypes |= EGraphicsDataTypes_RGB32f;
+			caps.flags.dataTypes |= EGraphicsDataTypes_RGB32f;
 
 		format.Format = DXGI_FORMAT_R32G32B32_SINT;
 
@@ -1305,7 +1325,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
-			caps.dataTypes |= EGraphicsDataTypes_RGB32i;
+			caps.flags.dataTypes |= EGraphicsDataTypes_RGB32i;
 
 		format.Format = DXGI_FORMAT_R32G32B32_UINT;
 
@@ -1313,7 +1333,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
-			caps.dataTypes |= EGraphicsDataTypes_RGB32u;
+			caps.flags.dataTypes |= EGraphicsDataTypes_RGB32u;
 
 		//8x MSAA is optional for RGBA32f and RGB32f
 
@@ -1335,7 +1355,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT;
 
 		if(
-			(caps.dataTypes & EGraphicsDataTypes_RGB32f) && (
+			(caps.flags.dataTypes & EGraphicsDataTypes_RGB32f) && (
 				FAILED(device->lpVtbl->CheckFeatureSupport(
 					device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa)
 				)) ||
@@ -1345,7 +1365,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			supportRGBX32MSAA = false;
 
 		if(supportRGBX32MSAA)
-			caps.featuresExt |= EDxGraphicsFeatures_RGBX32fMSAA;
+			caps.flags.featuresExt |= EDxGraphicsFeatures_RGBX32fMSAA;
 
 		//Max allocation size and max buffer size isn't queryable in D3D12 yet.
 		//We hardcode the reported sizes from Vulkan and the hardlimit as defined by HLSL.
@@ -1407,14 +1427,14 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu64"", i);
 
 				if(status == NVAPI_OK)
-					info->capabilities.features |= EGraphicsFeatures_RayValidation;
+					info->capabilities.flags.features |= EGraphicsFeatures_RayValidation;
 
 				//SER and opacity micromaps are detected vendor-neutrally via D3D12_RAYTRACING_TIER_1_2 (see above).
 
 				//Mega geometry (RTXMG) has no vendor-neutral D3D12 query, so it goes through NVAPI raytracing caps.
 				//Two separate bits to match the Vulkan split (cluster acceleration structures vs partitioned TLAS).
 
-				if(info->capabilities.features & EGraphicsFeatures_Raytracing) {
+				if(info->capabilities.flags.features & EGraphicsFeatures_Raytracing) {
 
 					NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAPS clusterCaps =
 						NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAP_NONE;
@@ -1427,7 +1447,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						) == NVAPI_OK &&
 						(clusterCaps & NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAP_STANDARD)
 					)
-						info->capabilities.features2 |= EGraphicsFeatures2_RayClusterAS;
+						info->capabilities.flags.features2 |= EGraphicsFeatures2_RayClusterAS;
 
 					NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAPS ptlasCaps =
 						NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAP_NONE;
@@ -1440,15 +1460,15 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						) == NVAPI_OK &&
 						(ptlasCaps & NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAP_STANDARD)
 					)
-						info->capabilities.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
+						info->capabilities.flags.features2 |= EGraphicsFeatures2_RayPartitionedTLAS;
 
 					//Indirect AS builds are inherent to the mega geometry APIs, so either implies the bit
 
 					if(
-						info->capabilities.features2 &
+						info->capabilities.flags.features2 &
 						(EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS)
 					)
-						info->capabilities.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
+						info->capabilities.flags.features2 |= EGraphicsFeatures2_RayIndirectASBuild;
 				}
 
 			#endif

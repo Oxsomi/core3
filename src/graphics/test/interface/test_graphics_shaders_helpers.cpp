@@ -459,7 +459,7 @@ namespace oxc { namespace c {
 		GraphicsInstance *ownInstance = GraphicsInstanceRef_ptr(*ownInstanceRef);
 		Bool created = false;
 
-		if (Test_assert(t, "ownDeviceInfos", GraphicsInstance_getDeviceInfos(ownInstance, &deviceInfos, &t->err))) {
+		if (Test_assert(t, "ownDeviceInfos", GraphicsInstance_getDeviceInfos(ownInstance, &deviceInfos, NULL, &t->err))) {
 
 			for(U64 i = 0; i < deviceInfos.length; ++i)
 				if (Buffer_eq(

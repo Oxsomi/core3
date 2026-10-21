@@ -116,7 +116,7 @@ static Bool CLI_isaPrintLiveTargets(const Allocator *alloc, Error *e_rr) {
 		))
 			goto clean;
 
-		if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, &gErr) || !infos.length)
+		if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, NULL, &gErr) || !infos.length)
 			goto clean;
 
 		//The list belongs to the driver rather than the adapter, so any AMD device answers for the whole generation.
@@ -1027,7 +1027,7 @@ clean:
 			alloc, &instanceType, &instanceRef, e_rr
 		));
 
-		gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
+		gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, NULL, e_rr));
 
 		if(!infos.length)
 			retError(clean, Error_invalidState(0, "CLI_isaDisassembleLive() the graphics API reported no devices"));
@@ -1154,7 +1154,7 @@ clean:
 		//Without introspection the run still builds the pipeline, which validates the binary and the state; it just
 		// has nothing to disassemble afterwards, so it's said here rather than refused.
 
-		if(!(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo))
+		if(!(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.flags.features2 & EGraphicsFeatures2_PipelineExecutableInfo))
 			Log_warnLnx(
 				"%s on this device exposes no pipeline introspection, so this run validates the pipeline without "
 				"disassembling it.", apiName
@@ -1608,7 +1608,7 @@ clean:
 		// only where it exists and its absence is reported rather than treated as a failure.
 
 		const Bool hasIntrospection =
-			(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.features2 &
+			(GraphicsDeviceRef_ptr(deviceRef)->info.capabilities.flags.features2 &
 			EGraphicsFeatures2_PipelineExecutableInfo) != 0;
 
 		if(hasIntrospection)

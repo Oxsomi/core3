@@ -179,7 +179,7 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 
 	//Compaction is an acceleration structure operation; it needs neither a ray pipeline nor ray queries.
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_Raytracing)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_Raytracing)) {
 		c::Test_print(t, "Device lacks raytracing, skipping BLAS compaction tests");
 		return;
 	}
@@ -236,7 +236,7 @@ extern "C" void Test_graphicsBlasCompaction(oxc::c::Test *t, oxc::c::GraphicsDev
 
 			if (
 				dev.api() == c::EGraphicsApi_Vulkan &&
-				(dev.info().capabilities.featuresExt & c::EVkGraphicsFeatures_NoCompactionQuery)
+				(dev.info().capabilities.flags.featuresExt & c::EVkGraphicsFeatures_NoCompactionQuery)
 			) {
 				c::Test_print(t, "Device can't query compacted sizes, its builds are marked compacted instead");
 				c::Test_assert(t, "noQueryClaimed", blas.data()->base.compactionQuery == c::U32_MAX);

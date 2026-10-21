@@ -472,7 +472,7 @@ extern "C" void Test_graphicsTextureRef(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	//An exposed render target gets real, distinct handles that resolve in the default table
 
-	if (dev.info().capabilities.features & c::EGraphicsFeatures_Bindless) {
+	if (dev.info().capabilities.flags.features & c::EGraphicsFeatures_Bindless) {
 
 		RenderTexture exposed;
 
@@ -742,13 +742,9 @@ extern "C" void Test_graphicsPipelineLayout(oxc::c::Test *t, oxc::c::GraphicsDev
 	(void) c::ListDescriptorBinding_createRefConst(&bab, 1, &plainInfo.bindings, nullptr);
 	(void) c::ListCharString_createRefConst(&babName, 1, &plainInfo.bindingNames, nullptr);
 
-	//A device without VK_KHR_push_descriptor refuses this outright (Android emulators, where gfxstream drops
-	// the extension), which is the documented gap rather than something this module is testing.
-
-	if(dev.createDescriptorLayout(pushInfo, "Test push descriptor layout", pushDescLayout, nullptr))
-		Test_assert(t, "pushDescLayout", pushDescLayout.valid());
-
-	else Test_print(t, "Device has no push descriptor support, skipping the push descriptor layout");
+	Test_assert(t, "pushDescLayout", dev.createDescriptorLayout(
+		pushInfo, "Test push descriptor layout", pushDescLayout, e_rr
+	));
 
 	Test_assert(t, "plainLayout", dev.createDescriptorLayout(plainInfo, "Test plain layout", plainLayout, e_rr));
 
