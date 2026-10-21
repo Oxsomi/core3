@@ -25,6 +25,7 @@
 #include "types/base/atomic.h"
 #include "types/base/buffer_base.h"
 #include "types/base/string_base.h"
+#include "types/container/log.h"
 #include "types/container/perf/container_perf.h"
 
 #include <stdlib.h>
@@ -91,5 +92,9 @@ int main() {
 	gotoIfError3(clean, Perf_aesThroughput(&alloc, &outputCsv, true, &err));
 
 clean:
+
+	if(!s_uccess)
+		Error_print(&alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
 	return !s_uccess;
 }

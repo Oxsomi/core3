@@ -493,6 +493,57 @@ void Test_hashIndex(Test *t) {
 		ListU64_free(&list, alloc);
 	}
 
+	//========================= the ceiling formula =========================
+
+	{
+		Test_assert(t, "ceiling of the smallest table", HashIndex_displacementCeiling(HashIndex_minCapacity) == 28);
+		Test_assert(t, "ceiling gains two per doubling", HashIndex_displacementCeiling(128) == 30);
+		Test_assert(t, "ceiling at 2^20 slots", HashIndex_displacementCeiling((U64)1 << 20) == 56);
+		Test_assert(t, "ceiling of the widest table", HashIndex_displacementCeiling(HashIndex_maxCapacity) == 80);
+		Test_assert(t, "ceiling rounds a size that is no power of two up", HashIndex_displacementCeiling(65) == 30);
+		Test_assert(t, "ceiling of zero", HashIndex_displacementCeiling(0) == 16);
+		Test_assert(t, "ceiling of one", HashIndex_displacementCeiling(1) == 16);
+		Test_assert(t, "ceiling stops at 63 bits", HashIndex_displacementCeiling(U64_MAX) == 142);
+	}
+
+	//========================= a hit at the load limit allocates nothing =========================
+
+	{
+		HashIndex index = (HashIndex) { 0 };
+		HashIndexInfo info = HashIndexTest_u64Info(0);
+		ListU64 list = (ListU64) { 0 };
+		const Allocator failing = (Allocator) { 0 };
+		U64 existing = 0;
+		Bool ok = true;
+
+		for(U64 i = 0; i < 48; ++i)
+			ok &= HashIndexTest_add(&index, &info, &list, i * 11, &existing, alloc, e_rr) && existing == U64_MAX;
+
+		const U64 capacity = index.slots.length;
+		const U64 present = 5 * 11, absent = 48 * 11;
+
+		Test_assert(t, "setup: a hashed index at exactly 3/4 load", ok && capacity == 64 && index.count == 48);
+
+		Test_assert(t, "a hit at the load limit allocates nothing and cannot fail", (
+			HashIndex_insert(&index, &info, list.ptr, &present, list.length, &existing, &failing, NULL) &&
+			existing == 5 && index.slots.length == capacity && index.count == 48
+		));
+
+		Test_assert(t, "a miss at the load limit needs the allocator and changes nothing without it", (
+			!HashIndex_insert(&index, &info, list.ptr, &absent, list.length, &existing, &failing, NULL) &&
+			existing == U64_MAX && index.slots.length == capacity && index.count == 48 &&
+			HashIndexTest_consistent(&index, &info, &list)
+		));
+
+		Test_assert(t, "and takes it once the allocator works", (
+			HashIndexTest_add(&index, &info, &list, absent, &existing, alloc, e_rr) &&
+			existing == U64_MAX && index.slots.length == capacity * 2 && HashIndexTest_consistent(&index, &info, &list)
+		));
+
+		HashIndex_free(&index, alloc);
+		ListU64_free(&list, alloc);
+	}
+
 	//========================= out of memory =========================
 
 	{

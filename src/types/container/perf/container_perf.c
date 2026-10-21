@@ -223,6 +223,15 @@ static U64 Perf_hashIndexMaxDisplacement(const HashIndex *index) {
 	return maxDisplacement;
 }
 
+//A static const info in this file is what lets the lookups below fold the hash and the compare, as a set's do.
+
+static const HashIndexInfo Perf_u64Info = {
+	.hash = U64_hash,
+	.compare = U64_compare,
+	.stride = sizeof(U64),
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
+};
+
 //HashIndex against the linear scan a consumer would otherwise write, plus the number the design rests on:
 // the greatest displacement Robin Hood leaves behind, since the ceiling that bounds a flood is only worth
 // having while honest keys stay far below it at every size.
@@ -236,12 +245,6 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 	ListU64 keys  = (ListU64) { 0 };
 	ListU64 list  = (ListU64) { 0 };
 	HashIndex index = (HashIndex) { 0 };
-
-	HashIndexInfo info = (HashIndexInfo) { 0 };
-	info.hash = U64_hash;
-	info.compare = U64_compare;
-	info.stride = sizeof(U64);
-	info.smallLimit = HASHINDEX_SMALL_LIMIT_WORD;
 
 	gotoIfError3(clean, CharString_createCopy(
 		CharString_createRefCStrConst("Structure,Count,Capacity,Operation,Seconds,OpsPerSecond,MaxDisplacement\n"),
@@ -258,15 +261,20 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 
 		//The first half is what goes in, the second half is what is looked up and never found.
 
-		for(U64 i = 0; i < count * 2; ++i)
-			keys.ptrNonConst[i] = ((U64) Perf_hashIndexRandom(&seed) << 32) | Perf_hashIndexRandom(&seed);
+		for(U64 i = 0; i < count * 2; ++i) {
+
+			const U64 high = Perf_hashIndexRandom(&seed);
+			const U64 low = Perf_hashIndexRandom(&seed);
+
+			keys.ptrNonConst[i] = high << 32 | low;
+		}
 
 		//Both reserves hoisted, as every hot path this exists for does.
 
 		HashIndex_free(&index, alloc);
 		ListU64_free(&list, alloc);
 
-		gotoIfError3(clean, HashIndex_reserve(&index, &info, list.ptr, count, alloc, e_rr));
+		gotoIfError3(clean, HashIndex_reserve(&index, &Perf_u64Info, list.ptr, count, alloc, e_rr));
 		gotoIfError3(clean, ListU64_reserve(&list, count, alloc, e_rr));
 
 		Ns start = Time_now();
@@ -274,7 +282,9 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 		for (U64 i = 0; i < count; ++i) {
 
 			U64 existing = 0;
-			gotoIfError3(clean, HashIndex_insert(&index, &info, list.ptr, &keys.ptr[i], list.length, &existing, alloc, e_rr));
+			gotoIfError3(clean, HashIndex_insert(
+				&index, &Perf_u64Info, list.ptr, &keys.ptr[i], list.length, &existing, alloc, e_rr
+			));
 
 			if(existing == U64_MAX)
 				gotoIfError3(clean, ListU64_pushBack(&list, keys.ptr[i], alloc, e_rr));
@@ -288,7 +298,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 		start = Time_now();
 
 		for(U64 i = 0; i < count; ++i)
-			found += HashIndex_find(&index, &info, list.ptr, &keys.ptr[i]) != U64_MAX;
+			found += HashIndex_find(&index, &Perf_u64Info, list.ptr, &keys.ptr[i]) != U64_MAX;
 
 		DNs hit = Time_elapsed(start);
 
@@ -296,7 +306,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 		start = Time_now();
 
 		for(U64 i = 0; i < count; ++i)
-			missed += HashIndex_find(&index, &info, list.ptr, &keys.ptr[count + i]) == U64_MAX;
+			missed += HashIndex_find(&index, &Perf_u64Info, list.ptr, &keys.ptr[count + i]) == U64_MAX;
 
 		DNs miss = Time_elapsed(start);
 
@@ -319,7 +329,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 		start = Time_now();
 
 		for (U64 i = 0; i < count; ++i) {
-			gotoIfError3(clean, HashIndex_eraseSwap(&index, &info, list.ptr, 0, e_rr));
+			gotoIfError3(clean, HashIndex_eraseSwap(&index, &Perf_u64Info, list.ptr, 0, e_rr));
 			list.ptrNonConst[0] = list.ptr[list.length - 1];
 			gotoIfError3(clean, ListU64_popBack(&list, NULL, e_rr));
 		}

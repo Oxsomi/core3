@@ -24,11 +24,10 @@
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/mathi.h"
 #include "types/container/list_impl.h"
 
 TListImpl(HashSlot);
-
-//Read once per table, when its slot array is built, and the only global anything here touches.
 
 static U64 HashIndex_processSeed = 0x9E3779B97F4A7C15;
 
@@ -36,19 +35,17 @@ void HashIndex_initSeed(U64 seed) {
 	HashIndex_processSeed = seed;
 }
 
+//A constant would not do: Robin Hood compresses the spread but the maximum still grows with the table, so one small
+// enough to be a defence fires on honest keys.
+
 U64 HashIndex_displacementCeiling(U64 capacity) {
-
-	U64 bits = 0;
-
-	while(bits < 63 && ((U64)1 << bits) < capacity)
-		++bits;
-
+	const U64 bits = capacity > 1 ? U64_min(63, (U64) U64_bitScan(capacity - 1) + 1) : 0;
 	return (bits << 1) + 16;
 }
 
 //An occupant sitting closer to its own home than what is being carried hands the slot over and is carried on.
 //Returns the greatest displacement anything ended up at, so the ceiling is compared against once rather than
-// at every step. The load cap is what terminates this: an empty slot always exists.
+// at every step.
 
 static U64 HashIndex_place(HashIndex *index, U64 pos, U32 hash, U32 slotIndex) {
 
@@ -277,7 +274,8 @@ Bool HashIndex_insert(
 
 	if(!index || !info || !info->hash || !info->compare || !key)
 		retError(clean, Error_nullPointer(
-			!index ? 0 : (!info ? 1 : 3), "HashIndex_insert()::index, info and key are required"
+			!index ? 0 : (!info || !info->hash || !info->compare ? 1 : 3),
+			"HashIndex_insert()::index, info and key are required"
 		));
 
 	//Anything but the entry the list is about to push means the two have drifted apart, which is worth
@@ -312,11 +310,6 @@ Bool HashIndex_insert(
 		));
 	}
 
-	//Checked before anything walks, which is what guarantees the loops below terminate.
-
-	else if((index->count + 1) * HashIndex_maxLoadDenominator > index->slots.length * HashIndex_maxLoadNumerator)
-		gotoIfError3(clean, HashIndex_resize(index, info, entries, index->slots.length << 1, allocator, e_rr));
-
 	{
 		const U64 mask = index->slots.length - 1;
 		const U32 hash = HashIndex_hashKey(info, index->seed, key);
@@ -339,6 +332,13 @@ Bool HashIndex_insert(
 
 				goto clean;
 			}
+		}
+
+		//Grown only once the key is known to be new, so a hit never allocates; the wider table places from the home slot.
+
+		if((index->count + 1) * HashIndex_maxLoadDenominator > index->slots.length * HashIndex_maxLoadNumerator) {
+			gotoIfError3(clean, HashIndex_resize(index, info, entries, index->slots.length << 1, allocator, e_rr));
+			pos = (U64) hash & (index->slots.length - 1);
 		}
 
 		const U64 maxDisplacement = HashIndex_place(index, pos, hash, (U32)(entryIndex + 1));
