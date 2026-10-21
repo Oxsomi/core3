@@ -581,7 +581,7 @@ For a binary that uses an extension OxC3 doesn't recognize yet, such as a vendor
 - `GraphicsDeviceRef_listShaderTargets(dev, alloc, &list, e_rr)` lists the ASIC targets the driver can compile for besides the device itself (empty except on AMD's D3D12 today); the names can be passed back as an ISA target.
 - `GraphicsDeviceRef_selectShaderTarget(dev, &name, e_rr)` picks which target the NEXT device created in this process compiles for (empty name = the real GPU). Process wide; the driver reads it while initializing the adapter, so it cannot apply to a device that already exists (create one to enumerate, release it, create a second to compile with). A backend that only compiles for the device refuses any other name.
 - Internal, called by backends: `GraphicsDeviceRef_flushPendingPulls` (records the queued pullRegion reads after the frame's commands) and `GraphicsDeviceRef_resizeStagingBuffer` (resizes the staging buffer). The device also shrinks staging on its own: every 64 frames, if that window's peak use stayed at or below a quarter of a region, it shrinks to three regions of 4 MiB doubled until each holds twice the peak (uploads through a temporary buffer count toward the peak). Apps use `GraphicsDeviceRef_reserveReadback` instead of touching these.
-- Internal, called by backends: `GraphicsDevice_addInFlight`, `reserveInFlight`, `isInFlight`, `isInAnyFlight` and `clearInFlight` are the only way to touch `resourcesInFlight`; a frame holds one reference per resource.
+- Internal, called by backends: `GraphicsDevice_addInFlight`, `reserveInFlight`, `isInFlight`, `isInAnyFlight` and `clearInFlight` are how a backend uses `resourcesInFlight`; a frame holds one reference per resource.
 
 ### Device loss
 

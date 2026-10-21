@@ -34,11 +34,10 @@ typedef struct Error Error;
 //An open addressed index laid BESIDE a list the caller owns, owning slots and nothing else: no keys, no
 // values, no entries. THashSet (hash_set.h) owns a list together with its index and is what callers use.
 //Iteration stays the caller's list in the caller's order, so the seed below can never reorder anything
-// observable, which is what lets it be on everywhere.
-//A zeroed HashIndex is a valid empty index, which the tracked allocator needs: its set is a statically
-// zeroed global already in use before anything could create one.
+// observable.
+//A zeroed HashIndex is a valid empty index.
 
-//The load cap is checked before a probe walks, so an empty slot always exists and no loop needs a limit.
+//The load stays at or below 3/4 after every insert, so an empty slot always exists and no probe needs a limit.
 
 static const U64 HashIndex_maxLoadNumerator = 3;
 static const U64 HashIndex_maxLoadDenominator = 4;
@@ -64,8 +63,7 @@ static inline U32 HashIndex_finalize(U64 hash) {
 	return (U32) hash;
 }
 
-//2 * log2(capacity) + 16. A constant ceiling won't do: Robin Hood compresses the spread but the maximum
-// still grows with the table, so one small enough to be a defence fires on honest keys.
+//The displacement past which an insert counts as a flood: 2 * log2(capacity) + 16.
 
 U64 HashIndex_displacementCeiling(U64 capacity);
 
@@ -83,7 +81,7 @@ U64 HashIndex_displacementCeiling(U64 capacity);
 void HashIndex_initSeed(U64 seed);
 
 //The whole hash rather than a tag, because the fairness compare, erase and growth all need a slot's distance
-// from its own home without having hashed its key. Growth then re-reads no key at all.
+// from its own home without having hashed its key.
 
 typedef struct HashSlot {
 	U32 hash;
@@ -99,7 +97,7 @@ typedef struct HashIndex {
 } HashIndex;
 
 //Where an entry's key lives. NULL means entries + index * stride + keyOffset, the fast path for a list of
-// pointers or handles; a callback covers the rest, like InputDevice.handles holding two strides in one Buffer.
+// pointers or handles; a callback covers the rest.
 
 typedef const void *(*HashKeyFunction)(const void *entries, U64 index, void *context);
 
@@ -120,7 +118,7 @@ typedef struct HashIndexInfo {
 	U64 stride, keyOffset;          //Only read when getKey is NULL
 
 	//Up to this many entries there is no slot array and lookup scans, which beats hashing at that size.
-	//HASHINDEX_SMALL_LIMIT_WORD for a word, 4 for a string.
+	//HASHINDEX_SMALL_LIMIT_WORD for a word, 4 for a string, never above 28: the ceiling of the smallest table.
 
 	U32 smallLimit, pad;
 
@@ -238,8 +236,8 @@ Bool HashIndex_insert(
 //    list.ptrNonConst[i] = list.ptr[list.length - 1];
 //    gotoIfError3(clean, ListX_popBack(&list, NULL, e_rr));
 //
-//Iteration order changes, which is the trade: an ordered erase would memmove the tail on every one.
-//There is none, because no site in the tree wants it. Never allocates.
+//Iteration order changes, which is the trade: an ordered erase would memmove the tail on every one, so there is none.
+//Never allocates.
 
 Bool HashIndex_eraseSwap(
 	HashIndex *index,

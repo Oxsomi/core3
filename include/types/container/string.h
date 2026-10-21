@@ -123,7 +123,7 @@ Bool CharString_findAll(const CharStringFind *find, C8 c, EStringCase caseSensit
 Bool CharString_findAllString(const CharStringFind *find, const CharString *other, EStringCase caseSensitive, Error *e_rr);
 
 U64 CharString_unicodeCodepoints(const CharString str);        //Returns U64_MAX if invalid codepoints were detected
-U64 CharString_hash(const CharString s);                       //Hash of content, for maps only (not for cryptography purposes)
+U64 CharString_hash(const CharString s);                       //Unseeded content hash; tables use CharString_hashSeeded
 
 //HashFunction shaped, key points at a CharString; the Insensitive one pairs with GenericList_compareStringInsensitive.
 

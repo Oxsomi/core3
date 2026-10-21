@@ -24,9 +24,11 @@
 #include "types/container/hash_set.h"
 #include "types/base/error.h"
 #include "types/base/mathi.h"
+#include "types/container/buffer.h"
 #include <stddef.h>
 
-//info is an expression for the const HashIndexInfo * of the key inside one entry, whose stride is sizeof(entry).
+//info is an expression for the set's const HashIndexInfo *, whose stride is sizeof(entry).
+//_insert hands a getKey callback the new entry as entries[0], so it has to read entries as the list's element type.
 
 #define THashSetNamedImpl(ListName, Name, info)                                                                             \
 																															\
