@@ -446,6 +446,14 @@ static void Test_streamOddLength(c::Test *t, const StreamFixture &fx, c::U64 ele
 
 		const c::U64 oddLen = elemsSize + 3;        //Three bytes into the 65th element
 
+		//A device without the runtime's bindless table cannot expose a buffer in one, so there the leg reads the
+		// buffer plainly and has no handle to check.
+
+		const c::Bool hasBindless = fx.dev.hasBindlessTable();
+
+		const c::EGraphicsResourceFlag oddFlags =
+			hasBindless ? c::EGraphicsResourceFlag_ShaderReadBindless : c::EGraphicsResourceFlag_ShaderRead;
+
 		c::MemoryStreamRef *oddStream = nullptr;
 		gfx::DeviceBuffer oddBuf;
 
@@ -455,11 +463,12 @@ static void Test_streamOddLength(c::Test *t, const StreamFixture &fx, c::U64 ele
 		))) {
 
 			if(Test_assert(t, "oddBuffer", fx.dev.createBufferStream(
-				c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_ShaderReadBindless,
+				c::EDeviceBufferUsage_None, oddFlags,
 				"Odd stream", (c::StreamRef*) oddStream, oddLen, oddBuf, false, nullptr, e_rr
 			))) {
 
-				Test_assert(t, "oddBindlessHandle", oddBuf.readHandle() != 0);
+				if(hasBindless)
+					Test_assert(t, "oddBindlessHandle", oddBuf.readHandle() != 0);
 
 				//The padding is the backend allocation's and the view's, never the resource's: what the
 				// resource reports is what the caller asked for, since that is the length of the upload and
@@ -571,6 +580,15 @@ static void Test_streamPullRegion(c::Test *t, const StreamFixture &fx, gfx::Devi
 		return;
 
 	Test_assert(t, "sinkHasNoHostCopy", !c::Buffer_length(sink.data()->cpuData));
+
+	//The shader reads whatever the table's input slot holds, so this leg names its own input instead of taking
+	// the one an earlier leg left behind.
+	//That buffer outlives the table's use of it, so no reference is maintained.
+
+	const c::Descriptor inputDesc = c::Descriptor_buffer(input.handle(), 0, 0, NULL, 0);
+
+	if(!Test_assert(t, "setPullInput", fx.table.setByName("input", inputDesc, 0, false, e_rr)))
+		return;
 
 	//maintainRef: the sink is scoped to this call while the table outlives it.
 

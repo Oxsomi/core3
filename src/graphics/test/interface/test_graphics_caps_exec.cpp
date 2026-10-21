@@ -777,6 +777,14 @@ extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::Graphi
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	gfx::CommandList emptyList;
 
+	//Every entry writes its output through a bindless handle, and a binary that declares Bindless is not selectable
+	// on a device without the runtime's table, so such a device has nothing to execute here.
+
+	if(!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping");
+		return;
+	}
+
 	if(!(
 		Test_assert(t, "createEmptyList", dev.createCommandList(2 * c::KIBI, 64, 16, emptyList, true, e_rr)) &&
 		Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr)) &&
