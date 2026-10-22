@@ -105,9 +105,36 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		Bool mapped =
 			ok && r.shEntriesRuntime.length == 1 &&
 			r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-			(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & (1u << i));
+			(r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions & (1u << i));
 
 		Test_assert(t, ESHExtension_names[i], mapped);
+	}
+
+	//--- Every ESHExtension2 name is too, into the second mask alone ---
+
+	for (U64 i = 0; i < ESHExtension2_Count; ++i) {
+
+		CharString_free(&src, alloc);
+		gotoIfError3(clean, CharString_format(
+			alloc, &src, e_rr,
+			"RWByteAddressBuffer buf;\n"
+			"[[oxc::extension(\"%s\")]]\n"
+			"[[oxc::stage(\"compute\")]]\n"
+			"[numthreads(1, 1, 1)]\n"
+			"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, 1); }\n",
+			ESHExtension2_names[i]
+		));
+
+		CompileResult_free(&r, alloc);
+		Bool ok = parseShader(&comp, src, alloc, &r, false);
+
+		Bool mapped =
+			ok && r.shEntriesRuntime.length == 1 &&
+			r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
+			(U32) r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions2 == (1u << i) &&
+			!r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions;
+
+		Test_assert(t, ESHExtension2_names[i], mapped);
 	}
 
 	CharString_free(&src, alloc);
@@ -120,12 +147,13 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[shader(\"raygeneration\")]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "RayReorder on raygen",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-		(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & ESHExtension_RayReorder)
+		(r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions & ESHExtension_RayReorder)
 	);
 
 	src = CharString_createRefCStrConst(
@@ -133,12 +161,13 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[shader(\"raygeneration\")]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "PAQ on raygen",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
-		(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & ESHExtension_PAQ)
+		(r.shEntriesRuntime.ptr[0].extensions.ptr[0].extensions & ESHExtension_PAQ)
 	);
 
 	//--- Unknown extension names are rejected ---
@@ -150,6 +179,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(t, "unknown extension rejected", !parseShader(&comp, src, alloc, &r, true));
 
@@ -161,6 +191,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "model 6.7 recorded",
@@ -177,6 +208,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "vendor mask recorded",
@@ -192,6 +224,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "binary(dxil) records DXIL-only mask",
@@ -207,6 +240,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "binary(spv, dxil) records both bits",
@@ -221,6 +255,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "binary absent leaves mask unset",
@@ -238,6 +273,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(t, "binary(air) rejected until AIR is supported", !parseShader(&comp, src, alloc, &r, true));
 
@@ -252,6 +288,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(2, 2, 1)]\n"
 		"void main(uint3 id : SV_DispatchThreadID) {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "AtomicF32 entrypoint auto-restricts to SPIRV",
@@ -268,6 +305,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(2, 2, 1)]\n"
 		"void main(uint3 id : SV_DispatchThreadID) {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "ComputeDeriv entrypoint stays dual-backend (compiles on DXIL too)",
@@ -285,6 +323,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "RayTriPosition entrypoint stays dual-backend (SPIRV via inline SPIR-V)",
@@ -301,6 +340,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "CoopVec entrypoint stays dual-backend (SPIRV via inline SPIR-V)",
@@ -317,6 +357,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(32, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "CoopMat entrypoint stays dual-backend (SPIRV via SPV_KHR_cooperative_matrix)",
@@ -330,6 +371,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "plain compute entrypoint supports both backends",
@@ -346,6 +388,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	{
 		Bool ok = parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1;
@@ -373,6 +416,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "two define-sets -> two compile combinations",
@@ -388,6 +432,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "two models -> two shader versions",
@@ -408,6 +453,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 
 	{
@@ -431,6 +477,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 
 	{
@@ -454,6 +501,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[numthreads(1, 1, 1)]\n"
 		"void main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "uniform recorded",
@@ -467,6 +515,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[[oxc::stage(\"vertex\")]]\n"
 		"float4 main() : SV_Position { return 0; }\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "vertex stage parses",
@@ -477,6 +526,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"[[oxc::stage(\"pixel\")]]\n"
 		"float4 main() : SV_Target { return 1; }\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "pixel stage parses",
@@ -530,6 +580,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	src = CharString_createRefCStrConst(
 		"[[oxc::binary(\"spv\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n"
 	);
+
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "binary(spv) restricts effective set to SPIRV",

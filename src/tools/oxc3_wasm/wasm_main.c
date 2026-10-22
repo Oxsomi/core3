@@ -587,6 +587,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_shExtractBinary(const U8 *ptr, U32 length, U32 b
 		JsonWriter_keyU64(w, "length", Buffer_length(blob), e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));
+
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -632,6 +633,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 			JsonWriter_keyCstr(w, "format", "oiSR", e_rr) &&
 			JsonWriter_key(w, "document", e_rr)
 		));
+
 		gotoIfError3(clean, Wasm_srDocument(&srFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
@@ -643,6 +645,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 			JsonWriter_keyCstr(w, "format", "oiSP", e_rr) &&
 			JsonWriter_key(w, "document", e_rr)
 		));
+
 		gotoIfError3(clean, Wasm_spDocument(&spFile, CharString_createNull(), CharString_createNull(), w, e_rr));
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
@@ -654,6 +657,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_fileHeader(const U8 *ptr, U32 length) {
 			JsonWriter_keyCstr(w, "format", "oiSH", e_rr) &&
 			JsonWriter_key(w, "document", e_rr)
 		));
+
 		gotoIfError3(clean, Wasm_shDocument(&shFile, CharString_createNull(), CharString_createNull(), w, alloc, e_rr));
 		gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	}
@@ -736,6 +740,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_assemble(U32 binaryType, const C8 *text) {
 		JsonWriter_keyU64(w, "length", Buffer_length(blob), e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));
+
 	frame = Wasm_frame(&json, &blob);
 
 clean:
@@ -1778,6 +1783,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_isaHasOfflinePath(const U8 *ptr, U32 length) {
 		JsonWriter_beginObject(w, e_rr) &&
 		JsonWriter_keyBool(w, "offline", SpvISA_stageHasOfflinePath(Wasm_input(ptr, length), alloc), e_rr)
 	));
+
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
@@ -1919,6 +1925,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_caPack() {
 		JsonWriter_keyU64(w, "bytes", Buffer_length(packed), e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));
+
 	frame = Wasm_frame(&json, &packed);
 
 clean:
@@ -2135,6 +2142,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_annotationEnums() {
 		JsonWriter_endObject(w, e_rr) &&
 		JsonWriter_endObject(w, e_rr)
 	));
+
 	frame = Wasm_frame(&json, NULL);
 
 clean:
@@ -2174,6 +2182,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_validate(U32 binaryType, const U8 *ptr, U32 leng
 		JsonWriter_keyBool(w, "valid", valid, e_rr) &&
 		JsonWriter_keyStr(w, "message", message, e_rr)
 	));
+
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 
@@ -2330,6 +2339,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_isaDisassemble(
 	gotoIfError3(clean, JsonWriter_str(
 		w, CharString_createRefSizedConst((const C8*) isa.ptr, Buffer_length(isa), false), e_rr
 	));
+
 	gotoIfError3(clean, JsonWriter_endObject(w, e_rr));
 	frame = Wasm_frame(&json, NULL);
 

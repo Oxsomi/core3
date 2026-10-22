@@ -44,7 +44,7 @@
 	#include <sched.h>
 	#define THREAD_YIELD() sched_yield()
 	#if _ARCH == ARCH_ARM64
-		#ifdef __clang__
+		#if _COMPILER == COMPILER_CLANG
 			#define CPU_PAUSE() __builtin_arm_yield()
 		#else
 			#define CPU_PAUSE() __asm__ __volatile__("yield")

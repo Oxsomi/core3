@@ -54,7 +54,18 @@
 #include <exception>
 #include "compiler_private.hpp"
 
-static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtension *demotion, Error *e_rr) {
+//DXC reports dx::linalg use with this flag, which d3d12shader.h doesn't name yet.
+
+#ifndef D3D_SHADER_REQUIRES_LINEAR_ALGEBRA
+	#define D3D_SHADER_REQUIRES_LINEAR_ALGEBRA 0x200000000ull
+#endif
+
+//allowsUnknown lets requirement flags oiSH has no extension for pass and map to nothing (UnsafeExtensionExecution).
+//declared picks the extension for a flag that more than one extension raises.
+
+static inline Bool DxilMapToESHExtension(
+	U64 flags, ESHExtension declared, Bool allowsUnknown, ESHExtension *ext, ESHExtension *demotion, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -117,10 +128,20 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		tmp = (ESHExtension)(tmp | extensions[i]);
 	}
 
+	//Cooperative vectors and matrices both raise linear algebra, so either declaration covers it.
+	//Declaring neither reports both, which the caller refuses as undeclared.
+
+	if(flags & D3D_SHADER_REQUIRES_LINEAR_ALGEBRA) {
+		const ESHExtension coop = (ESHExtension)(ESHExtension_CoopVec | ESHExtension_CoopMat);
+		const ESHExtension used = (ESHExtension)(declared & coop);
+		tmp = (ESHExtension)(tmp | (used ? used : coop));
+		flags &= ~D3D_SHADER_REQUIRES_LINEAR_ALGEBRA;
+	}
+
 	*demotion = (ESHExtension)((~tmp) & ESHExtension_DxilNative);
 	*ext = tmp;
 
-	if(flags)
+	if(flags && !allowsUnknown)
 		retError(clean, Error_unsupportedOperation(0, "DxilMapToESHExtension() contained an unsupported extension"));
 
 clean:
@@ -150,6 +171,10 @@ clean:
 	return s_uccess;
 }
 
+//DXIL reflects [WaveSize(N)] as a minimum of N without a maximum, and the ranged form (SM6.8) as its minimum, maximum
+// and optional preferred size.
+//The entry keeps the codes, not the lane counts: the first form as its required size, the second as the other three.
+
 static inline Bool Compiler_convertWaveSize(
 	U32 waveSizeRecommended,
 	U32 waveSizeMin,
@@ -161,33 +186,22 @@ static inline Bool Compiler_convertWaveSize(
 	Bool s_uccess = true;
 	U8 recommend = 0, waveMin = 0, waveMax = 0;
 
-	U32 waveSizeRecommendedTmp = waveSizeRecommended;
-	U32 waveSizeMinTmp = waveSizeMin;
-	U32 waveSizeMaxTmp = waveSizeMax;
+	const U32 sizes[3] = { waveSizeRecommended, waveSizeMin, waveSizeMax };
 
-	if(!waveSizeMaxTmp)
-		waveSizeMaxTmp = 128;
-
-	if(!waveSizeMinTmp)
-		waveSizeMinTmp = 4;
-
-	if(!waveSizeRecommendedTmp)
-		waveSizeRecommendedTmp = (waveSizeMinTmp + waveSizeMaxTmp) / 2;        //Not base2, but don't care
-
-	if(
-		U32_min(waveSizeMinTmp, U32_min(waveSizeMaxTmp, waveSizeRecommendedTmp)) < 4 ||
-		U32_max(waveSizeMinTmp, U32_max(waveSizeMaxTmp, waveSizeRecommendedTmp)) > 128
-	)
-		retError(clean, Error_invalidState(0, "Compiler_convertWaveSize() couldn't get groupSize; out of bounds"));
+	for(U8 i = 0; i < 3; ++i)
+		if(sizes[i] && (sizes[i] < 4 || sizes[i] > 128))
+			retError(clean, Error_outOfBounds(
+				i, sizes[i], 128, "Compiler_convertWaveSize() a wave size is outside 4 to 128 lanes"
+			));
 
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeRecommended, &recommend, e_rr));
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMin, &waveMin, e_rr));
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMax, &waveMax, e_rr));
 
-	if(waveSizeMin || waveSizeMax)
-		*waveSizes = ((U16)waveSizeMin << 4) | ((U16)waveSizeMax << 8) | ((U16)recommend << 12);
+	if(waveMax)
+		*waveSizes = (U16)(((U16)waveMin << 4) | ((U16)waveMax << 8) | ((U16)recommend << 12));
 
-	else *waveSizes = recommend;
+	else *waveSizes = waveMin;
 
 clean:
 	return s_uccess;
@@ -230,6 +244,7 @@ extern "C" Bool Compiler_processDXIL(
 	HRESULT hr = S_OK;
 
 	Bool isLib = !CharString_length(toCompile->entrypoint);
+	Bool allowsUnknown = !!(toCompile->extensions & ESHExtension_UnsafeExtensionExecution);
 	ESHExtension exts = ESHExtension_None;
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
@@ -271,7 +286,9 @@ extern "C" Bool Compiler_processDXIL(
 
 			U64 featureFlags = funcRefl->GetRequiresFlags();
 			ESHExtension demote = ESHExtension_None;
-			gotoIfError3(clean, DxilMapToESHExtension(featureFlags, &exts, &demote, e_rr));
+			gotoIfError3(clean, DxilMapToESHExtension(
+				featureFlags, toCompile->extensions, allowsUnknown, &exts, &demote, e_rr
+			));
 
 			if(i)
 				*demotions = (ESHExtension)(*demotions & demote);
@@ -455,7 +472,7 @@ extern "C" Bool Compiler_processDXIL(
 			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"));
 
 		U64 reqFlags = dxilRefl->GetRequiresFlags();
-		gotoIfError3(clean, DxilMapToESHExtension(reqFlags, &exts, demotions, e_rr));
+		gotoIfError3(clean, DxilMapToESHExtension(reqFlags, toCompile->extensions, allowsUnknown, &exts, demotions, e_rr));
 
 		Bool isPixelShader = toCompile->stageType == EGfxPipelineStage_Pixel;
 
@@ -741,16 +758,12 @@ extern "C" Bool Compiler_processDXIL(
 		Buffer_memcpy(*result, Buffer_createRefConst(finalVersion->GetBufferPointer(), finalVersion->GetBufferSize()));
 	}
 
-	//Ensure we have a valid DXIL file
+	//Ensure we have a valid DXIL file, signed by DXC's bundled validator
 
-	//DXC signs DXIL through the bundled validator, which only knows shader models up to 6.9, so a 6.10 module
-	// (cooperative vectors / triangle position fetch) comes back structurally valid but unsigned (zero hash).
-	//D3D12 only accepts 6.10 with experimental shader models enabled anyway, so an unsigned hash is expected there.
 	if(
 		Buffer_length(*result) <= 0x14 ||
 		Buffer_readU32(*result, 0, NULL, NULL) != C8x4('D', 'X', 'B', 'C') ||
-		(toCompile->shaderVersion < OISH_SHADER_MODEL(6, 10) &&
-			I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero()))                  //Unsigned
+		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())                   //Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"));
 

@@ -107,6 +107,21 @@ def main():
 
 	check("the page asks for exactly what is vendored", vendorMatchesPage(names))
 
+	# The cache rule: only a versioned module folder may be pinned, since every other path keeps its
+	# name when its content changes. web/_headers has to say the same thing the server does.
+
+	cache = build_web.cacheControlFor
+	immutable = "public, max-age=31536000, immutable"
+
+	for p in ("/wasm/3.2.104/OxC3_wasm.wasm", "wasm/3.2.104/OxC3_wasm.js.br", "/wasm/next/OxC3_wasm_sf.js"):
+		check("a versioned module path is immutable: " + p, cache(p) == immutable, cache(p))
+
+	for p in ("/wasm/OxC3_wasm.wasm", "/wasm/versions.json", "/vendor/bootstrap.min.css", "/js/app.js",
+		"/index.html", "/js/mock_data.js.br", "/wasm/OxC3_wasm.wasm.br"):
+		check("everything else revalidates: " + p, cache(p) == "no-cache", cache(p))
+
+	check("the shipped _headers agrees with the rule", headersFileAgrees(cache, immutable))
+
 	# A new asset on the page that nobody adds to the deploy set is a site that half loads once it is
 	# unpacked somewhere else, and nothing else would notice.
 
@@ -119,7 +134,7 @@ def main():
 
 	check("everything the page loads is in the deploy set", not missing)
 
-	for required in ("index.html", "wasm/" + build_web.WEB_MODULE + ".js", "wasm/" + build_web.WEB_MODULE + ".wasm"):
+	for required in ("index.html", "_headers", "wasm/" + build_web.WEB_MODULE + ".js", "wasm/" + build_web.WEB_MODULE + ".wasm"):
 		check("the deploy set carries " + required, required in packaged)
 
 	for unwanted in ("dev/hosting_test.py", "package.json", "README.md", "TODO"):
@@ -147,6 +162,60 @@ def pageReferences():
 
 def pagePath():
 	return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "index.html")
+
+def headersFileAgrees(cache, immutable):
+
+	"""web/_headers is what a Cloudflare Pages style host applies, last matching rule winning, so this
+	replays that over the same sample paths the rule function was checked with."""
+
+	import re as rex
+
+	rules = []
+	current = None
+
+	with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_headers")) as f:
+
+		for line in f:
+
+			line = line.rstrip("\n")
+
+			if not line.strip() or line.strip().startswith("#"):
+				continue
+
+			if not line[0].isspace():
+				current = [line.strip(), None]
+				rules.append(current)
+
+			elif current and line.strip().lower().startswith("cache-control:"):
+				current[1] = line.split(":", 1)[1].strip()
+
+	def matches(pattern, path):
+		rx = rex.escape(pattern).replace(rex.escape(":version"), "[^/]+").replace(rex.escape("*"), ".*")
+		return rex.fullmatch(rx, path)
+
+	def applied(path):
+
+		out = None
+
+		for pattern, value in rules:
+			if value and matches(pattern, path):
+				out = value
+
+		return out
+
+	samples = {
+		"/wasm/3.2.104/OxC3_wasm.wasm": immutable,
+		"/wasm/OxC3_wasm.wasm": "no-cache",
+		"/js/app.js": "no-cache",
+		"/index.html": "no-cache",
+	}
+
+	for path, want in samples.items():
+		if applied(path) != want:
+			print("   _headers gives " + path + " " + str(applied(path)) + " where the rule says " + want)
+			return False
+
+	return True
 
 def vendorMatchesPage(names):
 

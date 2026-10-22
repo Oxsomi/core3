@@ -1,0 +1,12 @@
+# How a host caches this site (Cloudflare Pages / Netlify syntax; build_web.py's cacheControlFor is the
+# same rule for --serve, and web/README.md spells it for other hosts). Later rules override earlier ones.
+# Only the versioned module folders are immutable: every other path, the vendored third party and the
+# current module included, keeps its name when its content changes, so it revalidates and 304s instead.
+
+/*
+  Cache-Control: no-cache
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+/wasm/:version/*
+  Cache-Control: public, max-age=31536000, immutable

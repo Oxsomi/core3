@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-//File spec (docs/oiDL.md)
+//File spec (docs/file/oiDL.md)
 
 typedef enum EDLVersion {
 	EDLVersion_V1_0

@@ -22,6 +22,7 @@
 
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
@@ -73,6 +74,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 	heapExt->pushRingOffset = 0;
 
 	const U32 pushRing = heapExt->pushRingPerFrame * device->framesInFlight;
+
+	const U32 samplers = info.maxSamplers;
 
 	if (srvCbvUav || pushRing) {
 
@@ -140,6 +143,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
 
 		gotoIfError3(clean, AllocationBuffer_create(&create, true, e_rr));
 	}
+
+	DescriptorHeap_trackMemory(
+		heap,
+		(U64) (srvCbvUav + pushRing) * deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(
+			deviceExt->device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+		) +
+		(U64) samplers * deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(
+			deviceExt->device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+		)
+	);
 
 clean:
 	CharString_free(&tmpName, alloc);
@@ -225,6 +238,15 @@ Bool DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *t
 
 	for(U8 i = 0; i < 2; ++i)
 		if(ranges[i]) {
+
+			if(ranges[i] > Buffer_length(heapExt->allocators[i].buffer))
+				retError(clean, Error_outOfBounds(
+					0, ranges[i], Buffer_length(heapExt->allocators[i].buffer),
+					i ?
+						"DxDescriptorHeap_allocTable() the heap has too few samplers for the table; a static sampler "
+						"counts toward DescriptorHeapInfo::maxSamplers too" :
+						"DxDescriptorHeap_allocTable() the heap has too few CBV/SRV/UAV descriptors for the table"
+				));
 
 			lock = &heapExt->locks[i];
 			acq = SpinLock_lock(lock, 1 * SECOND);

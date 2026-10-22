@@ -33,7 +33,10 @@ global.window = global.window || { addEventListener() {} };
 
 const OxWasm = require(path.join(__dirname, "..", "js", "wasm.js"));
 
-for (const f of ["js/util.js", "js/mock_data.js", "js/mock.js", "js/mock_formats.js", "js/api.js", "js/tools/inspect.js"])
+for (const f of [
+  "js/util.js", "js/mock_samples.js", "js/mock_data.js", "js/mock.js", "js/mock_formats.js", "js/api.js",
+  "js/tools/inspect.js"
+])
   new Function(fs.readFileSync(path.join(__dirname, "..", f), "utf8"))();
 
 const OxAPI = global.window.OxAPI;

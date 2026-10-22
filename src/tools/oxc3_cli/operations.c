@@ -89,6 +89,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-pso-output",
 	"-pso-set",
 	"-pso-input",
+	"-tonemap",
+	"-exposure",
 	"-spirv-layout"
 };
 
@@ -122,6 +124,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 		"any field, so nothing has to stay assumed."
 	),
 	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited.",
+	"Display transform from HDR to 8 bit: none, reinhard, aces, agx or neutral (the default, PBR Neutral).",
+	"Exposure in stops before the display transform (e.g. -1.5); automatic when absent, mid grey at the log average.",
 	"SPIRV buffer layout (dx, gl or scalar); anything but dx requires a compile that targets SPIRV alone."
 };
 
@@ -886,6 +890,18 @@ void Operations_init() {
 		};
 
 	#endif
+
+	//Converting a file to another format of the same kind, picked by extension: an image between .hdr, .bmp and .dds.
+
+	Operation_values[EOperation_FileConvert] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "convert",
+		.desc = "Convert a file to another format by extension: images between .hdr, .bmp and .dds.",
+		.func = &CLI_imageConvert,
+		.isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.optionalParameters = EOperationHasParameter_Tonemap | EOperationHasParameter_Exposure
+	};
 
 	//Audio operations
 	

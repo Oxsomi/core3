@@ -371,12 +371,12 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 	}
 
 	//Each permutation's library pins exactly, so the exports spelling and the value each combination
-	// resolves to cannot drift. Combination ids count permutations from the LAST annotation up, which
-	// the two pins encode: 0 returns the second line's value, 1 the first's.
+	// resolves to cannot drift. Combination ids count permutations from the FIRST annotation down, which
+	// the two pins encode: 0 returns the first line's value, 1 the second's.
 
 	static const struct ExportPin { U16 combinationId; const C8 *expected; } exportPins[] = {
-		{ 0, "export uint $$specConst_COUNT() { return 8; }\n" },
-		{ 1, "export uint $$specConst_COUNT() { return 4; }\n" }
+		{ 0, "export uint $$specConst_COUNT() { return 4; }\n" },
+		{ 1, "export uint $$specConst_COUNT() { return 8; }\n" }
 	};
 
 	{

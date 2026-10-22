@@ -29,6 +29,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/base/mathf.h"
+#include "types/base/constants.h"
 #include "types/math/type_cast.h"
 
 //Adaptive RLE is only legal in this width range; anything else writes flat scanlines,
@@ -138,12 +139,13 @@ static U64 HDR_writePlane(const U8 *src, U32 w, U64 stride, U8 *dst) {
 //Streams both ways, like BMP_write: one scanline of source in, one encoded scanline out,
 // so the cost is O(width) rather than O(width * height). A 4k render is 64 KiB of scratch here instead of 134 MiB.
 
-Bool HDR_write(
+Bool HDR_writeExposed(
 	StreamRef *streamRef,
 	U64 *off,
 	EHDRWriteFlags flags,
 	U32 w,
 	U32 h,
+	F32 exposure,
 	const Allocator *alloc,
 	StreamRef *inputStreamRef,
 	U64 inputOffset,
@@ -162,6 +164,9 @@ Bool HDR_write(
 	if(!w || !h || w > HDR_MAX_DIM || h > HDR_MAX_DIM)
 		retError(clean, Error_invalidParameter(2, 0, "HDR_write() resolution out of range"));
 
+	if(!(exposure > 0) || exposure > F32_MAX)
+		retError(clean, Error_invalidParameter(5, 0, "HDR_writeExposed()::exposure has to be finite and above 0"));
+
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 	OxStream *inputStream = RefPtr_data(inputStreamRef, OxStream);
 
@@ -178,8 +183,13 @@ Bool HDR_write(
 	//"#?RADIANCE" is what every reader sniffs for, and -Y +X fixes row 0 at the TOP,
 	// matching both the input laid out here and what HDR_read hands back.
 
-	gotoIfError3(clean, CharString_format(
-		alloc, &header, e_rr, "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y %u +X %u\n", h, w
+	if(exposure == 1)
+		gotoIfError3(clean, CharString_format(
+			alloc, &header, e_rr, "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y %u +X %u\n", h, w
+		));
+
+	else gotoIfError3(clean, CharString_format(
+		alloc, &header, e_rr, "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nEXPOSURE=%.9g\n\n-Y %u +X %u\n", (F64) exposure, h, w
 	));
 
 	const U64 headerLen = CharString_length(header);
@@ -255,4 +265,18 @@ clean:
 	ListU8_free(&rgbe, alloc);
 	ListF32_free(&rowF32, alloc);
 	return s_uccess;
+}
+
+Bool HDR_write(
+	StreamRef *stream,
+	U64 *off,
+	EHDRWriteFlags flags,
+	U32 w,
+	U32 h,
+	const Allocator *alloc,
+	StreamRef *inputStream,
+	U64 inputOffset,
+	Error *e_rr
+) {
+	return HDR_writeExposed(stream, off, flags, w, h, 1, alloc, inputStream, inputOffset, e_rr);
 }

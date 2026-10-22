@@ -205,6 +205,7 @@ void Test_shaderCompilerSamples(Test *t) {
 						alloc, "\t%.*s differs only in version/include metadata, content is identical",
 						(int) CharString_length(refPath), refPath.ptr
 					);
+
 					matches = true;
 				}
 

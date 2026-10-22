@@ -107,6 +107,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayQuery)
 			Log_debugLnx("\t\tRay query");
 
+		if(cap.features2 & EGraphicsFeatures2_SoftwareRT)
+			Log_debugLnx("\t\tRay traversal in software (no dedicated traversal units)");
+
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
 			Log_debugLnx(
 				cap.features2 & EGraphicsFeatures2_RayMicromapOpacityActual ?
@@ -129,9 +132,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_Barycentrics)
 			Log_debugLnx("\t\tFragment shader barycentrics");
 
-		if(cap.features2 & EGraphicsFeatures2_RayMicromapOpacityU8)
-			Log_debugLnx("\t\tRaytracing opacity micromap 8-bit indices");
-
 		if(cap.features2 & EGraphicsFeatures2_RayClusterAS)
 			Log_debugLnx("\t\tRaytracing cluster acceleration structures (mega geometry)");
 
@@ -146,6 +146,18 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(cap.features2 & EGraphicsFeatures2_Predication)
 			Log_debugLnx("\t\tPredicated scopes");
+
+		if(cap.features2 & EGraphicsFeatures2_DeviceFault)
+			Log_debugLnx("\t\tDevice fault reporting");
+
+		if(cap.features2 & EGraphicsFeatures2_WriteBufferImmediate)
+			Log_debugLnx("\t\tWrite buffer immediate");
+
+		if(cap.features2 & EGraphicsFeatures2_ExperimentTier1)
+			Log_debugLnx("\t\tExperiment tier 1 (claimed by the driver, meaning undefined by OxC3)");
+
+		if(cap.features2 & EGraphicsFeatures2_ExperimentTier2)
+			Log_debugLnx("\t\tExperiment tier 2 (claimed by the driver, meaning undefined by OxC3)");
 
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
@@ -178,7 +190,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			Log_debugLnx("\t\tPipeline executable info (live ISA disassembly + statistics)");
 
 		if(feat & EGraphicsFeatures_SubgroupOperations)
-			Log_debugLnx("\t\tSubgroup operations");
+			Log_debugLnx(
+				"\t\tSubgroup operations (WaveSize %"PRIu8" to %"PRIu8" lanes)", cap.waveSizeMin, cap.waveSizeMax
+			);
 
 		if(feat & EGraphicsFeatures_CoopVec)
 			Log_debugLnx("\t\tCooperative vectors (matvec)");
@@ -269,9 +283,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt)
 				Log_debugLnx("\tD3D12 Extensions:");
 
-			if(cap.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate)
-				Log_debugLnx("\t\tWriteBufferImmediate");
-
 			if(cap.featuresExt & EDxGraphicsFeatures_ReBAR)
 				Log_debugLnx("\t\tReBAR");
 
@@ -307,6 +318,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EDxGraphicsFeatures_CacheCoherentUMA)
 				Log_debugLnx("\t\tCache coherent UMA");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_AllowTearing)
+				Log_debugLnx("\t\tAllow tearing");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
 				Log_debugLnx("\t\tRGB(A)32f supports MSAA");
@@ -349,6 +363,21 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
 				Log_debugLnx("\t\tPush descriptors");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_AddressBindingReport)
+				Log_debugLnx("\t\tAddress binding report");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_ExternalHostMemory)
+				Log_debugLnx("\t\tExternal host memory");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_MemoryPriority)
+				Log_debugLnx("\t\tMemory priority");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_PageableMemory)
+				Log_debugLnx("\t\tPageable device local memory");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_SubgroupSizeControl)
+				Log_debugLnx("\t\tSubgroup size control");
 		}
 	}
 }
@@ -359,7 +388,19 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 void GraphicsDeviceInfo_deriveCapabilities(GraphicsDeviceInfo *deviceInfo) {
 
-	if(!deviceInfo || !(deviceInfo->capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
+	if(!deviceInfo)
+		return;
+
+	//See the header for why a ray pipeline without a ray query is NVIDIA's software traversal set.
+
+	if(
+		deviceInfo->vendor == EGraphicsVendorId_NV &&
+		(deviceInfo->capabilities.features & EGraphicsFeatures_RayPipeline) &&
+		!(deviceInfo->capabilities.features & EGraphicsFeatures_RayQuery)
+	)
+		deviceInfo->capabilities.features2 |= EGraphicsFeatures2_SoftwareRT;
+
+	if(!(deviceInfo->capabilities.features & EGraphicsFeatures_RayMicromapOpacity))
 		return;
 
 	//NVIDIA is the only vendor we have evidence of reporting OMM on hardware without the units (Ampere), so it

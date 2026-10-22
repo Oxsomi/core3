@@ -229,7 +229,8 @@ function enumValue(enumName, valueName) {
 }
 const flagValue = (enumName, valueName) => 1 << enumValue(enumName, valueName);
 
-const RGBA8 = enumValue("ETextureFormatId", "RGBA8");                                     // ETextureFormatId_RGBA8, the assumed color target
+/* Resolved at use rather than at load: the recording this reads arrives after the page's own scripts */
+const RGBA8 = () => enumValue("ETextureFormatId", "RGBA8");                               // ETextureFormatId_RGBA8, the assumed color target
 
 function esbBytes(t) {
   const m = String(t).match(/^([FIU])(8|16|32|64)(?:x([2-4]))?(?:x([2-4]))?$/);
@@ -299,7 +300,7 @@ function derivePipeline(doc, pick) {
     const written = psE ? psE.outputs.filter(o => o.semantic === "SV_TARGET").length : 0;
     const rtvCount = Math.max(1, written);
     F("rtv.count", 0, rtvCount, "assumed");
-    for (let i = 0; i < rtvCount; i++) F("rtv.format", i, RGBA8, "assumed");
+    for (let i = 0; i < rtvCount; i++) F("rtv.format", i, RGBA8(), "assumed");
     for (let i = 0; i < rtvCount; i++) {
       F("blend.writeMask", i, 15, "assumed");
       for (const f of ["blend.src", "blend.dst", "blend.srcAlpha", "blend.dstAlpha", "blend.op", "blend.opAlpha"]) F(f, i, 0, "assumed");

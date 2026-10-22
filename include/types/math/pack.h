@@ -213,6 +213,29 @@ static inline F32x4 F32x4_unpackRGB9E5(U32 packed) {
 	);
 }
 
+//RGB10A2
+
+//DXGI_FORMAT_R10G10B10A2_UNORM, the layout @pack.hlsli reads: r | g<<10 | b<<20 | a<<30.
+//Three unorm10 channels and a unorm2, clamped to [0, 1] and rounded to nearest. 0 and 1 are exact, which is what an
+// albedo of exactly 1 (a furnace surface that loses nothing) needs.
+
+static inline U32 U32_packRGB10A2(F32x4 v) {
+	return
+		(U32) F32_floor(F32_clamp(F32x4_x(v), 0, 1) * 1023 + 0.5f) |
+		((U32) F32_floor(F32_clamp(F32x4_y(v), 0, 1) * 1023 + 0.5f) << 10) |
+		((U32) F32_floor(F32_clamp(F32x4_z(v), 0, 1) * 1023 + 0.5f) << 20) |
+		((U32) F32_floor(F32_clamp(F32x4_w(v), 0, 1) * 3 + 0.5f) << 30);
+}
+
+static inline F32x4 F32x4_unpackRGB10A2(U32 packed) {
+	return F32x4_create4(
+		(F32) ( packed        & 0x3FF) / 1023,
+		(F32) ((packed >> 10) & 0x3FF) / 1023,
+		(F32) ((packed >> 20) & 0x3FF) / 1023,
+		(F32) ( packed >> 30)          / 3
+	);
+}
+
 //Oct18
 
 //A unit vector as an 18 bit octahedral, 9 bits an axis in the low 18 bits, the top 14 left ZERO for the caller.
@@ -268,11 +291,7 @@ static inline F32x4 F32x4_unpackOct18(U32 packed) {
 		y = (1 - F32_abs(ex)) * (ey >= 0 ? 1 : -1);
 	}
 
-	//Divided by the real length rather than F32x4_normalize3, which is the approximate rsqrt on SSE and hands back
-	// 0.9998 for an axis. A pack helper is read back by a shader that did the exact thing, so it has to be exact.
-
-	const F32x4 n = F32x4_create3(x, y, z);
-	return F32x4_div(n, F32x4_xxxx4(F32x4_len3(n)));
+	return F32x4_normalize3(F32x4_create3(x, y, z));
 }
 
 //Oct32

@@ -143,12 +143,14 @@ typedef struct CompilerSettings {
 	Bool containsGfxOrComp;
 	Bool isRt;
 	Bool keepUnusedRegisters;   //Keep declared but unused resources bound and reflected (stable layouts across variants)
+	Bool isMeshTask;            //A library compile with a mesh or task entry, which needs the mesh extension
 	U8 spirvLayout;             //ESpirvLayout; non Dx only compiles when SPIRV is the sole target
 
 	//Compiler_reflect only: describe what parsed even when the source has errors.
 	//A build wants nothing from a source that doesn't compile, but an editor navigating a file being typed
 	//wants the declarations that did parse, and refusing on one bad token means no outline at all.
 	Bool reflectAllowErrors;
+	U8 padding[2];
 
 	//Compiler_reflect only: the permutation the reflection parses as. Zero-init keeps the historical
 	//behavior (every extension's define on, no $-defines): the everything-enabled parse an editor shows
@@ -223,7 +225,7 @@ typedef struct CompileResult {
 	Bool isSuccess;
 	Bool infoAboutIncludes;
 	U8 type;                    //ECompileResultType
-	U8 padding;
+	Bool isDisabled;            //The combination reached OXC_DISABLE_COMBINATION (@variants.hlsli): nothing compiled
 
 	union {
 		ListSHEntryRuntime shEntriesRuntime;
@@ -392,7 +394,7 @@ Bool Compiler_link(
 	U16 shaderVersion,                     //U8 maj, minor
 	EGfxPipelineStage stageType,
 	ESHExtension exts,
-	Bool keepRegisters,                    //Keep unused resources through the link's own codegen pass too
+	Bool keepRegisters,                    //Keep declared but unused resources bound, as the compile did
 	ListCompileError *errors,
 	Buffer *result,                        //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
 	const Allocator *alloc,
@@ -403,7 +405,7 @@ Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entryp
 	U32 localSize[3],                   //If compute-adj (mesh shaders too) the local size per group
 	U8 payloadSize,                     //If miss/hit/callable, the payload size that gets transmitted (bytes)
 	U8 intersectSize,                   //If intersection/hit shader, size of intersection attributes (generally 8 bytes)
-	U16 waveSize,                       //4 pairs of log2(thread) + 1 where 0 = none. req, min, max, rec
+	U16 waveSize,                       //What DXIL reflected (SHEntry::waveSize), 0 for SPIR-V, which can't carry one
 	ESBType inputs[16],                 //Input types for graphics shaders
 	ESBType outputs[16],                //Output types for graphics shaders
 	U8 uniqueInputSemantics,            //How many unique semantic names there are
@@ -421,8 +423,8 @@ Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entryp
 //This makes it possible to get a list of all includes.
 Bool Compiler_mergeIncludeInfo(Compiler *comp, const Allocator *alloc, ListIncludeInfo *infos, Error *e_rr);
 
-//Determine what minimum shader version is required
-U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSize);
+//Determine what minimum shader version is required; waveSizeType 1 for a required wave size, 2 for a range.
+U16 Compiler_minFeatureSetStage(EGfxPipelineStage stage, U16 waveSizeType);
 U16 Compiler_minFeatureSetExtension(ESHExtension ext);
 
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr);

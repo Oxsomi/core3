@@ -180,7 +180,6 @@ typedef enum EPipelineRaytracingFlags {
 	EPipelineRaytracingFlags_SkipTriangles            = 1 << 0,
 	EPipelineRaytracingFlags_SkipAABBs                = 1 << 1,
 
-	//Reserved, free to reuse.
 	EPipelineRaytracingFlags_Reserved2                = 1 << 2,
 
 	//Disallowing null shaders in stages.

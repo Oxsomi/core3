@@ -162,9 +162,11 @@ Bool SPFile_fromGraphicsInfo(SPFile *spFile, U32 pipelineId, const PipelineGraph
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_BlendIndependent, 0, info->blendState.allowIndependentBlend, e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_BlendTargetMask, 0, info->blendState.renderTargetMask, e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_BlendLogicOp, 0, info->blendState.logicOpExt, e_rr));
 
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_DepthFormat, 0, info->depthFormatExt, e_rr));
@@ -173,14 +175,17 @@ Bool SPFile_fromGraphicsInfo(SPFile *spFile, U32 pipelineId, const PipelineGraph
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_StencilCompare, 0, info->depthStencil.stencilCompare, e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_StencilFail, 0, info->depthStencil.stencilFail, e_rr));
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_StencilPass, 0, info->depthStencil.stencilPass, e_rr));
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_StencilDepthFail, 0, info->depthStencil.stencilDepthFail, e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_StencilWriteMask, 0, info->depthStencil.stencilWriteMask, e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_StencilReadMask, 0, info->depthStencil.stencilReadMask, e_rr
 	));
@@ -190,9 +195,11 @@ Bool SPFile_fromGraphicsInfo(SPFile *spFile, U32 pipelineId, const PipelineGraph
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_DepthBiasConstant, 0, (U32) info->rasterizer.depthBiasConstantFactor, e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_DepthBiasClamp, 0, U32_fromF32Bits(info->rasterizer.depthBiasClamp), e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_DepthBiasSlope, 0,
 		U32_fromF32Bits(info->rasterizer.depthBiasSlopeFactor), e_rr
@@ -202,6 +209,7 @@ Bool SPFile_fromGraphicsInfo(SPFile *spFile, U32 pipelineId, const PipelineGraph
 	gotoIfError3(clean, SPFile_supply(
 		spFile, pipelineId, ESPField_MsaaMinSampleShading, 0, U32_fromF32Bits(info->msaaMinSampleShading), e_rr
 	));
+
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_TopologyMode, 0, info->topologyMode, e_rr));
 	gotoIfError3(clean, SPFile_supply(spFile, pipelineId, ESPField_PatchControlPoints, 0, info->patchControlPoints, e_rr));
 
@@ -298,12 +306,14 @@ Bool Pipeline_toSPFile(
 			gotoIfError3(clean, SPFile_fromGraphicsInfo(
 				spFile, derivedId, Pipeline_info(pipeline, PipelineGraphicsInfo), e_rr
 			));
+
 			break;
 
 		case EPipelineType_RaytracingExt:
 			gotoIfError3(clean, SPFile_fromRaytracingInfo(
 				spFile, derivedId, Pipeline_info(pipeline, PipelineRaytracingInfo), e_rr
 			));
+
 			break;
 
 		//Compute carries no state beyond its shader, so deriving it is already exact.

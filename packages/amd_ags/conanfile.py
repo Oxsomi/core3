@@ -8,7 +8,7 @@ required_conan_version = ">=2.0"
 class ags(ConanFile):
 
 	name = "ags"
-	version = "2024.09.21"
+	version = "2026.10.11"
 
 	license = "MIT"
 	author = "AMD (original) & Oxsomi (modifications only)"

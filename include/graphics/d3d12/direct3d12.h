@@ -66,7 +66,8 @@ typedef struct DxUnifiedTexture {
 
 typedef enum EDxGraphicsInstanceFlags {
 	EDxGraphicsInstanceFlags_HasNVApi         = 1 << 0,
-	EDxGraphicsInstanceFlags_HasAMDAgs        = 1 << 1
+	EDxGraphicsInstanceFlags_HasAMDAgs        = 1 << 1,
+	EDxGraphicsInstanceFlags_HasDRED          = 1 << 2        //Page fault reporting is on for both device factories
 } EDxGraphicsInstanceFlags;
 
 typedef struct AGSContext AGSContext;
@@ -87,14 +88,12 @@ typedef struct DxGraphicsInstance {
 	// gated workarounds know which runtime line they are on.
 
 	U32 agilitySdkVersion;
-	U32 padding0;
+	U32 flags;                          //EDxGraphicsInstanceFlags
 
 	AGSContext *agsContext;
 
 	CharString nvDriverVersion;
 	CharString amdDriverVersion;
-
-	U32 flags, padding;
 
 } DxGraphicsInstance;
 
@@ -133,22 +132,38 @@ typedef struct DxPipeline {
 	// back; NULL on every pipeline that took the normal path.
 
 	void *amdAnalyzerHandle;                               //AmdExtD3DPipelineHandle
+	U8 padding[8];
 
 } DxPipeline;
 
+//OmmTriangles holds POINTERS to these two rather than the structs themselves, so both have to outlive the
+// geometry desc and therefore live in the BLAS rather than on the stack at build time.
+//Only used when the geometry type is OMM_TRIANGLES; the plain triangle path writes geometry.Triangles.
+
+typedef struct DxBLASOmmTriangles {
+	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangleData;
+	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage;
+} DxBLASOmmTriangles;
+
+TListNamed(D3D12_RAYTRACING_GEOMETRY_DESC, ListD3D12_RAYTRACING_GEOMETRY_DESC);
+TListNamed(DxBLASOmmTriangles, ListDxBLASOmmTriangles);
+
 typedef struct DxBLAS {
 
-	D3D12_RAYTRACING_GEOMETRY_DESC geometry;
+	//One entry per BLASGeometry and in the same order, since that index is what a shader reads back as
+	// GeometryIndex().
+	//inputs POINTS into geometries and every OMM desc is addressed out of ommTriangles, and the build
+	// re-reads both at every flush, so they are sized once at init and the pointers are taken after that.
+	//ommTriangles is only allocated when some geometry carries an OMM index buffer.
+
+	ListD3D12_RAYTRACING_GEOMETRY_DESC geometries;
+	ListDxBLASOmmTriangles ommTriangles;
+
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
 
-	//OmmTriangles holds POINTERS to these two rather than the structs themselves, so both have to outlive the
-	// geometry desc and therefore live here rather than on the stack at build time.
-	//Only used when the geometry type is OMM_TRIANGLES; the plain triangle path writes geometry.Triangles.
+	//Summed over the geometries once, which is what a build contributes to the device's pending work.
 
-	D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC ommTriangleData;
-	D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC ommLinkage;
-
-	U32 primitives, padding[3];
+	U64 primitives;
 
 } DxBLAS;
 
@@ -158,6 +173,7 @@ typedef struct DxOpacityMicromap {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
 	D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array;
 	ListDxOMMHistogram histogram;
+	U8 padding[8];
 } DxOpacityMicromap;
 
 typedef struct DxTLAS {
@@ -175,6 +191,11 @@ TList(D3D12_BUFFER_BARRIER);
 TList(ID3D12PipelineState);
 
 Bool dxCheck(HRESULT result, Error *e_rr);
+
+//An object's identity as COM compares it: its IUnknown, which is also the pointer DRED reports an allocation by.
+//0 for NULL. The interface pointer itself can differ from it, so it is never compared directly.
+
+U64 DxObject_identity(IUnknown *object);
 
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 

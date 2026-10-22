@@ -307,6 +307,7 @@ static Bool layoutMatches(const LayoutCase *c, const SBFile *sb, const Allocator
 			alloc, "%s under %s: size %u packed %u shared %u", c->name, layoutNames[c->layout],
 			sb->bufferSize, (U32) packed, (U32) shared
 		);
+
 		return false;
 	}
 
@@ -325,6 +326,7 @@ static Bool layoutMatches(const LayoutCase *c, const SBFile *sb, const Allocator
 				Log_debugLn(
 					alloc, "%s under %s: top level variable %u at %u", c->name, layoutNames[c->layout], (U32) top, var.offset
 				);
+
 				return false;
 			}
 
@@ -373,6 +375,7 @@ static Bool layoutMatches(const LayoutCase *c, const SBFile *sb, const Allocator
 			alloc, "%s under %s: %u top, %u members, element stride %u, matrix stride %u", c->name, layoutNames[c->layout],
 			(U32) top, (U32) child, (U32) elementStride, (U32) matrixStride
 		);
+
 		return false;
 	}
 

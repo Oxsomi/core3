@@ -1,4 +1,4 @@
-; gfx1100  SGPRs 30  VGPRs 9  code 304 B  instrs 58  scratch 0  lds 0
+; gfx1100  SGPRs 30  VGPRs 9  code 304 B  instrs 57  scratch 0  lds 0
 _amdgpu_cs_main:
 	v_and_b32_e32 v1, 0x3ff, v0                                // 000000000000
 	v_bfe_u32 v2, v0, 10, 10                                   // 000000000008
@@ -40,20 +40,19 @@ _amdgpu_cs_main:
 	v_cndmask_b32_e32 v6, v1, v0, vcc                          // 0000000000C4
 	v_cndmask_b32_e32 v0, v0, v1, vcc                          // 0000000000C8
 	s_and_b64 s[0:1], vcc, exec                                // 0000000000CC
-	s_cselect_b32 s0, s8, s6                                   // 0000000000D0
+	s_cselect_b32 s0, s6, s8                                   // 0000000000D0
 	s_waitcnt lgkmcnt(0)                                       // 0000000000D4
 	image_load v[2:5], v[2:4], s[12:19] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY unorm// 0000000000D8
-	v_xad_u32 v1, v0, -1, s0                                   // 0000000000E0
-	s_cselect_b32 s0, s6, s8                                   // 0000000000E8
-	s_cmp_lt_u32 s7, 0x30000                                   // 0000000000EC
+	s_cselect_b32 s1, s8, s6                                   // 0000000000E0
+	s_cmp_gt_u32 s7, 0x2ffff                                   // 0000000000E4
+	v_xad_u32 v1, v0, -1, s1                                   // 0000000000EC
 	v_xad_u32 v7, v6, -1, s0                                   // 0000000000F4
 	s_cselect_b64 vcc, -1, 0                                   // 0000000000FC
-	s_cmp_gt_u32 s7, 0x1ffff                                   // 000000000100
-	v_cndmask_b32_e32 v0, v0, v1, vcc                          // 000000000108
-	s_cselect_b64 vcc, -1, 0                                   // 00000000010C
-	s_waitcnt_depctr 0xfffe                                    // 000000000110
-	v_cndmask_b32_e32 v6, v6, v7, vcc                          // 000000000114
-	s_delay_alu instid0(VALU_DEP_2)                            // 000000000118
+	s_waitcnt_depctr depctr_sa_sdst(0)                         // 000000000100
+	s_cmp_gt_u32 s7, 0x1ffff                                   // 000000000104
+	s_cselect_b64 s[0:1], -1, 0                                // 00000000010C
+	s_delay_alu instid0(SALU_CYCLE_1)                          // 000000000110
+	v_cndmask_b32_e64 v6, v6, v7, s[0:1]                       // 000000000114
 	v_cndmask_b32_e32 v7, v1, v0, vcc                          // 00000000011C
 	s_waitcnt vmcnt(0)                                         // 000000000120
 	image_store v[2:5], v[6:8], s[20:27] dmask:0xf dim:SQ_RSRC_IMG_2D_ARRAY unorm// 000000000124

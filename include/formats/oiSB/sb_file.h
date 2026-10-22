@@ -128,6 +128,12 @@ void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecurs
 // which backends use it and its children. The shape is the buffer object web/js/api.js documents.
 Bool SBFile_writeJson(const SBFile *sbFile, JsonWriter *w, Error *e_rr);
 
+//Whether two buffers are the same layout. The hash only prefilters: fnv1a's step is a multiply by an odd prime
+//and so a bijection, which makes a colliding pair something a writer CONSTRUCTS rather than searches for, and
+//every input to it came out of a file.
+
+Bool SBFile_equals(const SBFile *a, const SBFile *b);
+
 //Checks every packing rule ESBSettingsFlags_HasSharedLayout promises, the same ones
 // SBFile_addVariableAsType applies while adding, so a file written or promoted with the claim reads back.
 //Pass a NULL e_rr to probe.
@@ -143,7 +149,7 @@ void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc);
 
 //File headers
 
-//File spec (docs/oiSB.md)
+//File spec (docs/file/oiSB.md)
 
 typedef enum ESBVersion {
 	ESBVersion_Undefined,

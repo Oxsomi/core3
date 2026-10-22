@@ -17,9 +17,8 @@ name: Linux x64 Vulkan static (gcc, ASan + UBSan)
 # That is an argument about MSVC alone: CMakeLists.txt has accepted gcc's sanitizers next to clang's the
 # whole time, and no job was using them.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 8 * * *'
   workflow_dispatch:
 
 jobs:

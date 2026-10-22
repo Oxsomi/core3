@@ -38,6 +38,7 @@ OXC3_TEST_MAIN(formats_hdr) {
 	Test_HDRRoundTripRunLength(&t);
 	Test_HDRRoundTripExactZero(&t);
 	Test_HDRRoundTripDynamicRange(&t);
+	Test_HDRRoundTripExposure(&t);
 
 	Test_HDRWriteZeroDimensions(&t);
 	Test_HDRWriteOversizedDimensions(&t);
@@ -47,6 +48,7 @@ OXC3_TEST_MAIN(formats_hdr) {
 	Test_HDRReadMissingFormat(&t);
 	Test_HDRReadUnsupportedFormat(&t);
 	Test_HDRReadZeroRepeat(&t);
+	Test_HDRReadBeginRefusesOutput(&t);
 	Test_HDRReadUnwritableSink(&t);
 
 	BasicAllocator_checkLeakedMem(&t);

@@ -282,6 +282,69 @@ Bool DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		buildAs.SourceAccelerationStructureData = dstAS;
 	}
 
+	//The build reads every BLAS its instances name. CPU instances name them, so each waits on its own build or
+	// compaction; instances in device memory don't, so one global barrier waits for any structure written before.
+	//Then its own structure and scratch, as a BLAS's. All in one barrier call.
+
+	{
+		DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+		const Bool useGlobal = TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory);
+
+		const D3D12_GLOBAL_BARRIER global = (D3D12_GLOBAL_BARRIER) {
+			.SyncBefore =
+				D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE |
+				D3D12_BARRIER_SYNC_COPY_RAYTRACING_ACCELERATION_STRUCTURE,
+			.SyncAfter = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+			.AccessBefore = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
+			.AccessAfter = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ
+		};
+
+		D3D12_BARRIER_GROUP groups[2] = {
+			(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER },
+			(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_GLOBAL, .NumBarriers = 1, .pGlobalBarriers = &global }
+		};
+
+		D3D12_BARRIER_GROUP *dependency = &groups[0];
+
+		if(!useGlobal) for(U64 i = 0; i < tlas->cpuInstances.length; ++i) {        //A repeated BLAS is already READ: no barrier
+
+			BLASRef *blas = tlas->cpuInstances.ptr[i].data.blasCpu;
+
+			if(blas)
+				gotoIfError3(clean, DxDeviceBuffer_transition(
+					DeviceBuffer_ext(DeviceBufferRef_ptr(BLASRef_ptr(blas)->base.asBuffer), Dx),
+					D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+					D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+					&deviceExt->bufferTransitions, dependency, alloc, e_rr
+				));
+		}
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
+			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
+			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE |
+				(tlas->base.isCompleted ? D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ : 0),
+			&deviceExt->bufferTransitions, dependency, alloc, e_rr
+		));
+
+		gotoIfError3(clean, DxDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.tempScratchBuffer), Dx),
+			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_BARRIER_ACCESS_UNORDERED_ACCESS,
+			&deviceExt->bufferTransitions, dependency, alloc, e_rr
+		));
+
+		//The global group sits after the buffer one, so an empty buffer group is skipped by starting past it
+
+		const U32 first = groups[0].NumBarriers ? 0 : 1;
+		const U32 count = (U32) useGlobal + (groups[0].NumBarriers ? 1 : 0);
+
+		if(count)
+			commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, count, groups + first);
+
+		if(groups[0].NumBarriers)
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	}
+
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
 
 	//Add as flight (keep alive extra)

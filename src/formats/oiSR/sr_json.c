@@ -95,6 +95,7 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 	Bool s_uccess = true;
 	Buffer collapsed = Buffer_createNull();
 	CharString annotationText = CharString_createNull();
+	SRNodeIndex index = (SRNodeIndex) { 0 };
 
 	if(!file || !w)
 		retError(clean, Error_nullPointer(!file ? 0 : 1, "SRFile_writeJsonMembers()::file and w are required"));
@@ -121,6 +122,10 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 		if(builtin)
 			gotoIfError3(clean, Buffer_setBit(collapsed, i, e_rr));
 	}
+
+	//Built once, so each node's type, register, enum value, children and interfaces are lookups below
+
+	gotoIfError3(clean, SRFile_createNodeIndex(file, alloc, &index, e_rr));
 
 	gotoIfError3(clean, (
 		JsonWriter_keyObject(w, "compilerVersion", e_rr) &&
@@ -199,16 +204,13 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 
 		gotoIfError3(clean, JsonWriter_keyI64(w, "parent", node.parent == U32_MAX ? (I64) -1 : (I64) node.parent, e_rr));
 
-		//Children are found by parent id rather than stored as a range.
 		//Every child travels, builtin or not: which of them to fold away is the reader's decision, and the
 		// `builtin` flag below is what it decides on. Leaving them out here would make the fold permanent.
 
 		gotoIfError3(clean, JsonWriter_keyArray(w, "children", e_rr));
 
-		for(U64 j = 0; j < file->nodes.length; ++j)
-			if (file->nodes.ptr[j].parent == i) {
-				gotoIfError3(clean, JsonWriter_u64(w, j, e_rr));
-			}
+		for(U32 j = index.childOffset.ptr[i]; j < index.childOffset.ptr[i + 1]; ++j)
+			gotoIfError3(clean, JsonWriter_u64(w, index.children.ptr[j], e_rr));
 
 		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -267,11 +269,7 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 		//`name` is the frontend spelling the type resolves to and `display` the alias the source wrote, which is
 		// what a tooltip shows.
 
-		const SRType *type = NULL;
-
-		for(U64 j = 0; j < file->types.length && !type; ++j)
-			if(file->types.ptr[j].nodeId == i)
-				type = &file->types.ptr[j];
+		const SRType *type = index.typeAt.ptr[i] == U32_MAX ? NULL : &file->types.ptr[index.typeAt.ptr[i]];
 
 		gotoIfError3(clean, JsonWriter_key(w, "type", e_rr));
 
@@ -333,13 +331,8 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 
 		gotoIfError3(clean, JsonWriter_keyArray(w, "implements", e_rr));
 
-		for (U64 j = 0; j < file->interfaces.length; ++j) {
-
-			if(file->interfaces.ptr[j].nodeId != i)
-				continue;
-
-			gotoIfError3(clean, JsonWriter_u64(w, file->interfaces.ptr[j].interfaceNodeId, e_rr));
-		}
+		for(U32 j = index.interfaceOffset.ptr[i]; j < index.interfaceOffset.ptr[i + 1]; ++j)
+			gotoIfError3(clean, JsonWriter_u64(w, file->interfaces.ptr[index.interfaces.ptr[j]].interfaceNodeId, e_rr));
 
 		gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
@@ -394,11 +387,8 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 
 		gotoIfError3(clean, JsonWriter_key(w, "register", e_rr));
 
-		const SRRegister *reg = NULL;
-
-		for(U64 j = 0; j < file->registers.length && !reg; ++j)
-			if(file->registers.ptr[j].nodeId == i)
-				reg = &file->registers.ptr[j];
+		const SRRegister *reg =
+			index.registerAt.ptr[i] == U32_MAX ? NULL : &file->registers.ptr[index.registerAt.ptr[i]];
 
 		if(!reg) {
 			gotoIfError3(clean, JsonWriter_null(w, e_rr));
@@ -418,12 +408,9 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 
 		gotoIfError3(clean, JsonWriter_key(w, "enumValue", e_rr));
 
-		const SREnumValue *enumValue = NULL;
-
-		if(node.type == ESRNodeType_EnumValue)
-			for(U64 j = 0; j < file->enumValues.length && !enumValue; ++j)
-				if(file->enumValues.ptr[j].nodeId == i)
-					enumValue = &file->enumValues.ptr[j];
+		const SREnumValue *enumValue =
+			node.type != ESRNodeType_EnumValue || index.enumValueAt.ptr[i] == U32_MAX ?
+			NULL : &file->enumValues.ptr[index.enumValueAt.ptr[i]];
 
 		if(!enumValue) {
 			gotoIfError3(clean, JsonWriter_null(w, e_rr));
@@ -540,6 +527,7 @@ Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 clean:
+	SRNodeIndex_free(&index, alloc);
 	CharString_free(&annotationText, alloc);
 	Buffer_free(&collapsed, alloc);
 	return s_uccess;

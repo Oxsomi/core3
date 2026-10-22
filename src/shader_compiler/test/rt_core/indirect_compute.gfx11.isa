@@ -21,7 +21,7 @@ _amdgpu_cs_main:
 	s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(TRANS32_DEP_3)// 000000000070
 	v_sin_f32_e32 v2, v2                                       // 000000000074
 	v_fma_f32 v0, v0, 0.5, 0.5                                 // 000000000078
-	s_waitcnt_depctr 0xfff                                     // 000000000080
+	s_waitcnt_depctr depctr_va_vdst(0)                         // 000000000080
 	v_fma_f32 v1, v1, 0.5, 0.5                                 // 000000000084
 	v_fma_f32 v2, v2, 0.5, 0.5                                 // 00000000008C
 	buffer_store_b96 v[0:2], off, s[0:3], 0                    // 000000000094

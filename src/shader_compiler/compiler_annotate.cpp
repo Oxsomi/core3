@@ -109,6 +109,19 @@ EGfxPipelineStage Compiler_parseStage(CharString stageName) {
 			if(stageNameLen == 4)            return EGfxPipelineStage_TaskExt;
 			break;
 
+		//amplification: DXC's name for the task stage, the only one [shader()] takes
+
+		case C8x4('a', 'm', 'p', 'l'):
+
+			if(
+				stageNameLen == 13 &&
+				Buffer_readU64(buf, 4, NULL, NULL) == C8x8('i', 'f', 'i', 'c', 'a', 't', 'i', 'o') &&
+				stageName.ptr[12] == 'n'
+			)
+				return EGfxPipelineStage_TaskExt;
+
+			break;
+
 		case C8x4('h', 'u', 'l', 'l'):        //hull
 			if(stageNameLen == 4)            return EGfxPipelineStage_Hull;
 			break;
@@ -288,6 +301,26 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
+		case C8x2('U', 'n'):    //UnsafeExperimentExecution, UnsafeExtensionExecution
+
+			if (
+				stageNameLen == 25 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('s', 'a', 'f', 'e', 'E', 'x', 'p', 'e') &&
+				Buffer_readU64(buf, 10, NULL, NULL) == C8x8('r', 'i', 'm', 'e', 'n', 't', 'E', 'x') &&
+				Buffer_readU64(buf, 17, NULL, NULL) == C8x8('x', 'e', 'c', 'u', 't', 'i', 'o', 'n')
+			)
+				return ESHExtension_UnsafeExperimentExecution;
+
+			if (
+				stageNameLen == 24 &&
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('s', 'a', 'f', 'e', 'E', 'x', 't', 'e') &&
+				Buffer_readU64(buf, 10, NULL, NULL) == C8x8('n', 's', 'i', 'o', 'n', 'E', 'x', 'e') &&
+				Buffer_readU64(buf, 16, NULL, NULL) == C8x8('x', 'e', 'c', 'u', 't', 'i', 'o', 'n')
+			)
+				return ESHExtension_UnsafeExtensionExecution;
+
+			break;
+
 		case C8x2('D', 'e'):    //DescriptorHeap
 
 			if (
@@ -409,36 +442,63 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 	return (ESHExtension)(1u << ESHExtension_Count);
 }
 
-Bool Compiler_registerExtension(U32 *extensions, CharString extensionName, Error *e_rr) {
+//The ESHExtension2 a name refers to, or 1 << ESHExtension2_Count for one that is none of them.
+
+ESHExtension2 Compiler_parseExtension2(CharString extensionName) {
+
+	const Buffer buf = CharString_bufferConst(extensionName);
+
+	if(
+		CharString_length(extensionName) == 15 &&
+		Buffer_readU64(buf, 0, NULL, NULL) == C8x8('E', 'x', 'p', 'e', 'r', 'i', 'm', 'e')
+	)
+		switch (Buffer_readU64(buf, 7, NULL, NULL)) {
+			case C8x8('e', 'n', 't', 'T', 'i', 'e', 'r', '1'):        return ESHExtension2_ExperimentTier1;
+			case C8x8('e', 'n', 't', 'T', 'i', 'e', 'r', '2'):        return ESHExtension2_ExperimentTier2;
+		}
+
+	return (ESHExtension2)(1u << ESHExtension2_Count);
+}
+
+//A name into the mask it belongs to, ESHExtension's or ESHExtension2's.
+
+Bool Compiler_registerExtension(SHExtensionSet *extensions, CharString extensionName, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	ESHExtension extension = Compiler_parseExtension(extensionName);
+	const ESHExtension extension = Compiler_parseExtension(extensionName);
+	const Bool isFirst = !(extension >> ESHExtension_Count);
+	const ESHExtension2 extension2 = isFirst ? ESHExtension2_None : Compiler_parseExtension2(extensionName);
 
-	if(extension >> ESHExtension_Count)
+	if(!isFirst && (extension2 >> ESHExtension2_Count))
 		retError(clean, Error_invalidParameter(
 			0, 5, "Compiler_registerExtension() unrecognized extension in extension annotation"
 		));
 
-	if(*extensions & extension)
+	if(isFirst ? (extensions->extensions & extension) : (extensions->extensions2 & extension2))
 		retError(clean, Error_invalidParameter(
 			0, 6, "Compiler_registerExtension() duplicate extension found"
 		));
 
-	*extensions |= extension;
+	if(isFirst)
+		extensions->extensions = (ESHExtension) (extensions->extensions | extension);
+
+	else extensions->extensions2 = (ESHExtension2) (extensions->extensions2 | extension2);
 
 clean:
 	return s_uccess;
 }
 
-Bool Compiler_registerExtensions(ListU32 *extensionsRegistered, U32 extensions, const Allocator *alloc, Error *e_rr) {
+Bool Compiler_registerExtensions(
+	ListSHExtensionSet *extensionsRegistered, SHExtensionSet extensions, const Allocator *alloc, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
-	if(ListU32_contains(*extensionsRegistered, extensions, 0, NULL))
+	if(ListSHExtensionSet_contains(*extensionsRegistered, extensions, 0, NULL))
 		retError(clean, Error_alreadyDefined(0, "Compiler_registerExtensions() extensions already defined"));
 
-	gotoIfError3(clean, ListU32_pushBack(extensionsRegistered, extensions, alloc, e_rr));
+	gotoIfError3(clean, ListSHExtensionSet_pushBack(extensionsRegistered, extensions, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -749,6 +809,72 @@ clean:
 	return s_uccess;
 }
 
+//[WaveSize(N)], [WaveSize(min, max)] or [WaveSize(min, max, preferred)] as the reflector spells the attribute, into
+// SHEntry::waveSize's codes. The parse is the one place every binary type sees it: SPIR-V can't carry a wave size.
+
+Bool Compiler_parseWaveSizeAnnot(SHEntryRuntime &entry, const C8 *&str, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U8 codes[3] = { 0 };
+	U8 count = 0;
+
+	if (entry.entry.waveSize)
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_parseWaveSizeAnnot() entry already had a WaveSize"));
+
+	//WaveSize ( 16 , 64 , 32 )
+	//        ^^^^^^^^^^^^^^^^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	for (; count < 3; ++count) {
+
+		if (count) {
+
+			if (!Compiler_skipWhitespace(str) || *str == ')')
+				break;
+
+			if (*str != ',')
+				retError(clean, Error_invalidParameter(0, 1, "Compiler_parseWaveSizeAnnot() expected , or )"));
+
+			++str;
+		}
+
+		Compiler_skipWhitespace(str);
+
+		if (!C8_isDec(*str))
+			retError(clean, Error_invalidParameter(0, 2, "Compiler_parseWaveSizeAnnot() expected a lane count"));
+
+		U32 lanes = 0;
+
+		while (C8_isDec(*str) && lanes < 1000)
+			lanes = lanes * 10 + C8_dec(*str++);
+
+		if (lanes < 4 || lanes > 128 || (lanes & (lanes - 1)))
+			retError(clean, Error_invalidParameter(
+				0, 3, "Compiler_parseWaveSizeAnnot() a wave size is a power of two from 4 to 128 lanes"
+			));
+
+		codes[count] = (U8) (U32_bitScan(lanes) + 1);
+	}
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseWaveSizeAnnot() expected end of token"));
+
+	//One size is the one the entry requires, two or three a range and the size preferred in it.
+
+	entry.entry.waveSize = count == 1 ? codes[0] : (U16) (codes[0] << 4 | codes[1] << 8 | codes[2] << 12);
+
+	if (!SHEntry_isValidWaveSize(entry.entry.waveSize))
+		retError(clean, Error_invalidParameter(
+			0, 4, "Compiler_parseWaveSizeAnnot() expected min up to max, with preferred between them"
+		));
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_parseStageAnnot(
 	SHEntryRuntime &entry, CharString functionName, const C8 *&str, const Allocator *alloc, Error *e_rr
 ) {
@@ -962,7 +1088,7 @@ Bool Compiler_parseExtensionAnnot(SHEntryRuntime &entry, const C8 *&str, const A
 
 	const C8 *annotStart = NULL;
 	const C8 *annotEnd = NULL;
-	U32 extensions = 0;
+	SHExtensionSet extensions = SHExtensionSet{};
 
 	//oxc::extension ( "16BitTypes", "I64" )
 	//              ^^
@@ -1387,7 +1513,7 @@ Bool Compiler_parseAnnot(
 
 	annotLen = annotEnd - str;
 
-	if (annotLen != 3 && annotLen != 6)    //Ignore non oxc and shader annots
+	if (annotLen != 3 && annotLen != 6 && annotLen != 8)    //Ignore non oxc, shader and WaveSize annots
 		goto clean;
 
 	//[shader()]
@@ -1395,6 +1521,21 @@ Bool Compiler_parseAnnot(
 
 	if (annotLen == 6) {
 		gotoIfError3(clean, Compiler_parseShaderAnnot(annot, funcName, str, annotLen, entry, alloc, e_rr));
+		goto clean;
+	}
+
+	//[WaveSize()], a builtin the reflector spells this way whatever the source's case
+	// ^
+
+	if (annotLen == 8) {
+
+		const CharString name = CharString_createRefSizedConst(str, annotLen, false);
+
+		if (annot.IsBuiltin && CharString_equalsCStringSensitive(&name, "WaveSize")) {
+			str += annotLen;
+			gotoIfError3(clean, Compiler_parseWaveSizeAnnot(entry, str, e_rr));
+		}
+
 		goto clean;
 	}
 

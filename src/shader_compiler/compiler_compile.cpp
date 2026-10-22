@@ -199,12 +199,19 @@ Bool Compiler_buildCompileArgs(
 				));
 			}
 
+			//An experiment's instructions are unknown to SPIRV-Tools by design, so its module is not validated:
+			// a NonSemantic instruction whose result is used is exactly what the validator refuses.
+
+			if(toCompile->extensions & ESHExtension_UnsafeExperimentExecution)
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Vd", alloc, e_rr));
+
 			ESHExtension vk13 = (ESHExtension) (
 				ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
 			);
 
 			Bool isCoop = !!(toCompile->extensions & vk13);
 			Bool isMeshTask =
+				settings->isMeshTask ||
 				toCompile->stageType == EGfxPipelineStage_MeshExt ||
 				toCompile->stageType == EGfxPipelineStage_TaskExt;
 
@@ -231,11 +238,18 @@ Bool Compiler_buildCompileArgs(
 			if(CharString_length(toCompile->entrypoint))
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr));
 
-			gotoIfError3(clean, Compiler_registerArgCStr(
-				&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
-			));
+			//The SPIR-V extensions DXC may use on its own, an allow list. A binary that uses unrecognized extensions gets
+			// none listed, which DXC takes as every extension it knows.
+
+			const Bool listExtensions = !(toCompile->extensions & ESHExtension_UnsafeExtensionExecution);
+
+			if(listExtensions)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
+				));
 
 			if(
+				listExtensions &&
 				toCompile->stageType >= EGfxPipelineStage_RtStartExt &&
 				toCompile->stageType <= EGfxPipelineStage_RtEndExt
 			)
@@ -243,30 +257,27 @@ Bool Compiler_buildCompileArgs(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_tracing", alloc, e_rr
 				));
 
-			if(
-				toCompile->stageType == EGfxPipelineStage_MeshExt ||
-				toCompile->stageType == EGfxPipelineStage_TaskExt
-			)
+			if(listExtensions && isMeshTask)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_mesh_shader", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_ComputeDeriv)
+			if(listExtensions && (toCompile->extensions & ESHExtension_ComputeDeriv))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_compute_shader_derivatives", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_16BitTypes)
+			if(listExtensions && (toCompile->extensions & ESHExtension_16BitTypes))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_16bit_storage", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_Multiview)
+			if(listExtensions && (toCompile->extensions & ESHExtension_Multiview))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_RayQuery)
+			if(listExtensions && (toCompile->extensions & ESHExtension_RayQuery))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
 				));
@@ -274,30 +285,32 @@ Bool Compiler_buildCompileArgs(
 			//SV_Barycentrics is a semantic DXC lowers natively (no inline [[vk::ext_*]] declares the extension for us
 			// like the RT hlsli helpers do), so the allow list must admit it.
 
-			if(toCompile->extensions & ESHExtension_Barycentrics)
+			if(listExtensions && (toCompile->extensions & ESHExtension_Barycentrics))
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_fragment_shader_barycentric", alloc, e_rr
 				));
 
-			//Full bindless (ResourceDescriptorHeap/SamplerDescriptorHeap) has no SPIRV leg yet: DXC's
-			//SPV_EXT_descriptor_heap lowering is incomplete (its own validator rejects the output; the heap
-			//runtime array carries no ArrayStrideIdEXT) and the proper integration is in progress upstream.
-			//Refused here so nothing provisional is ever emitted rather than failing deep inside validation.
-			//The emulated lowering is no way out either: it produces descriptor indexing runtime arrays,
-			//which OxC3 doesn't accept as registers.
-			//Once the integration lands, this refusal becomes the flag block below, which is what the leg
-			//took while it briefly worked against a patched fork (the -fspv-extension list is an allow
-			//list, so both extensions must be admitted for the heap lowering to be legal):
-			//    Compiler_registerArgCStr(&stringsUTF8, "-fspv-use-descriptor-heap", alloc, e_rr)
-			//    Compiler_registerArgCStr(&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_heap", alloc, e_rr)
-			//    Compiler_registerArgCStr(&stringsUTF8, "-fspv-extension=SPV_KHR_untyped_pointers", alloc, e_rr)
+			//Full bindless (ResourceDescriptorHeap/SamplerDescriptorHeap lowered to SPV_EXT_descriptor_heap).
+			//-fspv-use-descriptor-heap opts into the real heap lowering (the default is emulation through
+			// descriptor indexing runtime arrays, which OxC3 doesn't accept as registers).
+			//The -fspv-extension list is an allow list, so the extension must also be added for it to be legal.
 
-			if(toCompile->extensions & ESHExtension_DescriptorHeap)
-				retError(clean, Error_unsupportedOperation(
-					0,
-					"Compiler_buildCompileArgs() DescriptorHeap can't target SPIRV until DXC's SPV_EXT_descriptor_heap "
-					"lowering is integrated; annotate the entrypoint [[oxc::binary(\"dxil\")]] to compile DXIL alone"
-				));
+			if(toCompile->extensions & ESHExtension_DescriptorHeap) {
+
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-use-descriptor-heap", alloc, e_rr));
+
+				if(listExtensions)
+					gotoIfError3(clean, Compiler_registerArgCStr(
+						&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_heap", alloc, e_rr
+					));
+
+				//The heap lowering accesses the heaps through OpUntypedAccessChainKHR
+
+				if(listExtensions)
+					gotoIfError3(clean, Compiler_registerArgCStr(
+						&stringsUTF8, "-fspv-extension=SPV_KHR_untyped_pointers", alloc, e_rr
+					));
+			}
 
 			//NOTE: F32/F64 atomics have no native HLSL intrinsic and are expressed via inline SPIR-V
 			// ([[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]] on the atomic function).
@@ -341,23 +354,59 @@ Bool Compiler_buildCompileArgs(
 		//$$<X> foreach uniform
 		//Define $$<X> as a real preprocessor macro for BOTH backends, so `#ifdef $$<X>` works either way.
 		//DXIL points it at the function export, SPIRV at the spec-constant global (both named $$specConst_<X>).
+		//DXC has no 8 or 16 bit spec constants, so on SPIRV such a uniform is declared 32 bit and $$<X> casts it back to
+		//the type DXIL's export returns, which with 16 bit types is the narrow one.
 
 		Bool isDXIL = settings->outputType == EGfxBinaryType_DXIL;
+
+		EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
+
+		if(toCompile->extensions & ESHExtension_16BitTypes)
+			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_Has16Bit);
+
+		if(toCompile->extensions & ESHExtension_F64)
+			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasF64);
+
+		if(toCompile->extensions & ESHExtension_I64)
+			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasI64);
+
+		const EHLSLStringifyFlags specFlags = EHLSLStringifyFlags(flags & ~EHLSLStringifyFlags_Has16Bit);
 
 		for (U32 i = 0; i < toCompile->uniforms.length; ++i) {
 
 			CharString uniformName = toCompile->uniforms.ptr[i].name;
+			TypeId type = ETypeId_arr[toCompile->uniforms.ptr[i].typeIdShort];
 
-			gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr,
+			if (isDXIL) {
+				gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D$$%.*s=($$specConst_%.*s())",
+					(int) CharString_length(uniformName), uniformName.ptr,
+					(int) CharString_length(uniformName), uniformName.ptr
+				));
+			}
 
-				isDXIL ? "-D$$%.*s=($$specConst_%.*s())" : "-D$$%.*s=$$specConst_%.*s",
+			else {
 
-				(int) CharString_length(uniformName),
-				uniformName.ptr,
+				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tempStr1, e_rr));
+				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, specFlags, alloc, &tempStr2, e_rr));
 
-				(int) CharString_length(uniformName),
-				uniformName.ptr
-			));
+				if (CharString_equalsStringSensitive(&tempStr1, &tempStr2)) {
+					gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D$$%.*s=$$specConst_%.*s",
+						(int) CharString_length(uniformName), uniformName.ptr,
+						(int) CharString_length(uniformName), uniformName.ptr
+					));
+				}
+
+				else {
+					gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D$$%.*s=((%s) $$specConst_%.*s)",
+						(int) CharString_length(uniformName), uniformName.ptr,
+						tempStr1.ptr,
+						(int) CharString_length(uniformName), uniformName.ptr
+					));
+				}
+
+				CharString_free(&tempStr1, alloc);
+				CharString_free(&tempStr2, alloc);
+			}
 
 			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 			tempStr = CharString_createNull();
@@ -384,27 +433,12 @@ Bool Compiler_buildCompileArgs(
 				e_rr
 			));
 
-			Bool has16Bit = toCompile->extensions & ESHExtension_16BitTypes;
-			Bool hasInt64 = toCompile->extensions & ESHExtension_I64;
-			Bool hasF64   = toCompile->extensions & ESHExtension_F64;
-
-			EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
-
-			if(has16Bit)
-				flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_Has16Bit);
-
-			if(hasF64)
-				flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasF64);
-
-			if(hasInt64)
-				flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasI64);
-
 			for (U64 i = 0; i < toCompile->uniforms.length; ++i) {
 
 				SHUniformRuntime uniform = toCompile->uniforms.ptr[i];
 				TypeId type = ETypeId_arr[uniform.typeIdShort];
 
-				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tempStr, e_rr));
+				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, isDXIL ? flags : specFlags, alloc, &tempStr, e_rr));
 
 				if(isDXIL) {
 					gotoIfError3(clean, CharString_format(alloc, &tempStr1, e_rr, "%s $$specConst_%.*s();\n",
@@ -415,8 +449,10 @@ Bool Compiler_buildCompileArgs(
 
 				else {
 
+					//The default is only a placeholder every link replaces, and DXC takes a literal there.
+
 					SHValue value = SHValue{};
-					gotoIfError3(clean, SHValue_stringifyHLSL(&value, type, flags, alloc, &tempStr2, e_rr));
+					gotoIfError3(clean, SHValue_stringify(&value, type, alloc, &tempStr2, e_rr));
 
 					gotoIfError3(clean, CharString_format(
 						alloc, &tempStr1, e_rr,
@@ -441,6 +477,7 @@ Bool Compiler_buildCompileArgs(
 				alloc, &tempStr, e_rr, "#line 1 \"%.*s\"\n",
 				(int) CharString_length(settings->path), settings->path.ptr
 			));
+
 			gotoIfError3(clean, CharString_appendString(&tmpFile, &tempStr, alloc, e_rr));
 			CharString_free(&tempStr, alloc);
 
@@ -474,6 +511,13 @@ Bool Compiler_buildCompileArgs(
 		for(U32 i = 0; i < lastExtension; ++i)
 			if ((toCompile->extensions >> i) & 1) {
 				gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
+				tempStr = CharString_createNull();
+			}
+
+		for(U32 i = 0; i < ESHExtension2_Count; ++i)
+			if ((toCompile->extensions2 >> i) & 1) {
+				gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "-D__OXC_EXT_%s", ESHExtension2_defines[i]));
 				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 				tempStr = CharString_createNull();
 			}
@@ -532,6 +576,7 @@ Bool Compiler_compile(
 	IDxcBlobUtf8 *error = NULL;
 	IDxcBlob *resultBlob = NULL;
 	Bool hasErrors = false;
+	Bool isDisabled = false;
 	CharString tmpFile = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};        //One day, Microsoft will fix their stuff, I hope.
 
@@ -576,11 +621,26 @@ Bool Compiler_compile(
 		if(error && error->GetStringLength()) {
 			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
 			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr));
+
+			//OXC_DISABLE_COMBINATION (@variants.hlsli) expands to a type DXC doesn't know, which names it in the error.
+
+			const CharString marker = CharString_createRefCStrConst("__oxcDisableCombination__");
+			isDisabled = hasErrors && CharString_containsStringSensitive(&errs, &marker, 0, 0);
 		}
 
 		if(error) {
 			error->Release();
 			error = NULL;
+		}
+
+		//A disabled combination is no failure: it compiles nothing, so it has no errors to report either.
+
+		if (isDisabled) {
+			ListCompileError_freeUnderlying(&result->compileErrors, alloc);
+			result->isDisabled = true;
+			result->type = ECompileResultType_Binary;
+			result->isSuccess = true;
+			goto clean;
 		}
 
 		if (hasErrors)
@@ -591,14 +651,15 @@ Bool Compiler_compile(
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"));
 
-			//Fail loudly rather than silently emitting an empty binary
-			// that only trips a confusing SHFile_read error much later.
-			//DXC can produce no object without a reported error (e.g. a DXIL validation reject of a still-experimental op),
-			// so guard against a zero-length blob explicitly.
-			if(!resultBlob || !resultBlob->GetBufferSize())
-				retError(clean, Error_invalidState(
-					3, "Compiler_compile() DXC produced an empty binary (compile or validation failed silently)"
-				));
+		//Fail loudly rather than silently emitting an empty binary
+		// that only trips a confusing SHFile_read error much later.
+		//DXC can produce no object without a reported error (e.g. a DXIL validation reject of a still-experimental op),
+		// so guard against a zero-length blob explicitly.
+
+		if(!resultBlob || !resultBlob->GetBufferSize())
+			retError(clean, Error_invalidState(
+				3, "Compiler_compile() DXC produced an empty binary (compile or validation failed silently)"
+			));
 
 		gotoIfError3(clean, Buffer_createCopy(
 			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),

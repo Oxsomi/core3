@@ -480,6 +480,23 @@ def vendorFrontend(force=False):
 		f" ({fetched} fetched, {len(VENDOR) - fetched} already current)"
 	)
 
+def cacheControlFor(urlPath):
+	"""What a host sends for a path, in two classes; web/_headers and --serve both follow this.
+
+	Only the versioned module folders are immutable: a version's files never change under that path, so a
+	year long pin is free. Everything else keeps its name when its content changes, the vendored third
+	party and the current module included, so it revalidates instead: no-cache means ask every time, and
+	the answer stays a 304 until the bytes actually move. A precompressed sibling shares its source's
+	path shape, so it lands in the right class on its own.
+	"""
+
+	clean = urlPath.split("?")[0].split("#")[0].lstrip("/")
+
+	if re.match(r"wasm/[^/]+/.+", clean):
+		return "public, max-age=31536000, immutable"
+
+	return "no-cache"
+
 def precompressedSibling(source, accepted):
 	"""Which precompressed sibling of `source` to serve for an Accept-Encoding, or None for the file itself.
 
@@ -534,7 +551,7 @@ def frontendPackageFiles():
 	root = os.path.join(common.ROOT, WEB_FRONTEND)
 	files = []
 
-	for name in ("index.html", "favicon.png", "icon.png", "robots.txt", "sitemap.xml", "LICENSE"):
+	for name in ("index.html", "favicon.png", "icon.png", "robots.txt", "sitemap.xml", "LICENSE", "_headers"):
 		if os.path.isfile(os.path.join(root, name)):
 			files.append(name)
 
@@ -681,7 +698,7 @@ def runFrontendTests(mode, dxcSource=None):
 			print("-- npm ci for the frontend tests FAILED", file=sys.stderr)
 			sys.exit(result.returncode)
 
-	for script in ("frontend_unit.js", "editor_test.js", "smoke.js"):
+	for script in ("frontend_unit.js", "editor_test.js", "smoke.js", "lazy_smoke.js"):
 		result = subprocess.run(f"\"{node}\" \"{os.path.join('dev', script)}\"", shell=True, cwd=webDir)
 		if result.returncode:
 			print("-- Frontend tests FAILED", file=sys.stderr)
@@ -852,7 +869,7 @@ def serveFrontend(port):
 		def end_headers(self):
 			self.send_header("Cross-Origin-Opener-Policy", "same-origin")
 			self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
-			self.send_header("Cache-Control", "no-store")
+			self.send_header("Cache-Control", cacheControlFor(self.path))
 			super().end_headers()
 
 	Handler.extensions_map[".wasm"] = "application/wasm"

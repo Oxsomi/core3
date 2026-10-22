@@ -623,17 +623,29 @@ extern "C" Bool Compiler_linkDXIL(
 	//Link. The linker runs its own codegen pass over the merged module, which reverts to dropping
 	//unused resources unless it is told the same thing every per-library compile was told; without
 	//this, --keep-registers held for [[oxc::stage]] entries but silently not for [shader] ones.
+	//A library link (no entrypoint) keeps every function its inputs export, the uniforms' value exports included,
+	//which the entry walk in Compiler_processDXIL would then take for shaders. Only its shaders are exported, and the
+	//values, inlined by then, go with the rest of the dead functions.
 
 	{
-		LPCWSTR linkArgs[] = { L"-fhlsl-unused-resource-bindings=keep-all" };
+		const Bool isLibLink = !tmpWStr2.ptr;
+
+		LPCWSTR linkArgs[2];
+		U32 linkArgCount = 0;
+
+		if(keepRegisters)
+			linkArgs[linkArgCount++] = L"-fhlsl-unused-resource-bindings=keep-all";
+
+		if(isLibLink)
+			linkArgs[linkArgCount++] = L"-export-shaders-only";
 
 		hr = linker->Link(
 			tmpWStr2.ptr ? (const wchar_t*) tmpWStr2.ptr : NULL,
 			(const wchar_t*) tmpWStr3.ptr,
 			(const LPCWSTR*) wstrConstArr.ptr,
 			(U32) wstrConstArr.length,
-			keepRegisters ? linkArgs : nullptr,
-			keepRegisters ? 1 : 0,
+			linkArgCount ? linkArgs : nullptr,
+			linkArgCount,
 			&result
 		);
 	}

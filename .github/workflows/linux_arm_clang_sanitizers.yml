@@ -7,9 +7,8 @@ name: Linux ARM64 Vulkan static (clang, ASan + UBSan)
 # Nightly rather than per push for the same reason as the other sanitizer jobs, see
 # linux_clang_sanitizers.yml.
 
+# nightly.yml starts this each night with the rest of the round.
 on:
-  schedule:
-    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:

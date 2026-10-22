@@ -84,6 +84,12 @@ def main():
 	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
 	parser.add_argument(
+		"-mesa", type=str, default=None,
+		help="Run the suites against a Mesa built by tools/mesa.py (a version such as 26.2.3, or the ref it was "
+		     "built from) instead of the system's Vulkan drivers. Linux only. Implies -ctest True with -tests True"
+	)
+
+	parser.add_argument(
 		"-dxc_source", type=str, default=None, metavar="PATH",
 		help="Build DXC from this checkout instead of the pinned clone, for iterating on the fork"
 	)
@@ -100,6 +106,26 @@ def main():
 	system        = common.hostSystem()
 	arch          = common.hostArch()[0]
 	platform_name = common.hostPlatformName()
+
+	# The Vulkan loader takes the pinned Mesa's drivers and no others, for this build and anything it runs.
+	# The suites only rerun when something they were built from changed, and a different driver is not such a
+	# thing, so the whole suite runs through ctest instead.
+
+	if args.mesa is not None:
+
+		sys.path.insert(0, os.path.join(common.ROOT, "tools"))
+		import mesa
+
+		try:
+			os.environ.update(mesa.environment(args.mesa))
+		except RuntimeError as e:
+			print(f"-- Error: {e}", file=sys.stderr)
+			sys.exit(1)
+
+		print(f"-- Vulkan drivers from Mesa {args.mesa}: {os.environ['VK_ICD_FILENAMES']}")
+
+		if args.tests == "True":
+			args.ctest = "True"
 
 	# On non-Windows, mode is required
 
@@ -304,7 +330,12 @@ def main():
 		# Anything reaching the cap is still wedged rather than slow, which is the point: without it a
 		# deadlocked JobQueue burns the whole job's time budget before anyone finds out.
 
-		test_timeout = 900
+		# A sanitized run is a different workload against that cap: the device half of a suite that used to
+		# fail fast now actually executes, under two sanitizers, on a real GPU rather than on a rasterizer.
+		# Measured on a 3070: the CLI suite passes in 1413s where it fits well under 900 without them.
+		# Raised only for that case, so an unsanitized wedge is still caught in fifteen minutes.
+
+		test_timeout = 2400 if args.asan == "True" or args.ubsan == "True" else 900
 
 		flags = f"-C {test_mode} --output-on-failure --timeout {test_timeout}"
 

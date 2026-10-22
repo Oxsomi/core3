@@ -111,21 +111,18 @@ T##x4 Quat##T##_toEuler(Quat##T q) {                                            
 																														\
 Quat##T Quat##T##_mul(Quat##T a, Quat##T b) {                                                                           \
 																														\
-	T##x4 axXb = T##x4_mul(b, T##x4_xxxx(a));                                                                           \
-	T##x4 ayXb = T##x4_mul(b, T##x4_yyyy(a));                                                                           \
-	T##x4 azXb = T##x4_mul(b, T##x4_zzzz(a));                                                                           \
-	T##x4 awXb = T##x4_mul(b, T##x4_wwww(a));                                                                           \
+	/* Four scaled copies of b, each shuffled to the term it contributes and signed for it. Lane extraction */          \
+	/* would be sixteen moves out of the vector registers and four back in, for the same arithmetic.        */          \
 																														\
-	T axXb_x = T##x4_x(axXb),    axXb_y = T##x4_y(axXb),    axXb_z = T##x4_z(axXb),    axXb_w = T##x4_w(axXb);          \
-	T ayXb_x = T##x4_x(ayXb),    ayXb_y = T##x4_y(ayXb),    ayXb_z = T##x4_z(ayXb),    ayXb_w = T##x4_w(ayXb);          \
-	T azXb_x = T##x4_x(azXb),    azXb_y = T##x4_y(azXb),    azXb_z = T##x4_z(azXb),    azXb_w = T##x4_w(azXb);          \
-	T awXb_x = T##x4_x(awXb),    awXb_y = T##x4_y(awXb),    awXb_z = T##x4_z(awXb),    awXb_w = T##x4_w(awXb);          \
-																														\
-	return Quat##T##_create(                                                                                            \
-		awXb_x + axXb_w + ayXb_z - azXb_y,                                                                              \
-		awXb_y - axXb_z + ayXb_w + azXb_x,                                                                              \
-		awXb_z + axXb_y - ayXb_x + azXb_w,                                                                              \
-		awXb_w - axXb_x - ayXb_y - azXb_z                                                                               \
+	return T##x4_add(                                                                                                   \
+		T##x4_add(                                                                                                      \
+			T##x4_mul(b, T##x4_wwww(a)),                                                                                \
+			T##x4_mul(T##x4_mul(T##x4_wzyx(b), T##x4_create4(1, -1, 1, -1)), T##x4_xxxx(a))                             \
+		),                                                                                                              \
+		T##x4_add(                                                                                                      \
+			T##x4_mul(T##x4_mul(T##x4_zwxy(b), T##x4_create4(1, 1, -1, -1)), T##x4_yyyy(a)),                            \
+			T##x4_mul(T##x4_mul(T##x4_yxwz(b), T##x4_create4(-1, 1, 1, -1)), T##x4_zzzz(a))                             \
+		)                                                                                                               \
 	);                                                                                                                  \
 }                                                                                                                       \
 																														\

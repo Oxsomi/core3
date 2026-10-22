@@ -443,15 +443,7 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 				while(CharString_length(line) < 60)
 					gotoIfError3(clean, CharString_append(&line, ' ', alloc, e_rr));
 
-				CharString addr = CharString_createNull();
-				gotoIfError3(clean, CharString_format(alloc, &addr, e_rr, "// %012"PRIX64, codeSize));
-
-				if(!CharString_appendString(&line, &addr, alloc, e_rr)) {
-					CharString_free(&addr, alloc);
-					retError(clean, Error_invalidState(0, "SpvISA_clean() couldn't append the address"));
-				}
-
-				CharString_free(&addr, alloc);
+				gotoIfError3(clean, CharString_appendFormat(alloc, &line, e_rr, "// %012"PRIX64, codeSize));
 				codeSize += bytes;
 			}
 
@@ -512,9 +504,11 @@ Bool SpvISA_disassemble(
 	gotoIfError3(clean, CharString_format(
 		alloc, &tmpSpv, e_rr, "%.*s/shader.spv", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
+
 	gotoIfError3(clean, CharString_format(
 		alloc, &tmpAsm, e_rr, "%.*s/shader.s", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
+
 	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
 
 	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
@@ -561,6 +555,7 @@ Bool SpvISA_disassemble(
 			alloc, &inputArg, e_rr, "%.*s,%.*s",
 			(int) CharString_length(tmpSpv), tmpSpv.ptr, (int) CharString_length(entrypoint), entrypoint.ptr
 		));
+
 		gotoIfError3(clean, ListCharString_pushBack(&llpcArgs, inputArg, alloc, e_rr));
 	}
 
@@ -634,7 +629,7 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 		{ "gfx900", "GCN5/Vega" }, { "gfx906", "GCN5/Vega20" },
 		{ "gfx1010", "RDNA1" }, { "gfx1030", "RDNA2" }, { "gfx1032", "RDNA2" }, { "gfx1034", "RDNA2" }, { "gfx1035", "RDNA2" },
 		{ "gfx1100", "RDNA3" }, { "gfx1101", "RDNA3" }, { "gfx1102", "RDNA3" }, { "gfx1103", "RDNA3" },
-		{ "gfx1150", "RDNA3.5" },
+		{ "gfx1150", "RDNA3.5" }, { "gfx1151", "RDNA3.5" }, { "gfx1152", "RDNA3.5" }, { "gfx1153", "RDNA3.5" },
 		{ "gfx1200", "RDNA4" }, { "gfx1201", "RDNA4" }
 	};
 
@@ -657,6 +652,7 @@ Bool SpvISA_listSupportedTargets(const Allocator *alloc, ListCharString *out, Er
 		gotoIfError3(clean, CharString_format(
 			alloc, &gfxipArg, e_rr, "-gfxip=%.*s", (int) CharString_length(gfxip), gfxip.ptr
 		));
+
 		gotoIfError3(clean, ListCharString_pushBack(&args, gfxipArg, alloc, e_rr));
 
 		I32 exitCode = 0;

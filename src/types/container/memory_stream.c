@@ -202,7 +202,11 @@ Bool MemoryStream_createFromBuffer(
 		(flags & EMemoryStreamFlags_IsResizable) ? MemoryStream_reserveInternal : NULL,
 		MemoryStream_closeInternal,
 		Buffer_length(*buffer),
-		EStreamType_Memory | (flags & EMemoryStreamFlags_IsResizable ? EStreamType_Resizable : 0),
+		//A memory read is a memcpy out of a buffer this stream owns, with no cursor to share, so two ranges
+		// of it are independent. A RESIZABLE one is not: a reserve can move the buffer under a reader.
+
+		EStreamType_Memory |
+		(flags & EMemoryStreamFlags_IsResizable ? EStreamType_Resizable : EStreamType_ConcurrentRead),
 		type,
 		memStream,
 		e_rr
@@ -267,6 +271,9 @@ Bool MemoryStream_createFromBufferRegion(
 	gotoIfError3(clean, Buffer_offset(&buffer, offset, e_rr));
 
 	U64 bufl = Buffer_length(buffer);
+
+	if(!length)
+		length = bufl;
 
 	if (length > bufl)
 		retError(clean, Error_outOfBounds(

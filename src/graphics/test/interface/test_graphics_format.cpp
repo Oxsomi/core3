@@ -164,6 +164,7 @@ extern "C" void Test_bindlessDescriptorPacking(oxc::c::Test *t) {
 	const c::U64 none = c::BindlessDescriptor_pack3(
 		c::BindlessDescriptor_None, c::BindlessDescriptor_None, c::BindlessDescriptor_None
 	);
+
 	Test_assert(t, "pack3None", none == 0);
 
 	const c::I32x4 unpackedNone = c::BindlessDescriptor_unpack3(none);
@@ -288,6 +289,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 	Test_assert(t, "nullInfo", !c::GraphicsDevice_defaultBindlessLayout(
 		NULL, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_None, &result, alloc, NULL
 	));
+
 	Test_assert(t, "nullResult", !c::GraphicsDevice_defaultBindlessLayout(
 		&info, c::EGfxBinaryType_DXIL, c::EGraphicsDeviceFlags_None, NULL, alloc, NULL
 	));
@@ -314,6 +316,20 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 		Test_assert(t, "nonEmptyRefused", !c::GraphicsDevice_defaultBindlessLayout(
 			&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_EnableDynamicSamplers, &result, alloc, NULL
 		));
+
+		//Baked samplers alone are enough, since this overwrites the flags that say which form they are in
+
+		c::DescriptorLayoutInfo samplerOnly{};
+		c::U32 samplerOnlyId = 0;
+
+		if (Test_assert(t, "samplerOnlyAdd", c::DescriptorLayoutInfo_addStaticSampler(
+			&samplerOnly, c::SamplerInfo{}, &samplerOnlyId, alloc, &t->err
+		)))
+			Test_assert(t, "samplerOnlyRefused", !c::GraphicsDevice_defaultBindlessLayout(
+				&info, c::EGfxBinaryType_SPIRV, c::EGraphicsDeviceFlags_None, &samplerOnly, alloc, NULL
+			));
+
+		c::DescriptorLayoutInfo_free(&samplerOnly, alloc);
 
 		const c::DescriptorBinding *b = result.bindings.ptr;
 

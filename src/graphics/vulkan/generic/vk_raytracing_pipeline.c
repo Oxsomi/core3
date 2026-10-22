@@ -25,6 +25,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
@@ -83,6 +84,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	U64 binaryCount = binaryIndices->length;
 
 	VkPipeline pipelineHandle = NULL;
+	U64 key = Pipeline_hash(Buffer_fnv1a64Offset, &pipeline->type, sizeof(pipeline->type));
 	ListVkShaderModule modules = (ListVkShaderModule) { 0 };
 	ListVkPipelineShaderStageCreateInfo stages = (ListVkPipelineShaderStageCreateInfo) { 0 };
 	ListVkRayTracingShaderGroupCreateInfoKHR groups = (ListVkRayTracingShaderGroupCreateInfoKHR) { 0 };
@@ -128,6 +130,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 			info->binaries[EGfxBinaryType_SPIRV], &modules.ptrNonConst[j],
 			deviceExt, instanceExt, &temp, EPipelineStage_RtStart, alloc, e_rr
 		));
+
+		const Buffer spirv = info->binaries[EGfxBinaryType_SPIRV];
+		pipeline->irBytes += (U32) Buffer_length(spirv);        //Counted once it exists
+		key = Pipeline_hash(key, spirv.ptr, Buffer_length(spirv));
 
 		CharString_free(&temp, alloc);
 	}
@@ -248,7 +254,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_TRIANGLES_BIT_KHR;
 
 	if(rtPipeline->flags & EPipelineRaytracingFlags_AllowOpacityMicromapExt)
-		flags |= VK_PIPELINE_CREATE_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT;
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_OPACITY_MICROMAP_BIT_KHR;
 
 	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullAnyHit)
 		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_BIT_KHR;
@@ -273,16 +279,21 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
-	//Create vulkan pipelines
+	//Create vulkan pipelines; the groups hold only indices (their pointers are null), so they hash as they are
 
-	gotoIfError3(clean, checkVkError(deviceExt->createRaytracingPipelines(
-		deviceExt->device,
-		NULL,
-		NULL,
-		1, &info,
-		NULL,
-		&pipelineHandle
-	), e_rr));
+	for(U64 j = 0; j < stageCount; ++j) {
+		key = Pipeline_hash(key, &stages.ptr[j].stage, sizeof(stages.ptr[j].stage));
+		key = Pipeline_hashString(key, stages.ptr[j].pName);
+	}
+
+	key = Pipeline_hash(key, groups.ptr, groupCounter * sizeof(groups.ptr[0]));
+	key = Pipeline_hash(key, &flags, sizeof(flags));
+	key = Pipeline_hash(key, &rtPipeline->maxRecursionDepth, sizeof(rtPipeline->maxRecursionDepth));
+	key = Pipeline_hashLayout(key, pipeline->layout);
+
+	gotoIfError3(clean, VkGraphicsDevice_buildPipeline(
+		device, pipeline, &info, key, pipeline->irBytes, &pipelineHandle, e_rr
+	));
 
 	//Create RefPtrs for OxC3 usage.
 

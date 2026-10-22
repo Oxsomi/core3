@@ -28,6 +28,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
+
 namespace oxc {
 
 	namespace c {

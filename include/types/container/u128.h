@@ -28,53 +28,17 @@
 	extern "C" {
 #endif
 
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+//The scans of mathi.h, a word at a time.
 
-	static inline U8 U128_bitScan(U128 a) {
+static inline U8 U128_bitScan(U128 a) {
+	const U64 hi = U128_hi(a);
+	return hi ? (U8) (64 + U64_bitScan(hi)) : U64_bitScan(U128_lo(a));
+}
 
-		unsigned long index = 0;
-		const Bool hasFirstBit = _BitScanReverse64(&index, ((const U64 *)&a)[1]);
-
-		if (hasFirstBit)
-			return (U8)index + 64;
-
-		const Bool hasLastBit = _BitScanReverse64(&index, ((const U64 *)&a)[0]);
-		return hasLastBit ? (U8)index : U8_MAX;
-	}
-
-	static inline U8 U128_bitScanReverse(U128 a) {
-
-		unsigned long index = 0;
-		const Bool hasFirstBit = _BitScanForward64(&index, ((const U64 *)&a)[0]);
-
-		if (hasFirstBit)
-			return (U8)index;
-
-		const Bool hasLastBit = _BitScanForward64(&index, ((const U64 *)&a)[1]);
-		return hasLastBit ? (U8)index + 64 : U8_MAX;
-	}
-
-#else
-
-	static inline U8 U128_bitScan(U128 a) {
-		const U64 hi = (U64)(a >> 64);
-		const U64 lo = (U64)a;
-		if (hi)
-			return (U8)(127 - __builtin_clzll(hi));
-		return lo ? (U8)(63 - __builtin_clzll(lo)) : U8_MAX;
-	}
-
-	static inline U8 U128_bitScanReverse(U128 a) {
-		const U64 hi = (U64)(a >> 64);
-		const U64 lo = (U64)a;
-		if (lo)
-			return (U8)__builtin_ctzll(lo);
-		if (hi)
-			return (U8)(64 + __builtin_ctzll(hi));
-		return U8_MAX;
-	}
-
-#endif
+static inline U8 U128_bitScanReverse(U128 a) {
+	const U64 lo = U128_lo(a), hi = U128_hi(a);
+	return lo ? U64_bitScanReverse(lo) : hi ? (U8) (64 + U64_bitScanReverse(hi)) : U8_MAX;
+}
 
 static inline U128 U128_createFromBase2(CharString text, EIntEncoding type, Error *e_rr) {
 

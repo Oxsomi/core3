@@ -54,6 +54,8 @@ typedef struct PipelineLayout {
 	PipelineLayoutInfo info;
 } PipelineLayout;
 
+static_assert(sizeof(PipelineLayout) % 64 == 0, "PipelineLayout must be a 64 byte multiple, its backend ext follows it");
+
 #define PipelineLayout_ext(ptr, T) (!ptr ? NULL : (T##PipelineLayout*)(ptr + 1))        //impl
 #define PipelineLayoutRef_ptr(ptr) RefPtr_data(ptr, PipelineLayout)
 

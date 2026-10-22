@@ -35,11 +35,24 @@ static inline Quat##T Quat##T##_create(T x, T y, T z, T w) { return T##x4_create
 																												\
 static inline Quat##T Quat##T##_identity() { return Quat##T##_create(0, 0, 0, 1); }                             \
 																												\
-static inline Quat##T Quat##T##_conj(Quat##T q) {                                                               \
-		return Quat##T##_create(-T##x4_x(q), -T##x4_y(q), -T##x4_z(q), T##x4_w(q));                             \
-}                                                                                                               \
+/* Negating xyz, as a MULTIPLY over the whole vector rather than four lane extractions and a rebuild.     */    \
+																												\
+static inline Quat##T Quat##T##_conj(Quat##T q) { return T##x4_mul(q, T##x4_create4(-1, -1, -1, 1)); }          \
 static inline Quat##T Quat##T##_normalize(Quat##T q) { return T##x4_normalize4(q); }                            \
-static inline Quat##T Quat##T##_inverse(Quat##T q) { return Quat##T##_normalize(Quat##T##_conj(q)); }           \
+																												\
+/* conj(q) / |q|^2, which is the inverse for ANY quaternion. Dividing by |q| instead only lands on the      */  \
+/* inverse when |q| is already 1, and silently scales the result by |q| when it is not.                     */  \
+																												\
+static inline Quat##T Quat##T##_inverse(Quat##T q) {                                                            \
+		return T##x4_div(Quat##T##_conj(q), T##x4_xxxx4(T##x4_sqLen4(q)));                                      \
+}                                                                                                               \
+																												\
+/* The same thing for a UNIT quaternion, where |q|^2 is 1 and the divide changes nothing, so the inverse    */  \
+/* IS the conjugate: three sign flips against a length, a divide and four multiplies.                       */  \
+/* Named for its PRECONDITION rather than called Fast, because it is exact where that holds and wrong where */  \
+/* it does not, which is a different bargain from the one normalizeFast and rsqrtFast offer.                */  \
+																												\
+static inline Quat##T Quat##T##_inverseNormalized(Quat##T q) { return Quat##T##_conj(q); }                      \
 																												\
 static inline Bool Quat##T##_eqPrecise(Quat##T a, Quat##T b) { return T##x4_eqApprox4(a, b); }                  \
 static inline Bool Quat##T##_neqPrecise(Quat##T a, Quat##T b) { return T##x4_neqApprox4(a, b); }                \

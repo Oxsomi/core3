@@ -26,6 +26,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
@@ -247,15 +248,17 @@ static void DxCommandBufferState_bindDescriptors(
 
 			//Sampler descriptors are not the same size as CBV/SRV/UAV ones on every adapter, so each offset
 			// scales by its own heap's increment.
-			//Without EnableDynamicSamplers there is no sampler heap and the root signature has no sampler
-			// table, so both lists carry exactly what exists: the sampler table at root param 0 when present
-			// (it is the first binding of the default layout), resources at the next.
+			//The root signature only declares a sampler table for a sampler binding that took real descriptors,
+			// which is what anySampler means; a baked sampler is in the signature itself and takes none, while
+			// still sizing a sampler heap. So the lists are keyed on the LAYOUT rather than on that heap, and
+			// carry exactly what exists: the sampler table at root param 0 when present (it is the first
+			// binding of the default layout), resources at the next.
 
 			ID3D12DescriptorHeap *heaps[2];
 			D3D12_GPU_DESCRIPTOR_HANDLE tables[2];
 			U32 tableCount = 0;
 
-			if (bindlessHeap->samplerHeap.heap) {
+			if (DescriptorLayoutRef_ptr(device->defaultDescLayout)->anySampler && bindlessHeap->samplerHeap.heap) {
 
 				heaps[tableCount] = bindlessHeap->samplerHeap.heap;
 
@@ -279,10 +282,12 @@ static void DxCommandBufferState_bindDescriptors(
 
 			for(U32 i = 0; i < tableCount; ++i) {
 
-				if(isCompute)
-					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, i, tables[i]);
+				const U32 rootParam = layoutExt->rootParamBindings + i;
 
-				else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, i, tables[i]);
+				if(isCompute)
+					buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, tables[i]);
+
+				else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, tables[i]);
 			}
 		}
 
@@ -520,10 +525,12 @@ static void DxCommandBufferState_bindDescriptors(
 			.ptr = heap->resourcesHeap.gpuHandle.ptr + tableExt->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
 		};
 
-		if(isCompute)
-			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, resourceParam, handle);
+		const U32 rootParam = layoutExt->rootParamBindings + resourceParam;
 
-		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, resourceParam, handle);
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, handle);
 	}
 
 	if (samplerParam != U8_MAX) {
@@ -532,10 +539,12 @@ static void DxCommandBufferState_bindDescriptors(
 			.ptr = heap->samplerHeap.gpuHandle.ptr + tableExt->allocationLocations[1] * heap->samplerHeap.gpuIncrement
 		};
 
-		if(isCompute)
-			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, samplerParam, handle);
+		const U32 rootParam = layoutExt->rootParamBindings + samplerParam;
 
-		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, samplerParam, handle);
+		if(isCompute)
+			buffer->lpVtbl->SetComputeRootDescriptorTable(buffer, rootParam, handle);
+
+		else buffer->lpVtbl->SetGraphicsRootDescriptorTable(buffer, rootParam, handle);
 	}
 }
 
@@ -611,6 +620,28 @@ static void dxTimestampWrite(DxGraphicsDevice *deviceExt, U8 fifId, DxCommandBuf
 		);
 
 	++deviceExt->timestampCursor;
+}
+
+//No barrier: a buffer's first access in an ExecuteCommandLists needs none, and nothing on the GPU reads this one.
+
+void DxGraphicsDevice_breadcrumb(
+	const GraphicsDevice *device,
+	const DxGraphicsDevice *deviceExt,
+	DxCommandBuffer *buffer,
+	U32 slot,
+	U32 value,
+	D3D12_WRITEBUFFERIMMEDIATE_MODE mode
+) {
+
+	if(slot == U32_MAX)
+		return;
+
+	const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER param = (D3D12_WRITEBUFFERIMMEDIATE_PARAMETER) {
+		.Dest = deviceExt->breadcrumbAddress + ((U64) device->fifId * GRAPHICS_BREADCRUMBS + slot) * sizeof(U32),
+		.Value = value
+	};
+
+	buffer->lpVtbl->WriteBufferImmediate(buffer, 1, &param, &mode);
 }
 
 void DX_WRAP_FUNC(CommandList_process)(
@@ -951,6 +982,22 @@ void DX_WRAP_FUNC(CommandList_process)(
 					);
 				}
 			}
+
+			break;
+		}
+
+		case ECommandOp_CopyBuffer: {
+
+			const CopyBufferCmd copyBuffer = *(const CopyBufferCmd*) data;
+			const CopyBufferRegion *regions = (const CopyBufferRegion*) (data + sizeof(copyBuffer));
+
+			ID3D12Resource *srcRes = DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.src), Dx)->buffer;
+			ID3D12Resource *dstRes = DeviceBuffer_ext(DeviceBufferRef_ptr(copyBuffer.dst), Dx)->buffer;
+
+			for(U32 i = 0; i < copyBuffer.regionCount; ++i)
+				buffer->lpVtbl->CopyBufferRegion(
+					buffer, dstRes, regions[i].dstOffset, srcRes, regions[i].srcOffset, regions[i].length
+				);
 
 			break;
 		}
@@ -1405,18 +1452,23 @@ void DX_WRAP_FUNC(CommandList_process)(
 				temp->tempBoundBuffers.indexBuffer &&
 				(
 					temp->boundBuffers.indexBuffer != temp->tempBoundBuffers.indexBuffer ||
+					temp->boundBuffers.indexOffset != temp->tempBoundBuffers.indexOffset ||
 					temp->boundBuffers.isIndex32Bit != temp->tempBoundBuffers.isIndex32Bit
 				)
 			) {
 
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
+				temp->boundBuffers.indexOffset = temp->tempBoundBuffers.indexOffset;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
 				DeviceBuffer *indexBuffer = DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer);
+				const U64 indexOffset = temp->boundBuffers.indexOffset;
 
 				D3D12_INDEX_BUFFER_VIEW ibo = (D3D12_INDEX_BUFFER_VIEW) {
-					.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = temp->boundBuffers.indexBuffer }),
-					.SizeInBytes = (U32) indexBuffer->resource.size,
+					.BufferLocation = getDxDeviceAddress(
+						(DeviceData) { .buffer = temp->boundBuffers.indexBuffer, .offset = indexOffset }
+					),
+					.SizeInBytes = (U32) (indexBuffer->resource.size - indexOffset),
 					.Format = temp->boundBuffers.isIndex32Bit ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT
 				};
 
@@ -1436,11 +1488,12 @@ void DX_WRAP_FUNC(CommandList_process)(
 				for(U32 i = 0; i < 16; ++i) {
 
 					DeviceBufferRef *bufferRef = temp->tempBoundBuffers.vertexBuffers[i];
+					const U64 offset = temp->tempBoundBuffers.vertexOffsets[i];
 
 					if (!bufferRef)
 						continue;
 
-					if(temp->boundBuffers.vertexBuffers[i] != bufferRef) {
+					if(temp->boundBuffers.vertexBuffers[i] != bufferRef || temp->boundBuffers.vertexOffsets[i] != offset) {
 
 						if(start == 16)
 							start = i;
@@ -1448,13 +1501,14 @@ void DX_WRAP_FUNC(CommandList_process)(
 						end = i + 1;
 
 						temp->boundBuffers.vertexBuffers[i] = bufferRef;
+						temp->boundBuffers.vertexOffsets[i] = offset;
 					}
 
 					DeviceBuffer *buf = DeviceBufferRef_ptr(bufferRef);
 
 					vertexBuffers[i] = (D3D12_VERTEX_BUFFER_VIEW) {
-						.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = bufferRef }),
-						.SizeInBytes = (U32) buf->resource.size,
+						.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = bufferRef, .offset = offset }),
+						.SizeInBytes = (U32) (buf->resource.size - offset),
 						.StrideInBytes = graphicsShader->vertexLayout.bufferStrides12_isInstance1[i] & 4095
 					};
 				}
@@ -1782,7 +1836,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					++deviceExt->dispatchRaysIndirectCursor;
 
 					const U64 argOffset = (U64) slot * stride;
-					const Bool wbi = !!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate);
+					const Bool wbi = !!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate);
 
 					DxDeviceBuffer *argsBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(argsRef), Dx);
 					DxDeviceBuffer *callerBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
@@ -1934,6 +1988,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_Timed))
 				dxTimestampWrite(deviceExt, device->fifId, buffer);
+
+			temp->breadcrumbSlot = GraphicsDevice_claimBreadcrumb(device, scope.scopeId);
+			DxGraphicsDevice_breadcrumb(
+				device, deviceExt, buffer, temp->breadcrumbSlot, 1, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN
+			);
 
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
@@ -2227,6 +2286,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 			if((temp->curScopeFlags & ECommandScopeInternalFlags_DebugRegion))
 				buffer->lpVtbl->EndEvent(buffer);
 
+			DxGraphicsDevice_breadcrumb(
+				device, deviceExt, buffer, temp->breadcrumbSlot, 2, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT
+			);
+
+			temp->breadcrumbSlot = U32_MAX;
 			break;
 
 		//Unsupported

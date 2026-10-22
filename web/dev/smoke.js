@@ -53,7 +53,7 @@ window.prompt = () => null;
 /* editor.js drives cm via closure; our stub's setValue fires change: mimic real enough.
  * But editor.open() suppresses the callback itself, so that's fine. */
 
-for (const f of ["js/util.js", "js/workspace.js", "js/theme.js", "js/mock_data.js", "js/intrinsics_data.js", "js/mock.js", "js/mock_formats.js", "js/wasm.js", "js/wasm_rpc.js",
+for (const f of ["js/util.js", "js/workspace.js", "js/theme.js", "js/mock_samples.js", "js/mock_data.js", "js/intrinsics_data.js", "js/mock.js", "js/mock_formats.js", "js/wasm.js", "js/wasm_rpc.js",
   "js/api.js", "js/editor.js", "js/intellisense.js", "js/asmmap.js",
   "js/tools/compile.js", "js/tools/inspect.js", "js/tools/symbols.js", "js/tools/pipeline.js", "js/tools/isa.js",
   "js/tools/diff.js", "js/tools/binary.js", "js/app.js"]) {
@@ -619,16 +619,18 @@ function check(name, cond, extra) {
     $("#reflView").textContent.includes("assembled from " + spvName) && $("#reflView").textContent.includes("SM 6.8"),
     $("#reflView").textContent.slice(0, 200));
 
-  /* raw DXC from the Command tab: the derived line runs as is, output is a standalone binary.
-   * broken.hlsl was the last file compiled, so switch to one that compiles (a failing line stays in SPV/DXIL-less
-   * Compile mode with the DXC error in the log, which is the right behaviour but not what's checked here) */
+  /* raw DXC from the Command tab: the printed argv is real (oxc3_getCompileArgs), and running an edited
+   * line is parked until the compiler grows a raw compile entry, so the button renders disabled and the
+   * handler stays dormant. A click on it must do nothing: an enabled button here would mean the mock
+   * compileRaw became reachable from the page again. */
   $("#mCompile").checked = true; $("#mCompile").dispatchEvent(new window.Event("change")); await sleep(300);
   [...$("#railTree").querySelectorAll(".fitem")].find(f => f.dataset.name === "lighting.hlsl").click(); await sleep(500);
   const runBtn = $("#cmdList .dxc-run");
-  check("raw dxc: derived DXC lines are editable + runnable", runBtn != null && $("#cmdList textarea.dxc-line") != null);
-  runBtn.click(); await sleep(800);
-  check("raw dxc: log reports the output", $("#dxcLog").textContent.includes("bytes"), $("#dxcLog").textContent.slice(0, 160));
-  check("raw dxc: output opened in SPV/DXIL mode as a document", $("#mBins").checked && $("#railTree").textContent.includes(".sm6") && $("#reflView").textContent.includes("standalone binary"), $("#railTree").textContent);
+  check("raw dxc: derived DXC lines render and are editable", runBtn != null && $("#cmdList textarea.dxc-line") != null);
+  check("raw dxc: running one is parked, not wired to the mock", runBtn.hasAttribute("disabled"));
+  runBtn.click(); await sleep(400);
+  check("raw dxc: a click on the parked button does nothing", $("#dxcLog").classList.contains("d-none"),
+    $("#dxcLog").textContent.slice(0, 120));
 
   /* ---- ctrl+click targets (pure core) ------------------------------------------------------ */
 

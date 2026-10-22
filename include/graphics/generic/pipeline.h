@@ -166,13 +166,19 @@ typedef struct Pipeline {
 	EPipelineFlags flags;
 
 	U32 extensions;              //ESHExtension: union over the stages' binaries, minus their dormant extensions
-	U32 padding;
+	Bool statsTracked;           //Counted in the device's memory stats
+	Bool gpuBytesEstimated;      //gpuBytes is its IR size, not what the driver compiled it to
+	U8 padding[2];
+	U32 gpuBytes;                //Its code on the device, see GraphicsDeviceRef_getMemoryStats
+	U32 irBytes;                 //The DXIL or SPIR-V it was built from
 
 	PipelineLayoutRef *layout;
 
 	ListPipelineStage stages;
 
 } Pipeline;
+
+static_assert(sizeof(Pipeline) % 64 == 0, "Pipeline must be a 64 byte multiple, its backend ext follows it");
 
 typedef RefPtr PipelineRef;
 
@@ -250,8 +256,6 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	PipelineRef **pipeline,
 	Error *e_rr
 );
-
-//TODO: Ability to query PSO binary size (req. extension)
 
 #ifdef __cplusplus
 	}

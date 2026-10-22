@@ -61,6 +61,7 @@
 // pulling them here means a consumer needs exactly one include to write a whole application.
 
 #include "types/container/log.hpp"
+#include "types/base/bool_arg.hpp"
 
 namespace oxc {
 
@@ -529,7 +530,7 @@ namespace oxc {
 			//The reference is taken OUT of the slot before decrementing:
 			// Window_free re-enters detail::onDestroy, which must find nothing left to do.
 
-			void reap(c::Bool all = false) noexcept {
+			void reap(BoolArg all = false) noexcept {
 
 				Registry *reg = detail::registryOf(&self);
 

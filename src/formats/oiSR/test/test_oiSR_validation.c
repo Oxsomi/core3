@@ -437,6 +437,7 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 				t, "anonymous node stays anonymous",
 				ok && result.nodes.length == 1 && result.nodes.ptr[0].nameId == U32_MAX
 			);
+
 			SRFile_print(&result, 0, true, true, t->alloc);        //verbose must not crash on (anonymous)
 		}
 		else Test_assert(t, "create anon", false);
@@ -475,6 +476,7 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 			Test_assert(t, "interpolation field survives",
 				ok && result.nodes.length == N && result.nodes.ptr[1].interpolation == ESRInterpolation_LinearNoperspective
 			);
+
 			Test_assert(t, "large-N hash preserved", ok && result.hash == sr.hash);
 		}
 		else Test_assert(t, "create large-N", false);
@@ -546,6 +548,7 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 		Test_assert(t, "create rejects invalid flags",
 			!SRFile_create((ESRSettingsFlags) 0x80000000, ESRFeature_All, t->alloc, &sr, NULL
 		));
+
 		SRFile_free(&sr, t->alloc);
 	}
 	{
@@ -553,6 +556,7 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 		Test_assert(t, "create rejects unknown feature bits",
 			!SRFile_create(ESRSettingsFlags_None, (U32) (1 << 20), t->alloc, &sr, NULL
 		));
+
 		SRFile_free(&sr, t->alloc);
 	}
 
@@ -563,6 +567,7 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 			Test_assert(t, "create rejects non-empty target",
 				!SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, NULL
 			));
+
 		SRFile_free(&sr, t->alloc);
 	}
 

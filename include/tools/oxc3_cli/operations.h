@@ -68,6 +68,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_PipelineOutputShift,      //-pso-output: write the pipeline that was used as an oiSP
 	EOperationHasParameter_PipelineSetShift,         //-pso-set: supply pipeline fields by the path the report prints
 	EOperationHasParameter_PipelineInputShift,       //-pso-input: replay a stored oiSP's values over the derived pipeline
+	EOperationHasParameter_TonemapShift,             //-tonemap: the display transform file convert maps HDR to 8 bit with
+	EOperationHasParameter_ExposureShift,            //-exposure: stops of exposure file convert applies before it
 
 	EOperationHasParameter_SpirvLayoutShift,         //-spirv-layout: buffer layout for SPIRV-only compiles
 
@@ -114,6 +116,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_PipelineOutput            = 1 << EOperationHasParameter_PipelineOutputShift,
 	EOperationHasParameter_PipelineSet               = 1 << EOperationHasParameter_PipelineSetShift,
 	EOperationHasParameter_PipelineInput             = 1 << EOperationHasParameter_PipelineInputShift,
+	EOperationHasParameter_Tonemap                   = 1 << EOperationHasParameter_TonemapShift,
+	EOperationHasParameter_Exposure                  = 1 << EOperationHasParameter_ExposureShift,
 
 	EOperationHasParameter_SpirvLayout               = 1 << EOperationHasParameter_SpirvLayoutShift,
 
@@ -218,6 +222,7 @@ extern const C8 *EOperationFlags_descriptions[EOperationFlags_Count];
 typedef enum EOperation {
 
 	EOperation_FileTo,
+	EOperation_FileConvert,
 	EOperation_FileFrom,
 	EOperation_FileCombine,
 	EOperation_FileSplit,

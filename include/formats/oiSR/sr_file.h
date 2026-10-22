@@ -434,12 +434,34 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 // the JSON view fold on this one rule.
 Bool SRFile_isBuiltinInclude(CharString file);
 
+//What belongs to each node, built in one pass by SRFile_createNodeIndex (sr_index.c, which carries the why).
+//typeAt, registerAt and enumValueAt hold U32_MAX where the node has none, and take the first record naming the
+// node, which is what a scan stopping at its first match returns. The grouped pairs are offset lists of
+// nodeCount + 1 entries, so node i owns [offset[i], offset[i + 1]); a refused create leaves the index untouched.
+
+typedef struct SRNodeIndex {
+
+	ListU32 typeAt;                 //Per node: into SRFile::types, U32_MAX = none
+	ListU32 registerAt;             //Per node: into SRFile::registers
+	ListU32 enumValueAt;            //Per node: into SRFile::enumValues
+
+	ListU32 childOffset;            //Per node + 1: where its children start in `children`
+	ListU32 children;               //Node ids, grouped by parent, ascending within a parent
+
+	ListU32 interfaceOffset;        //Per node + 1: where its interfaces start in `interfaces`
+	ListU32 interfaces;             //Into SRFile::interfaces, grouped by the node that implements them
+
+} SRNodeIndex;
+
+Bool SRFile_createNodeIndex(const SRFile *srFile, const Allocator *alloc, SRNodeIndex *index, Error *e_rr);
+void SRNodeIndex_free(SRNodeIndex *index, const Allocator *alloc);
+
 //The JSON view of the file, the SRDocument contract web/js/api.js documents; writeJson and writeJsonMembers split
 // the way SHFile's do.
 Bool SRFile_writeJson(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
 Bool SRFile_writeJsonMembers(const SRFile *file, JsonWriter *w, const Allocator *alloc, Error *e_rr);
 
-//File headers (file spec: docs/oiSR.md)
+//File headers (file spec: docs/file/oiSR.md)
 
 typedef enum ESRVersion {
 	ESRVersion_Undefined,

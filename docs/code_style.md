@@ -5,9 +5,9 @@
 The following project structure should be used:
 
 ```cmake
-src/*.c 			# Source files
-include/<project>/*.h
-tst/*.c 			# (Unit) Test files
+src/<module>/*.c 	# Source files, per module (types, platforms, formats, graphics, ...)
+src/<module>/test/*.c	# (Unit) Test files, next to the module they test
+include/<module>/*.h	# Public headers, mirroring src/<module>
 docs/*.md			# Documentation markdown files
 tools/*.h,*.c		# Tools used to build the project
 *.h.in				# Configurable project files (prebuild)
@@ -18,7 +18,7 @@ LICENSE				# How the project may be used
 .gitignore			# Things like builds files to ignore
 ```
 
-the files should be lower_snake_case and of course src, include, tst, docs, tools can all have subdirectories, named the same way.
+the files should be lower_snake_case and of course src, include, docs, tools can all have subdirectories, named the same way.
 
 ## Forward declaring / includes
 
@@ -65,16 +65,17 @@ void myFunction(								// Incorrect, prefer a custom struct for U8,U16,U32,U64
     U64 w0
 );
 
-Error myFunction(								//Correct, easily readable.
+Bool myFunction(								//Correct, easily readable.
 	MyClass test1,
     U64 value,
     U32 otherValue,
     Allocator alloc,
-    T *myOutput
+    T *myOutput,
+    Error *e_rr
 );
 ```
 
-If a function allocates; it should be a) suffixed with an x or b) include an allocator and a pointer to the result at the end of the parameters. An x suffix indicates that it uses the Platform_instance's allocator will be used to allocate. If a function can return an error, it should return it and output the output in the last argument(s).
+If a function allocates; it should be a) suffixed with an x or b) include an allocator and a pointer to the result at the end of the parameters. An x suffix indicates that it uses the Platform_instance's allocator will be used to allocate. If a function can fail, it returns `Bool` (true on success) and takes `Error *e_rr` as its last parameter, after the outputs. `e_rr` may be NULL.
 
 Don't expose internal helper functions in the header file. Only use them in the source file. If this helper function is needed by multiple dependencies, document who is allowed to use it.
 
@@ -90,34 +91,36 @@ Both struct and local variables should use lowerCamelCase. Constants/externs and
 
 Always validate inputs to a function if that function is going to be generic or you're dealing with user input.
 
-Error is the standard struct that holds the error code and optionally callstack. This allows us to sort of handle C++-like exceptions in a more secure way; where it's very clear that a function can return an error and what type of error it is. As well as providing an (extended) function for printing the function and stacktrace. It also allows easy "rethrowing" by just returning the error and not messing with the stack trace. As well as the ability to ignore an error if it's not important (ex. a file check might want to figure out if Error_notFound is returned and might want to handle that in a custom way).
+Error is the standard struct that holds the error code and optionally callstack. A fallible function returns `Bool` and fills the trailing `Error *e_rr` on failure (see ARCHITECTURE.md, "The error-handling idiom"). The caller can pass NULL when it only cares about success. It also allows easy "rethrowing" by propagating the failure of a callee, whose `e_rr` is already filled, without touching it.
+
+In the C++ wrappers (`include/**/*.hpp`) a Bool parameter of a wrapper function is declared `BoolArg` (`types/base/bool_arg.hpp`) rather than `c::Bool` or `bool`; only callback signatures that the C side invokes keep `c::Bool`. A pointer converts to bool silently, so with a plain Bool directly before a defaulted `e_rr`, a call that leaves the Bool out binds `e_rr` to it, flips the flag and loses the error. `BoolArg` only accepts a bool, so that call fails to compile; check_style rejects a Bool parameter directly before an `Error *` in a C++ header.
 
 To handle cleanup code, use the following:
 
 ```c
-	... //Init default structs and pointers to NULL or empty struct. Init Error err = Error_none()
+Bool MyThing_frobnicate(MyThing *t, const Allocator *alloc, Error *e_rr) {
 
-	gotoIfError3(fail, myFunctionThatReturnsErrorx(x, &myResult));
+	Bool s_uccess = true;							//Exact name, the macros use it
+	MyResult myResult = MyResult_createNull();		//Init everything that clean frees to NULL or empty struct
+
+	if(!t)
+		retError(clean, Error_nullPointer(0, "MyThing_frobnicate()::t is required"));
+
+	gotoIfError3(clean, MyResult_createx(x, &myResult, e_rr));
 
 	... //Other code
 
-	... //We are a the end of our function
-
-
-    goto clean;
-
-fail:
-	MyResult_freex(&myResult);
 clean:
-	MyResult_freex(&myOtherResultThatNeedsCleaning);
-	return err;
+	MyResult_freex(&myResult);
+	return s_uccess;
+}
 ```
 
-Keep in mind that you might want to keep myResult if you had a successful function call, so you might have to skip a portion of the label's cleanup. If you don't return anything that allocates, feel free to simplify this to only a clean, without a goto (only fallthrough from end of function). If you're calling another function that should stop the execution of this one, you should still goto clean. You store the function's Error (if present) in the err (Error struct's name) and goto the cleanup part of your function. If your function doesn't allocate; using this is not recommended, as it adds unnecessary complexity.
+`retError(label, Error_x(...))` records the error, sets `s_uccess = false` and jumps; `gotoIfError3(label, call)` jumps when a callee returned false. Both go to the one `clean:` label, which runs on success and failure alike, so it has to be safe on everything that was never created. Never `return` early after something was allocated, and never dereference `e_rr` (it can be NULL; a failed callee already filled it). If you hand ownership of a result to the caller on success, move it out (set your local back to null) before clean, so the free in clean is a no-op, or free it conditionally on `!s_uccess`.
 
 Feel free to cleanup the variables that you don't need at any point throughout the function. These structs/types should be automatically reset on free (to prevent use after free), so freeing the same variable (provided it isn't restored to an invalid object) is perfectly fine. If an error can occur between the free and create, it should be freed by the clean label.
 
-If an error isn't returned but a function will fail, document clearly what value it returns on fail.
+If a function cannot report an error (no `e_rr`) but can still fail, document clearly what value it returns on fail.
 
 ## Formatting
 

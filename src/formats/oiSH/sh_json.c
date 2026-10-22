@@ -402,6 +402,11 @@ static Bool SHFile_jsonBinary(
 			gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension_names[i], e_rr));
 		}
 
+	for(U64 i = 0; i < ESHExtension2_Count; ++i)
+		if ((identifier->extensions2 >> i) & 1) {
+			gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension2_names[i], e_rr));
+		}
+
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
 
 	gotoIfError3(clean, JsonWriter_keyArray(w, "dormant", e_rr));
@@ -409,6 +414,11 @@ static Bool SHFile_jsonBinary(
 	for(U64 i = 0; i < ESHExtension_Count; ++i)
 		if (((binary->dormantExtensions & identifier->extensions) >> i) & 1) {
 			gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension_names[i], e_rr));
+		}
+
+	for(U64 i = 0; i < ESHExtension2_Count; ++i)
+		if (((binary->dormantExtensions2 & identifier->extensions2) >> i) & 1) {
+			gotoIfError3(clean, JsonWriter_cstr(w, ESHExtension2_names[i], e_rr));
 		}
 
 	gotoIfError3(clean, JsonWriter_endArray(w, e_rr));

@@ -249,9 +249,6 @@ src/tools/oxc3_wasm only frames it. What is left is reaching those views from th
 Reflection and the JSON views
 -----------------------------
 
-- Nodes should know their children when the AST is built. Emitting a node's child list currently scans
-  every node looking for one whose parent is this node, which is quadratic in the node count and is by
-  far the heaviest part of writing an oiSR document.
 - The page always folds builtin includes in the symbol tree. Expanding them should be a switch; the
   document already carries every node with its builtin flag, so this is page work only.
 - The JSON strings should reserve up front, so a document does not reallocate repeatedly while the

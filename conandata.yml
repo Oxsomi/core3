@@ -1,4 +1,4 @@
 sources:
-  "3.2.105":
+  "3.2.106":
     url: "https://github.com/Oxsomi/core3"
     checkout: "main"

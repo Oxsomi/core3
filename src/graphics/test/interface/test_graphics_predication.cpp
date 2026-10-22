@@ -118,6 +118,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 		CommandScope scope = negList.scope(
 			{ .id = 61, .name = "Refused clear", .predicate = &predicate, .predicateOffset = 8 }, e_rr
 		);
+
 		c::Test_assert(t, "refusalScope", (c::Bool) scope);
 		c::Test_assert(t, "clearRefused", !scope.clearImagef(c::F32x4_zero(), all, clearTarget.handle(), nullptr));
 	}
@@ -238,6 +239,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 			{ .transitions = { outputWrite }, .id = 50, .name = "Ran", .predicate = &predicate, .predicateOffset = 8 },
 			e_rr
 		);
+
 		c::Test_assert(t, "ranScope", (c::Bool) scope);
 		c::Test_assert(t, "ranHeap", scope.bindDescriptorHeap(heap, e_rr));
 		c::Test_assert(t, "ranTable", scope.bindDescriptorTable(table, e_rr));
@@ -255,6 +257,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 			},
 			e_rr
 		);
+
 		c::Test_assert(t, "skippedScope", (c::Bool) scope);
 		c::Test_assert(t, "skippedHeap", scope.bindDescriptorHeap(heap, e_rr));
 		c::Test_assert(t, "skippedTable", scope.bindDescriptorTable(table, e_rr));

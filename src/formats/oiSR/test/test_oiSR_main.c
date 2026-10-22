@@ -403,6 +403,8 @@ OXC3_TEST_MAIN(formats_oiSR) {
 	Test_SRFileHashAndName(&t);
 	Test_SRFileCreateAndWriteGuards(&t);
 	Test_SRFileWriteJson(&t);
+	Test_SRNodeIndex(&t);
+	Test_SRNodeIndexWide(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

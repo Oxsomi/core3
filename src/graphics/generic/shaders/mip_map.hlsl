@@ -49,7 +49,7 @@ groupshared Flp4 reduc8;
 RWStructuredBuffer<U32> _atomic;
 
 Texture2D<F32x4> _baseTexture;
-RWTexture2DArray<F32x4> _writeSlices;						//Resource(s) excluding the first one
+UNKNOWN_FORMAT RWTexture2DArray<F32x4> _writeSlices;		//Resource(s) excluding the first one
 // [globallycoherent] RWTexture2DArray<Flp4> _writeSlices6;	//6 slice+
 
 #define MipFilter_Avg 0

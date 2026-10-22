@@ -160,6 +160,75 @@ void Test_buffer(Test *test) {
 
 	Test_assert(test, "Buffer_memcpy (partial, post)", i == 256 / 8);
 
+	//The shorter of the two lengths is copied.
+
+	Test_assert(test, "Buffer_memcpy (shorter dst)", Buffer_unsetAllBits(buf1, &test->err));
+
+	Test_assert(
+		test, "Buffer_memcpy (shorter dst)", Buffer_memcpy(Buffer_createRef(dat1, 24), Buffer_createRefConst(dat, 32))
+	);
+
+	Test_assert(test, "Buffer_memcpy (shorter dst, data)", dat1[2] == 0xCDCDCDCDCDCDCDCD && !dat1[3]);
+	Test_assert(test, "Buffer_memcpy (shorter src)", Buffer_unsetAllBits(buf1, &test->err));
+
+	Test_assert(
+		test, "Buffer_memcpy (shorter src)", Buffer_memcpy(Buffer_createRef(dat1, 32), Buffer_createRefConst(dat, 8))
+	);
+
+	Test_assert(test, "Buffer_memcpy (shorter src, data)", dat1[0] == 0xCDCDCDCDCDCDCDCD && !dat1[1]);
+
+	//A null dst or src copies nothing and succeeds; a const dst fails.
+
+	Test_assert(test, "Buffer_memcpy (null dst)", Buffer_memcpy(Buffer_createNull(), buf));
+	Test_assert(test, "Buffer_memcpy (null src)", Buffer_memcpy(buf1, Buffer_createNull()) && !dat1[1]);
+	Test_assert(test, "Buffer_memcpy (const dst)", !Buffer_memcpy(buf2, buf));
+	Test_assert(test, "Buffer_memmove (null)", Buffer_memmove(Buffer_createNull(), buf));
+	Test_assert(test, "Buffer_memmove (const dst)", !Buffer_memmove(buf2, buf));
+
+	//Memmove
+
+	U8 bytes[16];
+
+	for(U8 k = 0; k < 16; ++k)
+		bytes[k] = k;
+
+	//Forward over itself, so a copy that runs from the front reads what it already wrote, then back again.
+
+	Test_assert(
+		test, "Buffer_memmove (forward)", Buffer_memmove(Buffer_createRef(bytes + 4, 12), Buffer_createRefConst(bytes, 12))
+	);
+
+	for(i = 0; i < 12; ++i)
+		if(bytes[4 + i] != i)
+			break;
+
+	Test_assert(test, "Buffer_memmove (forward, data)", i == 12 && bytes[3] == 3);
+
+	Test_assert(
+		test, "Buffer_memmove (back)", Buffer_memmove(Buffer_createRef(bytes, 12), Buffer_createRefConst(bytes + 4, 12))
+	);
+
+	for(i = 0; i < 12; ++i)
+		if(bytes[i] != i)
+			break;
+
+	Test_assert(test, "Buffer_memmove (back, data)", i == 12);
+
+	//The fill's refusals, with their errors.
+
+	Error err = Error_none();
+
+	Test_assert(
+		test, "Buffer_setAllToU8 (null)",
+		!Buffer_setAllToU8(Buffer_createNull(), 0, &err) && err.genericError == EGenericError_NullPointer
+	);
+
+	Test_assert(
+		test, "Buffer_setAllToU8 (const)", !Buffer_setAllToU8(buf2, 1, &err) && err.genericError == EGenericError_ConstData
+	);
+
+	Test_assert(test, "Buffer_setAllToU8 (no error)", !Buffer_setAllToU8(Buffer_createNull(), 0, NULL));
+
 	//Bit ranges
 
 	Test_assert(test, "Buffer_setBitRange", Buffer_unsetAllBits(buf, &test->err));

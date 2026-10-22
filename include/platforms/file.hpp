@@ -36,6 +36,7 @@
 #include "types/container/string.hpp"
 #include "types/container/buffer.hpp"
 #include "types/container/memory_stream.hpp"
+#include "types/base/bool_arg.hpp"
 
 //Pre-include system headers used by the C headers below at global scope;
 //they must not be pulled in for the first time inside a namespace.
@@ -49,6 +50,10 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef _MSC_VER
+	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp
+#endif
 
 namespace oxc {
 
@@ -110,10 +115,13 @@ namespace oxc {
 		//Slice the returned Buffer yourself for virtual reads. out is reset first,
 		// File_read refuses a filled output (it would indicate a leak),
 		// and MUST be built on the allocator types was made with (see FileTypes).
+		//maxTimeout, here and on every call below, is how long a failed open is RETRIED: 0 fails at once, which is
+		// what a missing file needs. Pass a timeout only to wait out another process holding the file; U64_MAX
+		// retries a file that never appears forever.
 
 		[[nodiscard]] inline c::Bool read(
 			const StringView &loc, const Types &types, Buffer &out,
-			c::U64 off = 0, c::U64 len = 0, c::Ns maxTimeout = c::U64_MAX,
+			c::U64 off = 0, c::U64 len = 0, c::Ns maxTimeout = 0,
 			c::Error *e_rr = nullptr
 		) noexcept {
 			out.release();
@@ -126,16 +134,16 @@ namespace oxc {
 
 		[[nodiscard]] inline c::Bool write(
 			const c::Buffer &data, const StringView &loc, const Types &types,
-			c::U64 off = 0, c::U64 len = 0, c::Ns maxTimeout = c::U64_MAX,
-			c::Bool createParent = true, c::Error *e_rr = nullptr
+			c::U64 off = 0, c::U64 len = 0, c::Ns maxTimeout = 0,
+			BoolArg createParent = true, c::Error *e_rr = nullptr
 		) noexcept {
 			return c::File_write(&data, &loc.handle(), off, len, maxTimeout, createParent, &types.fileHandle, e_rr);
 		}
 
 		[[nodiscard]] inline c::Bool write(
 			const Buffer &data, const StringView &loc, const Types &types,
-			c::U64 off = 0, c::U64 len = 0, c::Ns maxTimeout = c::U64_MAX,
-			c::Bool createParent = true, c::Error *e_rr = nullptr
+			c::U64 off = 0, c::U64 len = 0, c::Ns maxTimeout = 0,
+			BoolArg createParent = true, c::Error *e_rr = nullptr
 		) noexcept {
 			return c::File_write(&data.handle(), &loc.handle(), off, len, maxTimeout, createParent, &types.fileHandle, e_rr);
 		}
@@ -159,8 +167,8 @@ namespace oxc {
 		// calls.
 
 		[[nodiscard]] inline c::Bool foreach(
-			const StringView &loc, c::FileCallback callback, void *userData, c::Bool isRecursive,
-			const c::Allocator *alloc, c::Error *e_rr = nullptr, c::Bool inAppDir = false
+			const StringView &loc, c::FileCallback callback, void *userData, BoolArg isRecursive,
+			const c::Allocator *alloc, c::Error *e_rr = nullptr, BoolArg inAppDir = false
 		) noexcept {
 			return c::File_foreach(&loc.handle(), inAppDir, callback, userData, isRecursive, alloc, e_rr);
 		}
@@ -168,14 +176,14 @@ namespace oxc {
 		//Files only; countAll includes folders.
 
 		[[nodiscard]] inline c::Bool count(
-			const StringView &loc, c::EFileType type, c::Bool isRecursive, c::U64 &result,
+			const StringView &loc, c::EFileType type, BoolArg isRecursive, c::U64 &result,
 			const c::Allocator *alloc, c::Error *e_rr = nullptr
 		) noexcept {
 			return c::File_queryFileObjectCount(&loc.handle(), type, isRecursive, &result, alloc, e_rr);
 		}
 
 		[[nodiscard]] inline c::Bool countAll(
-			const StringView &loc, c::Bool isRecursive, c::U64 &result,
+			const StringView &loc, BoolArg isRecursive, c::U64 &result,
 			const c::Allocator *alloc, c::Error *e_rr = nullptr
 		) noexcept {
 			return c::File_queryFileObjectCountAll(&loc.handle(), isRecursive, &result, alloc, e_rr);
@@ -185,14 +193,14 @@ namespace oxc {
 
 		[[nodiscard]] inline c::Bool add(
 			const StringView &loc, c::EFileType type, const c::Allocator *alloc,
-			c::Error *e_rr = nullptr, c::Bool createParentOnly = false
+			c::Error *e_rr = nullptr, BoolArg createParentOnly = false
 		) noexcept {
 			return c::File_add(&loc.handle(), type, createParentOnly, alloc, e_rr);
 		}
 
 		[[nodiscard]] inline c::Bool remove(
 			const StringView &loc, const c::Allocator *alloc,
-			c::Error *e_rr = nullptr, c::Ns maxTimeout = c::U64_MAX
+			c::Error *e_rr = nullptr, c::Ns maxTimeout = 0
 		) noexcept {
 			return c::File_remove(&loc.handle(), maxTimeout, alloc, e_rr);
 		}
@@ -201,14 +209,14 @@ namespace oxc {
 
 		[[nodiscard]] inline c::Bool rename(
 			const StringView &loc, const StringView &newFileName, const c::Allocator *alloc,
-			c::Error *e_rr = nullptr, c::Ns maxTimeout = c::U64_MAX
+			c::Error *e_rr = nullptr, c::Ns maxTimeout = 0
 		) noexcept {
 			return c::File_rename(&loc.handle(), &newFileName.handle(), maxTimeout, alloc, e_rr);
 		}
 
 		[[nodiscard]] inline c::Bool move(
 			const StringView &loc, const StringView &directoryName, const c::Allocator *alloc,
-			c::Error *e_rr = nullptr, c::Ns maxTimeout = c::U64_MAX
+			c::Error *e_rr = nullptr, c::Ns maxTimeout = 0
 		) noexcept {
 			return c::File_move(&loc.handle(), &directoryName.handle(), maxTimeout, alloc, e_rr);
 		}
@@ -229,8 +237,8 @@ namespace oxc {
 
 		[[nodiscard]] static c::Bool open(
 			const StringView &loc, const file::Types &types, FileHandle &result,
-			c::EFileOpenType type = c::EFileOpenType_Read, c::Bool create = false,
-			c::Error *e_rr = nullptr, c::Ns timeout = c::U64_MAX
+			c::EFileOpenType type = c::EFileOpenType_Read, BoolArg create = false,
+			c::Error *e_rr = nullptr, c::Ns timeout = 0
 		) noexcept {
 
 			result = FileHandle();
@@ -243,15 +251,29 @@ namespace oxc {
 			return true;
 		}
 
-		//len 0 reads to the end. out is reset first,
-		// the C side refuses a filled output because that would indicate a leak,
-		// and must be built on the allocator Types was made with.
+		//[off, off + len) into out, replacing what it held with a buffer of exactly that size from out's own allocator;
+		// len 0 reads to the end, and a failed read leaves out empty.
+		//FileHandleRef_read fills the buffer it is given and reports a range past the end, so such a range is handed
+		// over without allocating anything for it.
 
 		[[nodiscard]] c::Bool read(
 			Buffer &out, c::U64 off = 0, c::U64 len = 0, c::Error *e_rr = nullptr
 		) const noexcept {
+
+			const c::U64 fileSize = c::FileHandle_fileSize(data());
+			const c::U64 size = len ? len : (off < fileSize ? fileSize - off : 0);
+			const c::Bool inRange = off < fileSize && size <= fileSize - off;
+
 			out.release();
-			return c::FileHandleRef_read(ref.handle(), off, len, &out.handle(), e_rr);
+
+			if(size && inRange && !out.createUninitializedBytes(size, e_rr))
+				return false;
+
+			if(c::FileHandleRef_read(ref.handle(), off, size, &out.handle(), e_rr))
+				return true;
+
+			out.release();
+			return false;
 		}
 
 		[[nodiscard]] c::Bool write(
@@ -283,8 +305,8 @@ namespace oxc {
 
 		[[nodiscard]] static c::Bool open(
 			const StringView &loc, const file::Types &types, FileStream &result,
-			c::EFileOpenType type = c::EFileOpenType_Read, c::Bool create = false,
-			c::Error *e_rr = nullptr, c::Ns timeout = c::U64_MAX
+			c::EFileOpenType type = c::EFileOpenType_Read, BoolArg create = false,
+			c::Error *e_rr = nullptr, c::Ns timeout = 0
 		) noexcept {
 
 			result = FileStream();

@@ -77,6 +77,8 @@
 //Both C++ headers come BEFORE the block below: a standard header included after the C headers landed in
 //oxc::c finds its guard already tripped and leaves its symbols in that namespace.
 
+#include <stdlib.h>
+
 #include "test_graphics_shared.hpp"
 
 //Log::debugLn is the C++ front for Log_debugLnx; the x macros name ELogOptions_NewLine unqualified and so
@@ -121,6 +123,34 @@ namespace oxc { namespace c {
 //its entry points, and they all reach c:: the same way.
 
 using namespace oxc;
+
+//Whether this run asks the API to validate itself, off unless OXC3_TEST_VALIDATION says otherwise.
+//Read per call rather than cached, since nothing here runs often enough for that to matter.
+
+static c::Bool Test_wantsValidation(const c::Allocator *alloc) {
+
+	//An EMPTY value counts as off (Platform_getEnv treats it as unset), since that is what a workflow hands over for a
+	// switch it left alone.
+
+	c::Bool validation = false;
+	c::Platform_getEnvBool(c::CharString_createRefCStrConst("OXC3_TEST_VALIDATION"), alloc, &validation, NULL);
+	return validation;
+}
+
+//Whether an adapter is tested: all of them, unless OXC3_TEST_GPU names part of the ones to test (case insensitive),
+// for leaving out an adapter that is unstable on this machine.
+
+static c::Bool Test_wantsAdapter(const c::GraphicsDeviceInfo *info, const c::Allocator *alloc) {
+
+	c::CharString filter = c::CharString_createNull();
+	c::Platform_getEnv(c::CharString_createRefCStrConst("OXC3_TEST_GPU"), alloc, &filter, NULL);
+
+	const c::CharString name = c::CharString_createRefCStrConst(info->name);
+	const c::Bool wanted = !c::CharString_length(filter) || c::CharString_containsStringInsensitive(&name, &filter, 0, 0);
+
+	c::CharString_free(&filter, alloc);
+	return wanted;
+}
 
 // -- 1. GraphicsInterface ------------------------------------------------------
 
@@ -185,9 +215,11 @@ static void Test_graphicsInstance(c::Test *t) {
 	Test_assert(t, "createNullApp", !c::GraphicsInstance_create(
 		NULL, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &err
 	));
+
 	Test_assert(t, "createNullInst", !c::GraphicsInstance_create(
 		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, &type, NULL, &err
 	));
+
 	Test_assert(t, "createNullType", !c::GraphicsInstance_create(
 		&appInfo, c::EGraphicsApi_Count, c::EGraphicsInstanceFlags_None, alloc, NULL, NULL, &err
 	));
@@ -221,6 +253,7 @@ static void Test_graphicsInstance(c::Test *t) {
 		Test_checkObjectType(
 			t, "device", &types->device, (c::TypeId)c::EGraphicsTypeId_GraphicsDevice, sizeof(c::GraphicsDevice), alloc
 		);
+
 		Test_checkObjectType(
 			t, "buffer", &types->buffer, (c::TypeId)c::EGraphicsTypeId_DeviceBuffer, sizeof(c::DeviceBuffer), alloc
 		);
@@ -371,8 +404,17 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	c::GraphicsDeviceRef *created = NULL;
 
+	//Asked of the INSTANCE rather than of the request: IsDebug there is a wish the instance may turn down
+	//when the machine has no debug layer, and a debug device on an instance without one is refused outright.
+
+	const c::GraphicsInstance *instance = RefPtr_data(instRef, c::GraphicsInstance);
+
+	const c::EGraphicsDeviceFlags deviceFlags =
+		(instance->flags & c::EGraphicsInstanceFlags_IsDebug) ? c::EGraphicsDeviceFlags_IsDebug :
+		c::EGraphicsDeviceFlags_None;
+
 	if(!Test_assert(t, "deviceCreate", c::GraphicsDeviceRef_create(
-		instRef, info, c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
+		instRef, info, deviceFlags, c::EGraphicsBufferingMode_Default, NULL, NULL, &created, &t->err
 	)))
 		return;
 
@@ -437,10 +479,14 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsCommandValidation(t, deviceRef);
 	c::Test_graphicsRenderPass(t, deviceRef);
 	c::Test_graphicsTextureRef(t, deviceRef);
+	c::Test_graphicsResourceRegistry(t, deviceRef);
 	c::Test_graphicsSamplerAndData(t, deviceRef);
 	c::Test_graphicsPipelineLayout(t, deviceRef);
 	c::Test_graphicsShaderReflection(t, deviceRef);
 	c::Test_graphicsSubmit(t, deviceRef);
+	c::Test_graphicsSubmitSwapchainOnly(t, deviceRef);
+	c::Test_graphicsSubmitFlush(t, deviceRef);
+	c::Test_graphicsSubmitFailure(t, deviceRef);
 
 	//40. Runs after submit because half of it needs a resource the device is still holding.
 
@@ -471,16 +517,22 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsFrameGlobals(t, deviceRef);
 	c::Test_graphicsBindfulRays(t, deviceRef);
 	c::Test_graphicsBlasCompaction(t, deviceRef);
+	c::Test_graphicsBlasGeometry(t, deviceRef);
+	c::Test_graphicsBlasScratch(t, deviceRef);
+	c::Test_graphicsOmmRayQuery(t, deviceRef);
 	c::Test_graphicsBindfulOmm(t, deviceRef);
 	c::Test_graphicsBindfulRayQueryGraphics(t, deviceRef);
 	c::Test_graphicsBindfulAtomicFloat(t, deviceRef);
 	c::Test_graphicsBindfulPushConstants(t, deviceRef);
+	c::Test_graphicsPipelineCache(t, deviceRef);
 	c::Test_graphicsBindfulPushDescriptors(t, deviceRef);
 	c::Test_graphicsBindfulPushTexture(t, deviceRef);
 	c::Test_graphicsBindfulStaticSampler(t, deviceRef);
+	c::Test_graphicsBindfulStaticSamplerByValue(t, deviceRef);
 	c::Test_graphicsBindfulReservedSpace(t, deviceRef);
 	c::Test_graphicsBindfulPushClass(t, deviceRef);
 	c::Test_graphicsGpuExecute(t, deviceRef);
+	c::Test_graphicsBufferStream(t, deviceRef);
 	c::Test_graphicsAccelerationStructures(t, deviceRef);
 
 	//31-33. Shader execution: real dispatches, draws and traces with verified results, plus the pipelines
@@ -506,6 +558,15 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 
 	c::Test_graphicsCapabilities(t, deviceRef);
 	c::Test_graphicsCapabilityExecution(t, deviceRef);
+
+	//That a compute entry's [WaveSize] runs at the size it names, or is refused where the device runs none of them
+
+	c::Test_graphicsWaveSize(t, deviceRef);
+
+	//That the device refuses both unsafe markers (the config variants run them), and the experiment tiers it claims
+
+	c::Test_graphicsUnsafeExecution(t, deviceRef);
+	c::Test_graphicsExperimentTiers(t, deviceRef);
 
 	c::Test_graphicsDeviceMemory(t, deviceRef);
 
@@ -537,7 +598,17 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	c::GraphicsInstanceRef *instRef = NULL;
 	c::ListGraphicsDeviceInfo infos {};
 
-	if (!c::GraphicsInstance_create(&appInfo, api, c::EGraphicsInstanceFlags_None, alloc, &type, &instRef, &t->err)) {
+	//OPT IN, through OXC3_TEST_VALIDATION=1. The debug layers cost a lot of run time, so they are not what a
+	//normal run pays for; what they buy is the API's own account of a misuse, which is the only thing that
+	// speaks when a process dies in a way no handler inside it can see.
+	//GPU based validation stays off: it reports what a shader does, and nothing it watches has run yet at the
+	// point a create fails.
+
+	const c::EGraphicsInstanceFlags instanceFlags = Test_wantsValidation(t->alloc)
+		? (c::EGraphicsInstanceFlags) (c::EGraphicsInstanceFlags_IsDebug | c::EGraphicsInstanceFlags_DisableGPUBV)
+		: c::EGraphicsInstanceFlags_None;
+
+	if (!c::GraphicsInstance_create(&appInfo, api, instanceFlags, alloc, &type, &instRef, &t->err)) {
 		c::Test_print(t, "No compatible graphics driver, skipping device tests");
 		t->err = c::Error_none();
 		return;
@@ -626,8 +697,15 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	//8-14. Every enumerated adapter gets the full battery, so integrated and software devices are exercised
 	// on machines that have them rather than only the preferred device
 
-	for(c::U64 i = 0; i < infos.length; ++i)
+	for(c::U64 i = 0; i < infos.length; ++i) {
+
+		if(!Test_wantsAdapter(&infos.ptr[i], t->alloc)) {
+			c::Test_print(t, "OXC3_TEST_GPU leaves this adapter out");
+			continue;
+		}
+
 		Test_graphicsDeviceSingle(t, instRef, &infos.ptr[i]);
+	}
 
 clean:
 

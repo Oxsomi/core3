@@ -404,7 +404,9 @@ Bool File_add(
 		firstMissing = i - 1;
 	}
 
-	//Create forward from firstMissing
+	//Create forward from firstMissing.
+	//A parallel File_add races the existence walk above, and a folder another process just made is as ensured
+	// as one this call made, so losing the race only errors when what sits there now isn't a folder.
 
 	for (U64 i = firstMissing; i < dirCount; ++i) {
 
@@ -415,12 +417,33 @@ Bool File_add(
 		const C8 *start = str.ptr[0].ptr;
 		CharString section = CharString_createRefSizedConst(start, end - start, false);
 
-		gotoIfError3(clean, File_addPhysical(&section, false, alloc, e_rr));
+		Error errTmp = Error_none();
+		Bool added = File_addPhysical(&section, false, alloc, &errTmp);
+
+		if (!added && errTmp.genericError == EGenericError_AlreadyDefined) {
+			added = File_getInfo(&section, &info, alloc, NULL) && info.type == EFileType_Folder;
+			FileInfo_free(&info, alloc);
+		}
+
 		*end = prev;
+
+		if(!added)
+			retError(clean, errTmp);
 	}
 
-	if(!createParentOnly)
-		gotoIfError3(clean, File_addPhysical(&resolved, type == EFileType_File, alloc, e_rr));
+	if (!createParentOnly) {
+
+		Error errTmp = Error_none();
+		Bool added = File_addPhysical(&resolved, type == EFileType_File, alloc, &errTmp);
+
+		if (!added && type == EFileType_Folder && errTmp.genericError == EGenericError_AlreadyDefined) {
+			added = File_getInfo(&resolved, &info, alloc, NULL) && info.type == EFileType_Folder;
+			FileInfo_free(&info, alloc);
+		}
+
+		if(!added)
+			retError(clean, errTmp);
+	}
 
 clean:
 	FileInfo_free(&info, alloc);
@@ -678,8 +701,8 @@ Bool FileHandleRef_read(const FileHandleRef *handleRef, U64 off, U64 len, Buffer
 
 	U64 size = !len ? fileSize - off : len;
 
-	if(off + size > fileSize)
-		retError(clean, Error_outOfBounds(2, off + size, fileSize, "FileHandleRef_read() offset + length out of bounds"));
+	if(size > fileSize - off)
+		retError(clean, Error_outOfBounds(2, size, fileSize - off, "FileHandleRef_read() offset + length out of bounds"));
 
 	if(size > Buffer_length(*output))
 		retError(clean, Error_outOfBounds(3, size, Buffer_length(*output), "FileHandleRef_read() size exceeds output buffer"));

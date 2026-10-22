@@ -24,10 +24,12 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/container/buffer.h"
 #include "types/base/error.h"
 
 Bool createShaderModule(
@@ -50,6 +52,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	const CharString *entryName,
 	Pipeline *pipeline,
 	const SHBinaryInfo *buf,
+	const SHEntry *entry,
 	Error *e_rr
 ) {
 
@@ -102,11 +105,43 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 			VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
 			VK_PIPELINE_CREATE_CAPTURE_INTERNAL_REPRESENTATIONS_BIT_KHR;
 
+	//SPIR-V can't carry [WaveSize], so the pipeline asks for the size, one GraphicsDeviceRef_checkShaderFeatures
+	// already found the device runs.
+	//Without subgroup size control that is the device's one size, which needs no asking.
+
+	const U32 subgroupSize = GraphicsDeviceCapabilities_pickWaveSize(
+		&device->info.capabilities, entry->waveSize, (U8) deviceExt->subgroupSize
+	);
+
+	if(entry->waveSize && !subgroupSize)
+		retError(clean, Error_unsupportedOperation(
+			0, "VkGraphicsDevice_createPipelineCompute() entry's WaveSize names no subgroup size the device runs"
+		));
+
+	const Bool requestSize =
+		subgroupSize && (device->info.capabilities.featuresExt & EVkGraphicsFeatures_SubgroupSizeControl);
+
+	const U64 groupThreads = (U64) entry->groupX * entry->groupY * entry->groupZ;
+
+	if(requestSize && groupThreads > (U64) subgroupSize * deviceExt->maxComputeWorkgroupSubgroups)
+		retError(clean, Error_outOfBounds(
+			0, groupThreads, (U64) subgroupSize * deviceExt->maxComputeWorkgroupSubgroups,
+			"VkGraphicsDevice_createPipelineCompute() at its WaveSize the group holds more subgroups than the device "
+			"allows (maxComputeWorkgroupSubgroups)"
+		));
+
+	VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT requiredSize =
+		(VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT,
+			.requiredSubgroupSize = subgroupSize
+		};
+
 	VkComputePipelineCreateInfo pipelineInfo = (VkComputePipelineCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.flags = createFlags,
 		.stage = (VkPipelineShaderStageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = requestSize ? &requiredSize : NULL,
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
 			.module = shaderModule,
 			.pName = entryPoint
@@ -114,13 +149,21 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
-	gotoIfError3(clean, checkVkError(deviceExt->createComputePipelines(
-		deviceExt->device,
-		NULL,
-		1, &pipelineInfo,
-		NULL,
-		&pipelineHandle
-	), e_rr));
+	const Buffer spirv = buf->binaries[EGfxBinaryType_SPIRV];
+
+	U64 key = Pipeline_hash(Buffer_fnv1a64Offset, &pipeline->type, sizeof(pipeline->type));
+	key = Pipeline_hash(key, spirv.ptr, Buffer_length(spirv));
+	key = Pipeline_hashString(key, entryPoint);
+	key = Pipeline_hash(key, &createFlags, sizeof(createFlags));
+
+	if(requestSize)
+		key = Pipeline_hash(key, &subgroupSize, sizeof(subgroupSize));
+
+	key = Pipeline_hashLayout(key, pipeline->layout);
+
+	gotoIfError3(clean, VkGraphicsDevice_buildPipeline(
+		device, pipeline, &pipelineInfo, key, Buffer_length(spirv), &pipelineHandle, e_rr
+	));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && name && CharString_length(*name)) {
 

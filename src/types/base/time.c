@@ -30,12 +30,18 @@
 #include <time.h>
 
 #ifdef _WIN32
-	#include <intrin.h>
 	#define timegm _mkgmtime
 	#define localtime_r(a, b) (!localtime_s(b, a))
 	#define gmtime_r(a, b) (!gmtime_s(b, a))
-#elif _ARCH == ARCH_X86_64 && !defined(__clang__)
-	#include <x86intrin.h>        //Only x86 GCC needs this (for __rdtsc); ARM uses cntvct_el0, clang uses a builtin
+#endif
+
+//Only x86 MSVC and GCC need __rdtsc declared; ARM uses cntvct_el0, clang uses a builtin.
+//MSVC declares it in intrin.h alone, which is too heavy for one intrinsic, so it is declared as intrin.h does.
+
+#if _ARCH == ARCH_X86_64 && _COMPILER == COMPILER_MSVC
+	unsigned __int64 __rdtsc();
+#elif _ARCH == ARCH_X86_64 && _COMPILER == COMPILER_GCC
+	#include <x86intrin.h>
 #endif
 
 Ns Time_now() {
@@ -57,21 +63,19 @@ Ns Time_now() {
 	U64 Time_clocks() {
 		return (U64) (emscripten_get_now() * 1e6);
 	}
-#elif defined(__clang__)
+#elif _COMPILER == COMPILER_CLANG || _COMPILER == COMPILER_CLANG_CL
 	U64 Time_clocks() {
 		return __builtin_readcyclecounter();
 	}
 #elif _ARCH == ARCH_ARM64
 
-	//Windows doesn't support inline ASM with arm64,
-	//To support this anyways, we have time_clocks_arm64.s
-	//This will then turn into time_clocks_arm64.obj and we will link this.
+	//MSVC has no inline asm on arm64, so it links time_clocks_arm64.asm instead.
 	
 	//clang reads the register inline on windows too, which MSVC can't do; only MSVC needs the .asm.
 	//That matters beyond tidiness: the ClangCL toolset preprocesses .asm before handing it to armasm64,
 	// which only understands #line and rejects the result outright.
 
-	#if !defined(_WIN32) || defined(__clang__)
+	#if _COMPILER != COMPILER_MSVC
 		U64 Time_clocks() {
 			U64 result;
 			__asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(result));

@@ -23,10 +23,7 @@
 #pragma once
 #include "types/base/types.h"
 #include "types/base/constants.h"
-
-#ifdef _MSC_VER
-	#include <intrin.h>        //_BitScan*64; MSVC resolves those without this, clang-cl needs the declaration
-#endif
+#include "types/base/mathi.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -105,13 +102,7 @@ static inline U16 BigInt_bitScan(BigInt a) {
 		const U64 v = a.data[i];
 		if (!v) continue;
 
-		#if defined(_MSC_VER)
-			unsigned long index = 0;
-			_BitScanReverse64(&index, v);
-			return (U16)(i * 64 + index);
-		#else
-			return (U16)(i * 64 + 63 - __builtin_clzll(v));
-		#endif
+		return (U16)(i * 64 + U64_bitScan(v));
 	}
 
 	return U16_MAX;
@@ -125,13 +116,7 @@ static inline U16 BigInt_bitScanReverse(BigInt a) {
 		const U64 v = a.data[i];
 		if (!v) continue;
 
-		#if defined(_MSC_VER)
-			unsigned long index = 0;
-			_BitScanForward64(&index, v);
-			return (U16)(i * 64 + index);
-		#else
-			return (U16)(i * 64 + __builtin_ctzll(v));
-		#endif
+		return (U16)(i * 64 + U64_bitScanReverse(v));
 	}
 
 	return U16_MAX;

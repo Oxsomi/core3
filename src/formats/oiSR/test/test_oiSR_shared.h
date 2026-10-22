@@ -40,3 +40,5 @@ void Test_SRFileStructuralRoundTrips(Test *t);      //empty, anonymous node, 1-n
 void Test_SRFileHashAndName(Test *t);               //hash determinism + content sensitivity, ESRNodeType_name coverage
 void Test_SRFileCreateAndWriteGuards(Test *t);      //create flag/feature/memleak guards, write/finalize symbol-parallel guards
 void Test_SRFileWriteJson(Test *t);                 //The JSON view of the sample tree, and the members form
+void Test_SRNodeIndex(Test *t);                     //What belongs to each node, answered without searching
+void Test_SRNodeIndexWide(Test *t);                 //The same over a parent with many children

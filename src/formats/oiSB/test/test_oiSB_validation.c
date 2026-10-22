@@ -48,6 +48,7 @@ void Test_SBFileCombineFlags(Test *t) {
 		Test_assert(t, "add to a",
 			SBFile_addVariableAsType(&a, &nameA, 0, U16_MAX, ESBType_F32, ESBVarFlag_IsUsedVarSPIRV, NULL, t->alloc, &t->err)
 		);
+
 		Test_assert(t, "add to b",
 			SBFile_addVariableAsType(&b, &nameB, 0, U16_MAX, ESBType_F32, ESBVarFlag_IsUsedVarDXIL, NULL, t->alloc, &t->err)
 		);
@@ -69,69 +70,52 @@ void Test_SBFileCombineFlags(Test *t) {
 	}
 }
 
-//SBFile_combine merges a layout that holds a struct, where a variable's name id is offset past the
-//struct names rather than being its own index.
-//A layout with no struct never separates the two, so this is the case that tells them apart.
-void Test_SBFileCombineStruct(Test *t) {
+//SBFile_combine with structs: names hold the structs first, so every variable sits past them in the name table.
+//What a structured buffer of a struct reflects as, on SPIR-V and DXIL alike: two structs, a variable of one, its members.
 
-	Test_setModule(t, "SBFile combine: layout holding a struct");
+void Test_SBFileCombineStructs(Test *t) {
 
-	{
-		SBFile a        = { 0 };
-		SBFile b        = { 0 };
-		SBFile combined = { 0 };
+	Test_setModule(t, "SBFile combine: layouts with structs");
 
-		if (
-			!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &a, &t->err) ||
-			!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &b, &t->err)
-		) {
-			Test_assert(t, "create a and b", false);
-			goto doneCombineStruct;
-		}
+	SBFile files[2] = { 0 };
+	SBFile combined = { 0 };
 
-		//The same layout twice, each seen as used by one backend: MyStruct { F32x4 pos; F32x4 col; }
+	for (U32 f = 0; f < 2; ++f) {
 
-		SBStruct myStruct = { .stride = 32 };
-		SBFile *files[2] = { &a, &b };
-		ESBVarFlag used[2] = { ESBVarFlag_IsUsedVarSPIRV, ESBVarFlag_IsUsedVarDXIL };
-		Bool built = true;
+		const ESBVarFlag used = f ? ESBVarFlag_IsUsedVarDXIL : ESBVarFlag_IsUsedVarSPIRV;
+		SBFile *file = &files[f];
 
-		for (U8 i = 0; i < 2; ++i) {
+		CharString rec = CharString_createRefCStrConst("Rec");
+		CharString ray = CharString_createRefCStrConst("Ray");
+		CharString core = CharString_createRefCStrConst("core");
+		CharString x = CharString_createRefCStrConst("x");
+		CharString y = CharString_createRefCStrConst("y");
 
-			CharString structName = CharString_createRefCStrConst("MyStruct");
-			CharString rootName = CharString_createRefCStrConst("myVar");
-			CharString posName = CharString_createRefCStrConst("pos");
-			CharString colName = CharString_createRefCStrConst("col");
+		Test_assert(t, "create", SBFile_create(ESBSettingsFlags_None, 32, t->alloc, file, &t->err));
+		Test_assert(t, "addStructRec", SBFile_addStruct(file, &rec, (SBStruct) { .stride = 32 }, t->alloc, &t->err));
+		Test_assert(t, "addStructRay", SBFile_addStruct(file, &ray, (SBStruct) { .stride = 16 }, t->alloc, &t->err));
 
-			built = built &&
-				SBFile_addStruct(files[i], &structName, myStruct, t->alloc, &t->err) &&
-				SBFile_addVariableAsStruct(files[i], &rootName, 0, U16_MAX, 0, used[i], NULL, t->alloc, &t->err) &&
-				SBFile_addVariableAsType(files[i], &posName, 0, 0, ESBType_F32x4, used[i], NULL, t->alloc, &t->err) &&
-				SBFile_addVariableAsType(files[i], &colName, 16, 0, ESBType_F32x4, used[i], NULL, t->alloc, &t->err);
-		}
+		Test_assert(t, "addCore", SBFile_addVariableAsStruct(
+			file, &core, 0, U16_MAX, 0, used, NULL, t->alloc, &t->err
+		));
 
-		Test_assert(t, "build both layouts", built);
-		Test_assert(t, "combine", SBFile_combine(&a, &b, t->alloc, &combined, &t->err));
-
-		Test_assert(t, "combined struct count", combined.structs.length == 1);
-		Test_assert(t, "combined vars count", combined.vars.length == 3);
-
-		//Every variable is matched by name, so every one of them carries both backends' use flags.
-
-		Bool merged = combined.vars.length == 3;
-
-		for(U64 i = 0; merged && i < combined.vars.length; ++i)
-			merged =
-				(combined.vars.ptr[i].flags & ESBVarFlag_IsUsedVarSPIRV) &&
-				(combined.vars.ptr[i].flags & ESBVarFlag_IsUsedVarDXIL);
-
-		Test_assert(t, "use flags merged on every variable", merged);
-
-	doneCombineStruct:
-		SBFile_free(&a,        t->alloc);
-		SBFile_free(&b,        t->alloc);
-		SBFile_free(&combined, t->alloc);
+		Test_assert(t, "addX", SBFile_addVariableAsType(file, &x, 0, 0, ESBType_F32, used, NULL, t->alloc, &t->err));
+		Test_assert(t, "addY", SBFile_addVariableAsType(file, &y, 4, 0, ESBType_F32, used, NULL, t->alloc, &t->err));
 	}
+
+	Test_assert(t, "combine", SBFile_combine(&files[0], &files[1], t->alloc, &combined, &t->err));
+	Test_assert(t, "combinedVars", combined.vars.length == 3);
+	Test_assert(t, "combinedStructs", combined.structs.length == 2);
+
+	for (U64 i = 0; i < combined.vars.length; ++i) {
+		const ESBVarFlag flags = combined.vars.ptr[i].flags;
+		Test_assert(t, "bothFlags", (flags & ESBVarFlag_IsUsedVarSPIRV) && (flags & ESBVarFlag_IsUsedVarDXIL));
+	}
+
+	for (U32 f = 0; f < 2; ++f)
+		SBFile_free(&files[f], t->alloc);
+
+	SBFile_free(&combined, t->alloc);
 }
 
 //SBFile_combine rejects files with mismatched buffer sizes.
@@ -578,6 +562,7 @@ void Test_SBFileSharedLayout(Test *t) {
 				t, "flag mismatch between inputs still merges",
 				built && SBFile_combine(&a, &b, t->alloc, &combined, &t->err)
 			);
+
 			Test_assert(t, "the proven merge carries the claim", (combined.flags & ESBSettingsFlags_HasSharedLayout) != 0);
 		}
 
@@ -614,6 +599,7 @@ void Test_SBFileSharedLayout(Test *t) {
 				t, "agreeing broken layouts still merge",
 				built && SBFile_combine(&a, &b, t->alloc, &combined, &t->err)
 			);
+
 			Test_assert(t, "the unprovable merge stays unclaimed", !(combined.flags & ESBSettingsFlags_HasSharedLayout));
 		}
 

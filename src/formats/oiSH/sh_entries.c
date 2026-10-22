@@ -78,6 +78,28 @@ const C8 *EGfxPipelineStage_getStagePrefix(EGfxPipelineStage stage) {
 	return targetPrefix;
 }
 
+Bool SHEntry_isValidWaveSize(U16 waveSize) {
+
+	for(U8 i = 0; i < ESHWaveSize_Count; ++i) {
+		const U8 code = (U8) ((waveSize >> (i << 2)) & 0xF);
+		if(code && (code < 3 || code > 8))
+			return false;
+	}
+
+	const U8 required = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Required);
+	const U8 low = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Min);
+	const U8 high = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Max);
+	const U8 preferred = SHEntry_waveSizeLanes(waveSize, ESHWaveSize_Preferred);
+
+	if(required)
+		return !low && !high && !preferred;
+
+	if(!low != !high || low > high)
+		return false;
+
+	return !preferred || (low && preferred >= low && preferred <= high);
+}
+
 Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -121,11 +143,10 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			0, entry->binaryIds.length, U8_MAX, "SHFile_addEntrypoint() binaryIds.length out of bounds"
 		));
 
-	for(U8 i = 0; i < 4; ++i)
-		if(((entry->waveSize >> (i << 2)) & 0xF) > 9)
-			retError(clean, Error_outOfBounds(
-				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
-			));
+	if(!SHEntry_isValidWaveSize(entry->waveSize))
+		retError(clean, Error_invalidParameter(
+			1, 0, "SHFile_addEntrypoint() waveSize is neither a required size nor a range (SHEntry_isValidWaveSize)"
+		));
 
 	if(entry->waveSize && entry->stage != EGfxPipelineStage_Compute)
 		retError(clean, Error_invalidOperation(
@@ -420,7 +441,7 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	ESHExtension used = ESHExtension_None;
 
 	for (U64 i = 0; i < runtime->extensions.length; ++i)
-		used = (ESHExtension)(used | runtime->extensions.ptr[i]);
+		used = (ESHExtension)(used | runtime->extensions.ptr[i].extensions);
 
 	if (used & ESHExtension_NoDxilCompile)
 		mask &= (U8)(1 << EGfxBinaryType_SPIRV);
@@ -519,8 +540,8 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	// dedupes, so the combination space stays DENSE: every combination still resolves to a binary, which is
 	// what entry->binaryIds and Compiler_registerShaderEntries require.
 
-	const ESHExtension extensionSet =
-		(ESHExtension)(runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0);
+	const SHExtensionSet extensionSet =
+		runtime->extensions.length ? runtime->extensions.ptr[extensionId] : (SHExtensionSet) { 0 };
 
 	const U16 declaredVersion =
 		runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL_MIN;
@@ -530,9 +551,10 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 		.entrypoint =
 			runtime->isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime->entry.name),
 
-		.extensions = extensionSet,
-		.shaderVersion = U16_max(declaredVersion, ESHExtension_minShaderModel(extensionSet)),
-		.stageType = runtime->isShaderAnnotation ? EGfxPipelineStage_Count : runtime->entry.stage    //Turn into lib if possible
+		.extensions = extensionSet.extensions,
+		.shaderVersion = U16_max(declaredVersion, ESHExtension_minShaderModel(extensionSet.extensions)),
+		.stageType = runtime->isShaderAnnotation ? EGfxPipelineStage_Count : runtime->entry.stage,  //Into a lib if possible
+		.extensions2 = extensionSet.extensions2
 	};
 
 	//Only combine raytracing shaders, since they don't have different configs
@@ -595,6 +617,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 
 	binaryInfo->identifier = *identifier;
 	binaryInfo->dormantExtensions = dormantExtensions;
+	binaryInfo->dormantExtensions2 = ESHExtension2_None;        //Nothing in it is reflected, so nothing is demoted
 	binaryInfo->vendorMask = runtime->vendorMask;
 	binaryInfo->hasShaderAnnotation = runtime->isShaderAnnotation;
 	binaryInfo->binaries[binaryType] = Buffer_createRefFromBuffer(buf, true);
@@ -715,19 +738,19 @@ void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *allo
 					shEntry->groupX, shEntry->groupY, shEntry->groupZ
 				);
 
-				for (U8 j = 0; j < 4; ++j) {
+				for (U8 j = 0; j < ESHWaveSize_Count; ++j) {
 
-					const C8 *formats[] = {
-						"\tWaveSize.required: %"PRIu8,
-						"\tWaveSize.min: %"PRIu8,
-						"\tWaveSize.max: %"PRIu8,
-						"\tWaveSize.recommended: %"PRIu8,
+					const C8 *formats[ESHWaveSize_Count] = {
+						"\tWaveSize.required: %"PRIu8" lanes",
+						"\tWaveSize.min: %"PRIu8" lanes",
+						"\tWaveSize.max: %"PRIu8" lanes",
+						"\tWaveSize.preferred: %"PRIu8" lanes",
 					};
 
-					U8 curr = (shEntry->waveSize >> (j << 2)) & 0xF;
+					const U8 lanes = SHEntry_waveSizeLanes(shEntry->waveSize, (ESHWaveSize) j);
 
-					if(curr)
-						Log_debugLn(alloc, formats[j], curr);
+					if(lanes)
+						Log_debugLn(alloc, formats[j], lanes);
 				}
 
 				break;
@@ -762,26 +785,9 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 	}
 
 	for (U64 i = 0; i < entry->extensions.length; ++i) {
-
-		ESHExtension exts = entry->extensions.ptr[i];
-
-		if(!exts)
-			Log_debugLn(alloc, "\t[[oxc::extension()]]");
-		
-		else {
-
-			Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
-
-			Bool prev = false;
-
-			for(U64 j = 0; j < ESHExtension_Count; ++j)
-				if((exts >> j) & 1) {
-					Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
-					prev = true;
-				}
-
-			Log_debug(alloc, ELogOptions_NewLine, ")]]");
-		}
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
+		SHExtensionSet_logNames(entry->extensions.ptr[i], alloc);
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
 	for (U64 i = 0, k = 0; i < entry->definesPerCompilation.length; ++i) {
@@ -906,7 +912,7 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, const Allocator *alloc) {
 
 	SHEntry_free(&entry->entry, alloc);
 	ListU16_free(&entry->shaderVersions, alloc);
-	ListU32_free(&entry->extensions, alloc);
+	ListSHExtensionSet_free(&entry->extensions, alloc);
 
 	ListU8_free(&entry->definesPerCompilation, alloc);
 	ListCharString_freeUnderlying(&entry->defineNameValues, alloc);

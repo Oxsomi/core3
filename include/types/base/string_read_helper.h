@@ -159,6 +159,14 @@ static inline Bool CharString_equalsStringSensitive(const CharString *s, const C
 	return CharString_equalsString(s, other, EStringCase_Sensitive);
 }
 
+static inline Bool CharString_equalsStringIgnoreEolSensitive(const CharString *s, const CharString *other) {
+	return CharString_equalsStringIgnoreEol(s, other, EStringCase_Sensitive);
+}
+
+static inline Bool CharString_equalsStringIgnoreEolInsensitive(const CharString *s, const CharString *other) {
+	return CharString_equalsStringIgnoreEol(s, other, EStringCase_Insensitive);
+}
+
 static inline Bool CharString_equalsCStringSensitive(const CharString *s, const C8 *other) {
 	return CharString_equalsCString(s, other, EStringCase_Sensitive);
 }

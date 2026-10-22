@@ -23,6 +23,7 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_allocator.h"
+#include "types/container/job_queue.h"
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
@@ -72,7 +73,27 @@ typedef enum EGraphicsDeviceFlags {
 	// samplers dynamically.
 	//Static samplers cover the ordinary case at no cost; see DescriptorLayoutInfo::immutableSamplers.
 
-	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 5
+	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 5,
+
+	//Breadcrumbs: every scope records on the GPU when it began and ended, into memory the process owns, so a lost
+	// device can still say which scopes it was in (docs/graphics_api.md, "Device loss"). Two small writes a scope.
+	//On by default on a debug device.
+
+	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6,
+
+	//Takes binaries marked [[oxc::extension("UnsafeExperimentExecution")]] (ESHExtension_UnsafeExperimentExecution),
+	// unvalidated and without checking the device supports what they declare, which no other device does.
+	//No API reports which instructions a device can execute, so the caller has to be certain of it, by an experiment
+	// tier its driver claims for instance (EGraphicsFeatures2_ExperimentTier1). Creating such a device logs a warning
+	// saying so.
+
+	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 7,
+
+	//Takes binaries marked [[oxc::extension("UnsafeExtensionExecution")]] (ESHExtension_UnsafeExtensionExecution), which
+	// use extensions OxC3 doesn't recognize and so can't check the device for. Their recognized extensions are still
+	// checked. Creating such a device logs a warning saying so.
+
+	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 8
 
 } EGraphicsDeviceFlags;
 
@@ -111,7 +132,22 @@ typedef enum EGraphicsDeviceMessage {
 	//An allocation preferring a dedicated block fell back to shared because the device already holds >= 2000
 	// memory blocks (the cap guards the API limit of 4096 allocations).
 
-	EGraphicsDeviceMessage_TooManyMemoryBlocks  = 1 << 3
+	EGraphicsDeviceMessage_TooManyMemoryBlocks  = 1 << 3,
+
+	//A pull whose destination is a stream could not write it. The bytes reached the host, so this is the
+	// stream refusing them; a pull with no callback has no other way to say so.
+
+	EGraphicsDeviceMessage_PullStreamFailed     = 1 << 4,
+
+	//A memory block went past the OS budget for its heap: it was made smaller, placed in host memory instead
+	// (Vulkan), or allocated over budget, where the OS may page memory out from under the device.
+
+	EGraphicsDeviceMessage_OverBudget           = 1 << 5,
+
+	//How many distinct messages the enum carries, which is what the per message throttle state is sized by.
+	//A count rather than another bit, so it names a size and never a message.
+
+	EGraphicsDeviceMessage_Bits                 = 6
 
 } EGraphicsDeviceMessage;
 
@@ -140,6 +176,46 @@ typedef struct TimingEntry {
 
 TList(TimingEntry);
 
+//A buffer or texture as a device loss reports it: by the device address a fault hit, or by the API object a driver
+// names (the D3D12 resource's IUnknown, the Vulkan handle). The name is this device's own copy and never reaches
+// the API, so nothing is named for a debugger unless the device is a debug one.
+
+//Live entries read address, size, block and type from the resource itself: it unregisters under the device lock before
+// anything of it is freed, so an entry found under that lock is still whole. A texture has one entry per image.
+
+typedef struct LiveResource {
+	WeakRefPtr *resource;                   //DeviceBufferRef or TextureRef
+	U64 apiObject;
+	CharString name;
+} LiveResource;
+
+TList(LiveResource);
+
+//A freed resource can't be read any more, so it keeps a copy of what a loss would name it by.
+
+typedef struct FreedResource {
+	U64 apiObject;
+	U64 address, size;                      //Device address range; 0 where the API gives none (a texture)
+	U64 blockOffset;
+	Ns freedAt;
+	CharString name;
+	U32 blockId;
+	U8 type;                                //EResourceType
+	U8 padding[3];
+} FreedResource;
+
+#define GRAPHICS_FREED_RESOURCES 32           //How many freed resources a loss can still name
+#define GRAPHICS_BREADCRUMBS 4096             //Scopes per frame in flight that breadcrumbs follow
+
+//The work a submit records outside any scope gets a breadcrumb too, under these ids: the uploads before the frame's
+// scopes and the readbacks after them.
+
+#define GRAPHICS_BREADCRUMB_UPLOADS 0xFFFFFFFEu          //U32_MAX - 1, spelled out so C++ outside oxc::c can use it
+#define GRAPHICS_BREADCRUMB_READBACKS 0xFFFFFFFDu        //U32_MAX - 2
+
+//Every frame in flight's slots, rounded up to the 64 KiB a D3D12 heap and a host pointer import are both happy with
+#define GRAPHICS_BREADCRUMB_BYTES ((MAX_FRAMES_IN_FLIGHT * GRAPHICS_BREADCRUMBS * sizeof(U32) + 0xFFFF) &~ (U64) 0xFFFF)
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -159,6 +235,12 @@ typedef struct GraphicsDevice {
 	U8 fifId;                //(submitId - 1) % FRAMES_IN_FLIGHT
 
 	AtomicI64 runtimeMessages;                              //EGraphicsDeviceMessage bits that already logged
+
+	//Throttle state for the messages that report LOAD rather than a fact, indexed by the message's bit
+	//position: when that message last logged, and how many occurrences have been folded in since.
+
+	AtomicI64 logLast[EGraphicsDeviceMessage_Bits];
+	AtomicI64 logFolded[EGraphicsDeviceMessage_Bits];
 
 	Ns lastSubmit;
 
@@ -186,6 +268,48 @@ typedef struct GraphicsDevice {
 	//Guarded by this device's lock, never nested with an RTAS lock in either direction.
 
 	ListRefPtr liveTlases;
+
+	//Every live buffer and texture, and the last GRAPHICS_FREED_RESOURCES freed ones since a fault in freed memory
+	//is exactly what a loss should name. Same contract as liveTlases: guarded by lock, no references held.
+
+	ListLiveResource liveResources;
+	FreedResource freedResources[GRAPHICS_FREED_RESOURCES];
+	U32 freedResourceNext;
+	U32 lossPadding;
+
+	//Non zero once a loss was reported, which happens once per device. Set under lock, but read without it
+	// (GraphicsDeviceRef_isLost, the submit's early refusal), so it is only ever accessed atomically.
+
+	AtomicI64 lossReported;
+
+	//Breadcrumbs (EGraphicsDeviceFlags_Breadcrumbs): GRAPHICS_BREADCRUMBS slots per frame in flight in memory the
+	// process owns, so they outlive a lost device. A scope's slot reads 1 once the GPU began it and 2 once it ended.
+	//breadcrumbScopes holds each slot's scope id and breadcrumbSubmit the submit that recorded the frame.
+	//NULL where there are none: not asked for, or the backend lacks what they need.
+	//Not volatile: the CPU only touches them across a fence wait or a lost device's failed call, which no compiler
+	// moves an access over, and what the GPU wrote being visible is the memory type's job.
+
+	U32 *breadcrumbs;
+	ListU32 breadcrumbScopes[MAX_FRAMES_IN_FLIGHT];
+	U64 breadcrumbSubmit[MAX_FRAMES_IN_FLIGHT];
+
+	//A frame reused before all its scopes ended, which only a lost device does (a driver may report a lost device's
+	// fence as signalled, so the loss is only seen a few submits later): its scope ids and slots as they were, since
+	// that submit is the one the device was lost in. Empty while every reused frame had finished.
+
+	ListU32 breadcrumbUnfinishedScopes, breadcrumbUnfinishedSlots;
+	U64 breadcrumbUnfinishedSubmit;
+
+	//A bit per frame in flight whose submit failed without a loss after its breadcrumbs started.
+	//Part of such a frame can have run (the part before a flush) while the rest never reached the GPU,
+	// so its scopes can read began and never ended without saying anything about a loss.
+
+	U64 breadcrumbFailedFrames;
+
+	//GPU memory the allocator doesn't see: descriptor heaps and pipeline code (GraphicsDeviceRef_getMemoryStats).
+	//pipelineBytes is code the driver reported; pipelineEstimateBytes is code only its IR size stands in for.
+
+	AtomicI64 descriptorHeapBytes, pipelineBytes;
 
 	SpinLock lock;                                          //Lock for submission and marking resources dirty
 
@@ -248,7 +372,42 @@ typedef struct GraphicsDevice {
 
 	DescriptorHeapRef *defaultDescriptorHeaps;
 
+	//BORROWED for the length of one submit, never owned and never outliving that call, which is why it is
+	//passed to the submit rather than handed to the device: the upload work begins and ends inside it.
+	//NULL means every source read runs on the calling thread, which is what every existing submit does.
+	//The submit runs jobs on it as execution context 0, so it has to be handed over by the thread that
+	// created it, the same rule JobQueue_wait carries.
+	//Only the reads the submit itself pushed are ever run here, so unrelated jobs on the queue are left to
+	// its workers.
+
+	JobQueue *uploadJobQueue;
+
+	AtomicI64 descriptorHeapCount, pipelineCount;
+
+	//The staging buffer shrinks once uploads stay small: the most a frame used since the last check, and how many
+	// frames that has been (GraphicsDeviceRef_handleNextFrame)
+
+	U32 stagingPeakKiB, stagingQuietFrames;
+
+	//The readback buffer shrinks the same way once pulls stay small, never below the most reserveReadback asked for a
+	// frame
+
+	U32 stagingReadbackPeakKiB, stagingReadbackQuietFrames;
+	U64 stagingReadbackFloor;
+
+	AtomicI64 pipelineEstimateBytes, pipelineEstimateCount;
+
+	//The driver's code size of each pipeline built so far or loaded with a pipeline cache, as sorted (key, bytes)
+	// pairs, so a pipeline the cache already holds still reports a known size. Guarded by lock.
+
+	ListU64 pipelineSizes;
+
+	AtomicI64 pipelineKnownIRBytes;         //The IR size of the pipelines in pipelineBytes, to compare the estimate with
+	U8 padding[16];
+
 } GraphicsDevice;
+
+static_assert(sizeof(GraphicsDevice) % 64 == 0, "GraphicsDevice must be a 64 byte multiple, its backend ext follows it");
 
 typedef RefPtr GraphicsDeviceRef;
 
@@ -296,6 +455,8 @@ Bool GraphicsDevice_defaultBindlessLayout(
 // in which case there is no default table or pipeline layout and every pipeline has to bring its own.
 //The device copies it, so the caller keeps ownership and can free it right after.
 //Its flags are taken as given, so EDescriptorLayoutFlags_AllowBindlessOnArrays has to be set to allocate bindlessly.
+//A sampler it bakes is given by value (DescriptorLayoutInfo_addStaticSampler), since no sampler exists before the
+// device does; a layout naming sampler refs is refused.
 //reservedDescriptors is optional extra heap capacity added ON TOP of what the bindless set consumes, so
 // bindful descriptor tables can be created from the device's own heap (Device defaultHeap) and live beside
 // the bindless set without a second heap and the heap switch a second heap costs.
@@ -315,14 +476,27 @@ Bool GraphicsDeviceRef_create(
 );
 
 //Checks whether a shader binary can run on this device at all.
-//Besides features, data types, shader model and vendor, this also refuses a binary whose bindless registers don't
-// match the device's bindless layout, since the descriptor handles it indexes with would resolve to the wrong arrays.
-//Only binaries the oiSH marks as needing bindless are held to that, so a bindful shader with a pipeline layout of
-// its own is unaffected; the mismatch itself is logged with the register and what the layout has instead.
+//Its shader model and vendor are checked, and the extensions it uses against the device's features and data types.
+//A dormant extension, declared but unused, is not held against the device.
+//The unsafe markers and experiment tiers count as declared, dormant or not.
+//An unsafe marker needs the device flag allowing it, and an unsafe experiment skips the feature and data type checks.
+//A declared tier needs the driver to claim it, an unsafe experiment's included.
+//A sampler array needs the device's bindless layout to have _samplers[] (EGraphicsDeviceFlags_EnableDynamicSamplers).
+//A binary the oiSH marks as needing bindless has to match the device's bindless layout, since the descriptor handles
+// it indexes with would resolve to the wrong arrays; the mismatch is logged with the register and what the layout has
+// instead.
+//An entry's [WaveSize] has to name a size the device runs (GraphicsDeviceCapabilities_pickWaveSize).
 
 Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDeviceRef *device, const SHBinaryInfo *info, const SHEntry *entry, Error *e_rr
 );
+
+//The lanes a compute entry with this SHEntry::waveSize runs at on a device with these capabilities: the required size,
+// else the preferred one, else the size of the range nearest defaultLanes.
+//0 when the entry names no size, or none it names is in the device's range (waveSizeMin to waveSizeMax).
+//D3D12 leaves a ranged entry's choice to its driver, so only Vulkan takes the answer; both refuse an entry it is 0 for.
+
+U8 GraphicsDeviceCapabilities_pickWaveSize(const GraphicsDeviceCapabilities *caps, U16 waveSize, U8 defaultLanes);
 
 //Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
@@ -339,9 +513,46 @@ TListNamed(SwapchainRef*, ListSwapchainRef);
 //It returns U64_MAX on error (e.g. if nullptr)
 U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
 
+//The allocator's state as JSON, for finding where memory goes: heap usage, a summary per category, every memory block
+// (size, bytes used, free ranges and the largest of them, dedicated or not, CPU side or not) and every registered
+// buffer and texture with the block and offset it occupies. The caller frees json.
+//The summary also has what the allocator never sees: descriptor heaps (exact on D3D12, from the descriptor heap
+// extension's sizes on Vulkan, 0 bytes otherwise) and pipeline code: "pipeline" where the driver reported it (a D3D12
+// PSO's cached blob, what a Vulkan pipeline added to a pipeline cache), "pipelineEstimate" where only the DXIL or
+// SPIR-V handed to the driver stands in for it (always for a D3D12 ray tracing state object).
+
+Bool GraphicsDeviceRef_getMemoryStats(GraphicsDeviceRef *deviceRef, const Allocator *alloc, CharString *json, Error *e_rr);
+
+//Pipeline cache: what the driver compiled, kept so a later run can skip compiling it again.
+//OxC3 never reads or writes a file for it: the application stores the blob wherever suits it and hands it back.
+//get returns everything this device compiled or was given so far, as one blob the caller frees.
+//set merges such a blob into the device, best before pipelines are created; a blob from another API, device or
+// driver version is ignored (true, with a debug message), since the driver would only refuse it.
+//Without one the device still measures each pipeline it builds, so its code size counts as known in the memory stats.
+
+Bool GraphicsDeviceRef_getPipelineCache(GraphicsDeviceRef *deviceRef, const Allocator *alloc, Buffer *data, Error *e_rr);
+Bool GraphicsDeviceRef_setPipelineCache(GraphicsDeviceRef *deviceRef, Buffer data, Error *e_rr);
+
 //Submit commands to device.
 //Per dispatch data a shader needs travels as a push constant, which the shader declares and the pipeline
 //layout validates, rather than through a block of untyped bytes that every shader shared.
+//The same submit with a JobQueue LENT to it, so source reads worth splitting are fanned across it. The queue
+//is borrowed for exactly this call and cleared on the way out, failure included, so it never outlives it.
+//Lent rather than owned because the work begins and ends inside the call: an engine hands over the same queue
+// it already runs instead of core3 keeping one of its own and competing with it for the same cores.
+//A stream is only ever read concurrently where it DECLARES EStreamType_ConcurrentRead; one that does not is
+// serialized against itself and still runs beside other work on the queue.
+
+Bool GraphicsDeviceRef_submitCommandsJob(
+	GraphicsDeviceRef *deviceRef,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	F32 deltaTime,
+	F32 time,
+	JobQueue *uploadQueue,
+	Error *e_rr
+);
+
 Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDeviceRef *deviceRef,
@@ -358,6 +569,21 @@ Bool GraphicsDeviceRef_submitCommands(
 
 //Wait on previously submitted commands
 Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
+//Device loss diagnostics (docs/graphics_api.md, "Device loss").
+
+//The live buffer or texture whose device address range holds address.
+//Textures have a range only where the API reports one (a Vulkan image with VK_EXT_device_address_binding_report).
+//The result is a WeakRefPtr: no reference is taken, and it was live only while the registry lock was held.
+//Another thread can free it right after, so it may only be dereferenced or RefPtr_inc'd by a caller that already
+// keeps that resource alive; comparing it against references the caller owns is always safe.
+
+Bool GraphicsDeviceRef_findResourceByAddress(GraphicsDeviceRef *deviceRef, U64 address, WeakRefPtr **resource, U64 *offset);
+
+//Whether a submit or wait found the device lost. Everything after that fails, so an app ends (or recreates the device)
+// instead of retrying every frame; its resources can still be released.
+
+Bool GraphicsDeviceRef_isLost(GraphicsDeviceRef *deviceRef);
 
 //Copies the GPU timings of the most recently completed frame into a caller-owned list, one per manual region,
 // insert or timed scope, keyed by id and name.
@@ -385,10 +611,22 @@ Bool GraphicsDevice_resolveTimings(
 
 Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
 
+//The twin for a message that reports current LOAD rather than a fact about the device. logOnce is right where
+//the first line already says everything and the condition will never change; it is wrong where the useful
+// signal is how OFTEN, since a run that trips the condition every frame then reports it once and looks fine.
+//
+//Returns 0 to suppress, otherwise how many occurrences have happened since it last reported, this one
+//included, so the line can carry the count rather than implying it happened once.
+//Two threads crossing the interval together can report twice or fold an occurrence into the next line, which
+// is a tolerance a log can afford and a lock here would not be worth.
+
+U64 GraphicsDevice_logThrottled(GraphicsDevice *device, EGraphicsDeviceMessage message, Ns interval);
+
 //Create the pullRegion readback buffers ahead of time, sized for sizePerFrame bytes of pulls per frame.
 //The readback memory is otherwise created at the first pull, which on D3D12 can bring in a whole new memory
 // block mid frame; reserving during load time moves that hitch to a predictable place.
-//Zero reserves the minimum, the buffers only ever grow and underestimating just re-grows at the next pull.
+//Zero reserves the minimum. The buffers grow for bigger pulls and shrink back once pulls stay small, but never below
+// the most reserved for a frame; underestimating just re-grows at the next pull.
 Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePerFrame, Error *e_rr);
 
 //Private

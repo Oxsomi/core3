@@ -622,6 +622,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				gotoIfError3(cleanCa, CAFile_writeJson(
 					&file, (args->flags & EOperationFlags_Verbose) != 0, &w, alloc, e_rr
 				));
+
 				gotoIfError3(cleanCa, CLI_showJson(args, tmp, start, length, e_rr));
 				goto cleanCa;
 			}
@@ -649,6 +650,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 						Log_errorLnx(
 							"Index out of bounds, max is %"PRIu64".", CAFile_fileObjectCount(&file, CAHandle_Root, false)
 						);
+
 						goto cleanCa;
 					}
 				}
@@ -1107,6 +1109,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 									Log_errorLnx(
 										"%s disassembly failed at index %"PRIu64, EGfxBinaryType_names[binaryType], entryI
 									);
+
 									goto cleanSh;
 								}
 

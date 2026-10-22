@@ -171,6 +171,7 @@ void Test_shaderCompilerReflection(Test *t) {
 				sb && sb->bufferSize == 20 && sb->vars.length == 3 && sb->vars.ptr[2].offset == 4 &&
 				(sb->flags & ESBSettingsFlags_HasSharedLayout)
 			);
+
 			CharString_free(&label, alloc);
 		}
 

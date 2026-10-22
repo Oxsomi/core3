@@ -128,6 +128,17 @@ clean:
 	return s_uccess;
 }
 
+U64 DxObject_identity(IUnknown *object) {
+
+	IUnknown *identity = NULL;
+
+	if(!object || FAILED(object->lpVtbl->QueryInterface(object, &IID_IUnknown, (void**) &identity)))
+		return 0;
+
+	identity->lpVtbl->Release(identity);
+	return (U64) (size_t) identity;
+}
+
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data) {
 	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
 }

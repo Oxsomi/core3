@@ -747,6 +747,7 @@ Bool CharString_formatVariadic(const Allocator *alloc, CharString *result, Error
 	va_copy(arg2, args);
 
 	const int len = calcFormatLen(format, arg2);
+	va_end(arg2);
 
 	if(len < 0)
 		retError(clean, Error_stderr(0, "CharString_formatVariadic() len can't be <0"));
@@ -779,11 +780,59 @@ Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, 
 
 	va_list arg1;
 	va_start(arg1, format);
-	gotoIfError3(clean, CharString_formatVariadic(alloc, result, e_rr, format, arg1));
+	const Bool formatted = CharString_formatVariadic(alloc, result, e_rr, format, arg1);
 	va_end(arg1);
+
+	gotoIfError3(clean, formatted);
 
 clean:
 	return s_uccess;
+}
+
+Bool CharString_appendFormatVariadic(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, va_list args) {
+
+	Bool s_uccess = true;
+
+	if(!s || !format)
+		retError(clean, Error_nullPointer(!s ? 1 : 3, "CharString_appendFormatVariadic()::s and format are required"));
+
+	const U64 oldLen = CharString_length(*s);
+
+	if(CharString_isRef(*s) && oldLen)
+		retError(clean, Error_invalidParameter(1, 0, "CharString_appendFormatVariadic()::s has to be managed memory"));
+
+	va_list lenArgs;
+	va_copy(lenArgs, args);
+	const int len = calcFormatLen(format, lenArgs);
+	va_end(lenArgs);
+
+	if(len < 0)
+		retError(clean, Error_stderr(0, "CharString_appendFormatVariadic() len can't be <0"));
+
+	if(!len)
+		goto clean;
+
+	//The resize keeps a byte past the new length for the terminator vsnprintf writes.
+
+	gotoIfError3(clean, CharString_resize(s, oldLen + (U64) len, ' ', alloc, e_rr));
+
+	if(vsnprintf(s->ptrNonConst + oldLen, (size_t) len + 1, format, args) < 0) {
+		CharString_resize(s, oldLen, ' ', alloc, NULL);        //Shrinking only moves the terminator back
+		retError(clean, Error_stderr(0, "CharString_appendFormatVariadic() vsnprintf failed"));
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool CharString_appendFormat(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, ...) {
+
+	va_list args;
+	va_start(args, format);
+	const Bool appended = CharString_appendFormatVariadic(alloc, s, e_rr, format, args);
+	va_end(args);
+
+	return appended;
 }
 
 Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharString *result, Error *e_rr) {

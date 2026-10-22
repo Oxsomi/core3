@@ -160,6 +160,12 @@ Bool ListCharString_concatString(const ListCharStringConcat *concat, const CharS
 Bool CharString_formatVariadic(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, va_list args);
 Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, ...);
 
+//Formats onto the end of s rather than into a new string, so building text up takes no temporary to free.
+//s keeps its contents when this fails, and has to be managed memory unless it is empty, as for CharString_appendString.
+
+Bool CharString_appendFormatVariadic(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, va_list args);
+Bool CharString_appendFormat(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, ...);
+
 //Parsing and stringifying TypeId (as long as it's a basic OxC3 base type)
 
 Bool CharString_createFromETypeId(TypeId type, const Allocator *alloc, CharString *result, Error *e_rr);

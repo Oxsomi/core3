@@ -30,12 +30,14 @@
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/device_internal.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
@@ -47,7 +49,7 @@
 #include "types/base/constants.h"
 #include "types/container/string_unicode.h"
 
-#if _ARCH == ARCH_X86_64
+#ifdef _HAS_NV_API
 	#include <nvapi.h>
 #endif
 
@@ -104,7 +106,7 @@ void onDebugReport(
 	}
 }
 
-#if _ARCH == ARCH_X86_64
+#ifdef _HAS_NV_API
 
 	void onDebugReportNv(
 		void *pUserData,
@@ -201,14 +203,29 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ID3DBlob *errBlob = NULL, *rootSigBlob = NULL;
 
+	//Device creation is a long run of calls into the driver, and one that takes the process down does it in a
+	//way no handler in it can report. Verbose names each step as it is reached, so a log that simply stops
+	// says which call stopped it.
+	//The Windows sink writes through WriteConsole/WriteFile rather than stdio, so each line is out before the
+	// call after it runs.
+
+	#define dxVerbose(...) do {                                     \
+		if(device->flags & EGraphicsDeviceFlags_IsVerbose)          \
+			Log_debugLnx(__VA_ARGS__);                              \
+	} while(false)
+
 	//Create device
 
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
+
+	dxVerbose("D3D12: enumerating the adapter by LUID");
 
 	gotoIfError3(clean, dxCheck(instanceExt->factory->lpVtbl->EnumAdapterByLuid(
 		instanceExt->factory, *(const LUID*)&physicalDevice->luid,
 		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
 	), e_rr));
+
+	dxVerbose("D3D12: creating the device");
 
 	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_IndependentDevices)
 	{
@@ -227,6 +244,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		),
 		e_rr
 	));
+
+	dxVerbose("D3D12: querying the device configuration");
 
 	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
 		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
@@ -247,18 +266,33 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	#endif
 
+	dxVerbose("D3D12: probing the AMD shader analyzer (isAmd %s)", isAmd ? "true" : "false");
+
 	if(isAmd && DxAmdShaderAnalyzer_init((ID3D12Device*) deviceExt->device, &deviceExt->amdAnalyzer))
 		device->info.capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
 	(void) isNv;
 
-	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
+	//The debug device only exists once the layer is actually on, which is settled at instance creation and can
+	//be refused there. Asking for it is how this finds out, so a refusal leaves the device without debug
+	// features rather than leaving the caller without a device, and clears the flag so nothing below assumes
+	// them. Everything downstream already tests debugDevice for NULL or reads this flag.
 
-		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
+	dxVerbose("D3D12: querying the debug device");
+
+	if(
+		(device->flags & EGraphicsDeviceFlags_IsDebug) &&
+		FAILED(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
 			&IID_ID3D12DebugDevice, (void**) &deviceExt->debugDevice
-		), e_rr));
+		))
+	) {
+		Log_warnLnx("D3D12: the debug layer is not enabled, so this device carries no debug features");
+		device->flags &=~ EGraphicsDeviceFlags_IsDebug;
+	}
+
+	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
 		//Get infoQueue0 to disable some bogus validation messages
 
@@ -326,7 +360,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			), e_rr));
 		}
 
-		#if _ARCH == ARCH_X86_64
+		#ifdef _HAS_NV_API
 
 			//Nv specific initialization
 
@@ -356,6 +390,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 		#endif
 	}
+
+	dxVerbose("D3D12: creating the command queues");
 
 	//Get queues
 
@@ -407,11 +443,20 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	U64 threads = Platform_getThreads();
 	gotoIfError3(clean, ListDxCommandAllocator_resize(&deviceExt->commandPools, 3 * threads * 3, alloc, e_rr));
 
+	dxVerbose("D3D12: creating the fence");
+
 	//Create fence
 
 	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
 		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->commitSemaphore
 	), e_rr));
+
+	//The pipeline library every PSO is stored in; without one (a driver without libraries) PSOs are just uncached
+
+	if(FAILED(deviceExt->device->lpVtbl->CreatePipelineLibrary(
+		deviceExt->device, NULL, 0, &IID_ID3D12PipelineLibrary, (void**) &deviceExt->pipelineLibrary
+	)))
+		deviceExt->pipelineLibrary = NULL;
 
 	//Timestamp query heaps and readback buffers, one per frame in flight, and the period from the graphics queue.
 	//D3D12 supports timestamps on the direct queue on every device, so this is unconditional.
@@ -451,6 +496,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			deviceExt->timestampCapacity[i] = GRAPHICS_TIMESTAMP_QUERIES;
 		}
 	}
+
+	dxVerbose("D3D12: creating the depth stencil views");
 
 	//Create DSVs
 
@@ -518,6 +565,57 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		), e_rr));
 	}
 
+	//Breadcrumbs, in memory the process owns so they outlive a lost device: WriteBufferImmediate into a heap opened
+	// from host memory, which ID3D12Device3 always offers. Anything missing only costs a loss its breadcrumbs, so a
+	// failure warns rather than failing the device.
+
+	const Bool wantsBreadcrumbs = device->flags & (EGraphicsDeviceFlags_Breadcrumbs | EGraphicsDeviceFlags_IsDebug);
+
+	if(!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate)) {
+		if(device->flags & EGraphicsDeviceFlags_Breadcrumbs)
+			Log_warnLnx("D3D12: breadcrumbs need WriteBufferImmediate on the direct queue, which is missing");
+	}
+
+	else if(wantsBreadcrumbs) {
+
+		const U64 size = GRAPHICS_BREADCRUMB_BYTES;
+
+		ID3D12Device3 *device3 = NULL;
+		deviceExt->breadcrumbMemory = Platform_allocPages(size);
+
+		const D3D12_RESOURCE_DESC1 desc = (D3D12_RESOURCE_DESC1) {
+			.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+			.Width = size,
+			.Height = 1,
+			.DepthOrArraySize = 1,
+			.MipLevels = 1,
+			.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 },
+			.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+			.Flags = D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER
+		};
+
+		if(
+			deviceExt->breadcrumbMemory &&
+			SUCCEEDED(deviceExt->device->lpVtbl->QueryInterface(deviceExt->device, &IID_ID3D12Device3, (void**) &device3)) &&
+			SUCCEEDED(device3->lpVtbl->OpenExistingHeapFromAddress(
+				device3, deviceExt->breadcrumbMemory, &IID_ID3D12Heap, (void**) &deviceExt->breadcrumbHeap
+			)) &&
+			SUCCEEDED(deviceExt->device->lpVtbl->CreatePlacedResource2(
+				deviceExt->device, deviceExt->breadcrumbHeap, 0, &desc, D3D12_BARRIER_LAYOUT_UNDEFINED, NULL, 0, NULL,
+				&IID_ID3D12Resource, (void**) &deviceExt->breadcrumbBuffer
+			))
+		) {
+			ID3D12Resource *buf = deviceExt->breadcrumbBuffer;
+			deviceExt->breadcrumbAddress = buf->lpVtbl->GetGPUVirtualAddress(buf);
+			device->breadcrumbs = (U32*) deviceExt->breadcrumbMemory;
+		}
+
+		else Log_warnLnx("D3D12: breadcrumbs couldn't be set up, a lost device won't say which scope it was in");
+
+		if(device3)
+			device3->lpVtbl->Release(device3);
+	}
+
 clean:
 
 	if(errBlob)
@@ -529,23 +627,39 @@ clean:
 	if(!s_uccess)
 		RefPtr_dec(deviceRef);
 
+	#undef dxVerbose
+
 	return s_uccess;
 }
 
 U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
+	return DxGraphicsDevice_getMemoryUsage(device, isDeviceLocal, NULL);
+}
+
+U64 DxGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, U64 *budget) {
 
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	if(budget)
+		*budget = U64_MAX;
+
+	//A UMA adapter reports all of its memory in the local segment group, so its shared memory is asked there
+
+	const Bool local = isDeviceLocal || device->info.type != EGraphicsDeviceType_Dedicated;
 
 	DXGI_QUERY_VIDEO_MEMORY_INFO vidMem = (DXGI_QUERY_VIDEO_MEMORY_INFO) { 0 };
 	HRESULT hr = deviceExt->adapter4->lpVtbl->QueryVideoMemoryInfo(
 		deviceExt->adapter4,
 		0,
-		isDeviceLocal ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+		local ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
 		&vidMem
 	);
 
 	if(FAILED(hr))
 		return U64_MAX;
+
+	if(budget)
+		*budget = vidMem.Budget;
 
 	return vidMem.CurrentUsage;
 }
@@ -600,8 +714,23 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(deviceExt->queues[i].queue)
 				deviceExt->queues[i].queue->lpVtbl->Release(deviceExt->queues[i].queue);
 
+		if(deviceExt->breadcrumbBuffer)
+			deviceExt->breadcrumbBuffer->lpVtbl->Release(deviceExt->breadcrumbBuffer);
+
+		if(deviceExt->breadcrumbHeap)
+			deviceExt->breadcrumbHeap->lpVtbl->Release(deviceExt->breadcrumbHeap);
+
+		if(deviceExt->pipelineLibrary)
+			deviceExt->pipelineLibrary->lpVtbl->Release(deviceExt->pipelineLibrary);
+
 		deviceExt->device->lpVtbl->Release(deviceExt->device);
 	}
+
+	Buffer_free(&deviceExt->pipelineLibraryData, alloc);
+
+	//The memory itself is the process's, freed once nothing on the device can still name it.
+
+	Platform_freePages(deviceExt->breadcrumbMemory, GRAPHICS_BREADCRUMB_BYTES);
 
 	if(deviceExt->adapter4)
 		deviceExt->adapter4->lpVtbl->Release(deviceExt->adapter4);
@@ -652,22 +781,40 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 //Executing commands
 
-Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+//Waits ONE fence value rather than everything submitted, so a caller that only needs its own frame back does
+//not stall the rest. A value already passed, 0 included, returns without waiting.
+
+Bool DxGraphicsDevice_waitFence(GraphicsDeviceRef *deviceRef, U64 fenceId, Error *e_rr) {
 
 	Bool s_uccess = true;
+	HANDLE eventHandle = NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	U64 completedValue = deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore);
+	//Creation failed before there was anything to wait on
 
-	if (completedValue >= deviceExt->fenceId)
-		return s_uccess;
+	if(!deviceExt->commitSemaphore)
+		goto clean;
 
-	const HANDLE eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
+	//A removed device reports every fence as passed (UINT64_MAX), and its event fires too, so that value is checked
+	// against the removal reason rather than taken as done: otherwise every wait after a loss succeeds and frames
+	// run empty without an error.
+
+	const U64 completed = deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore);
+
+	if(completed == U64_MAX) {
+		gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device), e_rr));
+		goto clean;
+	}
+
+	if(completed >= fenceId)
+		goto clean;
+
+	eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 	gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
+		deviceExt->commitSemaphore, fenceId, eventHandle
 	), e_rr));
 
 	//An INFINITE wait would inherit a wedged submit as a silent forever-hang, and a hard deadline would
@@ -678,11 +825,18 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 
 		const DWORD waitRes = WaitForSingleObject(eventHandle, 1000);
 
-		if(waitRes == WAIT_OBJECT_0)
+		if(waitRes == WAIT_OBJECT_0) {
+
+			if(deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore) == U64_MAX)
+				gotoIfError3(clean, dxCheck(
+					deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device), e_rr
+				));
+
 			break;
+		}
 
 		if(waitRes != WAIT_TIMEOUT)
-			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_wait() event wait failed"));
+			retError(clean, Error_invalidState(0, "DxGraphicsDevice_waitFence() event wait failed"));
 
 		gotoIfError3(clean, dxCheck(
 			deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device), e_rr
@@ -692,13 +846,150 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 
 		if(!(waited % 5))
 			Log_performanceLnx(
-				"GraphicsDeviceRef_wait() still waiting on the commit fence after %"PRIu64"s, "
+				"DxGraphicsDevice_waitFence() still waiting on the commit fence after %"PRIu64"s, "
 				"the device may be wedged", waited
 			);
 	}
 
 clean:
-	CloseHandle(eventHandle);
+
+	if(eventHandle)
+		CloseHandle(eventHandle);
+
+	return s_uccess;
+}
+
+//Names an allocation DRED reports through the device's resource registry, by its object rather than a name, since
+// objects are only named on a debug device. What the registry cannot name is reported by DRED's own name and type.
+
+static void DxGraphicsDevice_logDredNodes(
+	GraphicsDevice *device, const D3D12_DRED_ALLOCATION_NODE1 *node, const C8 *what, const Allocator *alloc
+) {
+
+	for(U32 i = 0; node && i < 64; node = node->pNext, ++i) {
+
+		CharString str = CharString_createNull();
+
+		if(GraphicsDevice_describeResource(device, 0, (U64) (size_t) node->pObject, &str, alloc, NULL))
+			Log_errorLnx("\t%s: %.*s", what, (int) CharString_length(str), str.ptr);
+
+		else Log_errorLnx(
+			"\t%s: %s (DRED allocation type %" PRIu32 ")",
+			what, node->ObjectNameA ? node->ObjectNameA : "an object this device didn't register",
+			(U32) node->AllocationType
+		);
+
+		CharString_free(&str, alloc);
+	}
+}
+
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_reportLoss)(GraphicsDeviceRef *deviceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
+	if(!deviceExt || !deviceExt->device)
+		return false;
+
+	const HRESULT reason = deviceExt->device->lpVtbl->GetDeviceRemovedReason(deviceExt->device);
+
+	if(SUCCEEDED(reason))
+		return false;
+
+	Log_errorLnx("D3D12: device \"%s\" was removed, reason 0x%08" PRIX32, device->info.name, (U32) reason);
+
+	ID3D12DeviceRemovedExtendedData2 *dred = NULL;
+
+	if(FAILED(deviceExt->device->lpVtbl->QueryInterface(
+		deviceExt->device, &IID_ID3D12DeviceRemovedExtendedData2, (void**) &dred
+	))) {
+		Log_errorLnx("\tDRED isn't available, so nothing is known about what it faulted on");
+		return true;
+	}
+
+	//HUNG is a timeout with nothing faulting, which is the case a budget prevents; a fault is a bug to find.
+
+	switch(dred->lpVtbl->GetDeviceState(dred)) {
+
+		case D3D12_DRED_DEVICE_STATE_HUNG:
+			Log_errorLnx("\tstate: hung (a timeout, nothing faulted)");
+			break;
+
+		case D3D12_DRED_DEVICE_STATE_FAULT:
+			Log_errorLnx("\tstate: fault");
+			break;
+
+		case D3D12_DRED_DEVICE_STATE_PAGEFAULT:
+			Log_errorLnx("\tstate: page fault");
+			break;
+
+		default:
+			Log_errorLnx("\tstate: unknown");
+			break;
+	}
+
+	D3D12_DRED_PAGE_FAULT_OUTPUT2 pageFault = (D3D12_DRED_PAGE_FAULT_OUTPUT2) { 0 };
+
+	if(SUCCEEDED(dred->lpVtbl->GetPageFaultAllocationOutput2(dred, &pageFault)) && pageFault.PageFaultVA) {
+
+		CharString str = CharString_createNull();
+
+		if(GraphicsDevice_describeResource(device, pageFault.PageFaultVA, 0, &str, alloc, NULL))
+			Log_errorLnx("\tpage fault at 0x%" PRIx64 ", in %.*s",
+				(U64) pageFault.PageFaultVA, (int) CharString_length(str), str.ptr
+			);
+
+		else Log_errorLnx("\tpage fault at 0x%" PRIx64, (U64) pageFault.PageFaultVA);
+
+		CharString_free(&str, alloc);
+
+		DxGraphicsDevice_logDredNodes(device, pageFault.pHeadExistingAllocationNode, "allocation there", alloc);
+		DxGraphicsDevice_logDredNodes(device, pageFault.pHeadRecentFreedAllocationNode, "freed allocation there", alloc);
+	}
+
+	else Log_errorLnx("\tno page fault reported");
+
+	dred->lpVtbl->Release(dred);
+	return true;
+}
+
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Dx);
+	return DxGraphicsDevice_waitFence(deviceRef, deviceExt->fenceId, e_rr);
+}
+
+//The slot's value is the one that submit signalled or, once a later submit reused the slot, that one's, which
+// completes after it; waiting on either covers the submit asked for.
+
+Bool DxGraphicsDevice_waitSubmit(GraphicsDeviceRef *deviceRef, U64 submitId, Error *e_rr) {
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	if(!submitId || device->completedSubmitId >= submitId)
+		return true;
+
+	return DxGraphicsDevice_waitFence(
+		deviceRef, deviceExt->slotFenceValue[(submitId - 1) % device->framesInFlight], e_rr
+	);
+}
+
+//Queues the next commit fence value behind everything submitted so far.
+//fenceId only advances once the queue accepted it, so no wait is ever left on a value nothing will signal.
+
+static Bool DxGraphicsDevice_signalNext(DxGraphicsDevice *deviceExt, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
+
+	gotoIfError3(clean, dxCheck(
+		queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId + 1), e_rr
+	));
+
+	++deviceExt->fenceId;
+
+clean:
 	return s_uccess;
 }
 
@@ -744,15 +1035,17 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	//So the sampler offset has to scale by the sampler heap's stride.
 	//Using the resource heap's happens to work only where the two coincide,
 	// and lands somewhere else entirely on hardware where they don't.
-	//Without EnableDynamicSamplers the device has NO sampler heap and the root signature no sampler table,
-	// so both lists carry exactly what exists: the sampler table at root param 0 when present (it is the
-	// first binding of the default layout), resources at the next.
+	//The root signature only declares a sampler table for a sampler binding that took real descriptors, which
+	// is what anySampler means; a baked sampler is in the signature itself and takes none, while still sizing
+	// a sampler heap. So the lists are keyed on the LAYOUT rather than on that heap, and carry exactly what
+	// exists: the sampler table at root param 0 when present (it is the first binding of the default layout),
+	// resources at the next.
 
 	ID3D12DescriptorHeap *descriptorHeaps[2];
 	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2];
 	U32 descriptorCount = 0;
 
-	if (heap->samplerHeap.heap) {
+	if (DescriptorLayoutRef_ptr(device->defaultDescLayout)->anySampler && heap->samplerHeap.heap) {
 
 		descriptorHeaps[descriptorCount] = heap->samplerHeap.heap;
 
@@ -776,8 +1069,9 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
 
 	for(U32 i = 0; i < descriptorCount; ++i) {
-		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+		const U32 rootParam = defaultLayoutExt->rootParamBindings + i;
+		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, rootParam, descriptorTable[i]);
+		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, rootParam, descriptorTable[i]);
 	}
 
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
@@ -868,7 +1162,7 @@ static Bool DxGraphicsDevice_reserveDispatchRaysIndirect(GraphicsDeviceRef *devi
 	if(!slots || (curArgs && DeviceBufferRef_ptr(curArgs)->resource.size >= (U64) slots * stride))
 		return true;
 
-	const Bool wbi = !!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate);
+	const Bool wbi = !!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate);
 
 	U32 newCap = curArgs ? (U32) (DeviceBufferRef_ptr(curArgs)->resource.size / stride) : 0;
 
@@ -936,7 +1230,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	HANDLE eventHandle = NULL;
 	CharString temp = CharString_createNull();
 	ListU16 temp16 = (ListU16) { 0 };
 
@@ -944,26 +1237,15 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//recordingAllocator tracks which allocator owns a list that is mid recording, so a poisoned list can be dropped.
 
 	DxCommandAllocator *recordingAllocator = NULL;
-	Bool executed = false;
+	Bool signalled = false;
 
 	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
-	//Wait for previous frame semaphore
+	//The previous submit at this frame in flight has to be done before its allocator and per frame buffers are reused.
+	//Its own value rather than one derived from fenceId, since a flush takes values of its own.
+	//A removed device fails the wait rather than passing it.
 
-	++deviceExt->fenceId;
-
-	if (deviceExt->fenceId > device->framesInFlight) {
-
-		eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
-
-		gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, deviceExt->fenceId - device->framesInFlight, eventHandle
-		), e_rr));
-
-		WaitForSingleObject(eventHandle, INFINITE);
-		CloseHandle(eventHandle);
-		eventHandle = NULL;
-	}
+	gotoIfError3(clean, DxGraphicsDevice_waitFence(deviceRef, deviceExt->slotFenceValue[device->fifId], e_rr));
 
 	//Prepare per frame cbuffer
 
@@ -1084,7 +1366,16 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		DxCommandBufferState state = (DxCommandBufferState) { .buffer = commandBuffer };
 		state.boundPrimitiveTopology = U8_MAX;
 
+		//The uploads handleNextFrame records get a breadcrumb of their own, as everything else outside a scope does
+
+		GraphicsDevice_startBreadcrumbs(device);
+
+		const U32 uploads = GraphicsDevice_claimBreadcrumb(device, GRAPHICS_BREADCRUMB_UPLOADS);
+		DxGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, uploads, 1, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN);
+
 		gotoIfError3(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state, e_rr));
+
+		DxGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, uploads, 2, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT);
 
 		//Resolve the previous frame at this slot before buildTimings overwrites its entries; the fence wait above
 		// proved it done, so the readback its ResolveQueryData filled is ready. D3D12 timestamps are full 64-bit.
@@ -1222,6 +1513,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		for (U64 i = 0; i < (commandLists ? commandLists->length : 0); ++i) {
 
 			state.scopeCounter = 0;
+			state.breadcrumbSlot = U32_MAX;
 			CommandList *commandList = CommandListRef_ptr(commandLists->ptr[i]);
 			const U8 *ptr = commandList->data.ptr;
 
@@ -1234,7 +1526,12 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		//Readbacks are recorded after the frame's commands so they observe this frame's results
 
+		const U32 readbacks = GraphicsDevice_claimBreadcrumb(device, GRAPHICS_BREADCRUMB_READBACKS);
+		DxGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, readbacks, 1, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN);
+
 		gotoIfError3(clean, GraphicsDeviceRef_flushPendingPulls(deviceRef, &state, e_rr));
+
+		DxGraphicsDevice_breadcrumb(device, deviceExt, commandBuffer, readbacks, 2, D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT);
 
 		//Copy this frame's timestamps out of the query heap into its readback buffer; the CPU reads them a frame on.
 
@@ -1297,9 +1594,18 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Submit queue
 	//TODO: Multiple queues
+	//A frame of only swapchains records nothing, and a NULL entry is not a list ExecuteCommandLists accepts.
+	//The back buffer needs no transition then either: every frame that records hands its back buffer back in PRESENT,
+	// which is also the layout a new one starts in.
 
-	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
-	executed = true;
+	if(commandBuffer)
+		queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
+
+	//Each swapchain remembers this submit, so a resize waits on the frame that used THAT swapchain instead of on
+	//everything submitted since. Stamped before the present, which can fail after the list already executed.
+
+	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i)
+		TextureRef_getImplExtT(DxSwapchain, swapchains->ptr[i])->lastSubmitId = device->submitId;
 
 	//Presents
 
@@ -1330,12 +1636,11 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		unifiedTexture->currentImageId %= unifiedTexture->images;
 	}
 
-	//Fence value after present
+	//Fence value after present, which is what frees this frame in flight
 
-	gotoIfError3(clean, dxCheck(
-		queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId),
-		e_rr
-	));
+	gotoIfError3(clean, DxGraphicsDevice_signalNext(deviceExt, e_rr));
+	deviceExt->slotFenceValue[device->fifId] = deviceExt->fenceId;
+	signalled = true;
 
 clean:
 
@@ -1351,18 +1656,21 @@ clean:
 		recordingAllocator->cmd = NULL;
 	}
 
-	//The frame's fence value has to signal even on failure, or every later wait on this device hangs forever.
-	//If nothing was submitted the CPU can signal it directly, otherwise the queue signals after the submitted work.
+	//A failed frame still gives its slot a value, queued behind whatever it did execute, so the next submit at this
+	// slot waits for that work rather than reusing what it may still read.
+	//Always the queue and never the CPU: a CPU Signal completes ahead of earlier submits still running, and every
+	// wait for those would then pass early.
+	//Its timings were never written, so the slot's next reuse must not resolve them.
 
 	if(!s_uccess) {
 
-		if(!executed)
-			deviceExt->commitSemaphore->lpVtbl->Signal(deviceExt->commitSemaphore, deviceExt->fenceId);
+		if(!signalled && DxGraphicsDevice_signalNext(deviceExt, NULL))
+			deviceExt->slotFenceValue[device->fifId] = deviceExt->fenceId;
 
-		else queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId);
+		device->timingSlots[device->fifId] = 0;
 	}
 
-	#if _ARCH == ARCH_X86_64
+	#ifdef _HAS_NV_API
 
 		//Regardless of device removal, we'll ask NV to report anything fishy to us.
 		//It's technically possible that a TDR/Device removal is caused during setup time, but it's very unlikely.
@@ -1373,14 +1681,13 @@ clean:
 
 			NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
 
+			//Diagnostics only (and already past clean), so a failure is logged rather than failing the submit
+
 			if(status != NVAPI_OK)
-				retError(clean, Error_invalidState(0, "D3D12GraphicsDevice_submitCommands() flush RT val msgs failed"));
+				Log_warnLnx("D3D12GraphicsDevice_submitCommands() couldn't flush RT validation messages (%i)", (int) status);
 		}
 
 	#endif
-
-	if(eventHandle)
-		CloseHandle(eventHandle);
 
 	ListU16_free(&temp16, alloc);
 	CharString_free(&temp, alloc);
@@ -1391,15 +1698,18 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 
 	//The Vulkan twin hints the same way; see EGraphicsDeviceMessage_SubmitFlushed
 
-	if(GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(deviceRef), EGraphicsDeviceMessage_SubmitFlushed))
+	const U64 splits = GraphicsDevice_logThrottled(
+		GraphicsDeviceRef_ptr(deviceRef), EGraphicsDeviceMessage_SubmitFlushed, 1 * SECOND
+	);
+
+	if(splits)
 		Log_performanceLnx(
 			"D3D12: submit was split mid recording because pending copies or AS builds crossed the flush "
 			"threshold, which adds a GPU sync point; raise flushThreshold or batch smaller uploads "
-			"(only logged once)"
+			"(%u since the last report)", (U32) splits
 		);
 
 	Bool s_uccess = true;
-	HANDLE eventHandle = NULL;
 
 	if(commandBuffer->inRender)
 		retError(clean, Error_invalidState(
@@ -1413,19 +1723,16 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 
 	gotoIfError3(clean, dxCheck(commandBuffer->buffer->lpVtbl->Close(commandBuffer->buffer), e_rr));
 
-	//Submit only the copy command list
+	//Submit only the copy command list.
+	//Its fence value is not the slot's: the submit being split signals its own once it executes.
 
-	++deviceExt->fenceId;
 	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer->buffer);
-	gotoIfError3(clean, dxCheck(
-		queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId),
-		e_rr
-	));
+	gotoIfError3(clean, DxGraphicsDevice_signalNext(deviceExt, e_rr));
 
-	//Wait for the device
+	//Wait for the device; the submit this flush splits is still being recorded, so it isn't complete yet
 
-	gotoIfError3(clean, GraphicsDeviceRef_wait(deviceRef, e_rr));
+	gotoIfError3(clean, GraphicsDeviceRef_waitFlush(deviceRef, e_rr));
 
 	//Reset command list
 
@@ -1454,9 +1761,5 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 	commandBuffer->lastRootSig[0] = commandBuffer->lastRootSig[1] = NULL;
 
 clean:
-
-	if(eventHandle)
-		CloseHandle(eventHandle);
-
 	return s_uccess;
 }

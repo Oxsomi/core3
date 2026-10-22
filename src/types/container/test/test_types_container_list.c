@@ -127,6 +127,51 @@ void Test_list(Test *t) {
 	Test_assert(t, "resize shrink", ListU32_resize(&list, 4, alloc, e_rr));
 	Test_assert(t, "length after shrink", list.length == 4);
 
+	//What a shrink left behind is zeroed again when the list grows back over it, within its capacity and past it.
+
+	for(U64 i = 0; i < list.length; ++i)
+		list.ptrNonConst[i] = U32_MAX;
+
+	Test_assert(t, "resize regrow", ListU32_resize(&list, 3, alloc, e_rr) && ListU32_resize(&list, 4, alloc, e_rr));
+	Test_assert(t, "regrown element is zeroed", list.ptr[3] == 0 && list.ptr[2] == U32_MAX);
+
+	const U64 beyond = ListU32_allocatedBytes(list) / sizeof(U32) + 7;
+	Test_assert(t, "resize past capacity", ListU32_resize(&list, beyond, alloc, e_rr) && list.length == beyond);
+
+	Bool zeroed = true;
+
+	for(U64 i = 4; i < beyond; ++i)
+		zeroed &= list.ptr[i] == 0;
+
+	Test_assert(t, "grown past capacity is zeroed", zeroed && list.ptr[3] == 0);
+	Test_assert(t, "shrink after growing", ListU32_resize(&list, 4, alloc, e_rr));
+
+	//The Uninitialized forms: an exact allocation for create, resize's growth for resize, and the elements kept.
+
+	ListU32 raw = (ListU32) { 0 };
+	Test_assert(t, "createUninitialized", ListU32_createUninitialized(1000, alloc, &raw, e_rr));
+	Test_assert(t, "createUninitialized is exact", raw.length == 1000 && ListU32_allocatedBytes(raw) == 1000 * sizeof(U32));
+
+	for(U64 i = 0; i < raw.length; ++i)
+		raw.ptrNonConst[i] = (U32) i * 7;
+
+	Test_assert(t, "resizeUninitialized grow", ListU32_resizeUninitialized(&raw, 3000, alloc, e_rr) && raw.length == 3000);
+
+	Bool kept = true;
+
+	for(U64 i = 0; i < 1000; ++i)
+		kept &= raw.ptr[i] == (U32) i * 7;
+
+	Test_assert(t, "resizeUninitialized keeps the elements", kept);
+	Test_assert(t, "resizeUninitialized shrink", ListU32_resizeUninitialized(&raw, 10, alloc, e_rr) && raw.length == 10);
+
+	ListU32 empty = (ListU32) { 0 };
+	Test_assert(t, "createUninitialized empty", ListU32_createUninitialized(0, alloc, &empty, e_rr) && !empty.length);
+	Test_assert(t, "createUninitialized refuses a filled list", !ListU32_createUninitialized(4, alloc, &raw, NULL));
+
+	ListU32_free(&raw, alloc);
+	ListU32_free(&empty, alloc);
+
 	ListU32_clear(&list, e_rr);
 	Test_assert(t, "length after clear", list.length == 0);
 

@@ -29,6 +29,7 @@
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
 #include "types/base/mathi.h"
+#include "types/math/flp.h"
 
 #include "optimizer.hpp"
 #include "linker.hpp"
@@ -150,6 +151,12 @@ extern "C" Bool Compiler_processSPIRV(
 
 	Bool isLinalg = !!(toCompile->extensions & linalg);
 
+	//Nothing in an unsafe experiment's module is validated (ESHExtension_UnsafeExperimentExecution), and capabilities
+	// oiSH has no extension for pass for a binary that uses unrecognized extensions (UnsafeExtensionExecution)
+
+	Bool isUnsafe = !!(toCompile->extensions & ESHExtension_UnsafeExperimentExecution);
+	Bool allowsUnknown = !!(toCompile->extensions & ESHExtension_UnsafeExtensionExecution);
+
 	spvtools::Optimizer optimizerRt{ SPV_ENV_UNIVERSAL_1_4 };
 	spvtools::Optimizer optimizerNoRt{ SPV_ENV_UNIVERSAL_1_3 };
 	spvtools::Optimizer optimizerLinalg{ SPV_ENV_UNIVERSAL_1_6 };
@@ -199,11 +206,19 @@ extern "C" Bool Compiler_processSPIRV(
 
 	//Validate capabilities.
 	//This makes sure that we only output a binary that's supported by oiSH and no unknown extensions are used.
+	//A binary that uses unrecognized extensions may hold capabilities oiSH has no extension for; those pass and map to
+	// nothing.
 
 	for (U64 i = 0; i < spvMod.capability_count; ++i) {
 
 		ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
-		gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr));
+
+		if(allowsUnknown) {
+			if(!spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, NULL))
+				continue;
+		}
+
+		else gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr));
 
 		//Check if extension was known to oiSH
 
@@ -649,8 +664,16 @@ extern "C" Bool Compiler_processSPIRV(
 
 		optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
 
-		if (!isDebug)
-			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
+		//The reflection strip is SPIRV-Tools' non-semantic strip under its old name: it deletes every instruction of a
+		// NonSemantic set, which is how an unsafe experiment's own instructions come in, and leaves their uses dangling.
+
+		if (!isDebug) {
+
+			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass());
+
+			if (!isUnsafe)
+				optimizer.RegisterPass(spvtools::CreateStripReflectInfoPass());
+		}
 
 		//Alignment was already fixed at the top of the function, before the decoration scan.
 
@@ -658,6 +681,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 		spvtools::OptimizerOptions optimizerOptions;
 		optimizerOptions.set_preserve_bindings(keepRegisters);
+		optimizerOptions.set_run_validator(!isUnsafe);
 
 		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp, optimizerOptions))
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
@@ -777,6 +801,7 @@ extern "C" Bool Compiler_validateSPIRV(
 				CharString_createRefCStrConst("not a SPIR-V module (bad size, alignment or magic)"),
 				alloc, errorText, e_rr
 			));
+
 		goto clean;
 	}
 
@@ -1077,6 +1102,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	const CharString *entrypoint,
 	EGfxPipelineStage stage,
 	ESHExtension exts,
+	Bool keepRegisters,
 	ListCompileError *errors,
 	Buffer *result,
 	const Allocator *alloc,
@@ -1090,11 +1116,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	// so their optimizer/validator must match (mirrors Compiler_processSPIRV).
 	//1.6 is a superset of 1.4, so RT + coop is safe too.
 	ESpirvVersion spvVer = Compiler_linkSpirvVersion(stage, exts);
-	spv_target_env env =
-		spvVer == ESpirvVersion_1_6 ? SPV_ENV_UNIVERSAL_1_6 :
-		(spvVer == ESpirvVersion_1_4 ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
-
-	spvtools::Optimizer opt(env);
+	spv_target_env env = SPV_ENV_UNIVERSAL_1_3;
 
 	//Link (or just use the already linked binary)
 
@@ -1123,13 +1145,29 @@ extern "C" Bool Compiler_linkSPIRV(
 		linkedBinPtr = alignedBin.data();
 	}
 
+	//A library compiled for one of its entries (a mesh one at SPIR-V 1.4) holds the others at that version too, so the
+	//module's own version is the floor of the optimizer's, whatever the entry being linked needs.
+
+	if (linkedBinSiz > 1) {
+
+		const U32 minor = (linkedBinPtr[1] >> 8) & 0xFF;
+
+		if (minor >= 6)
+			spvVer = ESpirvVersion_1_6;
+
+		else if (minor >= 4 && spvVer != ESpirvVersion_1_6)
+			spvVer = ESpirvVersion_1_4;
+	}
+
+	env =
+		spvVer == ESpirvVersion_1_6 ? SPV_ENV_UNIVERSAL_1_6 :
+		(spvVer == ESpirvVersion_1_4 ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
+
 	//Run optimizer to get rid of uniforms
 
 	if (uniforms->length || CharString_length(*entrypoint)) {
 
-		//TODO: Think about this; what if a binary with RT enabled produces a non RT entrypoint.
-		//We need to produce SPV1.4 but afterwards we need to go back to SPV1.3?
-		//Maybe we need to disallow this since we can't go backwards.
+		spvtools::Optimizer opt(env);
 
 		opt.SetMessageConsumer(
 			[alloc, errors, e_rr, &s_uccess](
@@ -1170,53 +1208,42 @@ extern "C" Bool Compiler_linkSPIRV(
 				EDataTypeStride dts = ETypeId_getDataTypeStride(typeId);
 
 				Bool isBool = dt == EDataType_Bool;
-
-				Bool isX8 = dts == EDataTypeStride_8;
-				Bool isX16 = dts == EDataTypeStride_16;
-
-				Bool is16 = (exts & ESHExtension_16BitTypes) && (isX16 || (isX8 && !isBool));
-
+				Bool isNarrow = dts == EDataTypeStride_8 || dts == EDataTypeStride_16;
 				Bool is64 = dts == EDataTypeStride_64;
 
-				U32 stride16 = is64 ? 4 : (is16 ? 1 : 2);        //width in U16s
-				uniformMap[i].resize((width * height * stride16 + 1) >> 1);
+				uniformMap[i].resize(width * height * (is64 ? 2 : 1));
 
-				//Copy into uniformMap; normally this is quite straightforward.
-				//Except for bools and 8-bit types; not natively supported.
-				//Another exception is 16-bit while 16-bit types aren't supported.
-				//These all get expanded to either 16-bit (if supported, unless bool) or 32-bit.
+				//Every B1, 8 and 16 bit uniform is a 32 bit spec constant (Compiler_compile declares it so, since DXC has
+				//no 8 or 16 bit ones): a B1 becomes 0 or 1, an unsigned value is widened with zeros, a signed one with its
+				//sign and a half becomes the float of the same value. 32 and 64 bit ones are copied as they are.
 
 				U32 *asU32 = uniformMap[i].data();
-				U16 *asU16 = (U16*) asU32;
 
-				const U8 *inputAsU8 = uniformData.ptr + uniform.dataOffset;
-
-				//dataOffset is an unpadded running byte sum, so a U16 view of the input can be misaligned
+				//dataOffset is an unpadded running byte sum, so a wider view of the input can be misaligned
 				// (e.g. a U8 uniform declared before a U16 one puts it at an odd offset).
-				//The words are copied to an aligned local instead; 16 elements is the widest expandable
-				// uniform (a 4x4 matrix) and Buffer_memcpy clamps to the smaller side.
+				//The value is copied to an aligned local instead; Buffer_memcpy clamps to the smaller side.
 
-				U16 inputU16Copy[16] = {};
+				SHValue value = SHValue{};
 				Buffer_memcpy(
-					Buffer_createRef(inputU16Copy, sizeof(inputU16Copy)),
-					Buffer_createRefConst(inputAsU8, len)
+					Buffer_createRef(&value, sizeof(value)),
+					Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
 				);
 
-				const U16 *inputAsU16 = inputU16Copy;
+				if (isBool || isNarrow)
+					for (U64 j = 0; j < (U64) width * height; ++j) {
 
-				if (isBool || isX8 || (!is16 && isX16))
-					for (U64 j = 0; j < width * height; ++j) {
+						if (isBool)
+							asU32[j] = (U32) ((value.vu64[0] >> j) & 1);
 
-						if (is16)                         //Expand 8-bit to 16-bit
-							asU16[j] = inputAsU8[j];
+						else if (dt == EDataType_Int)
+							asU32[j] = (U32) (dts == EDataTypeStride_8 ? (I32) value.vi8[j] : (I32) value.vi16[j]);
 
-						else if (isX8)                    //Expand 8-bit to 32-bit
-							asU32[j] = inputAsU8[j];
+						else if (dt == EDataType_Float) {
+							const F32 f = F16_castF32(value.vu16[j]);
+							Buffer_memcpy(Buffer_createRef(asU32 + j, sizeof(U32)), Buffer_createRefConst(&f, sizeof(f)));
+						}
 
-						else if (isBool)                  //Expand B1 to 32-bit
-							asU32[j] = (inputAsU16[0] >> j) & 1;
-
-						else asU32[j] = inputAsU16[j];    //Expand 16-bit to 32-bit
+						else asU32[j] = dts == EDataTypeStride_8 ? value.vu8[j] : value.vu16[j];
 					}
 
 				//Size of this uniform's own storage, not the number of uniforms in the map.
@@ -1231,14 +1258,27 @@ extern "C" Bool Compiler_linkSPIRV(
 
 			opt.RegisterPass(spvtools::CreateSetSpecConstantDefaultValuePass(uniformMap));
 			opt.RegisterPass(spvtools::CreateFreezeSpecConstantValuePass());
+
+			//Expressions over them (U32 $$Mode & 1) stay OpSpecConstantOp until folded, and keep their branches alive
+
+			opt.RegisterPass(spvtools::CreateFoldSpecConstantOpAndCompositePass());
 		}
 
 		//Remove dead code and resolve branches generated by spec constants or entrypoint strip
 
 		opt.RegisterPerformancePasses();
 
+		//An unsafe experiment's module is not validated here either (see Compiler_processSPIRV)
+
+		//keep-all: the bindings DXC preserved for --keep-registers have to survive this optimizer too, dead branches'
+		//included, or a binary specialized past a resource's only read drops its register.
+
+		spvtools::OptimizerOptions optimizerOptions;
+		optimizerOptions.set_run_validator(!(exts & ESHExtension_UnsafeExperimentExecution));
+		optimizerOptions.set_preserve_bindings(keepRegisters);
+
 		std::vector<U32> tmp;
-		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp))
+		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp, optimizerOptions))
 			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() couldn't run optimizer"));
 
 		//Note: we don't strip reflection here, Compiler_process will handle that.

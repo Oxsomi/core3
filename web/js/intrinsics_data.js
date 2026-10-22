@@ -7,7 +7,7 @@
  * with the objects each signature exists on. g = layout-generic (scalar, vector and matrix takes),
  * t = T stands for the element or template type, sm = minimum shader model, more = overloads past the cap.
  *
- * Source: github.com/Oxsomi/DirectXShaderCompiler @ db9a488703d4 (table sha256 c57366fbc5dc346e, SemaHLSL.cpp sha256 f03e135724ccecff), 359 names / 1074 signatures.
+ * Source: github.com/Oxsomi/DirectXShaderCompiler @ 50560f82a9dd (table sha256 691f50fef5aa0e0c, SemaHLSL.cpp sha256 75723266a03e119d), 359 names / 1074 signatures.
  */
 window.OxIntrinsicsData = {
 fns: {

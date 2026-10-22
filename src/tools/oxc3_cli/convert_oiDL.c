@@ -375,6 +375,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 			gotoIfError3(clean, CharString_createDec(
 				&(CharStringCreateNumber) { .v = i, .leadingZeros = 0, .allocator = alloc, .result = &filePathi }, e_rr
 			));
+
 			gotoIfError3(clean, CharString_insertString(&filePathi, &outputBase, 0, alloc, e_rr));
 
 			if (file.settings.dataType == EDLDataType_Data) {
