@@ -89,7 +89,6 @@
 namespace oxc { namespace c {
 	#include "types/base/error.h"
 	#include "types/base/string_base.h"
-	#include "types/container/memory_stream.h"
 	#include "types/container/texture_format.h"
 	#include "types/test/test.h"
 	#include "formats/oiSH/sh_registers.h"
@@ -821,12 +820,8 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 		const c::CharString graphicsSection = c::CharString_createRefCStrConst("//OxC3_graphics");
 		const c::CharString prebuiltShader = c::CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
 
-		//The loaded section can keep streams that refer to this type, so it outlives the call.
-
-		static const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
-
 		if (
-			!c::File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) ||
+			!c::File_loadVirtual(&graphicsSection, NULL, NULL, NULL, alloc, NULL) ||
 			!c::File_hasFile(&prebuiltShader, alloc)
 		) {
 			c::Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");

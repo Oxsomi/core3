@@ -32,6 +32,8 @@
 //With the real budget a forbidden device still allocates, uploads and reads back: on D3D12 that runs every heap and
 // dedicated resource through creation not resident and the residency request, which is the path an allocation takes when
 // the OS is asked not to go past its budget.
+//On D3D12 several forbidden allocations in a row on one device each wait for their own value of the device's residency
+// fence.
 //GraphicsDevice/overBudgetReal fills the device's real video memory budget on D3D12 to see the OS refuse the allocation
 // that goes past it. It evicts other applications' memory if the OS does not refuse, so it only runs with
 // OXC3_TEST_OVER_BUDGET set to 1 (see docs/graphics_api.md).
@@ -416,6 +418,21 @@ extern "C" void Test_graphicsOverBudget(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 					c::Test_assert(t, source.readName, equal);
 				}
 		}
+	}
+
+	//Several in a row on one device: host memory is a committed resource of its own on D3D12, so each buffer is made
+	// resident with the next value of the device's residency fence, and each create returns once that value is reached
+
+	{
+		gfx::DeviceBuffer row[8];
+
+		const c::EGraphicsResourceFlag rowFlags =
+			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderRead | c::EGraphicsResourceFlag_HostMemoryRead);
+
+		for(gfx::DeviceBuffer &buffer : row)
+			c::Test_assert(t, "forbiddenInARow", dev.createBuffer(
+				c::EDeviceBufferUsage_None, rowFlags, "overBudget row", 64 * c::KIBI, buffer, nullptr, &t->err
+			));
 	}
 
 	overBudgetForbid(t, dev, false);

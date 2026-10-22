@@ -189,6 +189,14 @@ endif()
 
 project(OxC3)
 
+# Emscripten.cmake sizes pointers from CMAKE_C_FLAGS before a fresh Conan configure has put the profile's -m64 there.
+if(EMSCRIPTEN AND CMAKE_SIZEOF_VOID_P EQUAL 4 AND CMAKE_C_FLAGS MATCHES "MEMORY64|-m64|--target=wasm64")
+	set(CMAKE_SIZEOF_VOID_P 8)
+	set(CMAKE_C_SIZEOF_DATA_PTR 8)
+	set(CMAKE_CXX_SIZEOF_DATA_PTR 8)
+	set(CMAKE_LIBRARY_ARCHITECTURE "wasm64-emscripten")
+endif()
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 

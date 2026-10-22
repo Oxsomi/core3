@@ -125,15 +125,13 @@ static const U64 EOperationHasParameter_Exposure          = (U64)1 << EOperation
 
 //The two parameter key sources (-aes / -aes-file); --aes-stdin is a flag (EOperationFlags_AESStdin), so a
 // "any key source present" test must also check that flag separately.
-//Built from the shifts, not from EOperationHasParameter_AES and _AESFile: a static const is not a constant expression
-// in C, so it can't initialize another one.
+//Built from the shifts, since in C a static const can't initialize another.
 
 static const U64 EOperationHasParameter_AnyAES =
 	((U64)1 << EOperationHasParameter_AESShift) | ((U64)1 << EOperationHasParameter_AESFileShift);
 
-//One entry per shift: operations.c static_asserts both counts against EOperationHasParameter_CountEnum,
-// so a shift added without a name or a description fails to compile.
-//They stay unsized here: sized, the definition would take this size and a short list would compile, zero filled.
+//One entry per shift, unsized so that operations.c's static_asserts against EOperationHasParameter_CountEnum catch a
+// short list.
 
 extern const C8 *EOperationHasParameter_names[];
 extern const C8 *EOperationHasParameter_descriptions[];

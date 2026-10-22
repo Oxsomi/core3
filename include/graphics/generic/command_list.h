@@ -46,10 +46,8 @@ typedef struct CommandList {
 
 	Buffer data;                                       //Data for all commands
 	ListCommandOpInfo commandOps;
-	//Resources used by this command list.
-	//CommandListRef_end references every resource its transitions name, and that reference is held until the list is
-	// begun again with a clear, or freed.
-	//Freeing a resource to give its memory back therefore needs every list that named it emptied (or freed) first.
+	//Resources used by this command list: CommandListRef_end references each one its transitions name, until the list
+	// is begun again with a clear, or freed.
 
 	HashSetRefPtr resources;
 

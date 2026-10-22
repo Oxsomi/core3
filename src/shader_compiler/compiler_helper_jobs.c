@@ -1203,8 +1203,7 @@ Bool Compiler_compileShaders(
 	Bool errorInPrevious = false;
 
 	MemoryStreamRef *ms = NULL;
-	const RefPtrType msType = MemoryStream_makeType(alloc);
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType msType = MemoryStream_makeType(alloc);        //Its buffer grows with alloc and is handed on
 
 	if(allBuffers)
 		gotoIfError3(clean, ListBuffer_resize(allBuffers, allOutputs->length, alloc, e_rr));
@@ -1329,7 +1328,7 @@ Bool Compiler_compileShaders(
 			}
 
 			else {
-				gotoIfError3(clean, File_write(&temp, &allOutputs->ptr[i], 0, 0, 100 * MS, true, &fileHandleType, e_rr));
+				gotoIfError3(clean, File_write(&temp, &allOutputs->ptr[i], 0, 0, 100 * MS, true, NULL, e_rr));
 				Buffer_free(&temp, alloc);
 			}
 		}

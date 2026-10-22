@@ -177,11 +177,9 @@ Bool Compiler_getTargetsFromFile(
 	CharString resolved = CharString_createNull();
 	CharString resolved2 = CharString_createNull();
 	CharString tempStr = CharString_createNull();
-	Buffer temp = Buffer_createNull();
+	Buffer temp = Buffer_createNull();        //File_read with a NULL type allocates it from the platform's allocator
 
 	Error errTmp = Error_none(), *e_rr = &errTmp;
-
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	//Get all shaders
 
@@ -295,7 +293,7 @@ Bool Compiler_getTargetsFromFile(
 
 		//Otherwise grab from file
 
-		gotoIfError3(clean, File_read(&allFiles->ptr[i], 10 * MS, 0, 0, &fileHandleType, &temp, e_rr));
+		gotoIfError3(clean, File_read(&allFiles->ptr[i], 10 * MS, 0, 0, NULL, &temp, e_rr));
 
 		if(!Buffer_length(temp)) {
 			gotoIfError3(clean, ListCharString_pushBack(allShaderText, CharString_createNull(), alloc, e_rr));
@@ -312,7 +310,7 @@ Bool Compiler_getTargetsFromFile(
 		gotoIfError3(clean, ListCharString_pushBack(allShaderText, tempStr, alloc, e_rr));
 		tempStr = CharString_createNull();
 
-		Buffer_free(&temp, alloc);
+		Buffer_free(&temp, Platform_instance->alloc);
 
 		prevStr = allFiles->ptr[i];
 	}
@@ -321,7 +319,7 @@ clean:
 	Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 	CharString_free(&resolved, alloc);
 	CharString_free(&resolved2, alloc);
-	Buffer_free(&temp, alloc);
+	Buffer_free(&temp, Platform_instance->alloc);
 	CharString_free(&tempStr, alloc);
 	return s_uccess;
 }

@@ -484,7 +484,7 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
-	Buffer tempBuffer = Buffer_createNull();
+	Buffer tempBuffer = Buffer_createNull();        //File_read with a NULL type allocates it from the platform's allocator
 	MemoryStreamRef *tempStream = NULL;
 	SHFile tmpBinary = (SHFile) { 0 };
 	DescriptorLayoutInfo pushDescriptors = (DescriptorLayoutInfo) { 0 };
@@ -495,38 +495,19 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	//Load prebuilt shaders
 
 	const CharString virtualSection = CharString_createRefCStrConst("//OxC3_graphics");
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
-	//The streams of the section's larger entries refer to this type until the section is unloaded, so it outlives the call
-	// and every device that made it.
-	//It is made once from the platform's allocator, not from this device's instance, so a later device never changes the
-	// type under streams that are already loaded and no instance's allocator is kept past the life of its instance.
-	//The lock makes that first creation safe when devices are created from more than one thread.
+	//The section outlives this device, so it takes the platform's stream type.
 
-	static RefPtrType memStreamType;
-	static SpinLock memStreamTypeLock;
-
-	const ELockAcquire typeAcq = SpinLock_lock(&memStreamTypeLock, U64_MAX);
-
-	if(typeAcq < ELockAcquire_Success)
-		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createPrebuiltShaders() couldn't lock the stream type"));
-
-	if(!memStreamType.free)
-		memStreamType = MemoryStream_makeType(Platform_instance->alloc);
-
-	if(typeAcq == ELockAcquire_Acquired)
-		SpinLock_unlock(&memStreamTypeLock);
-
-	gotoIfError3(clean, File_loadVirtual(&virtualSection, &memStreamType, NULL, NULL, alloc, e_rr));
+	gotoIfError3(clean, File_loadVirtual(&virtualSection, NULL, NULL, NULL, alloc, e_rr));
 
 	//image_copy shaders, only the 2nd can rotate images
 
 	const CharString path = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
-	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, &fileHandleType, &tempBuffer, e_rr));
+	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, NULL, &tempBuffer, e_rr));
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
 		Buffer_createRefFromBuffer(tempBuffer, true), 0, Buffer_length(tempBuffer),
-		EMemoryStreamFlags_None, &memStreamType, &tempStream, e_rr
+		EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &tempStream, e_rr
 	));
 
 	U64 streamOffset = 0;
@@ -655,7 +636,7 @@ clean:
 	DescriptorLayoutInfo_free(&pushDescriptors, alloc);
 	SHFile_free(&tmpBinary, alloc);
 	RefPtr_dec(&tempStream);
-	Buffer_free(&tempBuffer, alloc);
+	Buffer_free(&tempBuffer, Platform_instance->alloc);
 	return s_uccess;
 }
 

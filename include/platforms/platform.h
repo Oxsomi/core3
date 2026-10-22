@@ -24,6 +24,7 @@
 #include "formats/oiCA/ca_file.h"
 #include "types/container/string.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/ref_ptr.h"
 #include "types/base/platform_types.h"
 #include "types/base/string_base.h"
 #include "types/base/lock.h"
@@ -96,6 +97,13 @@ typedef struct PlatformCPUInfo {
 
 } PlatformCPUInfo;
 
+//The RefPtrTypes a file call uses when it's given NULL for one (see file.h).
+//Platform_create makes them from the platform's allocator, and they stay until Platform_cleanup.
+
+typedef struct PlatformTypes {
+	RefPtrType memoryStream, encryptionStream, fileHandle, fileStream;
+} PlatformTypes;
+
 typedef struct Platform {
 
 	EPlatform platformType;
@@ -120,6 +128,8 @@ typedef struct Platform {
 
 	void *data1;                        //If present can contain the executable file
 	U64 size1;
+
+	PlatformTypes types;                //What a file call given a NULL type uses
 	U8 pad2[40];
 
 	SpinLock virtualSectionsLock;
@@ -151,9 +161,8 @@ impl U64 Platform_getThreads();
 impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in bytes (0 if unknown)
 impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
 
-//What the system lets the process still commit, in bytes, where it enforces a commit limit.
-//On Windows that is the physical memory plus the page files, shared by every process, less what is committed.
-//It is 0 where there is no such limit or it is unknown (the unix platforms, which don't refuse a commit up front).
+//What the process can still commit in bytes, where the system enforces a commit limit (Windows: GlobalMemoryStatusEx).
+//0 where there is no such limit or it is unknown, as on the unix platforms.
 
 impl U64 Platform_getAvailableCommit();
 

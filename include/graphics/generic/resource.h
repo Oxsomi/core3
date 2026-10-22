@@ -67,21 +67,15 @@ typedef enum EGraphicsResourceFlag {
 
 	EGraphicsResourceFlag_InternalOwnsImages        = 1 << 8,
 
-	//Host (system) memory that the device reads over the bus: the buffer never lives in video memory, not even where
-	// ReBAR maps video memory for the CPU. Always set through EGraphicsResourceFlag_HostMemory, which adds CPUAllocatedBit.
-	//Only for a DeviceBuffer of usage None that shaders read: it refuses CPUBacked, CPUReadBit, ShaderWrite and
-	// ExposeBindlessWrite, and keeps no CPU copy.
-	//GraphicsDeviceRef_createBufferData fills it: the data is written into the host memory at the next submit and then
-	// freed, as for any buffer that isn't CPUBacked.
-	//It gets memory of its own, sized to it, and counts against the device's shared memory and not its video memory.
+	//A buffer in host memory that the device reads over the bus, never in video memory; set it through HostMemory.
+	//Only for a DeviceBuffer of usage None, filled at create (createBufferData or createBufferStream), without a CPU copy.
+	//CPUBacked, CPUReadBit, ShaderWrite and ExposeBindlessWrite are refused, and so are textures.
 
 	EGraphicsResourceFlag_HostMemoryBit             = 1 << 9,
 
-	//HostMemory that the CPU reads too: its pages are CPU cached (D3D12 WRITE_BACK in L0, Vulkan host cached and coherent
-	// where the device has such a memory type), so the CPU reads it at memory speed through DeviceBufferRef_hostMemory
-	// while the device reads it over the bus. Always set through EGraphicsResourceFlag_HostMemoryRead.
-	//Only HostMemoryBit accepts it, and nothing else about HostMemory changes.
-	//Not CPUReadBit, which is the internal staging memory pullRegion reads back into (see docs/graphics_api.md).
+	//HostMemory with CPU cached pages, which the CPU reads and writes through DeviceBufferRef_hostMemory(Writable).
+	//Set it through HostMemoryRead; createBuffer accepts it without data.
+	//Not CPUReadBit, the internal staging memory pullRegion reads back into.
 
 	EGraphicsResourceFlag_HostMemoryReadBit         = 1 << 10,
 
@@ -255,7 +249,7 @@ typedef struct GraphicsResource {
 
 	U64 deviceAddress;                      //Contains the memory address on the device if available (otherwise 0)
 
-	Bool hostUncached;                      //HostMemoryRead memory the CPU can only read uncached (Vulkan: no host cached type)
+	Bool hostUncached;                      //HostMemoryRead memory the CPU can only read uncached, so hostMemory returns NULL
 	U8 padding[7];                          //Padding to 16-byte to allow next element to have vectors
 
 } GraphicsResource;

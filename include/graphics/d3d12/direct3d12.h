@@ -202,29 +202,22 @@ D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data);
 D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset);
 
-//hostMemory (EGraphicsResourceFlag_HostMemoryBit) is a custom heap in L0 (host memory), where ReBAR would put a CPU sided
-// heap in L1 (video memory); hostRead (HostMemoryReadBit) makes its pages WRITE_BACK, CPU cached, where the adapter allows
-// it (not on an integrated adapter that isn't cache coherent: the heap stays write combined and the buffer reports it).
-//Without hostRead the pages are write combined on a dedicated adapter; a cache coherent integrated adapter has write back
-// pages for every CPU visible heap, host memory included.
+//hostMemory (HostMemoryBit) is a custom heap in L0 (host memory) with write combined pages; hostRead (HostMemoryReadBit)
+// makes them WRITE_BACK, except on a UMA adapter that isn't cache coherent.
+//A cache coherent UMA adapter has WRITE_BACK pages for every CPU visible heap.
 
 D3D12_HEAP_DESC getDxHeapDesc(
 	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap,
 	Bool hostMemory, Bool hostRead
 );
 
-//While GraphicsDeviceRef_forbidOverBudgetFallback holds the allocator back (DxGraphicsDevice_forbidsOverBudget), a new
-// heap or committed resource refuses to go past the OS budget. It reads the forbid once, so the flag it created the object
-// with and the residency it asks for agree:
-// - DxGraphicsDevice_checkBudget refuses first (Error_outOfMemory), from the budget the device knows (budgetOverride
-//   included) for the segment the heap lives in (DxGraphicsDevice_heapInVideoMemory, since cpuSided doesn't say: ReBAR
-//   puts a CPU sided heap in video memory), so a request that cannot fit is never created.
-// - The object is created with D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT.
-// - DxGraphicsDevice_makeResident makes it resident with D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET and waits for it, and the OS
-//   has the last word: if the budget moved since the check, it refuses (Error_outOfMemory) and evicts nothing for it.
-//   The allocator does not hold its lock while it waits: a heap waiting for residency is listed without its handle, which
-//   no other allocation shares, and is given back if the OS refuses.
-//The device is an ID3D12Device10, which includes ID3D12Device3 and so EnqueueMakeResident: there is no device without it.
+//While GraphicsDeviceRef_forbidOverBudgetFallback is in force (DxGraphicsDevice_forbidsOverBudget), a new heap or
+// committed resource that doesn't fit the budget the device knows for its segment is refused with Error_outOfMemory
+// (DxGraphicsDevice_checkBudget, DxGraphicsDevice_heapInVideoMemory).
+//Otherwise it is created with D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT and DxGraphicsDevice_makeResident makes it resident
+// with D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, which the OS can refuse (Error_outOfMemory).
+//makeResident waits on the GPU, so the allocator's lock is not held across it.
+//A device makes one object resident at a time, on a residency fence of its own.
 
 Bool DxGraphicsDevice_forbidsOverBudget(GraphicsDevice *device);
 Bool DxGraphicsDevice_heapInVideoMemory(GraphicsDevice *device, const D3D12_HEAP_DESC *heap);

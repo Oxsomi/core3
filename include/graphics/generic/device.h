@@ -516,29 +516,18 @@ TListNamed(SwapchainRef*, ListSwapchainRef);
 //It returns U64_MAX on error (e.g. if nullptr)
 U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
 
-//Returns the memory the OS lets the process use in bytes, which is the budget getMemoryBudget's usage is measured against.
-//That is DXGI_QUERY_VIDEO_MEMORY_INFO::Budget on D3D12 and the heap's budget of VK_EXT_memory_budget on Vulkan
-// (on Windows without that extension the DXGI adapter's, as for the memory in use).
-//The budget follows what other processes use. Past it the OS may move the process's allocations out of the heap
-// (WDDM demotes video memory to host memory, which the device then reads over the bus).
+//Returns the OS budget in bytes: the memory the process may use, which getMemoryBudget's usage counts against.
+//D3D12: DXGI_QUERY_VIDEO_MEMORY_INFO::Budget; Vulkan: the heap's budget of VK_EXT_memory_budget, else DXGI's on Windows.
 //isDeviceLocal is as for getMemoryBudget, and an iGPU/CPU returns 0 for device local.
 //It returns U64_MAX on error (e.g. nullptr) and where the api reports no budget.
 U64 GraphicsDeviceRef_getMemoryLimit(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
 
-//Stops the allocator from working around the OS budget of the device's memory, for an engine that plans its video memory
-// against GraphicsDeviceRef_getMemoryLimit itself and wants what it placed there to be there.
-//Vulkan: a device local block that would go past the budget is quietly placed in host memory instead, which the device
-// then reads over the bus, far slower than video memory and with no error to say so. Forbidden, the block goes past the
-// budget in video memory, and the OS decides what to page out.
-//D3D12: a new heap or dedicated resource goes past the budget, and the OS demotes memory to make room, other processes'
-// included. Forbidden, it is created not resident and made resident with D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, so an
-// allocation over the budget fails with Error_outOfMemory and nothing is evicted for it.
-//Both leave the memory already allocated alone: the OS can still demote resident memory later, when other processes need it.
-//Forbids are counted per device (forbid true takes one, false gives it back; the fallback is allowed while none is
-// taken), so several callers on a shared device do not undo each other and a caller that goes away gives its forbid
-// back. It affects allocations made after the call, on every thread. Giving back a forbid that was never taken does
-// nothing. Nothing changes for a device that never forbids.
-//A null deviceRef, or one that is not a graphics device, is refused with Error_nullPointer (and nothing is held).
+//Turns the allocator's over budget fallbacks off for allocations made after the call (GraphicsDeviceRef_getMemoryLimit).
+//Forbids are counted per device: forbid true takes one and false gives one back; none is taken by default.
+//Vulkan: a device local block past the budget stays in video memory instead of moving to host memory.
+//D3D12: a new heap or dedicated resource is created not resident and made resident with
+// D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, so one past the budget fails with Error_outOfMemory instead of evicting.
+//Memory already allocated is not protected, and a deviceRef that isn't a graphics device is refused (Error_nullPointer).
 
 Bool GraphicsDeviceRef_forbidOverBudgetFallback(GraphicsDeviceRef *deviceRef, Bool forbid, Error *e_rr);
 
@@ -681,11 +670,9 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr);
 
-//The size a staging buffer of prevSize bytes grows to for an upload or readback of needed bytes.
-//That is twice the size plus three times the need (one third per frame in flight), capped at the device's largest buffer.
-//Returns 0 when the need does not fit a third of that cap, which the caller reports instead of resizing,
-// and for a deviceRef that is not a device.
-//Used by the backends' flush functions and by the readback in GraphicsDeviceRef_flushPendingPulls.
+//The size a staging buffer of prevSize bytes grows to for an upload or readback of needed bytes: twice prevSize plus
+// three times needed, capped at the device's largest buffer.
+//Returns 0 when needed is over a third of that cap, and for a deviceRef that is not a device.
 U64 GraphicsDeviceRef_stagingSizeFor(GraphicsDeviceRef *deviceRef, U64 prevSize, U64 needed);
 
 //Shader targets this device's driver can compile for besides the device itself; empty on a backend or driver

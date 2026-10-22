@@ -31,10 +31,8 @@
 	extern "C" {
 #endif
 
-//The pause between two tries of a file call that was given maxTimeout to wait: a quarter of that timeout plus one
-// nanosecond, at most a second. The call works it out once, so it is the same between every pair of its tries.
-//It never wraps, so U64_MAX (wait as long as it takes) pauses a second between tries and does not spin.
-//Every physical file call that retries uses it.
+//The pause between two tries of a file call given maxTimeout to wait: a quarter of it plus a nanosecond, at most a second.
+//U64_MAX (wait as long as it takes) pauses a second between tries.
 
 static inline Ns File_retryPause(Ns maxTimeout) {
 	const Ns pause = (maxTimeout >> 2) + 1;
@@ -176,6 +174,9 @@ typedef struct RefPtr RefPtr;
 typedef struct RefPtrType RefPtrType;
 typedef RefPtr FileHandleRef;
 
+//Every call below that takes a type uses the platform's (Platform_instance->types) when given NULL.
+//File_read allocates its output with its type's allocator, so with NULL that is the platform's.
+
 RefPtrType FileHandle_makeType(const Allocator *alloc);
 
 Bool File_open(
@@ -219,9 +220,8 @@ typedef struct FileLoadVirtual {
 } FileLoadVirtual;
 
 //Load a virtual section.
-//memoryStreamType (and encStreamType when given) must outlive the section:
-// entries above the medium size keep a stream that refers to the type until the section is unloaded,
-// so a type on the stack is a use after scope.
+//A type that is passed must outlive the section; NULL, the platform's, always does.
+//alloc only serves the call: what the section keeps comes from the platform's allocator or from those types.
 Bool File_loadVirtual(
 	const CharString *loc,
 	const RefPtrType *memoryStreamType,

@@ -280,7 +280,6 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, ECLIS
 	MemoryStreamRef *ms = NULL;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType memType = MemoryStream_makeType(alloc);
 	const U64 size = Buffer_length(b);
 
 	//An explicit ref, because a memory stream takes ownership of a buffer that owns its allocation and b
@@ -289,7 +288,7 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, ECLIS
 	const Buffer ref = Buffer_createRefConst(b.ptr, size);
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
-		ref, 0, size, EMemoryStreamFlags_None, &memType, &ms, e_rr
+		ref, 0, size, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &ms, e_rr
 	));
 
 	s_uccess = CLI_showFileStream(args, ms, 0, size, start, length, format, showEntireFile);
@@ -314,8 +313,6 @@ Bool CLI_storeFileOrFolder(const ParsedArgs *args, const CAFile *a, CAHandle han
 	Error *e_rr = NULL;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	(void) fileHandleType;
 
 	//Save folder
 
@@ -368,9 +365,8 @@ Bool CLI_storeFileOrFolder(const ParsedArgs *args, const CAFile *a, CAHandle han
 
 		StreamRef *entry = NULL;
 		U64 base = 0, size = 0;
-		const RefPtrType memType = MemoryStream_makeType(alloc);        //Outlives entry
 
-		gotoIfError3(clean, CLI_openArchiveEntry(a, handle, &memType, &entry, &base, &size, e_rr));
+		gotoIfError3(clean, CLI_openArchiveEntry(a, handle, &entry, &base, &size, e_rr));
 
 		CLI_showFileStream(args, entry, base, size, start, len, ECLIShowFormat_Binary, false);
 		RefPtr_dec(&entry);
@@ -401,10 +397,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 	Buffer virtualBuf = Buffer_createNull();     //Virtual files can't be opened as a stream, so they get buffered
 
 	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
-	RefPtrType fileStreamType = FileStream_makeType(alloc);
-	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
+	const PlatformTypes *types = &Platform_instance->types;
 	StreamRef *stream = NULL;
 	StreamCursor cursor = (StreamCursor) { 0 };        //Peeks the magic; the format readers make their own cursor
 
@@ -439,16 +432,16 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 	if (File_isVirtual(path)) {
 
-		if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &virtualBuf, e_rr)) {
+		if (!File_read(&path, 100 * MS, 0, 0, NULL, &virtualBuf, e_rr)) {
 			Log_errorLnx("Invalid file path.");
 			goto clean;
 		}
 
-		if (!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr))
+		if (!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &types->memoryStream, &stream, e_rr))
 			goto clean;
 	}
 
-	else if (!File_openStream(&path, 100 * MS, EFileOpenType_Read, false, &fileHandleType, &fileStreamType, &stream, e_rr)) {
+	else if (!File_openStream(&path, 100 * MS, EFileOpenType_Read, false, NULL, NULL, &stream, e_rr)) {
 		Log_errorLnx("Couldn't open file.");
 		goto clean;
 	}
@@ -573,7 +566,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			Bool madeFile = false;
 			CharString out = CharString_createNull();
 
-			gotoIfError3(cleanCa, CAFile_read(stream, &encStreamType, 0, encryptionKey, alloc, &file, e_rr));
+			gotoIfError3(cleanCa, CAFile_read(stream, &types->encryptionStream, 0, encryptionKey, alloc, &file, e_rr));
 
 			if(encryptionKey)
 				Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
@@ -644,10 +637,9 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 						StreamRef *entryStream = NULL;
 						U64 base = 0, size = 0;
-						const RefPtrType memType = MemoryStream_makeType(alloc);        //Outlives entryStream
 
 						gotoIfError3(cleanCa, CLI_openArchiveEntry(
-							&file, handle, &memType, &entryStream, &base, &size, e_rr
+							&file, handle, &entryStream, &base, &size, e_rr
 						));
 
 						CharString entryPath = CharString_createNull();
@@ -762,7 +754,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			U64 dlOff = 0;
 			gotoIfError3(cleanDl, DLFile_read(
-				stream, &dlOff, encryptionKey, I32x4_zero(), false, false, alloc, &encStreamType, &file, e_rr
+				stream, &dlOff, encryptionKey, I32x4_zero(), false, false, alloc, &types->encryptionStream, &file, e_rr
 			));
 
 			if(encryptionKey)

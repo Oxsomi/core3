@@ -246,7 +246,6 @@ static Bool Packager_writeSidecar(
 	U32 toolchain,
 	U32 settingsHash,
 	const CharString *includeDir,
-	const RefPtrType *fileHandleType,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -263,7 +262,7 @@ static Bool Packager_writeSidecar(
 	));
 
 	buf = CharString_bufferConst(text);
-	gotoIfError3(clean, File_write(&buf, path, 0, 0, 100 * MS, true, fileHandleType, e_rr));
+	gotoIfError3(clean, File_write(&buf, path, 0, 0, 100 * MS, true, NULL, e_rr));
 
 clean:
 	CharString_free(&text, alloc);
@@ -278,17 +277,16 @@ static Bool Packager_readSidecar(
 	const CharString *path,
 	U32 *toolchain,
 	U32 *settingsHash,
-	const RefPtrType *fileHandleType,
 	const Allocator *alloc
 ) {
 
 	Buffer data = Buffer_createNull();
 	Bool ok = false;
 
-	if(!File_hasFile(path, fileHandleType->alloc))        //A miss is normal; opening a missing file RETRIES
+	if(!File_hasFile(path, alloc))        //A miss is normal; opening a missing file RETRIES
 		return false;
 
-	if(!File_read(path, 100 * MS, 0, 0, fileHandleType, &data, NULL))
+	if(!File_read(path, 100 * MS, 0, 0, NULL, &data, NULL))
 		return false;
 
 	CharString text = CharString_createRefSizedConst((const C8*) data.ptr, Buffer_length(data), false);
@@ -335,7 +333,6 @@ static Bool Packager_cacheIsClean(
 	const CharString *sourcePath,
 	const CharString *sourceText,
 	Buffer *cached,
-	const RefPtrType *fileHandleType,
 	const Allocator *alloc
 ) {
 
@@ -347,19 +344,17 @@ static Bool Packager_cacheIsClean(
 	CharString includeData = CharString_createNull();
 	Buffer includeBuf = Buffer_createNull();
 
-	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
-
-	if(!File_hasFile(cachePath, fileHandleType->alloc))
+	if(!File_hasFile(cachePath, alloc))
 		return false;
 
-	if(!File_read(cachePath, 100 * MS, 0, 0, fileHandleType, &data, NULL))
+	if(!File_read(cachePath, 100 * MS, 0, 0, NULL, &data, NULL))
 		return false;
 
 	U64 streamOffset = 0;
 
 	if(!MemoryStream_createFromBufferRegion(
 		Buffer_createRefFromBuffer(data, true), 0, Buffer_length(data), EMemoryStreamFlags_None,
-		&memStreamType, &stream, NULL
+		&Platform_instance->types.memoryStream, &stream, NULL
 	) || !stream)
 		goto clean;
 
@@ -430,8 +425,8 @@ static Bool Packager_cacheIsClean(
 		Buffer_free(&includeBuf, alloc);
 
 		if(
-			!File_hasFile(&resolved, fileHandleType->alloc) ||
-			!File_read(&resolved, 100 * MS, 0, 0, fileHandleType, &includeBuf, NULL)
+			!File_hasFile(&resolved, alloc) ||
+			!File_read(&resolved, 100 * MS, 0, 0, NULL, &includeBuf, NULL)
 		) {
 			clean = false;                                                  //Include vanished or moved
 			break;
@@ -480,7 +475,6 @@ clean:
 typedef struct CAFileRecursion {
 	CAFile *archive;
 	CharString root;
-	const RefPtrType *fileHandleType;
 	Bool keepShaderSource;        //See PackageSettings; stores .hlsl as-is rather than compiling it
 } CAFileRecursion;
 
@@ -526,7 +520,7 @@ Bool packageFile(const FileInfo *file, void *pkgFileGeneric, const Allocator *al
 
 	if (file->type == EFileType_File) {
 
-		gotoIfError3(clean, File_read(&file->path, 100 * MS, 0, 0, pkgFile->fileHandleType, &data, e_rr));
+		gotoIfError3(clean, File_read(&file->path, 100 * MS, 0, 0, NULL, &data, e_rr));
 
 		//If shader compilation is used, skip hlsl files, they'll be turned into oiSH files later.
 
@@ -607,10 +601,6 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	CASettings caSettings = (CASettings) { .compressionType = EXXCompressionType_None };
 
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
-	RefPtrType memStreamType = MemoryStream_makeType(alloc);
-
 	if(!settings)
 		retError(clean, Error_nullPointer(0, "Packager_package()::settings is required"));
 
@@ -667,7 +657,6 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
 		.root = resolved,
-		.fileHandleType = &fileHandleType,
 		.keepShaderSource = settings->keepShaderSource
 	};
 
@@ -749,7 +738,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 				U32 storedToolchain = 0, storedSettings = 0;
 
-				if(!Packager_readSidecar(&sidecarPath, &storedToolchain, &storedSettings, &fileHandleType, alloc)) {
+				if(!Packager_readSidecar(&sidecarPath, &storedToolchain, &storedSettings, alloc)) {
 					++missNoSidecar;                        //Nothing cached yet, or the cache was wiped
 					continue;
 				}
@@ -767,7 +756,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				Buffer cached = Buffer_createNull();
 
 				if(!Packager_cacheIsClean(
-					&cachePath, &allFiles.ptr[i], &allShaderText.ptr[i], &cached, &fileHandleType, alloc
+					&cachePath, &allFiles.ptr[i], &allShaderText.ptr[i], &cached, alloc
 				)) {
 					++missContent;                          //The source or one of its includes changed
 					continue;
@@ -859,10 +848,9 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 					//A cache that fails to write is not an error: the build is still correct, just not faster.
 
-					if(File_write(&allBuffers.ptr[dst], &cachePath, 0, 0, 100 * MS, true, &fileHandleType, NULL))
+					if(File_write(&allBuffers.ptr[dst], &cachePath, 0, 0, 100 * MS, true, NULL, NULL))
 						(void) Packager_writeSidecar(
-							&sidecarPath, toolchainHash, settingsHash, &settings->includeDir,
-							&fileHandleType, alloc, NULL
+							&sidecarPath, toolchainHash, settingsHash, &settings->includeDir, alloc, NULL
 						);
 				}
 			}
@@ -933,11 +921,11 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	//This is only sound because packaging is byte deterministic; see Compiler_sortBinaries.
 
 	gotoIfError3(clean, MemoryStream_create(
-		0, EMemoryStreamFlags_WriteResize, &memStreamType, (MemoryStreamRef**) &stream, e_rr
+		0, EMemoryStreamFlags_WriteResize, &Platform_instance->types.memoryStream, (MemoryStreamRef**) &stream, e_rr
 	));
 
 	U64 startOffset = 0;
-	gotoIfError3(clean, CAFile_write(&archive, &encStreamType, stream, &startOffset, alloc, e_rr));
+	gotoIfError3(clean, CAFile_write(&archive, &Platform_instance->types.encryptionStream, stream, &startOffset, alloc, e_rr));
 	gotoIfError3(clean, MemoryStream_move((MemoryStreamRef**) &stream, &packaged, e_rr));
 
 	//An output that is already byte identical is left alone, timestamp included.
@@ -947,11 +935,11 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	if (File_hasFile(&settings->output, alloc))
 		unchanged =
-			File_read(&settings->output, 100 * MS, 0, 0, &fileHandleType, &previous, NULL) &&
+			File_read(&settings->output, 100 * MS, 0, 0, NULL, &previous, NULL) &&
 			Buffer_eq(previous, packaged);
 
 	if(!unchanged)
-		gotoIfError3(clean, File_write(&packaged, &settings->output, 0, 0, 100 * MS, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, File_write(&packaged, &settings->output, 0, 0, 100 * MS, true, NULL, e_rr));
 
 clean:
 	if(caSettings.encryptionType)

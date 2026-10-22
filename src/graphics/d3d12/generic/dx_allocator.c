@@ -178,15 +178,25 @@ Bool DxGraphicsDevice_makeResident(GraphicsDevice *device, ID3D12Pageable *objec
 	Bool s_uccess = true;
 
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
-	ID3D12Fence *fence = NULL;
 
-	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
-		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &fence
-	), e_rr));
+	//EnqueueMakeResident signals its fence in call order, so a value is taken and enqueued under one lock: the fence
+	// then reaches each value only once its own object and every earlier one are resident.
+	//The wait is outside it, since it lasts as long as the OS takes to make the object resident.
+	//A refused request skips its value, so every later one waits for a value the fence hasn't reached.
+
+	const ELockAcquire acq = SpinLock_lock(&deviceExt->residencyLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "DxGraphicsDevice_makeResident() couldn't lock the residency fence"));
+
+	const U64 value = (U64) AtomicI64_inc(&deviceExt->residencyValue);
 
 	const HRESULT hr = deviceExt->device->lpVtbl->EnqueueMakeResident(
-		deviceExt->device, D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, 1, &object, fence, 1
+		deviceExt->device, D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, 1, &object, deviceExt->residencyFence, value
 	);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&deviceExt->residencyLock);
 
 	if(hr == E_OUTOFMEMORY)
 		retError(clean, Error_outOfMemory(
@@ -198,13 +208,11 @@ Bool DxGraphicsDevice_makeResident(GraphicsDevice *device, ID3D12Pageable *objec
 
 	//A null event blocks until the fence reaches the value, which is when the object is resident
 
-	gotoIfError3(clean, dxCheck(fence->lpVtbl->SetEventOnCompletion(fence, 1, NULL), e_rr));
+	gotoIfError3(clean, dxCheck(deviceExt->residencyFence->lpVtbl->SetEventOnCompletion(
+		deviceExt->residencyFence, value, NULL
+	), e_rr));
 
 clean:
-
-	if(fence)
-		fence->lpVtbl->Release(fence);
-
 	return s_uccess;
 }
 

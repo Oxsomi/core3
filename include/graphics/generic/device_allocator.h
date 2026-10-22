@@ -42,7 +42,7 @@ typedef struct DeviceMemoryBlock {
 
 	Bool isDedicated;
 	Bool isActive;
-	U16 allocationTypeExt;          //Allocation type flags (e.g. host visible); bit 0 is set for video memory on both backends
+	U16 allocationTypeExt;          //Allocation type flags (e.g. host visible)
 
 	U8 *mappedMemoryExt;            //Not always available, can be done on a resource basis
 

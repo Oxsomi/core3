@@ -16,16 +16,9 @@
 #
 # TEST_COMMAND is | separated, because a ; separated list would be split by -D itself.
 #
-# The exit code alone cannot tell that a test did not run.
-# An antivirus that quarantines a fresh executable makes it exit 0 without printing anything, and that counts as passed.
-# So a test can also be judged by what it printed:
-# - TEST_EXPECT: a regex the test's stdout has to match.
-#   The suites print "-- End: Success (N)" as their last line when every module ran to its end and every assert held
-#   (types/base/test/shared/shared.c, Test_end), which is what the suites are given.
-# - TEST_FAIL_ON: a regex that fails the test when either stream matches it, also when the exit code was 0.
-#   A UBSan build reports each place that did something undefined once and goes on: it exits 0 and prints its End line,
-#   and what it did is only in the text on stderr.
-# Both are regexes in CMake's syntax and both are optional, so a test that prints neither keeps being judged by its exit code.
+# TEST_EXPECT is a regex the test's stdout has to match, such as the "-- End: Success (N)" of a suite that passed.
+# TEST_FAIL_ON is a regex that fails the test when either stream matches it, also with exit code 0 (a UBSan report).
+# Both are optional; without them a test is judged by its exit code alone.
 
 # TEST_EXE is one binary; TEST_COMMAND is a whole command line, which is what a suite driven by a script
 # needs. Exactly one of them.

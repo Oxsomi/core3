@@ -240,18 +240,15 @@ typedef enum ESHExtension2 {
 	ESHExtension2_ExperimentTier1            = 1 << 0,
 	ESHExtension2_ExperimentTier2            = 1 << 1,
 
-	//Packed 4 x 8 bit integer dot products with a 32 bit accumulate: dot4add_i8packed and dot4add_u8packed.
-	//DXIL: SM6.4's Dot4AddI8Packed and Dot4AddU8Packed, which set no requires flag, so reflection can't detect them;
-	// every device OxC3 compiles DXIL for runs them, as its shader model floor is above 6.4.
-	//SPIR-V: DXC lowers them to OpSDot and OpUDot of PackedVectorFormat4x8Bit and an OpIAdd (SPV_KHR_integer_dot_product),
-	// which declares the DotProduct and DotProductInput4x8BitPacked capabilities that map to this extension.
+	//Packed 4 x 8 bit integer dot products with a 32 bit accumulate (dot4add_i8packed, dot4add_u8packed).
+	//SPIR-V declares them with the DotProduct and DotProductInput4x8BitPacked capabilities, which reflection detects;
+	// DXIL sets no requires flag for them, so reflection can't.
 	//The device needs EGraphicsFeatures2_IntegerDot4x8.
 
 	ESHExtension2_IntegerDot4x8              = 1 << 2,
 
 	//What reflection detects, as ESHExtension_DxilNative and ESHExtension_SpirvNative are for the first mask.
-	//SPIR-V reflects IntegerDot4x8 from its capabilities, so a binary that declares it and doesn't use it has it dormant.
-	//DXIL reflects none of these.
+	//SPIR-V detects IntegerDot4x8, so a SPIR-V binary that declares it without using it has it dormant; DXIL detects none.
 
 	ESHExtension2_DxilNative                 = ESHExtension2_None,
 	ESHExtension2_SpirvNative                = ESHExtension2_IntegerDot4x8,

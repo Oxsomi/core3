@@ -63,13 +63,10 @@ namespace oxc { namespace gfxtest {
 
 		const c::CharString section = c::CharString_createRefCStrConst("//OxC3_gtest");
 		const c::CharString path = c::CharString_createRefCStrConst(pathStr);
+		const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
 		const c::RefPtrType fileHandleType = c::FileHandle_makeType(alloc);
 
-		//The loaded section can keep streams that refer to this type, so it outlives the call.
-
-		static const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
-
-		c::File_loadVirtual(&section, &memStreamType, nullptr, nullptr, alloc, nullptr);
+		c::File_loadVirtual(&section, nullptr, nullptr, nullptr, alloc, nullptr);
 
 		if(!c::File_hasFile(&path, alloc))
 			return false;

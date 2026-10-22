@@ -42,7 +42,6 @@
 typedef struct CAFileRecursion {
 	CAFile *archive;
 	CharString root;
-	const RefPtrType *fileHandleType;
 } CAFileRecursion;
 
 Bool addFileToCAFile(const FileInfo *file, void *caFileGeneric, const Allocator *alloc, Error *e_rr) {
@@ -84,7 +83,7 @@ Bool addFileToCAFile(const FileInfo *file, void *caFileGeneric, const Allocator 
 
 	if (file->type == EFileType_File) {
 
-		gotoIfError3(clean, File_read(&file->path, 100 * MS, 0, 0, caFile->fileHandleType, &data, e_rr));
+		gotoIfError3(clean, File_read(&file->path, 100 * MS, 0, 0, NULL, &data, e_rr));
 
 		CAHandle handle = CAFile_addFile(caFile->archive, parent, &subPath, file->timestamp, alloc, e_rr);
 
@@ -124,9 +123,6 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 	FileInfo fileInfo = (FileInfo) { 0 };
 	Buffer fileData = Buffer_createNull();
 
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType streamType = FileStream_makeType(alloc);
-	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
 	StreamRef *stream = NULL;
 
 	(void)convert->inputInfo;
@@ -174,8 +170,7 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &file,
-		.root = resolved,
-		.fileHandleType = &fileHandleType
+		.root = resolved
 	};
 
 	if(File_hasFile(&resolved, alloc)) {
@@ -186,7 +181,7 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 			retError(clean, Error_invalidState(0, "CLI_convertToCA() cutBeforeLast failed"));
 
 		gotoIfError3(clean, File_getInfo(&resolved, &fileInfo, alloc, e_rr));
-		gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &fileData, e_rr));
+		gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, NULL, &fileData, e_rr));
 
 		gotoIfError3(clean, CharString_createCopy(subPath, alloc, &fileName, e_rr));
 
@@ -217,11 +212,11 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 	//Convert to CAFile and write to file
 
 	gotoIfError3(clean, File_openStream(
-		convert->output, 50 * MS, EFileOpenType_Write, true, &fileHandleType, &streamType, &stream, e_rr
+		convert->output, 50 * MS, EFileOpenType_Write, true, NULL, NULL, &stream, e_rr
 	));
 
 	U64 startOffset = 0;
-	gotoIfError3(clean, CAFile_write(&file, &encStreamType, stream, &startOffset, alloc, e_rr));
+	gotoIfError3(clean, CAFile_write(&file, &Platform_instance->types.encryptionStream, stream, &startOffset, alloc, e_rr));
 
 clean:
 	if(settings.encryptionType)
@@ -287,9 +282,7 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 
 	CAFile file = (CAFile) { 0 };
 
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType memStreamType = MemoryStream_makeType(alloc);
-	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
+	const PlatformTypes *types = &Platform_instance->types;
 	MemoryStreamRef *memStream = NULL;
 
 	//TODO: Batch multiple files
@@ -307,9 +300,11 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 
 	//Read file
 
-	gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr));
-	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, EMemoryStreamFlags_None, &memStreamType, &memStream, e_rr));
-	gotoIfError3(clean, CAFile_read(memStream, &encStreamType, 0, hasAES ? convert->encKey : NULL, alloc, &file, e_rr));
+	gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, NULL, &buf, e_rr));
+	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, EMemoryStreamFlags_None, &types->memoryStream, &memStream, e_rr));
+	gotoIfError3(clean, CAFile_read(
+		memStream, &types->encryptionStream, 0, hasAES ? convert->encKey : NULL, alloc, &file, e_rr
+	));
 
 	U64 entryCount = CAFile_fileObjectCount(&file, CAHandle_Root, true);
 	Bool outputAsSingle = entryCount == 1;

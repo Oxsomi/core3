@@ -52,6 +52,11 @@ oxc3_add_bundled_test(
 
 apply_web_link_options(OxC3_wtest)
 
+# platforms_interface reads its large entry out of this section, as OxC3_plinttst does
+
+include(${testRoot}/platforms/test/large_test_data.cmake)
+oxc3_add_large_test_data(OxC3_wtest ${testRoot}/..)
+
 apply_dependencies(OxC3_wtest)
 
 # ctest: CMAKE_CROSSCOMPILING_EMULATOR (node) runs the module.

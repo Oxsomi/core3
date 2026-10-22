@@ -443,6 +443,12 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->commitSemaphore
 	), e_rr));
 
+	//DxGraphicsDevice_makeResident's own fence (see DxGraphicsDevice::residencyFence)
+
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
+		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->residencyFence
+	), e_rr));
+
 	//The pipeline library every PSO is stored in; without one (a driver without libraries) PSOs are just uncached
 
 	if(FAILED(deviceExt->device->lpVtbl->CreatePipelineLibrary(
@@ -696,6 +702,9 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 		if(deviceExt->commitSemaphore)
 			deviceExt->commitSemaphore->lpVtbl->Release(deviceExt->commitSemaphore);
+
+		if(deviceExt->residencyFence)
+			deviceExt->residencyFence->lpVtbl->Release(deviceExt->residencyFence);
 
 		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 

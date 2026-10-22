@@ -601,12 +601,11 @@ clean:
 
 		//Read it straight back out of the buffer the compiler produced.
 
-		const RefPtrType streamType = MemoryStream_makeType(alloc);
 		U64 offset = 0;
 
 		gotoIfError3(clean, MemoryStream_createFromBufferRegion(
 			Buffer_createRefFromBuffer(buffers.ptr[0], true), 0, Buffer_length(buffers.ptr[0]),
-			EMemoryStreamFlags_None, &streamType, &stream, e_rr
+			EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &stream, e_rr
 		));
 
 		gotoIfError3(clean, SHFile_read((StreamRef*) stream, &offset, false, alloc, out, e_rr));
@@ -723,18 +722,18 @@ clean:
 	//The stored pipeline has to be of the same kind, since its fields belong to that kind's state.
 
 	static Bool CLI_isaApplyPipelineInput(
-		SPFile *spFile, U32 pipelineId, CharString path, const RefPtrType *fileHandleType,
-		const Allocator *alloc, Error *e_rr
+		SPFile *spFile, U32 pipelineId, CharString path, const Allocator *alloc, Error *e_rr
 	) {
 
 		Bool s_uccess = true;
 		Buffer data = Buffer_createNull();
 		StreamRef *stream = NULL;
 		SPFile stored = (SPFile) { 0 };
-		const RefPtrType memStreamType = MemoryStream_makeType(alloc);
 
-		gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, fileHandleType, &data, e_rr));
-		gotoIfError3(clean, MemoryStream_createFromBuffer(&data, EMemoryStreamFlags_None, &memStreamType, &stream, e_rr));
+		gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, NULL, &data, e_rr));
+		gotoIfError3(clean, MemoryStream_createFromBuffer(
+			&data, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &stream, e_rr
+		));
 
 		U64 off = 0;
 		gotoIfError3(clean, SPFile_read(stream, &off, false, alloc, &stored, e_rr));
@@ -949,8 +948,7 @@ clean:
 
 	static Bool CLI_isaDisassembleLive(
 		SHFile shFile, EGfxBinaryType binaryType, U64 deviceId, CharString liveTarget,
-		Bool hasOutput, CharString outputStr,
-		const RefPtrType *fileHandleType, Bool assumeDefaults,
+		Bool hasOutput, CharString outputStr, Bool assumeDefaults,
 		Bool hasPipelineOutput, CharString pipelineOutputStr, CharString psoSet, CharString psoInput,
 		CharString shaderName,
 		const Allocator *alloc, Error *e_rr
@@ -972,7 +970,6 @@ clean:
 		ListCharString runtimeNames = (ListCharString) { 0 };
 		ListCharString liveTargets = (ListCharString) { 0 };
 		StreamRef *pipelineStream = NULL;
-		const RefPtrType memStreamType = MemoryStream_makeType(alloc);
 		U32 pipelineId = U32_MAX;
 		ListCharString issues = (ListCharString) { 0 };
 		SHFile standIns = (SHFile) { 0 };
@@ -1263,7 +1260,7 @@ clean:
 		// the oiSP a previous -pso-output wrote; every value it carries counts as supplied.
 
 		if(CharString_length(psoInput))
-			gotoIfError3(clean, CLI_isaApplyPipelineInput(&spFile, pipelineId, psoInput, fileHandleType, alloc, e_rr));
+			gotoIfError3(clean, CLI_isaApplyPipelineInput(&spFile, pipelineId, psoInput, alloc, e_rr));
 
 		//-pso-set supplies any reported field by the path the report prints, so nothing has to stay assumed.
 
@@ -1639,7 +1636,9 @@ clean:
 		if (hasPipelineOutput) {
 
 			gotoIfError3(clean, SPFile_finalize(&spFile, alloc, e_rr));
-			gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memStreamType, &pipelineStream, e_rr));
+			gotoIfError3(clean, MemoryStream_create(
+				0, EMemoryStreamFlags_WriteResize, &Platform_instance->types.memoryStream, &pipelineStream, e_rr
+			));
 
 			U64 pipelineOff = 0;
 			gotoIfError3(clean, SPFile_write(&spFile, alloc, pipelineStream, &pipelineOff, e_rr));
@@ -1647,7 +1646,7 @@ clean:
 			const MemoryStream *pipelineMs = RefPtr_data(pipelineStream, MemoryStream);
 			const Buffer written = Buffer_createRefConst(pipelineMs->data.ptr, pipelineOff);
 
-			gotoIfError3(clean, File_write(&written, &pipelineOutputStr, 0, 0, 1 * SECOND, true, fileHandleType, e_rr));
+			gotoIfError3(clean, File_write(&written, &pipelineOutputStr, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 			Log_debugLnx(
 				"Wrote the pipeline -> %.*s",
@@ -1660,7 +1659,7 @@ clean:
 		if(hasOutput) {
 
 			const Buffer textBuf = CharString_bufferConst(text);
-			gotoIfError3(clean, File_write(&textBuf, &outputStr, 0, 0, 1 * SECOND, true, fileHandleType, e_rr));
+			gotoIfError3(clean, File_write(&textBuf, &outputStr, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 			Log_debugLnx(
 				"Wrote live ISA for '%.*s' -> %.*s",
@@ -1705,8 +1704,6 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 	Error err = Error_none(), *e_rr = &err;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
 
 	CharString inputStr = CharString_createNull(), outputStr = CharString_createNull(), asic = CharString_createNull();
 	Buffer input = Buffer_createNull(), isa = Buffer_createNull();
@@ -1776,9 +1773,9 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 		if(live) {
 
-			gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, &fileHandleType, &input, e_rr));
+			gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, NULL, &input, e_rr));
 			gotoIfError3(clean, MemoryStream_createFromBuffer(
-				&input, EMemoryStreamFlags_None, &memoryStreamType, &readStream, e_rr
+				&input, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &readStream, e_rr
 			));
 
 			U64 liveOff = 0;
@@ -1880,7 +1877,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 				CharString_length(pipelineOutputStr);
 
 			gotoIfError3(clean, CLI_isaDisassembleLive(
-				shFile, liveType, deviceId, liveTarget, hasOutput, outputStr, &fileHandleType, assumeDefaults,
+				shFile, liveType, deviceId, liveTarget, hasOutput, outputStr, assumeDefaults,
 				hasPipelineOutput, pipelineOutputStr, psoSetStr, psoInputStr, inputStr, alloc, e_rr
 			));
 
@@ -1922,7 +1919,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 	if(handled)                                  //'?' just listed the devices; nothing to disassemble
 		goto clean;
 
-	gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, &fileHandleType, &input, e_rr));
+	gotoIfError3(clean, File_read(&inputStr, 1 * SECOND, 0, 0, NULL, &input, e_rr));
 
 	//Get the SPIR-V to disassemble: a raw .spv is used as-is, an oiSH has its SPIR-V binary extracted (per -entry).
 	//DXIL has no offline path here (that's the live-AMD-device route, a separate step), so DXIL-only input errors.
@@ -1936,7 +1933,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 	else if(CharString_endsWithStringInsensitive(&inputStr, &oiSHExt, 0)) {
 
 		gotoIfError3(clean, MemoryStream_createFromBuffer(
-			&input, EMemoryStreamFlags_None, &memoryStreamType, &readStream, e_rr
+			&input, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &readStream, e_rr
 		));
 
 		U64 off = 0;
@@ -2018,7 +2015,7 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 	if(hasOutput) {
 
-		gotoIfError3(clean, File_write(&isa, &outputStr, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, File_write(&isa, &outputStr, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 		Log_debugLnx(
 			"Disassembled %.*s to AMD ISA for %.*s -> %.*s",

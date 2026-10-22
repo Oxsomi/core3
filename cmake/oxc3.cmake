@@ -900,14 +900,10 @@ endfunction()
 # to it, a dylib it dlopens).
 # Registers with ctest, and runs it after building unless OxC3TestAutoRun is off.
 #
-# A run is judged by its exit code and by what it printed (see cmake/run_test.cmake).
-# EXPECT is a regex the output has to match, which defaults to the result line every suite prints when it ran to its end,
-# "-- End: Success (N)"; NO_EXPECT drops it for an executable that prints no such line.
-# FAIL_ON is a regex that fails the run when it matches either stream, which defaults to a UBSan report in a UBSan build,
-# where reports don't change the exit code.
-# The build step applies both.
-# ctest applies FAIL_ON (FAIL_REGULAR_EXPRESSION) and leaves EXPECT out: a PASS_REGULAR_EXPRESSION makes ctest ignore the
-# exit code, so a crash after the result line would pass.
+# A run is judged by its exit code and by what it printed (cmake/run_test.cmake).
+# EXPECT is a regex its stdout has to match (NO_EXPECT drops it), by default the "-- End: Success (N)" of a passed suite.
+# FAIL_ON is a regex that fails the run when either stream matches it, by default a UBSan report in a UBSan build.
+# The build step applies both, ctest only FAIL_ON (FAIL_REGULAR_EXPRESSION).
 
 function(oxc3_add_test_run)
 
@@ -1058,7 +1054,7 @@ endfunction()
 
 # A test that is not an executable of its own (the CLI suite drives a python script against a built binary).
 # It hangs off the target it exercises, so it re-runs when that binary changes.
-# EXPECT and FAIL_ON judge its output as for oxc3_add_test_run, but neither defaults: a command prints what it prints.
+# EXPECT and FAIL_ON judge its output as for oxc3_add_test_run, without defaults.
 
 function(oxc3_add_test_command)
 

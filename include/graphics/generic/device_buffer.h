@@ -126,8 +126,7 @@ Bool DeviceBuffer_readUploadSource(
 //host as a whole. size is what the resource will be; this does not read the stream to find out.
 //A reference is taken on the stream and dropped with the buffer. CPUBacked is refused, since that flag is a
 // host copy to read BACK into, which is the opposite of what a stream source is for.
-//A HostMemory buffer is filled from the stream at its first upload and keeps no source after it, so keepSource is refused
-// for it.
+//keepSource is refused for a HostMemory buffer, which keeps no source after its first upload.
 
 Bool GraphicsDeviceRef_createBufferStream(
 	GraphicsDeviceRef *dev,
@@ -168,22 +167,15 @@ Bool GraphicsDeviceRef_createBufferData(
 	Error *e_rr
 );
 
-//The CPU's read only view of the bytes of a HostMemoryRead buffer (EGraphicsResourceFlag_HostMemoryRead), as many as
-// the buffer has; NULL for any other buffer.
-//The bytes are the data given at create once its upload has landed (the submit after the create has completed), and
-// the pointer stays valid for as long as the buffer lives.
-//Also NULL where the buffer could not get memory the CPU reads at memory speed (Vulkan on a device without a host cached
-// and coherent memory type: the CPU would read write combined memory at a few hundred MB/s), so a caller that wants the
-// fast read falls back to its other path.
+//The CPU's read only view of a HostMemoryRead buffer's bytes, valid while the buffer lives; they are the data given at
+// create once the submit after the create has completed.
+//NULL for any other buffer and where the CPU could only read the memory uncached (GraphicsResource::hostUncached).
 
 const U8 *DeviceBufferRef_hostMemory(const DeviceBufferRef *buffer);
 
-//The same bytes as a view the CPU may write, for the owner of a HostMemoryRead buffer that fills or refills it after the
-// create (a buffer made by createBuffer holds undefined bytes until it does). NULL wherever DeviceBufferRef_hostMemory is.
-//The memory is CPU cached and coherent, so the device sees a write once it is done: the owner orders it before the
-// submit that reads those bytes and never writes bytes that a submitted list may still read (that submit has completed,
-// or the device waited).
-//Writes go through this pointer only; markDirty has nothing to copy from and refuses a HostMemory buffer.
+//The same bytes for the buffer's owner to write; NULL wherever DeviceBufferRef_hostMemory is.
+//A buffer made by createBuffer holds undefined bytes until its owner writes them.
+//The owner writes before the submit that reads them, never while a submitted list may still read them.
 
 U8 *DeviceBufferRef_hostMemoryWritable(DeviceBufferRef *buffer);
 
@@ -203,8 +195,7 @@ static inline U64 DeviceBuffer_allocSize(U64 size) { return (size + 3) &~ (U64)3
 //Call this as little as possible while still not copying too much data.
 //A range needs a source that can still be read: a CPU backed buffer, a stream backed one, or a CPUAllocated
 // one whose memory the caller wrote into directly. Anything else can only be marked for its first upload, a HostMemory
-// buffer included: it is CPUAllocated, but its owner writes through DeviceBufferRef_hostMemoryWritable and there is no
-// source left to copy a range from.
+// buffer included.
 
 Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr);
 
