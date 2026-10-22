@@ -537,6 +537,74 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 
 	c::Test_assert(t, "bufferPushAccepted", dev.createDescriptorLayout(bufInfo, "Push class layout", layout, &t->err));
 
+	//A push binding is one descriptor, so a push layout is bounded by OXC3_MAX_PUSH_DESCRIPTORS bindings and an
+	// array binding is refused: the work op writes exactly one descriptor per binding and D3D12 has no root
+	// descriptor form for an array, so neither could ever be filled.
+	//Both rules are pinned from both sides, since a refusal is easy to read as too strict and lift.
+
+	c::DescriptorBinding many[OXC3_MAX_PUSH_DESCRIPTORS + 1];
+	c::CharString manyNames[OXC3_MAX_PUSH_DESCRIPTORS + 1];
+
+	for(c::U32 i = 0; i < OXC3_MAX_PUSH_DESCRIPTORS + 1; ++i) {
+		many[i] = push;
+		many[i].binding.binding = i;
+		manyNames[i] = pushName;
+	}
+
+	c::DescriptorLayoutInfo capInfo{};
+	capInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+	c::ListDescriptorBinding_createRefConst(many, OXC3_MAX_PUSH_DESCRIPTORS, &capInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(manyNames, OXC3_MAX_PUSH_DESCRIPTORS, &capInfo.bindingNames, nullptr);
+
+	DescriptorLayout capLayout;
+
+	c::Test_assert(t, "pushCapAccepted", dev.createDescriptorLayout(capInfo, "Push class layout", capLayout, &t->err));
+
+	c::DescriptorLayoutInfo overInfo{};
+	overInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+	c::ListDescriptorBinding_createRefConst(many, OXC3_MAX_PUSH_DESCRIPTORS + 1, &overInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(manyNames, OXC3_MAX_PUSH_DESCRIPTORS + 1, &overInfo.bindingNames, nullptr);
+
+	DescriptorLayout overLayout;
+
+	c::Test_assert(t, "pushOverCapRefused", !dev.createDescriptorLayout(
+		overInfo, "Push class layout", overLayout, nullptr
+	));
+
+	c::Test_assert(t, "pushOverCapNoLayout", !overLayout.valid());
+
+	//The same bindings outside a push descriptor layout build, so the count is the only objection
+
+	overInfo.flags = c::EDescriptorLayoutFlags_None;
+
+	c::Test_assert(t, "overCapRegularAccepted", dev.createDescriptorLayout(
+		overInfo, "Push class layout", overLayout, &t->err
+	));
+
+	c::DescriptorBinding pushArray = push;
+	pushArray.count = 2;
+
+	c::DescriptorLayoutInfo arrayInfo{};
+	arrayInfo.flags = c::EDescriptorLayoutFlags_HasPushDescriptors;
+	c::ListDescriptorBinding_createRefConst(&pushArray, 1, &arrayInfo.bindings, nullptr);
+	c::ListCharString_createRefConst(&pushName, 1, &arrayInfo.bindingNames, nullptr);
+
+	DescriptorLayout arrayLayout;
+
+	c::Test_assert(t, "pushArrayRefused", !dev.createDescriptorLayout(
+		arrayInfo, "Push class layout", arrayLayout, nullptr
+	));
+
+	c::Test_assert(t, "pushArrayNoLayout", !arrayLayout.valid());
+
+	//And the same array outside a push descriptor layout builds, so the push set is the only objection
+
+	arrayInfo.flags = c::EDescriptorLayoutFlags_None;
+
+	c::Test_assert(t, "arrayRegularAccepted", dev.createDescriptorLayout(
+		arrayInfo, "Push class layout", arrayLayout, &t->err
+	));
+
 	//A rotation is out of range rather than merely unsupported past 3
 
 	CommandList commandList;

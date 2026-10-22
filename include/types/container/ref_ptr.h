@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/container/hash_set.h"
 #include "types/base/types.h"
 #include "types/base/allocator.h"
 #include "types/base/type_id.h"
@@ -91,6 +92,7 @@ typedef struct RefPtr {
 } RefPtr;
 
 TListNamed(RefPtr*, ListRefPtr);
+THashSetNamed(ListRefPtr, HashSetRefPtr);        //Keyed on the RefPtr* itself
 
 //Needs type to stay allocated through the lifetime of the RefPtr.
 //Also needs a unique one per length & alloc.

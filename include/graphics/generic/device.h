@@ -28,6 +28,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/hash_set.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
@@ -60,26 +61,24 @@ typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 TListNamed(SpinLock*, ListSpinLockPtr);
 
 typedef enum EGraphicsDeviceFlags {
+
 	EGraphicsDeviceFlags_None            = 0,
 	EGraphicsDeviceFlags_IsVerbose       = 1 << 0,    //Device creation is verbose
 	EGraphicsDeviceFlags_IsDebug         = 1 << 1,    //Debug features such as API/RT validation, debug marker/names
-	EGraphicsDeviceFlags_DisableRt       = 1 << 2,    //Don't allow raytracing to be enabled (might reduce driver overhead)
-	EGraphicsDeviceFlags_DisableDebug    = 1 << 3,    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
-	EGraphicsDeviceFlags_DisableBindless = 1 << 4,    //No bindless layout, even where the device supports it
+	EGraphicsDeviceFlags_DisableDebug    = 1 << 2,    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
 
 	//Adds the bindless _samplers[] array to the default layout.
-	//Opt in because that array owns a descriptor set to itself on Vulkan (set 0, while every resource
-	// array shares set 1) and forces a sampler heap on both backends, and a shader only needs it to index
-	// samplers dynamically.
+	//Opt in because that array owns a descriptor set to itself on Vulkan (set 0, while every resource array shares set 1)
+	// and forces a sampler heap on both backends, and a shader only needs it to index samplers dynamically.
 	//Static samplers cover the ordinary case at no cost; see DescriptorLayoutInfo::immutableSamplers.
 
-	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 5,
+	EGraphicsDeviceFlags_EnableDynamicSamplers = 1 << 3,
 
 	//Breadcrumbs: every scope records on the GPU when it began and ended, into memory the process owns, so a lost
 	// device can still say which scopes it was in (docs/graphics_api.md, "Device loss"). Two small writes a scope.
 	//On by default on a debug device.
 
-	EGraphicsDeviceFlags_Breadcrumbs = 1 << 6,
+	EGraphicsDeviceFlags_Breadcrumbs = 1 << 4,
 
 	//Takes binaries marked [[oxc::extension("UnsafeExperimentExecution")]] (ESHExtension_UnsafeExperimentExecution),
 	// unvalidated and without checking the device supports what they declare, which no other device does.
@@ -87,13 +86,13 @@ typedef enum EGraphicsDeviceFlags {
 	// tier its driver claims for instance (EGraphicsFeatures2_ExperimentTier1). Creating such a device logs a warning
 	// saying so.
 
-	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 7,
+	EGraphicsDeviceFlags_AllowUnsafeExperimentExecution = 1 << 5,
 
 	//Takes binaries marked [[oxc::extension("UnsafeExtensionExecution")]] (ESHExtension_UnsafeExtensionExecution), which
 	// use extensions OxC3 doesn't recognize and so can't check the device for. Their recognized extensions are still
 	// checked. Creating such a device logs a warning saying so.
 
-	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 8
+	EGraphicsDeviceFlags_AllowUnsafeExtensionExecution = 1 << 6
 
 } EGraphicsDeviceFlags;
 
@@ -181,7 +180,7 @@ TList(TimingEntry);
 // the API, so nothing is named for a debugger unless the device is a debug one.
 
 //Live entries read address, size, block and type from the resource itself: it unregisters under the device lock before
-// anything of it is freed, so an entry found under that lock is still whole. A texture has one entry per image.
+// anything of it is freed, so an entry found under that lock is still whole. A resource has one entry.
 
 typedef struct LiveResource {
 	WeakRefPtr *resource;                   //DeviceBufferRef or TextureRef
@@ -190,6 +189,7 @@ typedef struct LiveResource {
 } LiveResource;
 
 TList(LiveResource);
+THashSet(LiveResource);                     //Keyed on the resource
 
 //A freed resource can't be read any more, so it keeps a copy of what a loss would name it by.
 
@@ -248,7 +248,7 @@ typedef struct GraphicsDevice {
 
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
-	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];     //Resources in flight, TODO: HashMap
+	HashSetRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];  //Resources in flight, per frame
 
 	//Compacted size slots, handed out per BLAS built with AllowCompaction and returned when the compaction
 	//that reads one consumes it. Only the storage differs per backend, a query pool on Vulkan and a pair of
@@ -272,7 +272,7 @@ typedef struct GraphicsDevice {
 	//Every live buffer and texture, and the last GRAPHICS_FREED_RESOURCES freed ones since a fault in freed memory
 	//is exactly what a loss should name. Same contract as liveTlases: guarded by lock, no references held.
 
-	ListLiveResource liveResources;
+	HashSetLiveResource liveResources;
 	FreedResource freedResources[GRAPHICS_FREED_RESOURCES];
 	U32 freedResourceNext;
 	U32 lossPadding;
@@ -403,7 +403,7 @@ typedef struct GraphicsDevice {
 	ListU64 pipelineSizes;
 
 	AtomicI64 pipelineKnownIRBytes;         //The IR size of the pipelines in pipelineBytes, to compare the estimate with
-	U8 padding[16];
+	U8 padding[40];
 
 } GraphicsDevice;
 
@@ -451,7 +451,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 
 //bindlessLayout describes the device's bindless descriptor layout, table and pipeline layout.
 //NULL means GraphicsDevice_defaultBindlessLayout, which is what OxC3's own shaders are compiled against.
-//It is ignored if the device lacks EGraphicsFeatures_Bindless or if EGraphicsDeviceFlags_DisableBindless is set,
+//It is ignored if the device lacks EGraphicsFeatures_Bindless,
 // in which case there is no default table or pipeline layout and every pipeline has to bring its own.
 //The device copies it, so the caller keeps ownership and can free it right after.
 //Its flags are taken as given, so EDescriptorLayoutFlags_AllowBindlessOnArrays has to be set to allocate bindlessly.
@@ -610,6 +610,21 @@ Bool GraphicsDevice_resolveTimings(
 //True exactly once per device per message, so the caller logs on true and stays silent forever after.
 
 Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message);
+
+//A frame holds one entry and one reference per resource until it completes, so a caller adds a resource once
+// and takes or hands over exactly one reference for it.
+
+Bool GraphicsDevice_isInFlight(const GraphicsDevice *device, RefPtr *resource);
+Bool GraphicsDevice_isInAnyFlight(const GraphicsDevice *device, RefPtr *resource);        //Any frame, not just this one
+
+Bool GraphicsDevice_addInFlight(GraphicsDevice *device, RefPtr *resource, const Allocator *alloc, Error *e_rr);
+
+//Makes room for one more, so the add that follows cannot fail: that is what lets a backend record a command
+// first and retire what it reads afterwards, with no undo needed.
+
+Bool GraphicsDevice_reserveInFlight(GraphicsDevice *device, const Allocator *alloc, Error *e_rr);
+
+Bool GraphicsDevice_clearInFlight(GraphicsDevice *device, U8 fifId, Error *e_rr);        //Gives every reference back
 
 //The twin for a message that reports current LOAD rather than a fact about the device. logOnce is right where
 //the first line already says everything and the condition will never change; it is wrong where the useful

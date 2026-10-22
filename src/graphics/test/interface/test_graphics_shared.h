@@ -98,6 +98,7 @@ void Test_graphicsOmmRayQuery(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsTextureRef(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsResourceRegistry(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsResourceRegistrySet(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPipelineCache(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsSamplerAndData(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPipelineLayout(Test *t, GraphicsDeviceRef *deviceRef);
@@ -131,6 +132,8 @@ void Test_graphicsTextureShapes(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFramesInFlight(Test *t, GraphicsDeviceRef *deviceRef);
 
 void Test_graphicsCapabilities(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsCapabilityDisable(Test *t);
+void Test_graphicsBindfulPushRollover(Test *t, GraphicsDeviceRef *deviceRef);
 
 //Shader execution helpers, defined in test_graphics_shaders.c and shared with the capability execution
 //module so the two don't keep their own copies of the same load/dispatch/readback dance.

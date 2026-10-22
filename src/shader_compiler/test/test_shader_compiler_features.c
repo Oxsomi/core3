@@ -713,10 +713,8 @@ void Test_shaderCompilerFeatures(Test *t) {
 			Bool ok =
 				compileFileShader(alloc, "features/uniform_values.hlsl", backends[b].mode, true, false, &out, &err) &&
 				out.length == 1 && Buffer_length(out.ptr[0]) &&
-				readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2;
-
-			if (ok)
-				ok = created = Compiler_create(alloc, &comp, &err);
+				readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length == 2 &&
+				(created = Compiler_create(alloc, &comp, &err)) != false;
 
 			for (U64 j = 0; ok && j < shFile.binaries.length; ++j) {
 

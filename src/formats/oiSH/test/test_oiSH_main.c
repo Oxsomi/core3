@@ -154,6 +154,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRegisterBufferWriteFlagRejections(&t);
 	Test_SHFileRegisterConstantBufferSizeLimit(&t);
 	Test_SHFileRegisterPackingNeedsClaim(&t);
+	Test_SHFileRegisterHashCollisionKeepsBoth(&t);
 	Test_SHFileWriteJson(&t);
 
 	BasicAllocator_checkLeakedMem(&t);

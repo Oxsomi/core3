@@ -80,7 +80,7 @@ extern "C" void Test_graphicsFormats(oxc::c::Test *t) {
 	Test_assert(t, "unpackRGBA8", c::ETextureFormatId_unpack[c::ETextureFormatId_RGBA8] == c::ETextureFormat_RGBA8);
 	Test_assert(t, "unpackUndefined", c::ETextureFormatId_unpack[c::ETextureFormatId_Undefined] == c::ETextureFormat_Undefined);
 
-	//The support queries only read capabilities.dataTypes, so a synthesised info exercises both answers without
+	//The support queries only read capabilities.flags.dataTypes, so a synthesised info exercises both answers without
 	// needing the adapter to happen to have or lack the type.
 
 	c::GraphicsDeviceInfo none {};
@@ -88,7 +88,7 @@ extern "C" void Test_graphicsFormats(oxc::c::Test *t) {
 
 	//Cast because C++ types an OR of enumerators as int, unlike C.
 
-	all.capabilities.dataTypes = (c::EGraphicsDataTypes) (
+	all.capabilities.flags.dataTypes = (c::EGraphicsDataTypes) (
 		c::EGraphicsDataTypes_BCn | c::EGraphicsDataTypes_ASTC | c::EGraphicsDataTypes_RGB32f |
 		c::EGraphicsDataTypes_D24S8 | c::EGraphicsDataTypes_S8
 	);
@@ -282,7 +282,7 @@ extern "C" void Test_graphicsDefaultBindlessLayout(oxc::c::Test *t) {
 
 	c::GraphicsDeviceInfo info {};
 	c::GraphicsDeviceInfo infoRt {};
-	infoRt.capabilities.features = c::EGraphicsFeatures_Raytracing;
+	infoRt.capabilities.flags.features = c::EGraphicsFeatures_Raytracing;
 
 	c::DescriptorLayoutInfo result {};
 

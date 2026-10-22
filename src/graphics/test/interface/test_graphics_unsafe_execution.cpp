@@ -55,7 +55,7 @@ namespace {
 		const c::Allocator *alloc = c::Platform_instance->alloc;
 		const c::GraphicsDevice *device = RefPtr_data(dev.handle(), c::GraphicsDevice);
 		const c::Bool hasFlag = !unsafe.flag || (device->flags & unsafe.flag);
-		const c::Bool claimsTier = (device->info.capabilities.features2 & unsafe.tier) == unsafe.tier;
+		const c::Bool claimsTier = (device->info.capabilities.flags.features2 & unsafe.tier) == unsafe.tier;
 		const c::Bool allowed = hasFlag && claimsTier;
 
 		Test_setModule(t, unsafe.module);
@@ -191,7 +191,7 @@ extern "C" void Test_graphicsUnsafeExecution(oxc::c::Test *t, oxc::c::GraphicsDe
 	const c::Bool experiments = !!(device->flags & c::EGraphicsDeviceFlags_AllowUnsafeExperimentExecution);
 	const c::Bool extensions = !!(device->flags & c::EGraphicsDeviceFlags_AllowUnsafeExtensionExecution);
 
-	const c::Bool tier1 = !!(device->info.capabilities.features2 & c::EGraphicsFeatures2_ExperimentTier1);
+	const c::Bool tier1 = !!(device->info.capabilities.flags.features2 & c::EGraphicsFeatures2_ExperimentTier1);
 
 	const UnsafeCase cases[] = {
 		{
@@ -232,7 +232,7 @@ extern "C" void Test_graphicsExperimentTiers(oxc::c::Test *t, oxc::c::GraphicsDe
 	Test_setModule(t, "GraphicsDevice/experimentTiers");
 
 	Device dev = Device::share(deviceRef);
-	const c::U32 features2 = dev.info().capabilities.features2;
+	const c::U32 features2 = dev.info().capabilities.flags.features2;
 
 	const c::U64 claimed =
 		(features2 & c::EGraphicsFeatures2_ExperimentTier1 ? 1 : 0) |

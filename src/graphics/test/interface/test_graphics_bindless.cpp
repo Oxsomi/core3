@@ -457,7 +457,7 @@ extern "C" void Test_graphicsBindlessEverywhere(oxc::c::Test *t, oxc::c::Graphic
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_Bindless)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_Bindless)) {
 		c::Test_print(t, "Device has no bindless, skipping bindless everywhere tests");
 		return;
 	}
@@ -771,7 +771,7 @@ extern "C" void Test_graphicsBindlessSampler(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	Device dev = Device::share(deviceRef);
 
-	if(!(dev.info().capabilities.features & c::EGraphicsFeatures_Bindless)) {
+	if(!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_Bindless)) {
 		Test_print(t, "Bindless unsupported on this device, skipping bindless sampler tests");
 		return;
 	}

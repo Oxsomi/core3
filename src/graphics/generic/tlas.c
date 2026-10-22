@@ -264,7 +264,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			3, 0, "GraphicsDeviceRef_createTLAS()::*tlasRef not NULL, indicates memleak"
 		));
 
-	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
+	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.flags.features;
 
 	if(!(feat & EGraphicsFeatures_Raytracing))
 		retError(clean, Error_unsupportedOperation(

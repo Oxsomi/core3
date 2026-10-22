@@ -22,6 +22,8 @@
 
 #include "mesh_internal.h"
 #include "formats/obj/obj_file.h"
+#include "types/container/list_impl.h"
+#include "types/container/hash_set_impl.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/base/allocator.h"
@@ -30,132 +32,61 @@
 #include "types/base/string_read.h"
 #include "types/base/string_read_helper.h"
 
-//The dedup table. A corner is a position, uv and normal index, 1 based the way the file counts and 0 where the
-// corner named none, and the table maps each distinct triple to the output vertex it became.
-//
-//Open addressing over a power of two, kept below half full, so a lookup is a hash and a short probe rather
-// than a chase through a chained structure. The keys sit in their own list indexed by output vertex, which is
-// also what a triangle later needs to find its positions by.
+//A corner is a position, uv and normal index, 1 based the way the file counts and 0 where the corner named none.
+//The set holds each distinct corner once, appended on first sight, so its list is indexed by output vertex.
 
-typedef struct ObjDedup {
-	ListU32 slots;                //Output vertex + 1, or 0 for empty
-	ListU32 keys;                 //v, vt, vn per output vertex
-	U64 mask;
-	U32 count;
-} ObjDedup;
+typedef struct ObjCorner {
+	U32 v, vt, vn;
+} ObjCorner;
 
-static U64 ObjDedup_hash(U32 v, U32 vt, U32 vn) {
+TList(ObjCorner);
+THashSet(ObjCorner);
+TListImpl(ObjCorner);
 
-	//The tree's own hash rather than a private one. v and vt ride one word so the chain is two steps for three
-	// indices, and they cannot collapse into each other the way three equal indices would under an xor.
+static U64 ObjCorner_hash(const void *key, U64 seed, void *context) {
 
-	U64 h = Buffer_fnv1a64Single(v | ((U64) vt << 32), Buffer_fnv1a64Offset);
-	h = Buffer_fnv1a64Single(vn, h);
+	(void) context;
 
-	//FNV1a avalanches weakly in its LOW bits and the table masks exactly those, so the finalizer stays.
+	const ObjCorner *corner = (const ObjCorner*) key;
+	const U64 hash = Buffer_fnv1a64Single(corner->v | ((U64) corner->vt << 32), seed ^ Buffer_fnv1a64Offset);
 
-	h ^= h >> 32;
-	h *= 0xD6E8FEB86659FD93ull;
-	h ^= h >> 32;
-
-	return h;
+	return Buffer_fnv1a64Single(corner->vn, hash);
 }
 
-static Bool ObjDedup_grow(ObjDedup *d, const Allocator *alloc, Error *e_rr) {
+static ECompareResult ObjCorner_compare(const void *a, const void *b, void *context) {
 
-	Bool s_uccess = true;
+	(void) context;
 
-	const U64 capacity = d->slots.length ? d->slots.length * 2 : 4096;
-	ListU32 slots = (ListU32) { 0 };
-
-	//resize rather than reserve: the table is indexed straight away and its LENGTH is the capacity, and the
-	// empty sentinel is 0, which resize has already written.
-
-	gotoIfError3(clean, ListU32_resize(&slots, capacity, alloc, e_rr));
-
-	const U64 mask = capacity - 1;
-
-	//Every held vertex is rehashed into the wider table from its key.
-
-	for(U32 i = 0; i < d->count; ++i) {
-
-		const U32 *key = d->keys.ptr + (U64) i * 3;
-		U64 slot = ObjDedup_hash(key[0], key[1], key[2]) & mask;
-
-		while(slots.ptr[slot])
-			slot = (slot + 1) & mask;
-
-		slots.ptrNonConst[slot] = i + 1;
-	}
-
-	ListU32_free(&d->slots, alloc);
-	d->slots = slots;
-	d->mask = mask;
-
-clean:
-
-	if(!s_uccess)
-		ListU32_free(&slots, alloc);
-
-	return s_uccess;
+	const ObjCorner *x = (const ObjCorner*) a, *y = (const ObjCorner*) b;
+	return x->v == y->v && x->vt == y->vt && x->vn == y->vn ? ECompareResult_Eq : ECompareResult_Lt;
 }
 
-//The output vertex for a corner, made on first sight. isNew tells the caller the vertex has to be written.
+static const HashIndexInfo ObjCorner_indexInfo = {
+	.hash = ObjCorner_hash,
+	.compare = ObjCorner_compare,
+	.stride = sizeof(ObjCorner),
+	.smallLimit = HASHINDEX_SMALL_LIMIT_WORD
+};
 
-static Bool ObjDedup_find(
-	ObjDedup *d, U32 v, U32 vt, U32 vn, U32 *result, Bool *isNew, const Allocator *alloc, Error *e_rr
-) {
+THashSetImpl(ObjCorner, &ObjCorner_indexInfo);
 
-	Bool s_uccess = true;
+THashSetNamed(ListCharString, ObjMaterialNames);
 
-	if((U64) d->count * 2 >= d->slots.length)
-		gotoIfError3(clean, ObjDedup_grow(d, alloc, e_rr));
+static const HashIndexInfo ObjMaterialNames_indexInfo = {
+	.hash = CharString_hashSeeded,
+	.compare = GenericList_compareString,
+	.stride = sizeof(CharString),
+	.smallLimit = 4
+};
 
-	U64 slot = ObjDedup_hash(v, vt, vn) & d->mask;
-
-	while(d->slots.ptr[slot]) {
-
-		const U32 *key = d->keys.ptr + (U64) (d->slots.ptr[slot] - 1) * 3;
-
-		if(key[0] == v && key[1] == vt && key[2] == vn) {
-			*result = d->slots.ptr[slot] - 1;
-			*isNew = false;
-			goto clean;
-		}
-
-		slot = (slot + 1) & d->mask;
-	}
-
-	if(d->count == U32_MAX)
-		retError(clean, Error_overflow(0, d->count, U32_MAX, "Obj_read() more distinct vertices than U32 indices"));
-
-	//One append, so a failure halfway cannot leave a partial key behind for the rehash to read.
-
-	const U32 key[3] = { v, vt, vn };
-	ListU32 keyRef = (ListU32) { 0 };
-
-	gotoIfError3(clean, ListU32_createRefConst(key, 3, &keyRef, e_rr));
-	gotoIfError3(clean, ListU32_pushAll(&d->keys, keyRef, alloc, e_rr));
-
-	d->slots.ptrNonConst[slot] = d->count + 1;
-	*result = d->count++;
-	*isNew = true;
-
-clean:
-	return s_uccess;
-}
-
-static void ObjDedup_free(ObjDedup *d, const Allocator *alloc) {
-	ListU32_free(&d->slots, alloc);
-	ListU32_free(&d->keys, alloc);
-}
+THashSetNamedImpl(ListCharString, ObjMaterialNames, &ObjMaterialNames_indexInfo);
 
 //The materials a file names, in order of first use, so usemtl can be mapped back to an index a triangle word
 // holds. The names themselves go nowhere: what a name means is the .mtl file's business and a consumer's, and this
 // reader has neither.
 
 typedef struct ObjMaterials {
-	ListCharString names;
+	ObjMaterialNames names;       //Owned copies
 	U32 current;                  //What the faces since the last usemtl belong to
 	Bool usedDefault;             //A face was emitted before any usemtl
 	U8 padding[3];
@@ -168,42 +99,44 @@ static Bool ObjMaterials_use(ObjMaterials *m, CharString name, const Allocator *
 	//Faces emitted before the first usemtl were on a material of their own, so it keeps index 0 under an empty
 	// name and the first named material takes 1 rather than sharing with them.
 
-	if(!m->names.length && m->usedDefault) {
+	if(!m->names.list.length && m->usedDefault) {
 
 		//A null string, not a copy of one: copying an empty source allocates nothing and returns exactly this,
 		// so the entry is the placeholder itself. It is load bearing, since it is what index 0 names.
 
-		gotoIfError3(clean, ListCharString_pushBack(&m->names, CharString_createNull(), alloc, e_rr));
+		gotoIfError3(clean, ObjMaterialNames_insert(&m->names, CharString_createNull(), NULL, alloc, e_rr));
 	}
 
-	for(U64 i = 0; i < m->names.length; ++i)
-		if(CharString_equalsStringSensitive(&m->names.ptr[i], &name)) {
-			m->current = (U32) i;
-			goto clean;
-		}
+	const U64 found = ObjMaterialNames_find(&m->names, &name);
 
-	if(m->names.length >= MeshTriangle_maxMaterials)
+	if(found != U64_MAX) {
+		m->current = (U32) found;
+		goto clean;
+	}
+
+	if(m->names.list.length >= MeshTriangle_maxMaterials)
 		retError(clean, Error_outOfBounds(
-			0, m->names.length, MeshTriangle_maxMaterials, "Obj_read() more materials than the triangle word holds"
+			0, m->names.list.length, MeshTriangle_maxMaterials, "Obj_read() more materials than the triangle word holds"
 		));
 
 	CharString copy = CharString_createNull();
 	gotoIfError3(clean, CharString_createCopy(name, alloc, &copy, e_rr));
 
-	if(!ListCharString_pushBack(&m->names, copy, alloc, e_rr)) {
+	if(!ObjMaterialNames_insert(&m->names, copy, NULL, alloc, e_rr)) {
 		CharString_free(&copy, alloc);
 		s_uccess = false;
 		goto clean;
 	}
 
-	m->current = (U32) (m->names.length - 1);
+	m->current = (U32) (m->names.list.length - 1);
 
 clean:
 	return s_uccess;
 }
 
 static void ObjMaterials_free(ObjMaterials *m, const Allocator *alloc) {
-	ListCharString_freeUnderlying(&m->names, alloc);
+	ListCharString_freeUnderlying(&m->names.list, alloc);
+	ObjMaterialNames_free(&m->names, alloc);
 }
 
 //A file index into an array with count entries, resolved to 1 based or refused.
@@ -335,7 +268,7 @@ Bool Obj_read(
 	MeshPositions positions = (MeshPositions) { 0 };
 	MeshTriangles triangles = (MeshTriangles) { 0 };
 	MeshAttributes attrs = (MeshAttributes) { 0 };
-	ObjDedup dedup = (ObjDedup) { 0 };
+	HashSetObjCorner corners = (HashSetObjCorner) { 0 };
 	ObjMaterials materials = (ObjMaterials) { 0 };
 
 	//The file's own arrays, which a face may name from anywhere and so have to be whole before it is resolved.
@@ -438,10 +371,13 @@ Bool Obj_read(
 					corner, v.length / 3, vt.length / 2, vn.length / 3, &iv, &ivt, &ivn, e_rr
 				));
 
-				U32 vertex = 0;
-				Bool isNew = false;
+				const ObjCorner key = (ObjCorner) { iv, ivt, ivn };
+				U64 existing = U64_MAX;
 
-				gotoIfError3(clean, ObjDedup_find(&dedup, iv, ivt, ivn, &vertex, &isNew, alloc, e_rr));
+				gotoIfError3(clean, HashSetObjCorner_insert(&corners, key, &existing, alloc, e_rr));
+
+				const Bool isNew = existing == U64_MAX;
+				const U32 vertex = (U32) (isNew ? corners.list.length - 1 : existing);
 
 				if(isNew) {
 
@@ -479,7 +415,7 @@ Bool Obj_read(
 			if(face.length > 3)
 				++info->fannedFaces;
 
-			if(!materials.names.length)
+			if(!materials.names.list.length)
 				materials.usedDefault = true;
 
 			//Fanned from the first corner, which is right for the convex polygons a modeler emits.
@@ -488,9 +424,9 @@ Bool Obj_read(
 
 				const U32 i0 = face.ptr[0], i1 = face.ptr[k], i2 = face.ptr[k + 1];
 
-				const F32 *p0 = v.ptr + (U64) (dedup.keys.ptr[(U64) i0 * 3] - 1) * 3;
-				const F32 *p1 = v.ptr + (U64) (dedup.keys.ptr[(U64) i1 * 3] - 1) * 3;
-				const F32 *p2 = v.ptr + (U64) (dedup.keys.ptr[(U64) i2 * 3] - 1) * 3;
+				const F32 *p0 = v.ptr + (U64) (corners.list.ptr[i0].v - 1) * 3;
+				const F32 *p1 = v.ptr + (U64) (corners.list.ptr[i1].v - 1) * 3;
+				const F32 *p2 = v.ptr + (U64) (corners.list.ptr[i2].v - 1) * 3;
 
 				gotoIfError3(clean, MeshTriangles_emit(
 					&triangles, i0, i1, i2, materials.current, p0, p1, p2, alloc, e_rr
@@ -502,7 +438,7 @@ Bool Obj_read(
 	}
 
 	gotoIfError3(clean, MeshPositions_finish(&positions, info, e_rr));
-	gotoIfError3(clean, MeshAttributes_finish(&attrs, &triangles, dedup.count, e_rr));
+	gotoIfError3(clean, MeshAttributes_finish(&attrs, &triangles, (U32) corners.list.length, e_rr));
 
 	//A computed normal replaces every one the file named, so what the file covered stops deciding this and the
 	// only placeholders left are the vertices no triangle with area touched.
@@ -517,9 +453,9 @@ Bool Obj_read(
 	gotoIfError3(clean, MeshSink_flush(&indexSink, e_rr));
 	gotoIfError3(clean, MeshSink_flush(&wordSink, e_rr));
 
-	info->vertexCount = dedup.count;
+	info->vertexCount = (U32) corners.list.length;
 	info->indexCount = triangles.count * 3;
-	info->materialCount = materials.names.length ? (U32) materials.names.length : 1;
+	info->materialCount = materials.names.list.length ? (U32) materials.names.list.length : 1;
 
 	*off = MeshSource_offset(&src);
 
@@ -529,7 +465,7 @@ clean:
 	ListF32_free(&vt, alloc);
 	ListF32_free(&vn, alloc);
 	ListU32_free(&face, alloc);
-	ObjDedup_free(&dedup, alloc);
+	HashSetObjCorner_free(&corners, alloc);
 	ObjMaterials_free(&materials, alloc);
 	MeshAttributes_free(&attrs, alloc);
 	MeshTriangles_free(&triangles, alloc);

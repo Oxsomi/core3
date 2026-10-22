@@ -343,8 +343,6 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return s_uccess;
 
@@ -430,8 +428,8 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 
 	//Add as flight (keep alive extra)
 
-	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
+	if(!GraphicsDevice_isInFlight(device, pending)) {
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
 
@@ -439,9 +437,9 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 	//And losing the reference from our object
 	//We do the same thing on the tempInstances, since it's CPU mem only
 
-	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL)) {
+	if(!GraphicsDevice_isInFlight(device, tlas->base.tempScratchBuffer)) {
 
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tlas->base.tempScratchBuffer, alloc, e_rr));
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, tlas->base.tempScratchBuffer, alloc, e_rr));
 
 		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->base.tempScratchBuffer);
@@ -449,9 +447,9 @@ Bool VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *devi
 		else tlas->base.tempScratchBuffer = NULL;
 	}
 
-	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL)) {
+	if(tlas->tempInstanceBuffer && !GraphicsDevice_isInFlight(device, tlas->tempInstanceBuffer)) {
 
-		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tlas->tempInstanceBuffer, alloc, e_rr));
+		gotoIfError3(clean, GraphicsDevice_addInFlight(device, tlas->tempInstanceBuffer, alloc, e_rr));
 
 		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->tempInstanceBuffer);

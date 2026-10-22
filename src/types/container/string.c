@@ -643,9 +643,30 @@ clean:
 	return s_uccess;
 }
 
-U64 CharString_hash(const CharString s) {
-	U64 hash = Buffer_fnv1a64Single(CharString_length(s), Buffer_fnv1a64Offset);
+U64 CharString_hashSeeded(const void *key, U64 seed, void *context) {
+	(void) context;
+	const CharString s = *(const CharString*) key;
+	const U64 hash = Buffer_fnv1a64Single(CharString_length(s), seed ^ Buffer_fnv1a64Offset);
 	return Buffer_fnv1a64(CharString_bufferConst(s), hash);
+}
+
+U64 CharString_hashSeededInsensitive(const void *key, U64 seed, void *context) {
+
+	(void) context;
+
+	const CharString s = *(const CharString*) key;
+	const U64 len = CharString_length(s);
+
+	U64 hash = Buffer_fnv1a64Single(len, seed ^ Buffer_fnv1a64Offset);
+
+	for(U64 i = 0; i < len; ++i)
+		hash = Buffer_fnv1a64Single((U64)(U8) C8_toLower(s.ptr[i]), hash);
+
+	return hash;
+}
+
+U64 CharString_hash(const CharString s) {
+	return CharString_hashSeeded(&s, 0, NULL);
 }
 
 Bool ListCharString_concat(const ListCharStringConcat *conc, C8 between, Error *e_rr) {

@@ -360,10 +360,10 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.priority = lowPriority ? 0.25f : (isDedicated && (req.flags & EVkBlockFlags_HighPriority) ? 0.75f : 0.5f)
 	};
 
-	if(allocator->device->info.capabilities.featuresExt & EVkGraphicsFeatures_MemoryPriority)
+	if(allocator->device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_MemoryPriority)
 		memAlloc.pNext = &priority;
 
-	if(allocator->device->info.capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress) {
+	if(allocator->device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress) {
 		next.pNext = memAlloc.pNext;
 		memAlloc.pNext = &next;
 	}

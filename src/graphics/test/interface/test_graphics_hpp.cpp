@@ -84,6 +84,21 @@ extern "C" void Test_graphicsHppTypeCheck(oxc::c::GraphicsDeviceRef *deviceRef, 
 
 	c::Error *e_rr = nullptr;
 
+	Instance instance;
+	c::ListGraphicsDeviceInfo infos{};
+	c::GraphicsDeviceInfo info{};
+	const c::GraphicsDeviceCapabilities required{};
+	const c::GraphicsDeviceCapFlags disabled = { .features = c::EGraphicsFeatures_Bindless };
+
+	(void) instance.getDeviceInfos(infos);
+	(void) instance.getDeviceInfos(infos, &disabled, e_rr);
+	(void) instance.getPreferredDevice(required, info);
+	(void) instance.getPreferredDevice(
+		required, info, &disabled, c::GraphicsInstance_vendorMaskAll, c::GraphicsInstance_deviceTypeAll, e_rr
+	);
+
+	(void) disableCapability(info, c::EGraphicsApi_Vulkan, "Bindless");
+
 	//Borrowing rather than adopting: the harness owns this ref and decs it itself.
 
 	Device dev = Device::share(deviceRef);

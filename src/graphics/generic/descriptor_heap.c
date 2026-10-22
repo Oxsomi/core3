@@ -101,13 +101,13 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 
 	if(
 		(info->flags & EDescriptorHeapFlags_AllowBindless) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless)
 	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info.flags can't include bindless if bindless feature is missing"
 		));
 
-	if(info->maxAccelerationStructures && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
+	if(info->maxAccelerationStructures && !(device->info.capabilities.flags.features & EGraphicsFeatures_Raytracing))
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info.maxAccelerationStructures can't be >0 if raytracing is missing"
 		));

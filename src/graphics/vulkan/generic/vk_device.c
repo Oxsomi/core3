@@ -49,6 +49,7 @@ TListImpl(VkSemaphore);
 TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
+TListImpl(VkDescriptorPool);
 TListImpl(VkQueryPool);
 
 #define bindNextVkStruct(T, condition, ...) \
@@ -236,10 +237,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 	(void)instanceExt;
 
-	EGraphicsFeatures feat = physicalDevice->capabilities.features;
-	EGraphicsFeatures2 feat2 = physicalDevice->capabilities.features2;
-	EVkGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;
-	EGraphicsDataTypes types = physicalDevice->capabilities.dataTypes;
+	EGraphicsFeatures feat = physicalDevice->capabilities.flags.features;
+	EGraphicsFeatures2 feat2 = physicalDevice->capabilities.flags.features2;
+	EVkGraphicsFeatures featEx = physicalDevice->capabilities.flags.featuresExt;
+	EGraphicsDataTypes types = physicalDevice->capabilities.flags.dataTypes;
 
 	VkPhysicalDeviceFeatures features = (VkPhysicalDeviceFeatures) {
 
@@ -287,7 +288,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	bindNextVkStruct(
 		VkPhysicalDeviceDescriptorIndexingFeatures,
-		true,
+		feat & EGraphicsFeatures_Bindless,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
 			.shaderUniformTexelBufferArrayDynamicIndexing = true,
@@ -312,7 +313,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	bindNextVkStruct(
 		VkPhysicalDevicePerformanceQueryFeaturesKHR,
-		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_PerfQuery,
+		physicalDevice->capabilities.flags.featuresExt & EVkGraphicsFeatures_PerfQuery,
 		(VkPhysicalDevicePerformanceQueryFeaturesKHR) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR,
 			.performanceCounterQueryPools = true
@@ -321,7 +322,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	bindNextVkStruct(
 		VkPhysicalDeviceBufferDeviceAddressFeaturesKHR,
-		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress,
+		physicalDevice->capabilities.flags.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress,
 		(VkPhysicalDeviceBufferDeviceAddressFeaturesKHR) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
 			.bufferDeviceAddress = true
@@ -720,7 +721,14 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_ComputeDeriv:                 on = feat & EGraphicsFeatures_ComputeDeriv;                 break;
 			case EOptExtensions_Maintenance4:                 on = featEx & EVkGraphicsFeatures_Maintenance4;             break;
 			case EOptExtensions_BufferDeviceAddress:          on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;      break;
-			case EOptExtensions_Bindless:                     on = feat & EGraphicsFeatures_Bindless;                     break;
+
+			//Our Vulkan 1.1 path needs VK_EXT_descriptor_indexing for VK_KHR_acceleration_structure.
+			//Only the extension dependency is enabled here; descriptor indexing features still depend on Bindless.
+
+			case EOptExtensions_Bindless:
+				on = feat & (EGraphicsFeatures_Bindless | EGraphicsFeatures_Raytracing);
+				break;
+
 			case EOptExtensions_DriverProperties:             on = featEx & EVkGraphicsFeatures_DriverProperties;         break;
 			case EOptExtensions_AtomicI64:                    on = types & EGraphicsDataTypes_AtomicI64;                  break;
 			case EOptExtensions_F16:                          on = types & EGraphicsDataTypes_F16;                        break;
@@ -958,6 +966,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCreateDescriptorSetLayout, deviceExt->createDescriptorSetLayout);
 	getVkFunctionDevice(clean, vkCreatePipelineLayout, deviceExt->createPipelineLayout);
 	getVkFunctionDevice(clean, vkCreateDescriptorPool, deviceExt->createDescriptorPool);
+	getVkFunctionDevice(clean, vkResetDescriptorPool, deviceExt->resetDescriptorPool);
 	getVkFunctionDevice(clean, vkAllocateDescriptorSets, deviceExt->allocateDescriptorSets);
 	getVkFunctionDevice(clean, vkFreeCommandBuffers, deviceExt->freeCommandBuffers);
 	getVkFunctionDevice(clean, vkDestroyCommandPool, deviceExt->destroyCommandPool);
@@ -984,20 +993,20 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCmdResetQueryPool, deviceExt->cmdResetQueryPool);
 	getVkFunctionDevice(clean, vkCmdWriteTimestamp, deviceExt->cmdWriteTimestamp);
 
-	if(device->info.capabilities.features2 & EGraphicsFeatures2_Predication) {
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Predication) {
 		getVkFunctionDevice(clean, vkCmdBeginConditionalRenderingEXT, deviceExt->cmdBeginConditionalRendering);
 		getVkFunctionDevice(clean, vkCmdEndConditionalRenderingEXT, deviceExt->cmdEndConditionalRendering);
 	}
 
-	if(device->info.capabilities.features2 & EGraphicsFeatures2_DeviceFault)
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_DeviceFault)
 		getVkFunctionDevice(clean, vkGetDeviceFaultInfoEXT, deviceExt->getDeviceFaultInfo);
 
-	if(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate)
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate)
 		getVkFunctionDevice(clean, vkCmdWriteBufferMarker2AMD, deviceExt->cmdWriteBufferMarker2);
 
 	if(
-		(device->info.capabilities.featuresExt & EVkGraphicsFeatures_ExternalHostMemory) &&
-		(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate) &&
+		(device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_ExternalHostMemory) &&
+		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate) &&
 		(device->flags & (EGraphicsDeviceFlags_Breadcrumbs | EGraphicsDeviceFlags_IsDebug))
 	)
 		getVkFunctionDevice(clean, vkGetMemoryHostPointerPropertiesEXT, deviceExt->getMemoryHostPointerProperties);
@@ -1244,7 +1253,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	VkPhysicalDeviceSubgroupSizeControlPropertiesEXT subgroupSizeProperties =
 		(VkPhysicalDeviceSubgroupSizeControlPropertiesEXT) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES_EXT,
-			.pNext = device->info.capabilities.features2 & EGraphicsFeatures2_DescriptorHeap ?
+			.pNext = device->info.capabilities.flags.features2 & EGraphicsFeatures2_DescriptorHeap ?
 				&deviceExt->descriptorHeapProperties : NULL
 		};
 
@@ -1267,6 +1276,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	if(featEx & EVkGraphicsFeatures_SubgroupSizeControl)
 		deviceExt->maxComputeWorkgroupSubgroups = (U16) U32_min(subgroupSizeProperties.maxComputeWorkgroupSubgroups, U16_MAX);
 
+	//A disabled size-control feature leaves only the native subgroup size available. The physical device's
+	// range may still describe sizes that required that extension, so shader validation must see the narrowed range.
+
+	else if(feat & EGraphicsFeatures_SubgroupOperations)
+		device->info.capabilities.waveSizeMin = device->info.capabilities.waveSizeMax = (U8) subgroupProperties.subgroupSize;
+
 	deviceExt->atomSize = (U8) properties2.properties.limits.nonCoherentAtomSize;
 
 	deviceExt->pipelineCacheHeader = (VkPipelineCacheHeaderVersionOne) {
@@ -1286,7 +1301,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	//One timestamp query pool per frame in flight, only where the device reports the capability.
 
-	if(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) {
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps) {
 
 		VkQueryPoolCreateInfo queryInfo = (VkQueryPoolCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
@@ -1311,7 +1326,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		LUID luid = (LUID) { 0 };
 		Buffer_memcpy(Buffer_createRef(&luid, sizeof(U64)), Buffer_createRefConst(&device->info.luid, sizeof(U64)));
 
-		if(instanceExt->dxgiFactory && (device->info.capabilities.features & EGraphicsFeatures_LUID))
+		if(instanceExt->dxgiFactory && (device->info.capabilities.flags.features & EGraphicsFeatures_LUID))
 			instanceExt->dxgiFactory->lpVtbl->EnumAdapterByLuid(
 				instanceExt->dxgiFactory,
 				luid,
@@ -1422,7 +1437,7 @@ U64 VkGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, 
 	if(budget)
 		*budget = U64_MAX;
 
-	if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_MemoryBudget) {
+	if(device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_MemoryBudget) {
 
 		VkPhysicalDeviceMemoryBudgetPropertiesEXT propertiesMemoryBudget = (VkPhysicalDeviceMemoryBudgetPropertiesEXT) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT
@@ -1534,6 +1549,12 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		if(deviceExt->cbufferPool)
 			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
 
+		//Same for the caller push emulation, except it is a list per frame rather than a single pool.
+
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			for(U64 j = 0; j < deviceExt->pushPools[i].length; ++j)
+				deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->pushPools[i].ptr[j], NULL);
+
 		if(deviceExt->emptySetLayout)
 			deviceExt->destroyDescriptorSetLayout(deviceExt->device, deviceExt->emptySetLayout, NULL);
 
@@ -1552,6 +1573,9 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	//The memory itself is the process's, freed once nothing on the device can still name it.
 
 	Platform_freePages(deviceExt->breadcrumbHost, GRAPHICS_BREADCRUMB_BYTES);
+
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+		ListVkDescriptorPool_free(&deviceExt->pushPools[i], alloc);
 
 	ListVkCommandAllocator_free(&deviceExt->commandPools, alloc);
 	ListVkSemaphore_free(&deviceExt->submitSemaphores, alloc);
@@ -1839,7 +1863,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-//Stands in for VK_KHR_push_descriptor on devices that don't have it.
+//Stands in for VK_KHR_push_descriptor when it is unavailable or disabled.
 //Only the globals constant buffer is ever pushed, and each frame in flight has its own buffer that lives as long as
 // the device, so a set per frame can be written once here and bound unchanged from then on.
 //That is what makes the emulation cheap; there is no per frame update and so no risk of writing a set still in flight.
@@ -1876,8 +1900,8 @@ static Bool VkGraphicsDevice_createCBufferSets(GraphicsDevice *device, VkGraphic
 		.pPoolSizes = &poolSize
 	};
 
-	gotoIfError3(clean, checkVkError(
-		deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->cbufferPool), e_rr
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->cbufferPool), e_rr
 	));
 
 	const VkDescriptorSetAllocateInfo allocInfo = (VkDescriptorSetAllocateInfo) {
@@ -1887,8 +1911,8 @@ static Bool VkGraphicsDevice_createCBufferSets(GraphicsDevice *device, VkGraphic
 		.pSetLayouts = layouts
 	};
 
-	gotoIfError3(clean, checkVkError(
-		deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, deviceExt->cbufferSets), e_rr
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, deviceExt->cbufferSets), e_rr
 	));
 
 	for (U32 i = 0; i < count; ++i) {
@@ -1914,10 +1938,9 @@ static Bool VkGraphicsDevice_createCBufferSets(GraphicsDevice *device, VkGraphic
 
 	deviceExt->updateDescriptorSets(deviceExt->device, count, writes, 0, NULL);
 
-clean:
+	Log_performanceLnx("Vulkan: emulating push descriptors with descriptor sets");
 
-	//The pool doubles as the "already emulated" marker, so a half built one would be skipped on the next submit
-	// and leave unallocated sets to be bound.
+clean:
 
 	if (!s_uccess && deviceExt->cbufferPool) {
 		deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->cbufferPool, NULL);
@@ -1927,31 +1950,172 @@ clean:
 	return s_uccess;
 }
 
-Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer, Error *e_rr) {
+Bool VK_WRAP_FUNC(GraphicsDevice_finishInit)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	if(deviceExt->cmdPushDescriptorSet || !device->defaultCBufferLayout)
+		return true;
+
+	return VkGraphicsDevice_createCBufferSets(device, deviceExt, e_rr);
+}
+
+//Sized for every descriptor type a push layout can hold: buffers, textures and, where the device has
+// raytracing, acceleration structures. createDescriptorLayout refuses a sampler in a push layout on every
+// backend, so no emulated set ever needs a SAMPLER or COMBINED_IMAGE_SAMPLER descriptor.
+//INPUT_ATTACHMENT is deliberately absent: the work op refuses a subpass input as a push descriptor, so no
+// set is ever allocated from a layout holding one. If that refusal is ever lifted, this list is the other
+// place that has to hear about it (the fresh-pool error below is what fires otherwise).
+//Over provisioned on purpose: one set holds at most OXC3_MAX_PUSH_DESCRIPTORS descriptors TOTAL, but a pool
+// has to name a count per type, and descriptors are small enough that reserving the max for each is cheaper
+// than being clever.
+//64 sets is a frame's worth for anything ordinary. Going past it appends another pool rather than failing,
+// so this is a stride and not a limit: the only cost of it being wrong is one more pool.
+
+#define VK_PUSH_POOL_SETS 64
+
+static Bool VkGraphicsDevice_addPushPool(
+	GraphicsDevice *device,
+	VkGraphicsDevice *deviceExt,
+	ListVkDescriptorPool *pools,
+	const Allocator *alloc,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
+	VkDescriptorPool pool = NULL;
+
+	//Acceleration structures are the one type that can't simply be named: a pool size for them is only legal
+	// where the device has raytracing, so that entry sits last and is dropped by poolSizeCount otherwise.
+
+	const Bool hasRt = !!(device->info.capabilities.flags.features & EGraphicsFeatures_Raytracing);
+	const U32 perType = VK_PUSH_POOL_SETS * OXC3_MAX_PUSH_DESCRIPTORS;
+
+	const VkDescriptorPoolSize sizes[5] = {
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,          .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,          .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,           .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,           .descriptorCount = perType },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, .descriptorCount = perType }
+	};
+
+	const VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = VK_PUSH_POOL_SETS,
+		.poolSizeCount = hasRt ? 5 : 4,
+		.pPoolSizes = sizes
+	};
+
+	gotoIfError3(clean, VkGraphicsDevice_check(
+		deviceExt, deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &pool), e_rr
+	));
+
+	gotoIfError3(clean, ListVkDescriptorPool_pushBack(pools, pool, alloc, e_rr));
+	pool = NULL;        //Owned by the list now, so the cleanup below must not double destroy it
+
+clean:
+
+	if(pool)
+		deviceExt->destroyDescriptorPool(deviceExt->device, pool, NULL);
+
+	return s_uccess;
+}
+
+Bool VkGraphicsDevice_allocPushDescriptorSet(
+	GraphicsDevice *device,
+	VkDescriptorSetLayout layout,
+	VkDescriptorSet *result,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	VkGraphicsDevice *deviceExt = NULL;
+	const Allocator *alloc = NULL;
+	ListVkDescriptorPool *pools = NULL;
+
+	if(!device || !layout || !result)
+		retError(clean, Error_nullPointer(
+			!device ? 0 : (!layout ? 1 : 2),
+			"VkGraphicsDevice_allocPushDescriptorSet()::device, layout and result are required"
+		));
+
+	deviceExt = GraphicsDevice_ext(device, Vk);
+	alloc = GraphicsDevice_getAlloc(device);
+	pools = &deviceExt->pushPools[device->fifId];
+
+	//Tracks whether the pool being tried was made a moment ago, because "exhausted" and "wrong shape for this
+	// layout" are the SAME VkResult. Appending pools on the second one would spin forever making pools that
+	// cannot serve the request either.
+
+	Bool freshPool = false;
+
+	for(;;) {
+
+		//The set limit is known. Advancing before allocation avoids an expected out-of-pool allocation
+		// failure (and its validation warning) every time a full pool rolls over.
+
+		if(deviceExt->pushPoolSetCount[device->fifId] == VK_PUSH_POOL_SETS) {
+			++deviceExt->pushPoolActive[device->fifId];
+			deviceExt->pushPoolSetCount[device->fifId] = 0;
+		}
+
+		if(deviceExt->pushPoolActive[device->fifId] >= pools->length) {
+			gotoIfError3(clean, VkGraphicsDevice_addPushPool(device, deviceExt, pools, alloc, e_rr));
+			freshPool = true;
+		}
+
+		const VkDescriptorSetAllocateInfo allocInfo = (VkDescriptorSetAllocateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = pools->ptr[deviceExt->pushPoolActive[device->fifId]],
+			.descriptorSetCount = 1,
+			.pSetLayouts = &layout
+		};
+
+		const VkResult res = deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, result);
+
+		if(res == VK_SUCCESS) {
+			++deviceExt->pushPoolSetCount[device->fifId];
+			break;
+		}
+
+		//A full pool is the expected end of that pool's life rather than a failure, and the spec allows both
+		// of these for it. Move to the next pool, making one if this was the last. Anything else is real.
+
+		if(res != VK_ERROR_OUT_OF_POOL_MEMORY && res != VK_ERROR_FRAGMENTED_POOL)
+			gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, res, e_rr));
+
+		//A pool that can't serve the layout when it is brand new is not exhausted, it is the wrong shape for it,
+		// and every pool this makes is identical. Report that rather than allocating pools until the host is out
+		// of memory.
+
+		if(freshPool)
+			retError(clean, Error_invalidState(
+				0,
+				"VkGraphicsDevice_allocPushDescriptorSet() a fresh pool couldn't serve this push descriptor layout, "
+				"so it needs a descriptor type the pool doesn't reserve (see VkGraphicsDevice_addPushPool)"
+			));
+
+		++deviceExt->pushPoolActive[device->fifId];
+		deviceExt->pushPoolSetCount[device->fifId] = 0;
+	}
+
+clean:
+	return s_uccess;
+}
+
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer) {
 
 	//Without bindless there's no default pipeline layout, table or push descriptor set to bind.
 	//Every pipeline brings its own layout in that case, so there's nothing to do per frame.
 
 	if(!device->defaultPipelineLayout || !device->defaultDescriptorTable)
-		return true;
+		return;
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	//A device without the extension leaves cmdPushDescriptorSet NULL, so the sets are built on first submit.
-	//They can't be built at device creation because the globals buffers don't exist yet at that point.
-
-	if(!deviceExt->cmdPushDescriptorSet && !deviceExt->cbufferPool) {
-
-		Log_performanceLnx(
-			"Vulkan: VK_KHR_push_descriptor is unavailable, emulating it with one descriptor set per frame in flight"
-		);
-
-		gotoIfError3(clean, VkGraphicsDevice_createCBufferSets(device, deviceExt, e_rr));
-	}
-
-	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
+	U64 bindingCount = device->info.capabilities.flags.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
 	VkPipelineLayout *defaultLayoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(device->defaultPipelineLayout), Vk);
 
@@ -2026,9 +2190,6 @@ Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 			&cbv
 		);
 	}
-
-clean:
-	return s_uccess;
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
@@ -2133,12 +2294,26 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		gotoIfError3(clean, ListVkSwapchainKHR_clear(retiredChains, e_rr));
 	}
 
+	//An emulated push descriptor set lives exactly as long as the frame that recorded it, and the fence above
+	// is what proves the GPU is done reading it. So the frame's pools go back wholesale here rather than a set
+	// at a time, which is the entire reason they are per frame in the first place.
+	//No-op on a device with VK_KHR_push_descriptor, where nothing ever allocates one, and on the skip paths
+	// above: an unused slot has empty pools, and a failed submit left nothing on the GPU to outlive.
+
+	for(U64 i = 0; i < deviceExt->pushPools[device->fifId].length; ++i)
+		gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetDescriptorPool(
+			deviceExt->device, deviceExt->pushPools[device->fifId].ptr[i], 0
+		), e_rr));
+
+	deviceExt->pushPoolActive[device->fifId] = 0;
+	deviceExt->pushPoolSetCount[device->fifId] = 0;
+
 	//Read back and resolve the timestamps of the frame that used this slot framesInFlight submits ago, now that its
 	// fence has proven it done. A host read, no GPU copy: the fence is the barrier. Best effort, since a failed read
 	// back only costs a frame of timings, never the submit.
 
 	if(
-		(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) &&
+		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps) &&
 		device->submitId > device->framesInFlight && slotWasPending && device->timingSlots[device->fifId]
 	) {
 		const U32 slots = device->timingSlots[device->fifId];
@@ -2285,8 +2460,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
@@ -2415,7 +2588,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		//Build this frame's timing entries and reset the pool it will write into. buildTimings clears the previous
 		// frame's entries at this slot, so it must run after the resolve above has read them.
 
-		device->timingSlots[device->fifId] = (device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps)
+		device->timingSlots[device->fifId] = (device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps)
 			? GraphicsDevice_buildTimings(device, device->fifId, commandLists, alloc) : 0;
 
 		deviceExt->timestampCursor = 0;
@@ -2546,8 +2719,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				));
 			}
 
-			if(RefPtr_inc(swapchainRef))
-				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
+			if(!GraphicsDevice_isInFlight(device, swapchainRef) && RefPtr_inc(swapchainRef))
+				gotoIfError3(clean, GraphicsDevice_addInFlight(device, swapchainRef, alloc, e_rr));
 		}
 
 		if(dependency.imageMemoryBarrierCount)

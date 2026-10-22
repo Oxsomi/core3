@@ -75,15 +75,20 @@ static inline Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderin
 //A custom layout emits the bound table's sets against that layout and marks the default sets dirty, since
 // binding with an incompatible layout invalidates them; a default layout pipeline then rebinds them once.
 
-Bool GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer, Error *e_rr);
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer);
 
-static void VkCommandBufferState_bindDescriptors(
+//Binding can fail when creating a texture view or allocating a set for emulated push descriptors.
+
+static Bool VkCommandBufferState_bindDescriptors(
 	VkCommandBufferState *temp,
 	VkGraphicsDevice *deviceExt,
 	GraphicsDevice *device,
 	PipelineRef *pipelineRef,
-	VkPipelineBindPoint bindPoint
+	VkPipelineBindPoint bindPoint,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
 
 	PipelineLayoutRef *layoutRef = PipelineRef_ptr(pipelineRef)->layout;
 
@@ -94,8 +99,8 @@ static void VkCommandBufferState_bindDescriptors(
 
 		if (!temp->defaultDescriptorsBound) {
 
+			GraphicsDevice_rebindDescriptors(device, temp->buffer);
 			temp->defaultDescriptorsBound = true;
-			GraphicsDevice_rebindDescriptors(device, temp->buffer, NULL);
 
 			for(U8 i = 0; i < 3; ++i) {
 				temp->lastBoundTable[i] = NULL;
@@ -103,7 +108,7 @@ static void VkCommandBufferState_bindDescriptors(
 			}
 		}
 
-		return;
+		return true;
 	}
 
 	const PipelineLayout *layout = PipelineLayoutRef_ptr(layoutRef);
@@ -208,8 +213,8 @@ static void VkCommandBufferState_bindDescriptors(
 		temp->lastPushDescLayout[bindPointId] = *layoutExt;
 	}
 
-	//Push descriptors go out here for the same reasons, and buffer class only for the same reason D3D12 is:
-	// createDescriptorLayout refuses anything else, so the writes below only ever describe buffers and RTASes.
+	//Caller push descriptors go out here for the same reasons, with buffers, textures and acceleration
+	// structures each written using their native descriptor type.
 
 	if (temp->pushDescriptorCount && layout->info.pushDescriptors && (
 		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
@@ -284,10 +289,7 @@ static void VkCommandBufferState_bindDescriptors(
 				VkImageView view = NULL;
 				U32 viewId = U32_MAX;
 
-				if(!VkUnifiedTexture_getView(d, binding.registerType, &view, &viewId, NULL)) {
-					Log_errorLnx("VkUnifiedTexture_getView failed for a push descriptor, skipping the bind");
-					continue;
-				}
+				gotoIfError3(clean, VkUnifiedTexture_getView(d, binding.registerType, &view, &viewId, e_rr));
 
 				images[writeCount] = (VkDescriptorImageInfo) {
 					.imageView = view,
@@ -341,8 +343,36 @@ static void VkCommandBufferState_bindDescriptors(
 				if(writeSets[i] == set)
 					setWrites[setWriteCount++] = writes[i];
 
-			if(setWriteCount)
+			if(!setWriteCount)
+				continue;
+
+			if(deviceExt->cmdPushDescriptorSet)
 				deviceExt->cmdPushDescriptorSet(temp->buffer, bindPoint, *layoutExt, set, setWriteCount, setWrites);
+
+			else {
+
+				//Emulated, the other half of what the globals set above does. Those can be written once for the
+				// life of the device because that buffer is fixed for the frame; a caller's descriptors change per
+				// work op, so this takes a set of its own out of the frame's pools, writes it and binds it.
+				//createDescriptorLayout left the layout without PUSH_DESCRIPTOR_BIT_KHR on such a device precisely
+				// so sets can be allocated from it here.
+				//One set per LAYOUT SLOT, since each slot is its own VkDescriptorSetLayout; k walks those slots.
+				//The set belongs to the frame and is recycled with it, so nothing frees it at the end of the op.
+
+				VkDescriptorSet emulated = NULL;
+
+				gotoIfError3(clean, VkGraphicsDevice_allocPushDescriptorSet(
+					device, pushExt->layouts[k], &emulated, e_rr
+				));
+
+				//dstSet is what cmdPushDescriptorSet would have filled in implicitly.
+
+				for(U32 i = 0; i < setWriteCount; ++i)
+					setWrites[i].dstSet = emulated;
+
+				deviceExt->updateDescriptorSets(deviceExt->device, setWriteCount, setWrites, 0, NULL);
+				deviceExt->cmdBindDescriptorSets(temp->buffer, bindPoint, *layoutExt, set, 1, &emulated, 0, NULL);
+			}
 		}
 
 		temp->pushDescriptorsEmitted[bindPointId] = true;
@@ -352,7 +382,7 @@ static void VkCommandBufferState_bindDescriptors(
 	//A layout without bindings has nothing to emit at all.
 
 	if(!temp->boundDescriptorTable || !layout->info.bindings)
-		return;
+		return true;
 
 	const DescriptorTable *table = DescriptorTableRef_ptr(temp->boundDescriptorTable);
 
@@ -363,7 +393,7 @@ static void VkCommandBufferState_bindDescriptors(
 	// left to do here.
 
 	if(table->layout != layout->info.bindings)
-		return;
+		return true;
 
 	VkDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Vk);
 
@@ -371,7 +401,7 @@ static void VkCommandBufferState_bindDescriptors(
 		temp->lastBoundTable[bindPointId] == temp->boundDescriptorTable &&
 		temp->lastBoundLayout[bindPointId] == *layoutExt
 	)
-		return;
+		return true;
 
 	temp->lastBoundTable[bindPointId] = temp->boundDescriptorTable;
 	temp->lastBoundLayout[bindPointId] = *layoutExt;
@@ -390,6 +420,9 @@ static void VkCommandBufferState_bindDescriptors(
 	}
 
 	temp->defaultDescriptorsBound = false;
+
+clean:
+	return s_uccess;
 }
 
 //A declared stage stands for itself AND every later stage that could reach the resource, because a scope
@@ -401,7 +434,7 @@ static VkPipelineStageFlags2 VkPipelineStage_fromMask(U32 stageMask, const Graph
 	VkPipelineStageFlags2 stages = 0;
 
 	const VkPipelineStageFlags2 geometry =
-		(device->info.capabilities.features & EGraphicsFeatures_GeometryShader) ?
+		(device->info.capabilities.flags.features & EGraphicsFeatures_GeometryShader) ?
 		VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT : 0;
 
 	const VkPipelineStageFlags2 tessEval =
@@ -722,11 +755,42 @@ void VK_WRAP_FUNC(CommandList_process)(
 							++writeCount;
 						}
 
-						if(writeCount)
-							deviceExt->cmdPushDescriptorSet(
-								buffer, VK_PIPELINE_BIND_POINT_COMPUTE, *copyLayoutExt,
-								pushExt->setIds[0], writeCount, writes
-							);
+						if(writeCount) {
+
+							if(deviceExt->cmdPushDescriptorSet)
+								deviceExt->cmdPushDescriptorSet(
+									buffer, VK_PIPELINE_BIND_POINT_COMPUTE, *copyLayoutExt,
+									pushExt->setIds[0], writeCount, writes
+								);
+
+							//Emulated exactly like a caller's push descriptors (see bindDescriptors): the copy layout
+							// is the device's own, but without VK_KHR_push_descriptor its two textures need a real set
+							// out of the frame's pools all the same. A failed allocation skips this region's dispatch,
+							// matching how a failed view lookup above is handled.
+
+							else {
+
+								VkDescriptorSet emulated = NULL;
+								Error setErr = Error_none();
+
+								if(!VkGraphicsDevice_allocPushDescriptorSet(
+									device, pushExt->layouts[0], &emulated, &setErr
+								)) {
+									Error_print(alloc, &setErr, ELogLevel_Error, ELogOptions_Default);
+									continue;
+								}
+
+								for(U32 j = 0; j < writeCount; ++j)
+									writes[j].dstSet = emulated;
+
+								deviceExt->updateDescriptorSets(deviceExt->device, writeCount, writes, 0, NULL);
+
+								deviceExt->cmdBindDescriptorSets(
+									buffer, VK_PIPELINE_BIND_POINT_COMPUTE, *copyLayoutExt,
+									pushExt->setIds[0], 1, &emulated, 0, NULL
+								);
+							}
+						}
 
 						//numthreads(16, 8, 1) in image_copy.hlsl
 
@@ -1150,9 +1214,15 @@ void VK_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
-			VkCommandBufferState_bindDescriptors(
-				temp, deviceExt, device, temp->pipelines[EPipelineType_Graphics], VK_PIPELINE_BIND_POINT_GRAPHICS
-			);
+			//A failed bind means the op would run against descriptors it never got, so it is skipped instead,
+			// which is the contract this whole function records under (see its header).
+
+			if(!VkCommandBufferState_bindDescriptors(
+				temp, deviceExt, device, temp->pipelines[EPipelineType_Graphics], VK_PIPELINE_BIND_POINT_GRAPHICS, e_rr
+			)) {
+				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+				break;
+			}
 
 			//Bind index buffer
 
@@ -1307,9 +1377,15 @@ void VK_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
-			VkCommandBufferState_bindDescriptors(
-				temp, deviceExt, device, temp->pipelines[EPipelineType_Compute], VK_PIPELINE_BIND_POINT_COMPUTE
-			);
+			//A failed bind means the op would run against descriptors it never got, so it is skipped instead,
+			// which is the contract this whole function records under (see its header).
+
+			if(!VkCommandBufferState_bindDescriptors(
+				temp, deviceExt, device, temp->pipelines[EPipelineType_Compute], VK_PIPELINE_BIND_POINT_COMPUTE, e_rr
+			)) {
+				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+				break;
+			}
 
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
@@ -1421,10 +1497,16 @@ void VK_WRAP_FUNC(CommandList_process)(
 				);
 			}
 
-			VkCommandBufferState_bindDescriptors(
+			//A failed bind means the op would run against descriptors it never got, so it is skipped instead,
+			// which is the contract this whole function records under (see its header).
+
+			if(!VkCommandBufferState_bindDescriptors(
 				temp, deviceExt, device, temp->pipelines[EPipelineType_RaytracingExt],
-				VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
-			);
+				VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, e_rr
+			)) {
+				Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+				break;
+			}
 
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 
@@ -1532,7 +1614,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
-			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
+			CommandScope scope = commandList->activeScopes.list.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
 			//A scope may bracket its work in a timestamp pair and/or a named debug region;

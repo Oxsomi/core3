@@ -99,7 +99,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 
 	if(
 		(pipeline->flags & EPipelineFlags_CaptureISA) &&
-		(device->info.capabilities.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
+		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
 	)
 		createFlags =
 			VK_PIPELINE_CREATE_CAPTURE_STATISTICS_BIT_KHR |
@@ -119,7 +119,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		));
 
 	const Bool requestSize =
-		subgroupSize && (device->info.capabilities.featuresExt & EVkGraphicsFeatures_SubgroupSizeControl);
+		subgroupSize && (device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_SubgroupSizeControl);
 
 	const U64 groupThreads = (U64) entry->groupX * entry->groupY * entry->groupZ;
 

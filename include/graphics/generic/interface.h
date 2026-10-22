@@ -313,6 +313,8 @@ typedef struct GraphicsObjectSizes {
 		Error *e_rr
 	);
 
+	typedef Bool (*GraphicsDevice_finishInitImpl)(GraphicsDeviceRef *deviceRef, Error *e_rr);
+
 	typedef U64 (*GraphicsDevice_getMemoryBudgetImpl)(GraphicsDevice *device, Bool isDeviceLocal);
 
 	typedef Bool (*GraphicsDevice_loadPipelineCacheImpl)(
@@ -429,6 +431,7 @@ typedef struct GraphicsObjectSizes {
 		DeviceMemoryAllocator_freeAllocationImpl         memoryFree;
 
 		GraphicsDevice_initImpl                          deviceInit;
+		GraphicsDevice_finishInitImpl                    deviceFinishInit;
 		GraphicsDeviceRef_waitImpl                       deviceWait;
 		GraphicsDeviceRef_reportLossImpl                 deviceReportLoss;
 		GraphicsDevice_freeImpl                          deviceFree;
@@ -637,6 +640,9 @@ Bool GraphicsDevice_initExt(
 	GraphicsDeviceRef **deviceRef,
 	Error *e_rr
 );
+
+//Runs after the generic device's layouts and globals buffers exist, before device creation returns.
+Bool GraphicsDevice_finishInitExt(GraphicsDeviceRef *deviceRef, Error *e_rr);
 
 U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
 

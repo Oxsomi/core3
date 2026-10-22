@@ -46,6 +46,9 @@ formatting), endianness, integer and float math that does not need vectors, sort
   not null terminated unless they say so. UTF-8, UTF-16 and UTF-32 convert through `string_unicode.h`.
 - **Lists**: `TList(T)` declares a typed dynamic array, `list_basic_types.h` has the common ones, and a generic list
   underneath holds any stride.
+- **Hash sets**: `THashSet(T)` is a list that owns a hash index over its entries: find, get or add and swap erase by
+  key, iterated as the list. `THashSetImplKey` / `THashSetImplKeyField` derive the hash and compare for a U32 or U64
+  key; any other key passes a `HashIndexInfo`.
 - **Streams**: a readable or writable source with a block size and a relative read cost, so a consumer can decide
   whether splitting a read pays. Memory streams, file streams, encrypting streams, and read only windows onto
   another stream all share the interface; the codecs in formats read and write through it.

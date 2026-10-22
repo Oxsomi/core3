@@ -1034,12 +1034,12 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f, void *context) 
 
 TGenericList_sorts(TGenericList_sort);
 
-static inline ECompareResult GenericList_compareString(const void *aRaw, const void *bRaw, void *context) {
+ECompareResult GenericList_compareString(const void *aRaw, const void *bRaw, void *context) {
 	(void) context;
 	return CharString_compareSensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }
 
-static inline ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void *bRaw, void *context) {
+ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void *bRaw, void *context) {
 	(void) context;
 	return CharString_compareInsensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }

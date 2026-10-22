@@ -45,7 +45,7 @@ extern "C" void Test_graphicsTimestamps(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	Device dev = Device::share(deviceRef);
 
-	if(!(dev.info().capabilities.features2 & c::EGraphicsFeatures2_Timestamps)) {
+	if(!(dev.info().capabilities.flags.features2 & c::EGraphicsFeatures2_Timestamps)) {
 		c::Test_print(t, "Device has no Timestamps capability, skipping");
 		return;
 	}

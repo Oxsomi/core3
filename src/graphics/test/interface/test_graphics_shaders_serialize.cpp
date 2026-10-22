@@ -189,7 +189,7 @@ static c::Bool TestShaders_canCreateGraphics(c::Test *t, gfx::Device &dev) {
 		return false;
 	}
 
-	if (!(dev.info().capabilities.features & c::EGraphicsFeatures_DirectRendering)) {
+	if (!(dev.info().capabilities.flags.features & c::EGraphicsFeatures_DirectRendering)) {
 		c::Test_print(t, "Device lacks direct rendering, skipping graphics pipeline creation tests");
 		return false;
 	}
@@ -442,7 +442,7 @@ extern "C" void Test_graphicsShaderPipelineIsa(oxc::c::Test *t, oxc::c::Graphics
 
 	gfx::Pipeline pipeline(oxc::RefPtr<c::Pipeline>::adopt(pipelineRaw));
 
-	if (!(dev.info().capabilities.features2 & c::EGraphicsFeatures2_PipelineExecutableInfo)) {
+	if (!(dev.info().capabilities.flags.features2 & c::EGraphicsFeatures2_PipelineExecutableInfo)) {
 		c::Test_print(t, "Device exposes no pipeline introspection, so only the pipeline itself was covered");
 		return;
 	}

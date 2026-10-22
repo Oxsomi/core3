@@ -28,3 +28,4 @@ typedef struct Error Error;
 typedef struct CharString CharString;
 
 Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Bool logToConsole, Error *e_rr);
+Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool logToConsole, Error *e_rr);

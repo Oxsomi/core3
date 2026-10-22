@@ -63,7 +63,7 @@ gotoIfError3(clean, GraphicsInstance_create(
 
 Once this instance is acquired, it can be used to query devices and to detect what API the runtime supports.
 
-*Note: GraphicsInterface_create must be called before GraphicsInstance_makeType/GraphicsInstance_create; it initializes the interface (and with dynamic linking, discovers the graphics API dylibs in the app directory). GraphicsInterface_supportsApi and EGraphicsApi_resolve can be used to query what's available. For dynamic libraries it is important that GraphicsInterface_instance and Platform_instance are set to the final exe/dll's instance (GraphicsInterface_getTable handles this) to ensure the same exact settings and memory allocation is handled by the same instance.*
+*Note: GraphicsInterface_create must be called before GraphicsInstance_makeType/GraphicsInstance_create; it initializes the interface (and with dynamic linking, discovers the graphics API dylibs in the app directory). GraphicsInterface_supportsApi and EGraphicsApi_resolve can be used to query what's available. For dynamic libraries it is important that GraphicsInterface_instance and Platform_instance are set to the final exe/dll's instance (GraphicsInterface_getTable handles this) to ensure the same exact settings and memory allocation is handled by the same instance. It also hands over the host's hash seed (`Platform.hashSeed`).*
 
 ### Properties
 
@@ -74,22 +74,26 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 ### (Member) Functions
 
 - ```c
-  Bool getDeviceInfos(ListGraphicsDeviceInfo *infos, Error *e_rr);
+  Bool getDeviceInfos(ListGraphicsDeviceInfo *infos, const GraphicsDeviceCapFlags *disabledCaps, Error *e_rr);
   ```
 
   - Queries all physical devices to detect if they're supported and what features they have.
+  - disabledCaps; optional mask of capabilities to remove, including their dependent features. NULL means no explicit exclusions. See [Disabling capabilities](graphics_spec.md#disabling-capabilities).
+  - OXC3_DISABLE_CAPABILITIES adds comma-separated capability names to the exclusions, for example `PerformantPushDescriptor` to force Vulkan push descriptor emulation. Names follow GraphicsDeviceInfo's disableCapability function.
 
 - ```c
   Bool getPreferredDevice(
-  	const GraphicsDeviceCapabilities *requiredCapabilities,
-  	U64 vendorMask,
-  	U64 deviceTypeMask,
-  	GraphicsDeviceInfo *deviceInfo,
-  	Error *e_rr
+      const GraphicsDeviceCapabilities *requiredCapabilities,
+      const GraphicsDeviceCapFlags *disabledCaps,
+      U64 vendorMask,
+      U64 deviceTypeMask,
+      GraphicsDeviceInfo *deviceInfo,
+      Error *e_rr
   );
   ```
 
   - Select the physical device that has all specified extensions and is a supported vendor and/or device type.
+  - Applies the same disabledCaps and environment exclusions as getDeviceInfos before checking requiredCapabilities. A required capability that is also disabled cannot match.
 
 - ```c
   U64 getValidationErrors();
@@ -116,7 +120,8 @@ GraphicsDeviceInfo deviceInfo = (GraphicsDeviceInfo) { 0 };
 
 gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
   GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
-  (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
+  NULL,										//No required features or data types
+  NULL,										//No explicit capability exclusions
   GraphicsInstance_vendorMaskAll,			//All vendors supported
   GraphicsInstance_deviceTypeAll,			//All device types supported
   &deviceInfo,
@@ -131,18 +136,20 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
 - type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Microsoft (MSFT) or unknown).
 - id; number in the list of supported devices.
-- luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
+- luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.flags.features & LUID.
 - uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example Direct3D12 would use the luid here and clear the other U64.
 - ext; extended physical device representation for the current API. Can be NULL if LUID is used to share this.
 - capabilities; what data types, features and api dependent features are enabled. See capabilities section. This also includes dedicated and shared memory.
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayReorder, RayTriPosition, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, SwapchainCompute, CoopVec, CoopMat, CoopFP8, CoopVecTraining.
+`GraphicsDeviceCapabilities.flags` is a `GraphicsDeviceCapFlags` containing `features`, `features2`, `dataTypes` and `featuresExt`. Limits, memory sizes and experimental subsets remain directly in `GraphicsDeviceCapabilities`.
 
-- experimentalFeatures: the subset of `features` that is experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so this stays empty. Check it if you want to opt into preview features knowingly.
+- flags.features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayReorder, RayTriPosition, RayValidation, LUID, Wireframe, LogicOp, DualSrcBlend, Barycentrics, SwapchainCompute, ComputeDeriv, MeshTaskTexDeriv, WriteMSTexture, Bindless, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining, SubgroupQuad.
+
+- experimentalFeatures and experimentalFeatures2: the subsets of `flags.features` and `flags.features2` that are experimental/preview on this device+build (not final; may change or be removed across SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled best-effort via the preview Agility SDK + D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions so these stay empty. Check them if you want to opt into preview features knowingly.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
-- features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, Timestamps, Predication, PipelineExecutableInfo, SoftwareRT, DeviceFault, WriteBufferImmediate, ExperimentTier1, ExperimentTier2.
+- flags.features2: RayReorderActual, DescriptorHeap, RayClusterAS, RayPartitionedTLAS, RayIndirectASBuild, RayMicromapOpacityActual, Timestamps, Predication, PipelineExecutableInfo, RaySoftware, DeviceFault, WriteBufferImmediate, ExperimentTier1, ExperimentTier2.
   - RayReorderActual: SER (RayReorder) means the shader-execution-reordering API is available (always valid to call, but may be a no-op); RayReorderActual means the device actually performs the reordering, so it's worth restructuring shaders around it.
   - RayMicromapOpacityActual: same shape one feature over. RayMicromapOpacity means the API accepts opacity micromaps; this bit means they're likely backed by dedicated hardware rather than emulated, so a real micromap object is worth building. Neither API reports it (D3D12 ships OMM wholesale with RAYTRACING_TIER_1_2, Vulkan's VkPhysicalDeviceOpacityMicromapFeaturesKHR is one bool, and an Ampere 3080 reports the same 12/12 subdivision maximum as hardware that has the units), so OxC3 derives it: NVIDIA needs RayReorderActual since the reordering and OMM hardware shipped in the same generation, every other vendor is taken at its word. It is a heuristic, so treat it as "worth it" rather than as a guarantee; special-index-only OMM costs nothing either way.
   - DescriptorHeap: full bindless; shaders index the descriptor heap directly without a fixed descriptor layout. D3D12: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap) + resource binding tier 3; Vulkan: VK_EXT_descriptor_heap. Always implies Bindless on both APIs.
@@ -151,15 +158,15 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
   - RayIndirectASBuild: GPU-driven acceleration structure builds. Vulkan: accelerationStructureIndirectBuild (vkCmdBuildAccelerationStructuresIndirectKHR for classic AS); D3D12: implied by either mega geometry bit, since those builds are indirect by design.
   - Predication: a scope can carry a predicate, a U64 in a device buffer read when the scope executes; zero skips its draws and dispatches while its barriers still run. D3D12: SetPredication (core); Vulkan: VK_EXT_conditional_rendering, which reads the low 32 bits, so write all 64. Without it a predicated scope simply runs.
   - PipelineExecutableInfo: the driver can return per-pipeline ISA disassembly and register statistics. Vulkan: VK_KHR_pipeline_executable_properties. Device and driver dependent, so not for goldens.
-  - SoftwareRT: ray traversal likely runs on the shader cores rather than dedicated units. A heuristic like RayMicromapOpacityActual, since neither API reports it; use it to pick between arms that are both correct (e.g. rasterized or traced primaries). D3D12 draws the line at raytracing tier 1.0.
+  - RaySoftware: ray traversal likely runs on the shader cores rather than dedicated units. A heuristic like RayMicromapOpacityActual, since neither API reports it; use it to pick between arms that are both correct (e.g. rasterized or traced primaries). D3D12 draws the line at raytracing tier 1.0.
   - DeviceFault: a lost device reports what it faulted on, addresses included (see Device loss). D3D12: DRED; Vulkan: VK_EXT_device_fault.
   - WriteBufferImmediate: the graphics queue can write a 32-bit value to a buffer address, ordered before or after the work around it (crash breadcrumbs). D3D12: WriteBufferImmediate on the direct queue; Vulkan: VK_AMD_buffer_marker.
   - ExperimentTier1, ExperimentTier2: experiment tiers the driver claims for itself, through the Vulkan device extensions VK_MESA_experiment_tier1 and VK_MESA_experiment_tier2 that a driver built for experiments may advertise. OxC3 enables the extension and reports the claim, nothing more: it gives the tiers no meaning and says nothing about what an experiment at one may use, which is between the driver and the application. A binary declares the tier it needs with `[[oxc::extension("ExperimentTier1")]]` (ESHExtension2), and `GraphicsDeviceRef_checkShaderFeatures` refuses it on a device whose driver doesn't claim that tier, an UnsafeExperimentExecution binary included, so first fit takes the entry's fallback there. D3D12 has no such extension, so a D3D12 device never claims one. The interface test prints what each device claims, and with `OXC3_TEST_EXPERIMENT_TIERS` set (a mask: 1 for the first tier, 2 for the second) asserts that it claims exactly that.
-- dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
+- flags.dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8, D32S8, LinearFilter16Norm, LinearFilter32f, WriteRGB9E5.
   - MSAA4 and MSAA1 (off) are supported by default.
-- featuresExt: API dependent features that aren't expected to be standardized in the same way.
-  - Vulkan: PerformanceQuery, MemoryBudget, PerformantPushDescriptor, NoCompactionQuery, AddressBindingReport, ExternalHostMemory, MemoryPriority, PageableMemory, SubgroupSizeControl.
-    - PerformantPushDescriptor: VK_KHR_push_descriptor with at least 32 push descriptors, so the globals constant buffer is pushed straight into the command buffer instead of bound from a set allocated to hold it. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 allocates one descriptor set per frame in flight, writes each once to that frame's globals buffer and binds it unchanged afterwards, so there's no per-frame update and nothing is rewritten while in flight. A one-time performance warning is logged on the first submit that takes the emulated path. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
+- flags.featuresExt: API dependent features that aren't expected to be standardized in the same way.
+  - Vulkan: PerfQuery, Maintenance4, BufferDeviceAddress, DriverProperties, MemoryBudget, PerformantPushDescriptor, NoCompactionQuery, AddressBindingReport, ExternalHostMemory, MemoryPriority, PageableMemory, SubgroupSizeControl.
+    - PerformantPushDescriptor: VK_KHR_push_descriptor with at least `OXC3_MAX_PUSH_DESCRIPTORS` push descriptors, so a descriptor is pushed straight into the command buffer instead of bound from a set allocated to hold it. The threshold is what a layout may actually declare rather than the spec's 32 minimum (one descriptor per binding, since a push binding can't be an array), so a driver reporting a smaller but sufficient number still takes the native path. Named for the performance rather than the capability, because pushing descriptors always works; the flag only says the device does it natively. It lives here rather than in `features2` because Vulkan is the only API where that isn't a given; D3D12 has root descriptors and Metal has argument buffers. Without it OxC3 emulates both kinds. The device's own globals buffer gets one descriptor set per frame in flight, written once and bound unchanged afterwards, which works because that buffer is fixed for the whole frame. A caller's push descriptors (and the rotated copy's textures) change per work op, so each push instead takes a set of its own from that frame's descriptor pools, which are reset wholesale once the frame's fence proves the GPU done with them; the pools grow by appending another rather than failing. Unlike a real push, an emulated set is a live object the GPU reads from, which is what that per frame lifetime exists to guarantee. Backend finalization allocates the globals sets during device creation, after their buffers and layouts exist, and logs a one-time performance warning; allocation failure fails device creation. Android emulators are the usual case, since gfxstream drops the extension from the guest even where the host driver exposes it.
     - MemoryBudget: VK_EXT_memory_budget, so new blocks can respect the OS budget (see the device's Properties).
     - NoCompactionQuery: the driver can't be asked for a compacted size, so a BLAS built with AllowCompaction is marked compacted by its build, with no query and no copy.
     - AddressBindingReport: VK_EXT_device_address_binding_report, so a fault address can name an image too.
@@ -170,8 +177,17 @@ gotoIfError3(clean, GraphicsInstance_getPreferredDevice(
   - Direct3D12: ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use), BatchedAsyncCommandList (batched async command list submission, SM6.10 / Agility 1.720+), CacheCoherentUMA (UMA that snoops CPU caches; upload heaps then use WRITE_BACK instead of WRITE_COMBINE), AllowTearing (DXGI tearing support, needed for the Immediate present mode).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 - waveSizeMin and waveSizeMax: the wave sizes, in lanes, a compute shader's `[WaveSize]` can name on this device: every power of two from one to the other. D3D12 reports WaveLaneCountMin and WaveLaneCountMax; Vulkan the subgroup size control range, or without SubgroupSizeControl its one subgroup size as both.
+- waveSizeDefault: Vulkan's native subgroup size, retained so disabling SubgroupSizeControl narrows the queried range correctly. Zero on APIs without a fixed native size. Disabling SubgroupOperations clears waveSizeMin and waveSizeMax.
 
 ### Functions
+
+- ```c
+  Bool disableCapability(EGraphicsApi api, CharString name);
+  ```
+
+  - Removes a capability from this info, along with dependent capabilities and their experimental bits. Apply before GraphicsDeviceRef_create; existing devices are unaffected.
+  - name; case-sensitive enum name without its prefix, for example `CharString_createRefCStrConst("F16")`. api determines which API-specific names are accepted.
+  - Returns true for a recognized name, even if already disabled. Invalid input or an unknown name returns false without changing the info.
 
 - ```
   print(EGraphicsApi api, Bool printCapabilities);
@@ -214,12 +230,13 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
     EGraphicsDeviceFlags_None,		//See "Device flags"
     EGraphicsBufferingMode_Default,	//Frames in flight: Default, Double or Triple
     NULL,							//Bindless DescriptorLayoutInfo; NULL is OxC3's default layout
+    NULL,                           //No reserved descriptors
     &device,
     e_rr
 ));
 ```
 
-The bindless layout is what the default descriptor table and pipeline layout are built from. Passing NULL uses OxC3's own layout, which is what the prebuilt shaders and the oiSH files OxC3 ships are compiled against. A caller that wants a different one can obtain the default through `GraphicsDevice_defaultBindlessLayout`, modify it and pass it in (it is freed with `DescriptorLayoutInfo_free`, the device copies whatever it gets). `EGraphicsDeviceFlags_DisableBindless` drops bindless entirely, even on a device that supports it; the feature bit is then cleared from the device's capabilities, so there is no default descriptor table or pipeline layout and every pipeline has to supply its own layout.
+The bindless layout is what the default descriptor table and pipeline layout are built from. Passing NULL uses OxC3's own layout, which is what the prebuilt shaders and the oiSH files OxC3 ships are compiled against. A caller that wants a different one can obtain the default through `GraphicsDevice_defaultBindlessLayout`, modify it and pass it in (it is freed with `DescriptorLayoutInfo_free`, the device copies whatever it gets). If a device doesn't support bindless then there is no default descriptor table or pipeline layout and every pipeline has to supply its own layout.
 
 Whichever layout the device ends up with is the one every shader is held to. When a pipeline is created (or a binary is picked through `GraphicsDeviceRef_getFirstShaderEntry`), `GraphicsDeviceRef_checkShaderFeatures` walks the binary's reflected registers and refuses any bindless array that the device's layout doesn't have at the same space and binding, with an incompatible register type, or with fewer descriptors than the shader declares. A shader that wants bindless arrays on a device without a bindless layout is refused too. The offending register and what the layout has instead are logged, so an oiSH built against an older layout can be run again by recreating that layout and passing it to `GraphicsDeviceRef_create`. Only binaries the oiSH marks as needing bindless are checked; push constants, push descriptors and singular bound resources come from the pipeline layout the caller supplies and are left alone.
 
@@ -229,9 +246,7 @@ Whichever layout the device ends up with is the one every shader is held to. Whe
 | --- | --- |
 | IsVerbose | Device creation is verbose. |
 | IsDebug | Debug features: API/RT validation, debug markers and names. Turns Breadcrumbs on. |
-| DisableRt | Don't allow raytracing to be enabled (might reduce driver overhead). |
 | DisableDebug | Force disable debugging even on a debug build; NDEBUG is leading otherwise. |
-| DisableBindless | No bindless layout, even where the device supports it. |
 | EnableDynamicSamplers | Adds the bindless `_samplers[]` array to the default layout. Opt in: on Vulkan it owns descriptor set 0 and both backends need a sampler heap; static samplers cover the ordinary case for free (see "Dynamic samplers are opt in"). |
 | Breadcrumbs | Every scope records on the GPU when it began and ended, so a lost device can name its scopes (see "Breadcrumbs"). Two small writes per scope; on by default on a debug device. |
 | AllowUnsafeExperimentExecution | Takes binaries marked `UnsafeExperimentExecution`, unvalidated and without feature checks, which no other device does (see "Unsafe experiment execution"). Creating the device logs a warning that says so. |
@@ -258,7 +273,7 @@ For a binary that uses an extension OxC3 doesn't recognize yet, such as a vendor
 - info; physical device.
 - submitId; counter of how many times submit was called (can be used as frame id).
 - lastSubmit, firstSubmit; used to track when a submit was called.
-- pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit.
+- pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit. resourcesInFlight is a `HashSetRefPtr` per frame.
 - allocator; used to allocate memory.
 - lock; used to ensure flushes aren't done while a commit is busy for example.
 - staging, stagingAllocations; staging allocations are used if the resources that are being updated are already in flight, if the resource is a tiled texture (non linear texture) or if the device doesn't support ReBAR/shared memory (and so the GPU memory isn't accessible).
@@ -568,6 +583,7 @@ For a binary that uses an extension OxC3 doesn't recognize yet, such as a vendor
 - `GraphicsDeviceRef_listShaderTargets(dev, alloc, &list, e_rr)` lists the ASIC targets the driver can compile for besides the device itself (empty except on AMD's D3D12 today); the names can be passed back as an ISA target.
 - `GraphicsDeviceRef_selectShaderTarget(dev, &name, e_rr)` picks which target the NEXT device created in this process compiles for (empty name = the real GPU). Process wide; the driver reads it while initializing the adapter, so it cannot apply to a device that already exists (create one to enumerate, release it, create a second to compile with). A backend that only compiles for the device refuses any other name.
 - Internal, called by backends: `GraphicsDeviceRef_flushPendingPulls` (records the queued pullRegion reads after the frame's commands) and `GraphicsDeviceRef_resizeStagingBuffer` (resizes the staging buffer). The device also shrinks staging on its own: every 64 frames, if that window's peak use stayed at or below a quarter of a region, it shrinks to three regions of 4 MiB doubled until each holds twice the peak (uploads through a temporary buffer count toward the peak). Apps use `GraphicsDeviceRef_reserveReadback` instead of touching these.
+- Internal, called by backends: `GraphicsDevice_addInFlight`, `reserveInFlight`, `isInFlight`, `isInAnyFlight` and `clearInFlight` are how a backend uses `resourcesInFlight`; a frame holds one reference per resource.
 
 ### Device loss
 
@@ -703,12 +719,12 @@ For more info on commands check out the "Commands" section.
 - device; owning device.
 - state; if the command list has been opened before and if it's open or closed right now.
 - allowResize; if command list is allowed to resize if it runs out of memory.
-- resources; Which resources are in use by the command list.
+- resources; which resources are in use by the command list (a `HashSetRefPtr`).
 - data; The current recorded commands.
 - commandOps; The opcodes for which commands are recorded.
 - transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
 - lock; for allowing multiple threads to open the same command list (has to be closed by one thread first).
-- activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
+- activeScopes; scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer), keyed by scope id and never erased from while recording, so its order is the submit order.
 - pipeline; currently bound pipelines.
 - boundImages/boundImageCount/boundDepthFormat/boundSampleCount; currently bound images in the renderpass and/or render targets (DirectRendering). As well as the sample count that it was bound with.
 - tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.
@@ -2005,9 +2021,9 @@ Same thing as dispatch, except the device reads from a U32x3 into the DeviceBuff
 
 dispatchIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer in the same scope. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
-### DebugMarkers feature
+### Debug markers
 
-The DebugMarkers feature adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended in the same scope that is submitted.
+The commands addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt provide debugging information to tools such as RenderDoc, NSight and Pix. They are recorded without a public `DebugMarkers` capability bit; backend emission depends on the available debugging support. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended in the same scope that is submitted.
 
 ```c
 gotoIfError3(clean, CommandListRef_startRegionDebugExt(
@@ -2122,20 +2138,20 @@ The payload is copied into the command itself rather than referenced, so a repla
 
 #### setPushDescriptors
 
-Writes every push descriptor the bound pipeline's layout declares, in that layout's own binding order (the order `detectLayoutFromEntry`/`detectLayoutFromEntries` produced into `pushDescriptorInfo`, whose `bindingNames` name them). A push descriptor lives in the command stream rather than in a heap: a root CBV/SRV/UAV on D3D12, `vkCmdPushDescriptorSetKHR` on Vulkan. Nothing about it goes through a DescriptorTable, so no heap or table has to be bound for one.
+Writes every push descriptor the bound pipeline's layout declares, in that layout's own binding order (the order `detectLayoutFromEntry`/`detectLayoutFromEntries` produced into `pushDescriptorInfo`, whose `bindingNames` name them). Buffer descriptors use root CBV/SRV/UAV bindings on D3D12 and `vkCmdPushDescriptorSetKHR` or emulated descriptor sets on Vulkan. The caller records descriptors directly rather than creating a DescriptorTable. Buffer pushes need no bound heap; texture pushes have the heap requirement described below.
 
 All of them are written at once rather than one at a time, because a partial set would leave the rest pointing at whatever the previous pipeline bound, and both backends emit the whole set anyway. The work op validates the written count against the layout, refuses a count that doesn't match it, and refuses writes against a layout that declares none: the same three rules push constants follow, and for the same reason they sit ahead of the bind state cache. Scope end resets the write.
 
-**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on both backends: one raw GPU virtual address, costing 2 of a D3D12 root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded. On D3D12 a pipeline layout's root parameters come in the order push constants, push descriptors, then the binding tables, so what changes per draw or dispatch lands in the first 13 DWORDs, the ones drivers keep in fast memory.
+**Buffer class** push descriptors (a constant buffer, a byte address or structured buffer, or an acceleration structure) are root descriptors on D3D12: one raw GPU virtual address, costing 2 of a root signature's 64 DWORDs each, which is why at most `OXC3_MAX_PUSH_DESCRIPTORS` can be recorded. Vulkan writes buffer or acceleration-structure descriptors through its native or emulated path. On D3D12 a pipeline layout's root parameters come in the order push constants, push descriptors, then the binding tables, so what changes per draw or dispatch lands in the first 13 DWORDs, the ones drivers keep in fast memory. A push binding is a single descriptor, so an array binding is refused when the layout is created: a root descriptor can't be one, and the work op writes exactly one descriptor per binding.
 
-**Textures** can be pushed too, but not as a root descriptor, because an address has nowhere to carry a format, a mip range or a swizzle. D3D12 gives the binding a single entry descriptor table instead and fills it at the work op; Vulkan pushes an image descriptor straight into the set and needs nothing further. That table needs a shader visible slot, and it has to come from a heap the CALLER put in play: a heap the runtime picked itself would need a `SetDescriptorHeaps` behind the caller's back, and that switch is heavy (it can drain the GPU on NV), which is the entire reason heap binds are explicit. So a heap carries a ring of its own for them, sized by `DescriptorHeapInfo::maxPushDescriptors`:
+**Textures** can be pushed too, but not as a root descriptor, because an address has nowhere to carry a format, a mip range or a swizzle. D3D12 gives the binding a single entry descriptor table instead and fills it at the work op; Vulkan writes an image descriptor through its native or emulated push path. That table needs a shader visible slot, and it has to come from a heap the CALLER put in play: a heap the runtime picked itself would need a `SetDescriptorHeaps` behind the caller's back, and that switch is heavy (it can drain the GPU on NV), which is the entire reason heap binds are explicit. So a heap carries a ring of its own for them, sized by `DescriptorHeapInfo::maxPushDescriptors`:
 
 - The slot comes from the bound DescriptorHeap (`bindDescriptorHeap`), or, only when the pipeline layout uses the runtime bindless set, from the device's own heap, since that pipeline binds the device heap for itself either way and the push adds no switch. Anything else is refused at the work op; there is no silent fallback.
 - `maxPushDescriptors` is **per frame in flight**, and every emission takes fresh slots rather than reusing them, because the earlier ones stay live until that frame retires. Size it for a frame's worth of texture pushes, not for a single bind. The device's own heap reserves `OXC3_MAX_PUSH_DESCRIPTORS * 64`. Exhausting it mid frame logs an error and wraps.
 - The texture needs `EGraphicsResourceFlag_ShaderRead`, or `EGraphicsResourceFlag_ShaderWrite` when the binding writes, since that is what makes the backend give it `ALLOW_UNORDERED_ACCESS` / `VK_IMAGE_USAGE_STORAGE_BIT` at creation. Checked when the work op records.
-- The requirement is enforced on Vulkan too, even though it pushes images directly, so a layout that records on one backend records on both.
+- The requirement is enforced on both Vulkan push paths too, so a layout that records on one backend records on both.
 
-**Samplers** cannot be in a push descriptor layout at all, immutable or not: D3D12 has no root sampler, and a baked one becomes a root signature static sampler whichever layout declared it, so the push descriptor set it sits in would mean something on Vulkan and nothing on D3D12. Declare a sampler in the regular layout, as an ordinary binding or as an **immutable** one. `DescriptorLayoutInfo::immutableSamplers` holds `SamplerRef`s and a sampler binding names one through `immutableSamplerId` (1 based, 0 meaning none), added with `DescriptorLayoutInfo_addImmutableSampler`. A sampler in a push descriptor layout **has** to be immutable, since there is no root sampler on D3D12 to push one into.
+**Samplers** cannot be in a push descriptor layout at all, immutable or not: D3D12 has no root sampler, and a baked one becomes a root signature static sampler whichever layout declared it, so the push descriptor set it sits in would mean something on Vulkan and nothing on D3D12. Declare a sampler in the regular layout, as an ordinary binding or as an **immutable** one. `DescriptorLayoutInfo::immutableSamplers` holds `SamplerRef`s and a sampler binding names one through `immutableSamplerId` (1 based, 0 meaning none), added with `DescriptorLayoutInfo_addImmutableSampler`.
 
 An immutable sampler is baked into the layout rather than bound:
 
@@ -2165,7 +2181,7 @@ A bindless device gets its static samplers by starting from `GraphicsDevice_defa
 
 The resources are kept alive by the command list, like a bound table's are, and per resource scope transitions remain the caller's job until auto transitions land.
 
-**Known gap:** on Vulkan a caller owned push descriptor layout currently requires `VK_KHR_push_descriptor` (the `PerformantPushDescriptor` capability) and is refused at layout creation without it. The device's own globals layout is exempt because it carries its own emulation (one descriptor set per frame in flight, written once and bound unchanged), which works only because that buffer is fixed for the whole frame. A caller's push descriptors change per work op, so the general emulation needs a set allocated per push from a per frame pool. Android emulators are the case that hits this, since gfxstream drops the extension from the guest even where the host driver exposes it.
+Vulkan emulates pushes when `PerformantPushDescriptor` is unavailable or disabled, including devices whose `VK_KHR_push_descriptor` limit is too small. The device's own globals layout uses one descriptor set per frame in flight, written once and bound unchanged, which works because that buffer is fixed for the whole frame. Backend finalization creates these sets before device creation returns, after the globals buffers and layouts exist; allocation failure fails device creation. Custom pipeline layouts can therefore use runtime globals on their first submission. A caller's push descriptors change per work op, so each emission instead allocates a set from that frame's descriptor pools, writes it and binds it at the same set index the push would have used; a push layout spanning several spaces takes one set per space, the same split the native path pushes with. The rotated copy's two textures ride the same mechanism. A set is allocated per `setPushDescriptors` that work actually consumes, not per draw, so a thousand draws sharing one binding cost one set. The pools are reset wholesale when the frame's fence proves the GPU done with them, and grow by appending another when one fills, so they settle at the worst frame's high water mark. Unlike a native push, which lives in the command stream, an emulated set is a live object the GPU reads from for the whole submit, which is what that per frame lifetime exists to guarantee. `OXC3_DISABLE_CAPABILITIES=PerformantPushDescriptor` exercises this path on desktop Vulkan; Android emulators also use it when gfxstream drops the extension from the guest.
 
 ### Raytracing feature
 

@@ -61,6 +61,10 @@ TListImpl(DevicePendingPull);
 TListImpl(GraphicsTiming);
 TListImpl(TimingEntry);
 
+//Internal dependency normalization from device_info.c, also used after instance capability masking.
+
+void GraphicsDeviceInfo_fixCapabilities(GraphicsDeviceInfo *info, EGraphicsApi api);
+
 //Frees a timings list filled by GraphicsDeviceRef_getTimings: its owned name copies, then the array itself.
 
 void ListGraphicsTiming_freeUnderlying(ListGraphicsTiming *timings, const Allocator *alloc) {
@@ -162,7 +166,7 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 
 				case ECommandOp_StartScope: {
 
-					const CommandScope scope = cl->activeScopes.ptr[scopeCounter++];
+					const CommandScope scope = cl->activeScopes.list.ptr[scopeCounter++];
 					curScopeTimed = (scope.flags & ECommandScopeInternalFlags_Timed) != 0;
 
 					if(curScopeTimed) {
@@ -461,13 +465,13 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
-		if(device->resourcesInFlight[i].length)
+		if(device->resourcesInFlight[i].list.length)
 			Log_warnLnx(
 			"GraphicsDevice_free detected resourcesInFlight still left on free. "
 			"This shouldn't be possible, as all resources should already be released!"
 		);
 
-		ListRefPtr_free(&device->resourcesInFlight[i], alloc);
+		HashSetRefPtr_free(&device->resourcesInFlight[i], alloc);
 	}
 
 	GraphicsDevice_freeResourceRegistry(device, alloc);
@@ -950,7 +954,7 @@ Bool GraphicsDevice_defaultBindlessLayout(
 	//Which matters beyond the name itself, because the names ARE how a derived layout tells the runtime's
 	// own registers from a caller's (GraphicsDeviceRef_isRuntimeRegister).
 
-	if (info->capabilities.features & EGraphicsFeatures_Raytracing) {
+	if (info->capabilities.flags.features & EGraphicsFeatures_Raytracing) {
 
 		bindingNames[descBindings] = CharString_createRefCStrConst("_tlasExt");
 
@@ -1033,36 +1037,6 @@ Bool GraphicsDeviceRef_create(
 	device->flags = flags;
 	device->framesInFlight = (U8) bufferMode;
 
-	if(device->flags & EGraphicsDeviceFlags_DisableRt) {
-		device->info.capabilities.features &=~ (
-			EGraphicsFeatures_Raytracing         |
-			EGraphicsFeatures_RayPipeline        |
-			EGraphicsFeatures_RayQuery           |
-			EGraphicsFeatures_RayMicromapOpacity |
-			EGraphicsFeatures_RayReorder         |
-			EGraphicsFeatures_RayValidation      |
-			EGraphicsFeatures_RayTriPosition
-		);
-
-		device->info.capabilities.features2 &=~ (
-			EGraphicsFeatures2_RayReorderActual         |
-			EGraphicsFeatures2_RayMicromapOpacityActual |
-			EGraphicsFeatures2_RayClusterAS             |
-			EGraphicsFeatures2_RayPartitionedTLAS       |
-			EGraphicsFeatures2_RayIndirectASBuild       |
-			EGraphicsFeatures2_SoftwareRT
-		);
-	}
-
-	//Clearing the feature is what actually turns bindless off, since layouts, heaps and shader checks all test it.
-	//Leaving it set would let a descriptor layout or an oiSH ask for bindless that the device no longer sets up.
-	//DescriptorHeap always implies Bindless, so it can't survive bindless being turned off either.
-
-	if(device->flags & EGraphicsDeviceFlags_DisableBindless) {
-		device->info.capabilities.features &=~ EGraphicsFeatures_Bindless;
-		device->info.capabilities.features2 &=~ EGraphicsFeatures2_DescriptorHeap;
-	}
-
 	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && !isDebugInstance)
@@ -1078,7 +1052,9 @@ Bool GraphicsDeviceRef_create(
 		device->flags |= EGraphicsDeviceFlags_IsDebug;
 
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
-		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
+		device->info.capabilities.flags.features &=~ EGraphicsFeatures_RayValidation;
+
+	GraphicsDeviceInfo_fixCapabilities(&device->info, instance->api);
 
 	if(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
 		Log_warnLnx(
@@ -1151,18 +1127,18 @@ Bool GraphicsDeviceRef_create(
 
 	//Create in flight resource refs
 
-	for(U64 i = 0; i < device->framesInFlight; ++i)
-		gotoIfError3(clean, ListRefPtr_reserve(&device->resourcesInFlight[i], 64, alloc, e_rr));
+	for (U64 i = 0; i < device->framesInFlight; ++i)
+		gotoIfError3(clean, HashSetRefPtr_reserve(&device->resourcesInFlight[i], 64, alloc, e_rr));
 
 	//Create extended device
 
-	gotoIfError3(clean, GraphicsDevice_initExt(instance, info, deviceRef, e_rr));
+	gotoIfError3(clean, GraphicsDevice_initExt(instance, &device->info, deviceRef, e_rr));
 
 	//Create the default descriptor heap, layout, table and pipeline layout.
-	//All of it is skipped if the device has no bindless, which includes the caller turning it off through the flag.
+	//All of it is skipped if the device has no bindless, including when the capability was disabled by the caller.
 	//TODO: Allow user to define the heap sizes too
 
-	if(device->info.capabilities.features & EGraphicsFeatures_Bindless) {
+	if(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless) {
 
 		//The layout is described first, because the heap is then sized to hold exactly it.
 		//The caller can hand over a layout of their own, otherwise OxC3's default is what the device runs with.
@@ -1361,6 +1337,10 @@ Bool GraphicsDeviceRef_create(
 			sizeof(CBufferData), &device->frameData[i], e_rr
 		));
 
+	//Finish backend setup after the default layouts and per-frame buffers exist.
+
+	gotoIfError3(clean, GraphicsDevice_finishInitExt(*deviceRef, e_rr));
+
 	//Load prebuilt shaders
 
 	gotoIfError3(clean, GraphicsDeviceRef_createPrebuiltShaders(*deviceRef, e_rr));
@@ -1467,9 +1447,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 			);
 
 			retError(clean, Error_invalidState(
-				0,
-				"GraphicsDeviceRef_checkShaderFeatures() binary uses bindless arrays, but bindless is unsupported "
-				"or was turned off with EGraphicsDeviceFlags_DisableBindless"
+				0, "GraphicsDeviceRef_checkShaderFeatures() binary uses bindless arrays, but it is unsupported or turned off"
 			));
 		}
 
@@ -1711,30 +1689,20 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	if(declared2 & ESHExtension2_ExperimentTier1)           tiers |= EGraphicsFeatures2_ExperimentTier1;
 	if(declared2 & ESHExtension2_ExperimentTier2)           tiers |= EGraphicsFeatures2_ExperimentTier2;
 
-	if((device->info.capabilities.features2 & tiers) != tiers)
+	if((device->info.capabilities.flags.features2 & tiers) != tiers)
 		retError(clean, Error_unsupportedOperation(
 			0,
 			"GraphicsDeviceRef_checkShaderFeatures() binary declares an experiment tier (ExperimentTier1 or "
 			"ExperimentTier2) that the device's driver doesn't claim"
 		));
 
-	//Bindless is the one feature a caller can take away from a device that has it,
-	// so it says as much instead of leaving it to the generic message below.
-
-	if((features & EGraphicsFeatures_Bindless) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
-		retError(clean, Error_invalidState(
-			0,
-			"GraphicsDeviceRef_checkShaderFeatures() binary needs bindless, but the device has no bindless layout "
-			"(unsupported or turned off with EGraphicsDeviceFlags_DisableBindless)"
-		));
-
-	if(!isUnsafe && (device->info.capabilities.features & features) != features)
+	if(!isUnsafe && (device->info.capabilities.flags.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
 
-	if(!isUnsafe && (device->info.capabilities.features2 & features2) != features2)
+	if(!isUnsafe && (device->info.capabilities.flags.features2 & features2) != features2)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features2 is missing"));
 
-	if(!isUnsafe && (device->info.capabilities.dataTypes & dataTypes) != dataTypes)
+	if(!isUnsafe && (device->info.capabilities.flags.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
 	//Reading an oiSH widens a was-everything mask to today's everything, so this comparison stays exact
@@ -1750,7 +1718,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if(binaryType == EGfxBinaryType_DXIL) {
 
-		if((device->info.capabilities.featuresExt & (U32)featuresDx) != (U32)featuresDx)
+		if((device->info.capabilities.flags.featuresExt & (U32)featuresDx) != (U32)featuresDx)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"));
 
 		if(!Buffer_length(bin->binaries[EGfxBinaryType_DXIL]))
@@ -1872,6 +1840,80 @@ clean:
 	return s_uccess;
 }
 
+Bool GraphicsDevice_isInFlight(const GraphicsDevice *device, RefPtr *resource) {
+
+	if(!device || !resource)
+		return false;
+
+	return HashSetRefPtr_find(&device->resourcesInFlight[device->fifId], &resource) != U64_MAX;
+}
+
+Bool GraphicsDevice_isInAnyFlight(const GraphicsDevice *device, RefPtr *resource) {
+
+	if(!device || !resource)
+		return false;
+
+	for (U64 i = 0; i < device->framesInFlight; ++i)
+		if(HashSetRefPtr_find(&device->resourcesInFlight[i], &resource) != U64_MAX)
+			return true;
+
+	return false;
+}
+
+Bool GraphicsDevice_reserveInFlight(GraphicsDevice *device, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!device)
+		retError(clean, Error_nullPointer(0, "GraphicsDevice_reserveInFlight()::device is required"));
+
+	{
+		HashSetRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
+
+		gotoIfError3(clean, HashSetRefPtr_reserve(inFlight, inFlight->list.length + 1, alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool GraphicsDevice_addInFlight(GraphicsDevice *device, RefPtr *resource, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!device || !resource)
+		retError(clean, Error_nullPointer(
+			!device ? 0 : 1, "GraphicsDevice_addInFlight()::device and resource are required"
+		));
+
+	gotoIfError3(clean, HashSetRefPtr_insert(&device->resourcesInFlight[device->fifId], resource, NULL, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+Bool GraphicsDevice_clearInFlight(GraphicsDevice *device, U8 fifId, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!device || fifId >= device->framesInFlight)
+		retError(clean, Error_outOfBounds(
+			1, fifId, device ? device->framesInFlight : 0, "GraphicsDevice_clearInFlight()::fifId out of bounds"
+		));
+
+	{
+		HashSetRefPtr *inFlight = &device->resourcesInFlight[fifId];
+
+		for(U64 i = 0; i < inFlight->list.length; ++i)
+			RefPtr_dec(inFlight->list.ptrNonConst + i);
+
+		gotoIfError3(clean, HashSetRefPtr_clear(inFlight, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
 static void GraphicsDevice_shrinkStaging(GraphicsDeviceRef *deviceRef);
 static void GraphicsDevice_shrinkStagingReadback(GraphicsDeviceRef *deviceRef);
 
@@ -1907,12 +1949,7 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 	//This might cause resource deletions because we might be the last one releasing them.
 	//For example temporary staging resources are released this way.
 
-	ListRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
-
-	for (U64 i = 0; i < inFlight->length; ++i)
-		RefPtr_dec(inFlight->ptrNonConst + i);
-
-	gotoIfError3(clean, ListRefPtr_clear(inFlight, e_rr));
+	gotoIfError3(clean, GraphicsDevice_clearInFlight(device, device->fifId, e_rr));
 
 	//Release all allocations of buffer that was in flight, after noting how much of it the frame used
 
@@ -2872,21 +2909,19 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	//Add resources from command lists to resources in flight
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	for (U64 j = 0; j < (!commandLists ? 0 : commandLists->length); ++j) {
 
 		CommandListRef *cmdRef = commandLists->ptr[j];
 		CommandList *cmd = CommandListRef_ptr(cmdRef);
 
-		for(U64 i = 0; i < cmd->resources.length; ++i) {
+		for(U64 i = 0; i < cmd->resources.list.length; ++i) {
 
-			RefPtr *ptr = cmd->resources.ptr[i];
+			RefPtr *ptr = cmd->resources.list.ptr[i];
 
-			if(ListRefPtr_contains(*currentFlight, ptr, 0, NULL))
+			if(GraphicsDevice_isInFlight(device, ptr))
 				continue;
 
-			gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, ptr, alloc, e_rr));
+			gotoIfError3(clean, GraphicsDevice_addInFlight(device, ptr, alloc, e_rr));
 			RefPtr_inc(ptr);
 		}
 	}
@@ -3042,7 +3077,7 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 
 	for (U64 i = 0; i < device->framesInFlight; ++i) {
 
-		ListRefPtr *inFlight = &device->resourcesInFlight[i];
+		HashSetRefPtr *inFlight = &device->resourcesInFlight[i];
 
 		//The submit being recorded keeps its references: what it holds can still be in use on the CPU by the caller
 		// that triggered the flush (a pending buffer whose last reference is this list, a BLAS mid build).
@@ -3053,9 +3088,9 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 
 		if(midSubmit && i == device->fifId) {
 
-			for (U64 j = inFlight->length; j > 0; --j) {
+			for (U64 j = inFlight->list.length; j > 0; --j) {
 
-				RefPtr *res = inFlight->ptrNonConst[j - 1];
+				RefPtr *res = inFlight->list.ptrNonConst[j - 1];
 
 				if(
 					res->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer ||
@@ -3064,7 +3099,9 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 				)
 					continue;
 
-				gotoIfError3(clean, ListRefPtr_erase(inFlight, j - 1, e_rr));
+				//Walking down, the entry swapped into the hole was already visited.
+
+				gotoIfError3(clean, HashSetRefPtr_eraseSwap(inFlight, j - 1, &res, e_rr));
 				RefPtr_dec(&res);
 			}
 
@@ -3076,10 +3113,7 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 		//This might cause resource deletions because we might be the last one releasing them.
 		//For example temporary staging resources are released this way.
 
-		for (U64 j = 0; j < inFlight->length; ++j)
-			RefPtr_dec(inFlight->ptrNonConst + j);
-
-		gotoIfError3(clean, ListRefPtr_clear(inFlight, e_rr));
+		gotoIfError3(clean, GraphicsDevice_clearInFlight(device, (U8) i, e_rr));
 
 		//Release all allocations of buffer that was in flight
 

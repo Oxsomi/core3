@@ -185,6 +185,17 @@ Bool Name##_insertAll(Name *l, const Name other, U64 offset, const Allocator *al
 Bool Name##_clear(Name *l, Error *e_rr);                                                                                    \
 void Name##_free(Name *l, const Allocator *allocator);                                                                      \
 																															\
+/* Makes room for one more element with the headroom pushBack would have taken, so the push that */                         \
+/* follows cannot fail. Name##_reserve takes an absolute capacity and leaves none. */                                       \
+																															\
+TListFn Bool Name##_reserveForPush(Name *l, const Allocator *allocator, Error *e_rr) {                                      \
+																															\
+	if(l && l->length + 1 <= GenericList_capacity(Name##_toList(*l)))                                                       \
+		return true;                                                                                                        \
+																															\
+	return Name##_reserve(l, l ? (l->length + 1) * 3 / 2 : 1, allocator, e_rr);                                             \
+}                                                                                                                           \
+																															\
 TListX(Name)
 
 #define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name)

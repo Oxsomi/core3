@@ -1836,7 +1836,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					++deviceExt->dispatchRaysIndirectCursor;
 
 					const U64 argOffset = (U64) slot * stride;
-					const Bool wbi = !!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate);
+					const Bool wbi = !!(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate);
 
 					DxDeviceBuffer *argsBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(argsRef), Dx);
 					DxDeviceBuffer *callerBuf = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
@@ -1958,7 +1958,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER }
 			};
 
-			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
+			CommandScope scope = commandList->activeScopes.list.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
 			//A scope may bracket its work in a timestamp pair and/or a named debug region;

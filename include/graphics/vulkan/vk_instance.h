@@ -25,6 +25,7 @@
 #include "types/base/platform_types.h"
 #include "types/base/lock.h"
 #include "types/container/list.h"
+#include "types/container/hash_set.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -136,6 +137,7 @@ typedef struct VkAddressBinding {
 } VkAddressBinding;
 
 TList(VkAddressBinding);
+THashSet(VkAddressBinding);        //Keyed on (handle, type); find takes a VkAddressBinding with those two set
 
 typedef struct VkGraphicsInstance {
 
@@ -198,8 +200,8 @@ typedef struct VkGraphicsInstance {
 
 	VkDebugUtilsMessengerEXT bindingMessenger;
 	PFN_vkDestroyDebugUtilsMessengerEXT destroyMessenger;
-	ListVkAddressBinding bindings;
-	U8 padding0[16];
+	HashSetVkAddressBinding bindings;
+	U8 padding0[40];
 
 	SpinLock bindingLock;
 

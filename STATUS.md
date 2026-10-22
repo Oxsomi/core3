@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-10-16 (branch `web_frontend`, v3.2.106). Update this table in the same PR as the feature.
+Last updated: 2026-10-23 (branch `web_frontend`, v3.2.106). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -21,7 +21,7 @@ Last updated: 2026-10-16 (branch `web_frontend`, v3.2.106). Update this table in
 | AllocationBuffer (GPU suballocator) | ✅ | Non-linear alignment supported |
 | JobQueue | ✅ | Deterministic single-thread mode |
 | Compression (Brotli) | 📄 | oiXX headers reserve flags; implementation is a disabled WIP. Readers must reject compressed files |
-| Generic hash map | ❌→🚧 | Wanted by debug allocator, command-list dedup, compiler caches (TODOs in tree) |
+| Hash set (THashSet) | ✅ | Robin Hood, seeded, worst case bounded |
 
 ## Formats
 
@@ -71,9 +71,10 @@ and compare triangles rather than vertices, since a read renumbers vertices into
 | Feature | Vulkan | D3D12 | Notes |
 | --- | --- | --- | --- |
 | Instance/device/swapchain | ✅ | ✅ | Side-by-side APIs via dynamic linking (desktop) |
+| Capability exclusions | ✅ | ✅ | Query masks and OXC3_DISABLE_CAPABILITIES; dependencies and experimental subsets stay consistent |
 | Virtual command lists + auto transitions | ✅ | ✅ | API-independent recorder (unit tests wanted) |
 | Buffers/textures + suballocation | ✅ | ✅ | |
-| Descriptor heap/layout/table + bindless | ✅ | ✅ | Android: bindful path missing |
+| Descriptor heap/layout/table + bindless | ✅ | ✅ | Vulkan push descriptors emulate through frame-owned descriptor sets when native support is unavailable or disabled |
 | Compute/graphics pipelines | ✅ | ✅ | Android: render passes missing |
 | Raytracing (pipeline + query, BLAS/TLAS) | ✅ | ✅ | Micromap/reorder behind extension flags; Vulkan micromaps need VK_KHR_opacity_micromap; ray queries reach them from every stage whose entry names `OXC_ENABLE_OPACITY_MICROMAP()` |
 | Mesh shaders / VRS | 🟡 | 🟡 | Capabilities exposed, nothing exercised: no `dispatchMesh` runtime path on either backend, no VRS test (see roadmap) |

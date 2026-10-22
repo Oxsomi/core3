@@ -172,6 +172,12 @@ namespace oxc {
 			c::GraphicsDeviceInfo_print(api, &info, capabilities);
 		}
 
+		[[nodiscard]] inline c::Bool disableCapability(
+			c::GraphicsDeviceInfo &info, c::EGraphicsApi api, const c::C8 *capability
+		) noexcept {
+			return c::GraphicsDeviceInfo_disableCapability(&info, api, name(capability));
+		}
+
 		//---------------------------------------------------------------- handles
 
 		class Instance {
@@ -237,8 +243,12 @@ namespace oxc {
 			// the same alloc create() was given.
 			//GraphicsDeviceInfo itself holds no heap data.
 
-			[[nodiscard]] c::Bool getDeviceInfos(c::ListGraphicsDeviceInfo &infos, c::Error *e_rr = nullptr) const noexcept {
-				return c::GraphicsInstance_getDeviceInfos(ref.data(), &infos, e_rr);
+			[[nodiscard]] c::Bool getDeviceInfos(
+				c::ListGraphicsDeviceInfo &infos,
+				const c::GraphicsDeviceCapFlags *disabledCaps = nullptr,
+				c::Error *e_rr = nullptr
+			) const noexcept {
+				return c::GraphicsInstance_getDeviceInfos(ref.data(), &infos, disabledCaps, e_rr);
 			}
 
 			//Validation messages the api's debug layers reported so far (0 when validation is off).
@@ -259,12 +269,13 @@ namespace oxc {
 			[[nodiscard]] c::Bool getPreferredDevice(
 				const c::GraphicsDeviceCapabilities &required,
 				c::GraphicsDeviceInfo &deviceInfo,
+				const c::GraphicsDeviceCapFlags *disabledCaps = nullptr,
 				c::U64 vendorMask = c::GraphicsInstance_vendorMaskAll,
 				c::U64 deviceTypeMask = c::GraphicsInstance_deviceTypeAll,
 				c::Error *e_rr = nullptr
 			) const noexcept {
 				return c::GraphicsInstance_getPreferredDevice(
-					ref.data(), &required, vendorMask, deviceTypeMask, &deviceInfo, e_rr
+					ref.data(), &required, disabledCaps, vendorMask, deviceTypeMask, &deviceInfo, e_rr
 				);
 			}
 
@@ -1629,7 +1640,7 @@ namespace oxc {
 
 			//bindlessLayout:
 			// NULL = OxC3's default bindless layout (see GraphicsDeviceRef_create's bindlessLayout);
-			// ignored without EGraphicsFeatures_Bindless or when EGraphicsDeviceFlags_DisableBindless is set.
+			// ignored without EGraphicsFeatures_Bindless.
 			//The device COPIES it, so the caller keeps ownership.
 			//The new params trail result so existing callers keep meaning the same thing.
 

@@ -35,12 +35,6 @@ Last full revision: 2026-09-02.
   Vulkan backend was binding whichever came first instead of the stage's own (fixed in vk_graphics_pipeline.c
   by preferring the name the oiSH recorded, then the stage's execution model). That is a later layer than
   getFirstShaderEntry so it is not this bug, but the multi-entry premise itself is no longer a guess.
-- **Android emulator: push descriptor emulation.** Owned by a separate effort in another checkout; do not
-  double-work it. The substance: gfxstream drops VK_KHR_push_descriptor from the guest even where the host
-  driver has it, and OxC3 only emulates the device's OWN globals layout (one pre-written set per frame in
-  flight, which works because that buffer is fixed for the whole frame); a caller-owned push descriptor
-  layout is refused at creation without the extension. The general emulation needs a set allocated per push
-  from a per-frame pool, since a caller's push descriptors change per work op.
 - **AMD's driver fail-fasts tearing a virtual GPU down.** Targeting another ASIC for DXIL ISA works
   (`-asic <name>` resolves the name, hands it to the driver and re-runs itself so the adapter initializes as
   the target), but the second process dies with STATUS_STACK_BUFFER_OVERRUN on the way out, after the
@@ -320,10 +314,6 @@ Roughly ordered by how often the gap bites.
   (vk_device_buffer.c ~560-640, textures likewise): merge per submit.
 - **Read to read buffer transitions still emit barriers** (vk_device_buffer.c ~55); state is tracked per whole
   buffer, not per range.
-- **Linear `ListRefPtr_contains`** per submit, per pending resource and per transition (command_list.c ~161-170,
-  device.c ~2670-2685, vk_device_buffer.c ~300-312): O(n^2) in resource count, as are the always on resource
-  registry's find and pop on every free and the Vulkan address binding list on every bind. Waits on a hash set
-  (GitHub #40).
 - **TLAS scratch is per TLAS** (vk_tlas.c ~272-286): follow-up to a caller provided BLAS scratch.
 - **Defrag, promotion and demotion of GFX memory** (GitHub #155).
 
@@ -349,7 +339,7 @@ Roughly ordered by how often the gap bites.
 
 - #129 printf in shaders. #165 device thermals and clock speeds (NVAPI) so benches can be interpreted. #146 DXIL PDB
   output (compiler_dxil.cpp ~695 only strips DXC_PART_PDB). #172 compile time error levels.
-- Stale issue candidates for the owner to close: #4, #11, #17, #18, #37, #40 (once the hash set lands), #113, #115,
+- Stale issue candidates for the owner to close: #4, #11, #17, #18, #37, #40, #113, #115,
   #116, #124, #128, #88, #90.
 
 ## Test and CI state

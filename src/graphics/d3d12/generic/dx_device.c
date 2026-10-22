@@ -227,7 +227,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	dxVerbose("D3D12: creating the device");
 
-	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_IndependentDevices)
+	if(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_IndependentDevices)
 	{
 		gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->CreateDevice(
 			instanceExt->deviceFactoryNoSingleton,
@@ -251,25 +251,17 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
 	), e_rr));
 
-	//D3D12 has no pipeline introspection of its own, so the capability is whatever AMD's extension offers.
-	//It's probed here rather than at enumeration because it needs a live ID3D12Device.
-	//An AMD driver can be installed next to another vendor's GPU, so the adapter has to be AMD as well: the
-	// extension binds to a device and would otherwise describe hardware that isn't the one being inspected.
+	//Enumeration reports availability; device creation initializes only capabilities left enabled by the caller.
 
-	Bool isAmd = device->info.vendor == EGraphicsVendorId_AMD;
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_PipelineExecutableInfo) {
 
-	#ifdef _HAS_AMD_AGS
+		dxVerbose("D3D12: initializing the AMD shader analyzer");
 
-		//AGS initializing proves the AMD driver is present and answering, not just that the adapter reports as AMD.
-
-		isAmd &= !!(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs);
-
-	#endif
-
-	dxVerbose("D3D12: probing the AMD shader analyzer (isAmd %s)", isAmd ? "true" : "false");
-
-	if(isAmd && DxAmdShaderAnalyzer_init((ID3D12Device*) deviceExt->device, &deviceExt->amdAnalyzer))
-		device->info.capabilities.features2 |= EGraphicsFeatures2_PipelineExecutableInfo;
+		if(!DxAmdShaderAnalyzer_init((ID3D12Device*) deviceExt->device, &deviceExt->amdAnalyzer)) {
+			device->info.capabilities.flags.features2 &= ~EGraphicsFeatures2_PipelineExecutableInfo;
+			device->info.capabilities.experimentalFeatures2 &= ~EGraphicsFeatures2_PipelineExecutableInfo;
+		}
+	}
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
 	(void) isNv;
@@ -368,7 +360,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 				//Enable RT validation
 
-				if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
+				if(device->info.capabilities.flags.features & EGraphicsFeatures_RayValidation) {
 
 					NvAPI_D3D12_EnableRaytracingValidation(
 						(ID3D12Device5*)deviceExt->device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
@@ -459,9 +451,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		deviceExt->pipelineLibrary = NULL;
 
 	//Timestamp query heaps and readback buffers, one per frame in flight, and the period from the graphics queue.
-	//D3D12 supports timestamps on the direct queue on every device, so this is unconditional.
 
-	{
+	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps) {
 		U64 timestampFreq = 0;
 		deviceExt->queues[EDxCommandQueue_Graphics].queue->lpVtbl->GetTimestampFrequency(
 			deviceExt->queues[EDxCommandQueue_Graphics].queue, &timestampFreq
@@ -552,7 +543,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i) {
 
-		if (i == EExecuteIndirectCommand_DispatchRays && !(device->info.capabilities.features & EGraphicsFeatures_RayPipeline))
+		if(
+			i == EExecuteIndirectCommand_DispatchRays &&
+			!(device->info.capabilities.flags.features & EGraphicsFeatures_RayPipeline)
+		)
 			continue;
 
 		signatures[i].NumArgumentDescs = 1;
@@ -571,7 +565,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	const Bool wantsBreadcrumbs = device->flags & (EGraphicsDeviceFlags_Breadcrumbs | EGraphicsDeviceFlags_IsDebug);
 
-	if(!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate)) {
+	if(!(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate)) {
 		if(device->flags & EGraphicsDeviceFlags_Breadcrumbs)
 			Log_warnLnx("D3D12: breadcrumbs need WriteBufferImmediate on the direct queue, which is missing");
 	}
@@ -662,6 +656,12 @@ U64 DxGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, 
 		*budget = vidMem.Budget;
 
 	return vidMem.CurrentUsage;
+}
+
+Bool DX_WRAP_FUNC(GraphicsDevice_finishInit)(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	(void) deviceRef;
+	(void) e_rr;
+	return true;
 }
 
 void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
@@ -898,6 +898,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_reportLoss)(GraphicsDeviceRef *deviceRef) {
 		return false;
 
 	Log_errorLnx("D3D12: device \"%s\" was removed, reason 0x%08" PRIX32, device->info.name, (U32) reason);
+
+	if(!(device->info.capabilities.flags.features2 & EGraphicsFeatures2_DeviceFault))
+		return true;
 
 	ID3D12DeviceRemovedExtendedData2 *dred = NULL;
 
@@ -1162,7 +1165,7 @@ static Bool DxGraphicsDevice_reserveDispatchRaysIndirect(GraphicsDeviceRef *devi
 	if(!slots || (curArgs && DeviceBufferRef_ptr(curArgs)->resource.size >= (U64) slots * stride))
 		return true;
 
-	const Bool wbi = !!(device->info.capabilities.features2 & EGraphicsFeatures2_WriteBufferImmediate);
+	const Bool wbi = !!(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate);
 
 	U32 newCap = curArgs ? (U32) (DeviceBufferRef_ptr(curArgs)->resource.size / stride) : 0;
 
@@ -1273,8 +1276,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	DxCommandBuffer *commandBuffer = NULL;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
-
 	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
@@ -1381,7 +1382,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		// proved it done, so the readback its ResolveQueryData filled is ready. D3D12 timestamps are full 64-bit.
 
 		if(
-			(device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps) &&
+			(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps) &&
 			device->submitId > device->framesInFlight && device->timingSlots[device->fifId]
 		) {
 			const U64 *ticks =
@@ -1393,7 +1394,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			);
 		}
 
-		device->timingSlots[device->fifId] = (device->info.capabilities.features2 & EGraphicsFeatures2_Timestamps)
+		device->timingSlots[device->fifId] = (device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps)
 			? GraphicsDevice_buildTimings(device, device->fifId, commandLists, alloc) : 0;
 
 		deviceExt->timestampCursor = 0;
@@ -1577,8 +1578,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				));
 			}
 
-			if(RefPtr_inc(swapchainRef))
-				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
+			if(!GraphicsDevice_isInFlight(device, swapchainRef) && RefPtr_inc(swapchainRef))
+				gotoIfError3(clean, GraphicsDevice_addInFlight(device, swapchainRef, alloc, e_rr));
 		}
 
 		if(dependency.NumBarriers)
@@ -1677,7 +1678,7 @@ clean:
 		//As we do the bulk of D3D12 calls and all RT calls in submitCommands.
 		//Otherwise we'd have to guard every dxCheck, which might not even have a device (could happen on an instance).
 
-		if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
+		if(device->info.capabilities.flags.features & EGraphicsFeatures_RayValidation) {
 
 			NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
 

@@ -84,7 +84,9 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 		U64 j = 0, k = a->structs.length;
 
-		for (; j < k; ++j) {        //TODO: HashMap
+		//Stays a scan: a shader buffer has tens of members and combine runs offline.
+
+		for (; j < k; ++j) {
 
 			j = DLFile_findLoadedString(&a->names, j, a->structs.length, &b->names.entryStrings.ptr[i]);
 
@@ -132,7 +134,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 			U64 j = a->structs.length, k = j + a->vars.length;
 
-			for (; j < k; ++j) {        //TODO: HashMap
+			for (; j < k; ++j) {        //Stays a scan, see the struct loop above
 
 				j = DLFile_findLoadedString(&a->names, j, k, &name);
 

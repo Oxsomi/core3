@@ -279,8 +279,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			RAWINPUT *data = &raw;
 
-			//Grab device from the list
-			//TODO: Map
+			//Grab device from the list; a scan, since a window has a handful of devices.
 
 			InputDevice *dev = w->devices.ptrNonConst;
 			InputDevice *end = ListInputDevice_end(w->devices);

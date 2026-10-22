@@ -401,7 +401,9 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			if((detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors) && count == 1 && !isSampler)
 				isPushDescriptor = true;
 
-			else for(U64 k = 0; k < (!pushDescriptors ? 0 : pushDescriptors->length); ++k)        //TODO: Hash
+			//Stays a scan: the set is the caller's, at most OXC3_MAX_PUSH_DESCRIPTORS; the oiSH name only probes.
+
+			else for(U64 k = 0; k < (!pushDescriptors ? 0 : pushDescriptors->length); ++k)
 				if (CharString_equalsString(&reg->name, &pushDescriptors->ptr[k], EStringCase_Sensitive)) {
 
 					if(isSampler)
@@ -647,7 +649,7 @@ Bool DescriptorBinding_validate(
 
 	if(
 		type == EGfxRegisterType_AccelerationStructure &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_Raytracing)
 	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings has an RTAS, but device doesn't have RT"
@@ -679,6 +681,15 @@ Bool DescriptorBinding_validate(
 				0, "GraphicsDeviceRef_createDescriptorLayout() can't create a push descriptor for a sampler"
 			));
 
+	//A push binding is a single descriptor: a root descriptor on D3D12 and one write on Vulkan, and the work
+	// op writes exactly one descriptor per binding. An array there could never be filled, so it is refused
+	// where it is declared rather than left to fail at the first draw.
+
+	if(isPushDescriptor && b.count > 1)
+		retError(clean, Error_invalidOperation(
+			1, "GraphicsDeviceRef_createDescriptorLayout() a push descriptor binding can't be an array"
+		));
+
 clean:
 	return s_uccess;
 }
@@ -706,7 +717,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	if(
 		(info->flags & EDescriptorLayoutFlags_AllowBindlessAny) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+		!(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless)
 	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.flags can't include bindless if bindless feature is missing"
@@ -724,15 +735,26 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 			0, "GraphicsDeviceRef_createDescriptorLayout() bindless is not allowed with push descriptors"
 		));
 
+	//A push binding is one descriptor (DescriptorBinding_validate refuses an array), so a push layout holds at
+	// most OXC3_MAX_PUSH_DESCRIPTORS bindings: the work op refuses more with the same bound, D3D12 has no root
+	// signature room for them, and Vulkan only takes the native path where the driver pushes that many.
+	//That makes it a property of the LAYOUT rather than of any particular draw, so it is refused here too,
+	// where the mistake was made, instead of only surfacing once something first draws with it.
+
+	if(isPushDescriptor && info->bindings.length > OXC3_MAX_PUSH_DESCRIPTORS)
+		retError(clean, Error_outOfBounds(
+			0, info->bindings.length, OXC3_MAX_PUSH_DESCRIPTORS,
+			"GraphicsDeviceRef_createDescriptorLayout() a push descriptor layout can hold at most "
+			"OXC3_MAX_PUSH_DESCRIPTORS bindings"
+		));
+
 	U64 bindlessTypes = 0;
-	U64 bindingCount = 0;
 
 	Bool anySampler = false, anyResource = false;
 
 	for(U64 i = 0; i < info->bindings.length; ++i) {
 
 		DescriptorBinding b = info->bindings.ptr[i];
-		bindingCount += b.count;
 
 		if(b.registerType == EGfxRegisterType_PushConstants)
 			retError(clean, Error_invalidOperation(
@@ -820,12 +842,6 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 			0,
 			"GraphicsDeviceRef_createDescriptorLayout() more than 15 bindless arrays are present, this is unsupported "
 			"due to BindlessDescriptor's limits"
-		));
-
-	if(bindingCount > 32 && isPushDescriptor)
-		retError(clean, Error_invalidOperation(
-			0,
-			"GraphicsDeviceRef_createDescriptorLayout() push descriptors are limited to 32"
 		));
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->descriptorLayout, layoutRef, e_rr));

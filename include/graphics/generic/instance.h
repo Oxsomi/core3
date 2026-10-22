@@ -119,7 +119,16 @@ Bool GraphicsInstance_create(
 	Error *e_rr
 );
 
-Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr);
+//disabledCaps may be NULL; set bits are removed before returning devices or applying requiredCapabilities.
+//OXC3_DISABLE_CAPABILITIES adds named exclusions to this mask, and dependent capabilities are cleared too.
+//featuresExt uses the instance's API. Returned infos are owned by the caller and use the instance's allocator.
+
+Bool GraphicsInstance_getDeviceInfos(
+	const GraphicsInstance *inst,
+	ListGraphicsDeviceInfo *infos,
+	const GraphicsDeviceCapFlags *disabledCaps,
+	Error *e_rr
+);
 
 //How many validation errors and warnings the api's debug layers reported so far (0 when validation is off).
 //Performance and info messages aren't counted, only real errors and warnings.
@@ -134,6 +143,7 @@ static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
 Bool GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
 	const GraphicsDeviceCapabilities *requiredCapabilities,
+	const GraphicsDeviceCapFlags *disabledCaps,
 	U64 vendorMask,
 	U64 deviceTypeMask,
 	GraphicsDeviceInfo *deviceInfo,

@@ -129,8 +129,8 @@ typedef struct TestCapabilityShader {
 	const c::C8 *path;
 	const c::C8 *name;
 
-	c::EGraphicsFeatures feature;              //Bit in capabilities.features, or 0 if gated on dataTypes
-	c::EGraphicsDataTypes dataType;            //Bit in capabilities.dataTypes, or 0 if gated on features
+	c::EGraphicsFeatures feature;              //Bit in capabilities.flags.features, or 0 if gated on dataTypes
+	c::EGraphicsDataTypes dataType;            //Bit in capabilities.flags.dataTypes, or 0 if gated on features
 
 	c::ESHExtension require;                   //Extension the entrypoint declares
 
@@ -390,7 +390,7 @@ static void Test_buildCapabilityTlas(
 	const c::GraphicsDeviceCapabilities blasCaps = dev.info().capabilities;
 
 	const c::ERTASBuildFlags blasFlags =
-		(blasCaps.features & c::EGraphicsFeatures_RayTriPosition) &&
+		(blasCaps.flags.features & c::EGraphicsFeatures_RayTriPosition) &&
 		!(blasCaps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition) &&
 		!forceNoDataAccess
 		? c::ERTASBuildFlags_AllowDataAccessExt : c::ERTASBuildFlags_None;
@@ -499,10 +499,10 @@ static c::Bool Test_runCapabilityShader(
 	// gating on either would send a device missing one of them into a lookup that can only fail.
 
 	const c::Bool hasFeatures =
-		!cap->feature || (caps.features & cap->feature) == cap->feature;
+		!cap->feature || (caps.flags.features & cap->feature) == cap->feature;
 
 	const c::Bool hasDataTypes =
-		!cap->dataType || (caps.dataTypes & cap->dataType) == cap->dataType;
+		!cap->dataType || (caps.flags.dataTypes & cap->dataType) == cap->dataType;
 
 	const c::Bool supported = (cap->feature || cap->dataType || cap->variant) && hasFeatures && hasDataTypes;
 
@@ -694,7 +694,7 @@ static void Test_capabilityRayTriPositionGuard(c::Test *t, gfx::Device &dev) {
 	const c::EGraphicsFeatures needed =
 		(c::EGraphicsFeatures) (c::EGraphicsFeatures_RayQuery | c::EGraphicsFeatures_RayTriPosition);
 
-	if((caps.features & needed) != needed || (caps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition))
+	if((caps.flags.features & needed) != needed || (caps.experimentalFeatures & c::EGraphicsFeatures_RayTriPosition))
 		return;
 
 	gfx::DeviceBuffer positions, indices, output;
@@ -777,6 +777,14 @@ extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::Graphi
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	gfx::CommandList emptyList;
 
+	//Every entry writes its output through a bindless handle, and a binary that declares Bindless is not selectable
+	// on a device without the runtime's table, so such a device has nothing to execute here.
+
+	if(!dev.hasBindlessTable()) {
+		c::Test_print(t, "Device has no bindless descriptor table, skipping");
+		return;
+	}
+
 	if(!(
 		Test_assert(t, "createEmptyList", dev.createCommandList(2 * c::KIBI, 64, 16, emptyList, true, e_rr)) &&
 		Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr)) &&
@@ -793,7 +801,7 @@ extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::Graphi
 	gfx::Blas blas;
 	gfx::Tlas tlas;
 
-	if(dev.info().capabilities.features & c::EGraphicsFeatures_RayQuery)
+	if(dev.info().capabilities.flags.features & c::EGraphicsFeatures_RayQuery)
 		Test_buildCapabilityTlas(t, dev, false, positions, indices, blas, tlas);
 
 	c::U32 verified = 0, skipped = 0;

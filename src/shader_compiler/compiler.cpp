@@ -38,6 +38,11 @@
 #include "types/base/c8.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
+#include "platforms/file.h"
+#include "types/container/file_base.h"
+#include "platforms/platform.h"
+#include "types/container/hash_index.h"
+#include "shader_compiler/compiler.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -72,6 +77,7 @@ extern "C" {
 
 		void Compiler_setPlatform(Platform *instance) {
 			Platform_instance = instance;
+			HashIndex_initSeed(instance->hashSeed);        //This module's own copy, see Platform.hashSeed
 		}
 
 	#endif

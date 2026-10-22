@@ -81,7 +81,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 			case ESwapchainPresentMode_Immediate:
 
-				if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowTearing)
+				if(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_AllowTearing)
 					mode = modei;
 
 				break;

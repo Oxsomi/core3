@@ -106,6 +106,35 @@ void Test_mathu(Test *test) {
 	Test_assert(test, "U8_safeDiv", U8_safeDiv(200, 4) == 50);
 	Test_assert(test, "U8_safeDiv", U8_safeDiv(200, 0) == 0);
 
+	//Compare takes pointers to the values
+
+	{
+		const U32 u32Small = 1, u32Large = 0xFFFFFFFE, u32Max = U32_MAX, u32Zero = 0;
+		const U64 u64Small = 1, u64Large = UINT64_C(0xFFFFFFFFFFFFFFFE), u64Max = U64_MAX, u64Zero = 0;
+		const U8 u8Small = 1, u8Large = 200, u8Min = 0, u8Max = U8_MAX;
+		const U16 u16Small = 1, u16Zero = 0, u16Max = U16_MAX;
+
+		Test_assert(test, "U32_compare Lt", U32_compare(&u32Small, &u32Large, NULL) == ECompareResult_Lt);
+		Test_assert(test, "U32_compare Gt", U32_compare(&u32Large, &u32Small, NULL) == ECompareResult_Gt);
+		Test_assert(test, "U32_compare Eq", U32_compare(&u32Large, &u32Large, NULL) == ECompareResult_Eq);
+		Test_assert(test, "U32_compare max", U32_compare(&u32Max, &u32Zero, NULL) == ECompareResult_Gt);
+
+		Test_assert(test, "U64_compare Lt", U64_compare(&u64Small, &u64Large, NULL) == ECompareResult_Lt);
+		Test_assert(test, "U64_compare Gt", U64_compare(&u64Large, &u64Small, NULL) == ECompareResult_Gt);
+		Test_assert(test, "U64_compare Eq", U64_compare(&u64Large, &u64Large, NULL) == ECompareResult_Eq);
+		Test_assert(test, "U64_compare max", U64_compare(&u64Max, &u64Zero, NULL) == ECompareResult_Gt);
+
+		Test_assert(test, "U8_compare", U8_compare(&u8Small, &u8Large, NULL) == ECompareResult_Lt);
+		Test_assert(test, "U8_compare Eq", U8_compare(&u8Large, &u8Large, NULL) == ECompareResult_Eq);
+		Test_assert(test, "U8_compare extremes Lt", U8_compare(&u8Min, &u8Max, NULL) == ECompareResult_Lt);
+		Test_assert(test, "U8_compare extremes Gt", U8_compare(&u8Max, &u8Min, NULL) == ECompareResult_Gt);
+
+		Test_assert(test, "U16_compare Lt", U16_compare(&u16Small, &u16Max, NULL) == ECompareResult_Lt);
+		Test_assert(test, "U16_compare Gt", U16_compare(&u16Max, &u16Small, NULL) == ECompareResult_Gt);
+		Test_assert(test, "U16_compare Eq", U16_compare(&u16Max, &u16Max, NULL) == ECompareResult_Eq);
+		Test_assert(test, "U16_compare zero", U16_compare(&u16Zero, &u16Max, NULL) == ECompareResult_Lt);
+	}
+
 	//Bits, at both ends of every width and in between
 
 	Test_assert(test, "U64_bitCount", U64_bitCount(0) == 0);
@@ -239,4 +268,27 @@ void Test_mathi(Test *test) {
 	Test_assert(test, "I8_abs I8_MIN", I8_abs(I8_MIN) == I8_MIN);
 	Test_assert(test, "I8_safeDiv", I8_safeDiv(100, 5) == 20);
 	Test_assert(test, "I8_safeDiv", I8_safeDiv(100, 0) == 0);
+
+	//Compare takes pointers to the values and is signed
+
+	{
+		const I32 i32Neg = -1, i32Pos = 1, i32Min = I32_MIN, i32Max = I32_MAX;
+		const I64 i64Neg = -1, i64Pos = 1, i64Min = I64_MIN, i64Max = I64_MAX;
+		const I8 i8Neg = -1, i8Pos = 1, i8Min = I8_MIN, i8Max = I8_MAX;
+		const I16 i16Neg = -1, i16Pos = 1, i16Min = I16_MIN, i16Max = I16_MAX;
+
+		Test_assert(test, "I32_compare negative", I32_compare(&i32Neg, &i32Pos, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I32_compare min max", I32_compare(&i32Min, &i32Max, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I64_compare negative", I64_compare(&i64Neg, &i64Pos, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I64_compare min max", I64_compare(&i64Min, &i64Max, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I8_compare negative", I8_compare(&i8Neg, &i8Pos, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I8_compare Eq", I8_compare(&i8Neg, &i8Neg, NULL) == ECompareResult_Eq);
+		Test_assert(test, "I8_compare extremes Lt", I8_compare(&i8Min, &i8Max, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I8_compare extremes Gt", I8_compare(&i8Max, &i8Min, NULL) == ECompareResult_Gt);
+
+		Test_assert(test, "I16_compare negative", I16_compare(&i16Neg, &i16Pos, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I16_compare Eq", I16_compare(&i16Neg, &i16Neg, NULL) == ECompareResult_Eq);
+		Test_assert(test, "I16_compare extremes Lt", I16_compare(&i16Min, &i16Max, NULL) == ECompareResult_Lt);
+		Test_assert(test, "I16_compare extremes Gt", I16_compare(&i16Max, &i16Min, NULL) == ECompareResult_Gt);
+	}
 }

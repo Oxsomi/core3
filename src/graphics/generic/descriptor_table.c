@@ -21,6 +21,7 @@
 //graphics/generic/descriptor_table.c
 
 #include "types/container/list_impl.h"
+#include "types/container/hash_set_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
@@ -41,6 +42,7 @@ TListImpl(TextureDescriptorRange);
 TListImpl(BufferDescriptorRange);
 TListImpl(DescriptorTableBinding);
 TListImpl(DescriptorTableResourceRef);
+THashSetImplKeyField(DescriptorTableResourceRef, U64, resource);
 TListImpl(Descriptor);
 TListImpl(DescriptorStackTrace);
 
@@ -165,10 +167,10 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 
 	ListDescriptorTableBinding_free(&table->bindings, alloc);
 
-	for (U64 i = 0; i < table->resources.length; ++i)
-		RefPtr_dec(&table->resources.ptrNonConst[i].resource);
+	for (U64 i = 0; i < table->resources.list.length; ++i)
+		RefPtr_dec(&table->resources.list.ptrNonConst[i].resource);
 
-	ListDescriptorTableResourceRef_free(&table->resources, alloc);
+	HashSetDescriptorTableResourceRef_free(&table->resources, alloc);
 
 	if(!(table->flags & EDescriptorTableFlags_InternalWeakDeviceRef))
 		RefPtr_dec(&table->parent);
@@ -359,6 +361,9 @@ U32 Descriptor_counterOffset(const Descriptor *d) {
 		((U32)d->buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
 }
 
+//The one site in graphics that erases constantly, and nothing reads the list in order: only
+// DescriptorTable_free walks it, to give the references back.
+
 Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -372,16 +377,21 @@ Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_timedOut(0, 1 * SECOND, "DescriptorTable_loseRef() couldn't acquire descriptor range"));
 
-	for(U64 i = 0; i < table->resources.length; ++i)
-		if (table->resources.ptr[i].resource == ref) {
+	{
+		const U64 i = HashSetDescriptorTableResourceRef_find(&table->resources, &ref);
 
-			if (!--table->resources.ptrNonConst[i].count) {        //Decrease refCount and decrease ref if last ref
-				RefPtr_dec(&ref);
-				gotoIfError3(clean, ListDescriptorTableResourceRef_erase(&table->resources, i, e_rr));
-			}
+		//Decrease refCount and decrease ref if last ref.
+		//The reference is given back after the erase, because that release can run the resource's own free.
 
-			break;
+		if (i != U64_MAX && !--table->resources.list.ptrNonConst[i].count) {
+
+			DescriptorTableResourceRef erased = (DescriptorTableResourceRef) { 0 };
+
+			gotoIfError3(clean, HashSetDescriptorTableResourceRef_eraseSwap(&table->resources, i, &erased, e_rr));
+
+			RefPtr_dec(&erased.resource);
 		}
+	}
 
 clean:
 
@@ -406,11 +416,14 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_timedOut(0, 1 * SECOND, "DescriptorTable_loseRef() couldn't acquire descriptor range"));
 
-	for(U64 i = 0; i < table->resources.length; ++i)
-		if (table->resources.ptr[i].resource == ref) {
-			++table->resources.ptrNonConst[i].count;
+	{
+		const U64 i = HashSetDescriptorTableResourceRef_find(&table->resources, &ref);
+
+		if (i != U64_MAX) {
+			++table->resources.list.ptrNonConst[i].count;
 			goto clean;
 		}
+	}
 
 	//The table is what keeps the resource alive while a descriptor points at it, so the first descriptor has to
 	// take a reference here.
@@ -423,8 +436,8 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 
 	referenced = true;
 
-	gotoIfError3(clean, ListDescriptorTableResourceRef_pushBack(
-		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }, alloc, e_rr
+	gotoIfError3(clean, HashSetDescriptorTableResourceRef_insert(
+		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }, NULL, alloc, e_rr
 	));
 
 	referenced = false;        //Handed over to the table
@@ -1012,7 +1025,7 @@ Bool DescriptorTableRef_setDescriptors(
 							"DescriptorTableRef_setDescriptors() RWTextures aren't allowed to have more than 1 mip selected"
 						));
 
-					if(tex.sampleCount && !(device->info.capabilities.features & EGraphicsFeatures_WriteMSTexture))
+					if(tex.sampleCount && !(device->info.capabilities.flags.features & EGraphicsFeatures_WriteMSTexture))
 						retError(clean, Error_unsupportedOperation(
 							0, "DescriptorTableRef_setDescriptors() RWTexture2DMS is unsupported on this device"
 						));

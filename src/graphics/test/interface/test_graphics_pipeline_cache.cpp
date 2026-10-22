@@ -136,7 +136,7 @@ extern "C" void Test_graphicsPipelineCache(oxc::c::Test *t, oxc::c::GraphicsDevi
 	Device dev = Device::share(deviceRef);
 	c::GraphicsDevice *device = RefPtr_data(deviceRef, c::GraphicsDevice);
 	const c::Allocator *alloc = c::GraphicsDeviceRef_getAlloc(deviceRef);
-	const c::EGraphicsFeatures features = (c::EGraphicsFeatures) dev.info().capabilities.features;
+	const c::EGraphicsFeatures features = (c::EGraphicsFeatures) dev.info().capabilities.flags.features;
 
 	OwnedSHFile computeFile(dev.alloc()), vertexFile(dev.alloc()), pixelFile(dev.alloc()), raysFile(dev.alloc());
 

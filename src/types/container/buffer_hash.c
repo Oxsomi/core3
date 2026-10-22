@@ -345,10 +345,6 @@ MD5Hash Buffer_md5(const Buffer buf) {
 	return hash;
 }
 
-U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
-	return (a ^ hash) * Buffer_fnv1a64Prime;
-}
-
 U64 Buffer_fnv1a64(const Buffer buf, U64 hash) {
 
 	U64 len = Buffer_length(buf);

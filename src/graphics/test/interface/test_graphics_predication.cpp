@@ -56,7 +56,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	//Without the capability the CONTRACT is refusal, not degradation: the predicate usage bit at buffer
 	// creation is the first gate, so that is what a capability-less device has to reject.
 
-	if(!(dev.info().capabilities.features2 & c::EGraphicsFeatures2_Predication)) {
+	if(!(dev.info().capabilities.flags.features2 & c::EGraphicsFeatures2_Predication)) {
 
 		const c::U64 zero = 0;
 		c::Buffer zeroData = c::Buffer_createRefConst(&zero, sizeof(zero));
@@ -124,7 +124,7 @@ extern "C" void Test_graphicsPredication(oxc::c::Test *t, oxc::c::GraphicsDevice
 	}
 
 	c::Test_assert(t, "negEnd", negList.end(e_rr));
-	c::Test_assert(t, "refusedHidden", negList.data()->activeScopes.length == 1);
+	c::Test_assert(t, "refusedHidden", negList.data()->activeScopes.list.length == 1);
 
 	OwnedSHFile writeFile(dev.alloc());
 

@@ -209,7 +209,7 @@ typedef struct Window {
 
 	CharString title;
 
-	//TODO: Make this a map at some point
+	//Stays a list: a window has a handful of devices.
 
 	ListInputDevice devices;
 	ListMonitor monitors;

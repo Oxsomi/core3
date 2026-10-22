@@ -60,7 +60,7 @@ Bool CommandListRef_startRenderExt(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_DirectRendering))
 		retError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_startRenderExt() requires directRendering extension, which was missing!"));
 
@@ -525,7 +525,7 @@ Bool CommandListRef_endRenderExt(CommandListRef *commandListRef, Error *e_rr) {
 	CommandListRef_validateScope(commandListRef, clean)
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 
-	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
+	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_DirectRendering))
 		retError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_endRenderExt() requires directRendering extension, which was missing!"
 		));
