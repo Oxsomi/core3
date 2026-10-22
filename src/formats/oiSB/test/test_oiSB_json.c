@@ -67,7 +67,7 @@ void Test_SBFileWriteJson(Test *t) {
 	Test_assert(t, "writes a complete document", SBFile_writeJson(&sb, &w, &t->err) && JsonWriter_isComplete(&w));
 
 	CharString expected = CharString_createRefCStrConst(
-		"{\"size\":48,\"padding\":16,\"packed\":false,\"vars\":["
+		"{\"size\":48,\"padding\":16,\"packed\":false,\"sharedLayout\":false,\"vars\":["
 		"{\"name\":\"myVar\",\"offset\":0,\"type\":\"MyStruct\",\"stride\":32,\"arrays\":[],"
 		"\"used\":{\"spirv\":true,\"dxil\":false},\"children\":["
 		"{\"name\":\"pos\",\"offset\":0,\"type\":\"F32x4\",\"stride\":16,\"arrays\":[],"

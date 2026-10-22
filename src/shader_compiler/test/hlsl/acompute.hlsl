@@ -1,5 +1,6 @@
-//Not in use until https://github.com/KhronosGroup/SPIRV-Reflect/issues/280 is fixed.
-//Or until I separate the requirement that struct sizes and offsets must match between SPIRV & DXIL
+//Nicu's members end at 22 bytes while its element stride is 24: the snapshot pins that the SPIRV side
+// reflects the decorated ArrayStride rather than spirv-reflect's summed size (SPIRV-Reflect#280), so
+// both backends combine.
 
 struct Nicu {
 	float a, b;

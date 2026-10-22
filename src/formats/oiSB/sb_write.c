@@ -50,6 +50,11 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 	if (*offset & 15)
 		retError(clean, Error_unsupportedOperation(0, "SBFile_write() at misaligned offset is unsupported (16-byte)"));
 
+	//A file claiming a shared layout never leaves this process with a layout that breaks the claim
+
+	if (sbFile->flags & ESBSettingsFlags_HasSharedLayout)
+		gotoIfError3(clean, SBFile_validateSharedLayout(sbFile, e_rr));
+
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	//Get header size
@@ -82,7 +87,9 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 	SBHeader header = {
 
 		.version = ESBVersion_V1_2,
-		.flags = sbFile->flags & ESBSettingsFlags_IsTightlyPacked ? ESBFlag_IsTightlyPacked : ESBFlag_None,
+		.flags =
+			(sbFile->flags & ESBSettingsFlags_IsTightlyPacked ? ESBFlag_IsTightlyPacked : ESBFlag_None) |
+			(sbFile->flags & ESBSettingsFlags_HasSharedLayout ? ESBFlag_HasSharedLayout : ESBFlag_None),
 		.arrays = (U16)sbFile->arrays.length,
 
 		.structs = (U16)sbFile->structs.length,

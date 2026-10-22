@@ -435,6 +435,17 @@ def main():
 				"[shader(\"pixel\")]\nfloat4 main() : SV_TARGET { return c; }\n")
 			out = run(exe, ["compile", "shaders", "-format", "HLSL", "-input", shader, "-output", p("t.oiSH")],
 				contains=["Compile success"])
+
+			# folder to folder, twice: the first run creates the output folder while registering outputs, and the
+			# second starts with it already present; File_add treats an existing output folder as a no-op, so
+			# both must succeed (this used to die on "folder already exists" before anything compiled)
+			shdir = p("shsrc")
+			os.makedirs(shdir)
+			write(os.path.join(shdir, "a.hlsl"),
+				"[shader(\"compute\")]\n[numthreads(1, 1, 1)]\nvoid main() {}\n")
+			for _ in range(2):
+				run(exe, ["compile", "shaders", "-format", "HLSL", "-input", shdir, "-output", p("shout")])
+			check(read_bytes(p("shout/a.oiSH")) != b"", "folder compile wrote a.oiSH into the output folder")
 		else:
 			skip("compile shaders", "shader compiler not in this build")
 
@@ -548,6 +559,11 @@ def main():
 			# a source that doesn't parse refuses instead of printing stale lines
 			write(p("scbad.hlsl"), "[shader(\"compute\")]\nvoid mainU( {}\n")
 			run(exe, ["shader", "commands", "-input", p("scbad.hlsl")], want_fail=True)
+			# -spirv-layout swaps the layout flag on the spirv leg, and refuses when dxil is in the target set
+			run(exe, ["shader", "commands", "-input", shc, "-compile-output", "spv", "-spirv-layout", "scalar"],
+				contains=["-fvk-use-scalar-layout"])
+			run(exe, ["shader", "commands", "-input", shc, "-compile-output", "all", "-spirv-layout", "scalar"],
+				want_fail=True)
 		else:
 			skip("shader", "shader compiler not in this build")
 

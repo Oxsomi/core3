@@ -987,6 +987,7 @@ Bool Compiler_processSPIRV(
 	ListSHRegisterRuntime *registers,    //Required; Output registers
 	Bool isDebug,
 	Bool keepRegisters,                  //Keep declared but unused resources bound and reflected
+	U8 spirvLayout,                      //ESpirvLayout; non Dx drops the shared layout claim
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,                      //If not NULL will be used before writing into entries
 	const ListSHEntryRuntime *entries,   //Array contains the current buffer's reflection for the entry & compatibility checks
@@ -1018,6 +1019,7 @@ Bool Compiler_process(
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,
 	const ListSHEntryRuntime *entries,
@@ -1035,7 +1037,8 @@ Bool Compiler_process(
 		case EGfxBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_processSPIRV(
-				result, registers, isDebug, keepRegisters, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
+				result, registers, isDebug, keepRegisters, spirvLayout, toCompile, lock, entries, isLib, demotions,
+				errors, alloc, e_rr
 			));
 
 			break;

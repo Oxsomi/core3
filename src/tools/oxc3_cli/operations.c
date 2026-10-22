@@ -88,7 +88,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-asic",
 	"-pso-output",
 	"-pso-set",
-	"-pso-input"
+	"-pso-input",
+	"-spirv-layout"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -120,7 +121,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 		"Supply pipeline fields by the path the report prints, e.g. \"blend.enable=1,rtv.format[0]=rgba16f\"; "
 		"any field, so nothing has to stay assumed."
 	),
-	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited."
+	"Replay a stored oiSP (from -pso-output) over the derived pipeline, so a run can be repeated or edited.",
+	"SPIRV buffer layout (dx, gl or scalar); anything but dx requires a compile that targets SPIRV alone."
 };
 
 //Flags
@@ -674,7 +676,8 @@ void Operations_init() {
 
 			.optionalParameters =
 				EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir |
-				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode,
+				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode |
+				EOperationHasParameter_SpirvLayout,
 
 			.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 			.supportedCategories = { EOperationCategory_Compile }
@@ -698,7 +701,8 @@ void Operations_init() {
 			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 			.optionalParameters =
 				EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir |
-				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode,
+				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode |
+				EOperationHasParameter_SpirvLayout,
 			.operationFlags =
 				EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_Split | EOperationFlags_KeepRegisters |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
@@ -796,7 +800,9 @@ void Operations_init() {
 			.func = &CLI_shaderCommands,
 			.isFormatLess = true,
 			.requiredParameters = EOperationHasParameter_Input,
-			.optionalParameters = EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
+			.optionalParameters =
+				EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode |
+				EOperationHasParameter_SpirvLayout,
 			.operationFlags = EOperationFlags_Debug | EOperationFlags_NoOpt | EOperationFlags_KeepRegisters
 		};
 

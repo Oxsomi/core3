@@ -168,6 +168,7 @@ U64 CLI_parseGraphicsAPIs(const ParsedArgs *args);        //U64_MAX indicates in
 	Bool CLI_package(const ParsedArgs *args);
 
 	Bool CLI_parseCompileTypes(const ParsedArgs *args, U64 *maskBinaryType, Bool *multipleModes);
+	Bool CLI_parseSpirvLayout(const ParsedArgs *args, U8 *spirvLayout);
 	Bool CLI_parseThreads(const ParsedArgs *args, U64 *threadCount, U64 defaultThreadCount);
 
 	ECompilerWarning CLI_getExtraWarnings(const ParsedArgs *args);

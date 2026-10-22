@@ -33,6 +33,7 @@ typedef struct SHFile SHFile;
 
 void Test_shaderCompilerParse(Test *t);           //Parse annotations -> SHEntryRuntime reflection
 void Test_shaderCompilerBuildArgs(Test *t);       //Compiler_buildCompileArgs argv query: backend flags + guards
+void Test_shaderCompilerLayouts(Test *t);         //Every -spirv-layout reflects the binary's own layout or refuses it
 void Test_shaderCompilerReflectSR(Test *t);       //Frontend symbol AST -> SRFile (oiSR) + round-trip
 void Test_shaderCompilerReflectErrors(Test *t);   //Same, over sources that don't compile (editor path)
 void Test_shaderCompilerSamples(Test *t);         //web/samples compiles both backends (desktop only)
@@ -63,6 +64,20 @@ Bool compileInlineShaders(
 	U64 threadCount,
 	const C8 *namePrefix,   //Names each shader "<prefix>N.hlsl" so logs/errors are identifiable
 	Bool enableLogging,
+	ListBuffer *out,
+	Error *e_rr
+);
+
+//Same, with an explicit SPIRV buffer layout (ESpirvLayout); compileInlineShaders passes Dx.
+Bool compileInlineShadersLayout(
+	const Allocator *alloc,
+	const C8 *const *srcs,
+	U64 count,
+	U8 mode,
+	U64 threadCount,
+	const C8 *namePrefix,
+	Bool enableLogging,
+	U8 spirvLayout,
 	ListBuffer *out,
 	Error *e_rr
 );
@@ -109,3 +124,17 @@ Bool oiSHRoundtrips(const Allocator *alloc, Buffer produced, Error *e_rr);
 // the stamped compiler version, the per-include CRC32C, and the SPIR-V generator word's version half.
 //A snapshot comparison uses this only after an exact match has already failed.
 Bool oiSHContentMatches(const Allocator *alloc, Buffer a, Buffer b);
+
+//--- test_shader_compiler_spirv_layout.c ---
+
+//True when every buffer layout an oiSH records for SPIR-V is the one its binary declares.
+//Each variable's offset, type and array dimensions are compared, and so are the array element and matrix row strides its
+// packing implies, against the module's own Offset, ArrayStride and MatrixStride decorations.
+//The decorations are read from the words directly rather than through SPIRV-Reflect, which the reflection is built on,
+// so neither can vouch for the other.
+//Logs the first difference under label, or checks quietly with a NULL label, for a caller expecting the difference.
+//Counts the buffers compared into checkedBuffers when it isn't NULL.
+Bool oiSHDescribesSpirvLayout(const Allocator *alloc, Buffer oiSH, const C8 *label, U64 *checkedBuffers);
+
+//Same, for an oiSH that was already read.
+Bool oiSHFileDescribesSpirvLayout(const Allocator *alloc, const SHFile *file, const C8 *label, U64 *checkedBuffers);

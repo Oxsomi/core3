@@ -41,7 +41,13 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 	if(!a || !b)
 		retError(clean, Error_nullPointer(!a ? 0 : 1, "SBFile_combine()::a and b are required"));
 
-	if (a->bufferSize != b->bufferSize || a->flags != b->flags)
+	//The shared layout claim is re-derived from the merged result below, so only the other flags have
+	// to agree between the inputs.
+
+	if (
+		a->bufferSize != b->bufferSize ||
+		(a->flags &~ ESBSettingsFlags_HasSharedLayout) != (b->flags &~ ESBSettingsFlags_HasSharedLayout)
+	)
 		retError(clean, Error_invalidState(0, "SBFile_combine()::bufferSize or flags mismatch"));
 
 	if (!combined)
@@ -53,7 +59,11 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 	if(a->vars.length != b->vars.length || a->structs.length != b->structs.length)
 		retError(clean, Error_invalidState(0, "SBFile_combine() unrelated buffer layouts can't be merged"));
 
-	gotoIfError3(clean, SBFile_create(a->flags | ESBSettingsFlags_CreateNoReserve, a->bufferSize, alloc, combined, e_rr));
+	gotoIfError3(clean, SBFile_create(
+		(a->flags &~ ESBSettingsFlags_HasSharedLayout) | ESBSettingsFlags_CreateNoReserve,
+		a->bufferSize, alloc, combined, e_rr
+	));
+
 	allocated = true;
 
 	//Vars, structs and arrays can easily be copied from a
@@ -242,6 +252,13 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 					retError(clean, Error_invalidState(0, "SBFile_combine() variable has mismatching array count"));
 		}
 	}
+
+	//Two binaries agreeing on one layout is exactly what the shared layout flag promises, so the
+	// merge grants it whenever the result also satisfies its packing rules (probed, not errored:
+	// a layout both backends genuinely agree on stays mergeable without the claim).
+
+	if (SBFile_validateSharedLayout(combined, NULL))
+		combined->flags |= ESBSettingsFlags_HasSharedLayout;
 
 clean:
 	if(allocated && !s_uccess)

@@ -73,7 +73,7 @@ Bool SBFile_create(
 	}
 
 	ESBSettingsFlags flagsReal = flags;
-	sbFile->flags = flags &~ ESBSettingsFlags_HideMagicNumber;
+	sbFile->flags = flags &~ (ESBSettingsFlags_HideMagicNumber | ESBSettingsFlags_HasSharedLayout);
 	sbFile->bufferSize = bufferSize;
 
 	//flags and bufferSize are a U32-aligned pair, so hashing them as one in-place U64 can be a misaligned load.
@@ -86,7 +86,11 @@ Bool SBFile_create(
 
 	sbFile->hash = Buffer_fnv1a64Single(flagsAndSize, Buffer_fnv1a64Offset);
 
-	sbFile->flags = flagsReal;        //We don't want HideMagicNumber to influence hash
+	//We don't want HideMagicNumber to influence the hash, nor HasSharedLayout: the claim is validation
+	// metadata, not layout identity, so identical layouts hash equal whether or not one carries it
+	// (SBFile_combine also grants it after the hash exists).
+
+	sbFile->flags = flagsReal;
 
 clean:
 
@@ -230,4 +234,79 @@ void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecurs
 		if(isRecursive && strct.stride)
 			SBFile_print(sbFile, indenting + 1, (U16) i, true, alloc);
 	}
+}
+
+//The widest scalar under a variable: a leaf's own component size, a struct's widest member.
+//Children always carry higher ids than their parent, but the tree is walked directly since layouts
+// stay small enough that clarity beats a scratch buffer.
+
+static U8 SBFile_scalarAlignment(const SBFile *sbFile, U16 varId) {
+
+	const SBVar var = sbFile->vars.ptr[varId];
+
+	if (var.structId == U16_MAX)
+		return (U8)(1 << ESBType_getStride((ESBType) var.type));
+
+	U8 align = 1;
+
+	for (U64 i = 0; i < sbFile->vars.length; ++i)
+		if (sbFile->vars.ptr[i].parentId == varId) {
+
+			U8 childAlign = SBFile_scalarAlignment(sbFile, (U16) i);
+
+			if (childAlign > align)
+				align = childAlign;
+		}
+
+	return align;
+}
+
+Bool SBFile_validateSharedLayout(const SBFile *sbFile, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!sbFile)
+		retError(clean, Error_nullPointer(0, "SBFile_validateSharedLayout()::sbFile is required"));
+
+	const Bool cbufferRows = !(sbFile->flags & ESBSettingsFlags_IsTightlyPacked);
+
+	for (U64 i = 0; i < sbFile->vars.length; ++i) {
+
+		const SBVar var = sbFile->vars.ptr[i];
+		const U8 align = SBFile_scalarAlignment(sbFile, (U16) i);
+
+		//The 16-byte rows SBFile_addVariableAsType and SBFile_addVariableAsStruct enforce while adding
+
+		if (cbufferRows) {
+
+			if(var.structId != U16_MAX && (var.offset & 15))
+				retError(clean, Error_invalidState(
+					2, "SBFile_validateSharedLayout() a cbuffer struct doesn't start a 16-byte row"
+				));
+
+			const U32 size = var.structId == U16_MAX ? ESBType_getSize((ESBType) var.type, false) : 0;
+
+			if(size && ((var.offset + size - 1) >> 4) != (var.offset >> 4) && (var.offset & 15))
+				retError(clean, Error_invalidState(
+					3, "SBFile_validateSharedLayout() a cbuffer variable straddles a 16-byte row"
+				));
+		}
+
+		if(var.offset & (align - 1))
+			retError(clean, Error_invalidState(
+				0,
+				"SBFile_validateSharedLayout() a variable's offset isn't aligned to its scalar "
+				"alignment, so one backend can't express this layout"
+			));
+
+		if(var.structId != U16_MAX && (sbFile->structs.ptr[var.structId].stride & (align - 1)))
+			retError(clean, Error_invalidState(
+				1,
+				"SBFile_validateSharedLayout() a struct's stride isn't aligned to its scalar "
+				"alignment, so one backend can't express this layout"
+			));
+	}
+
+clean:
+	return s_uccess;
 }

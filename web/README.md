@@ -267,8 +267,10 @@ Plain scripts with IIFE namespaces (`OxUtil`, `OxTheme`, `OxMock`, `OxMockFormat
 **Compile**: the in-browser equivalent of `OxC3 shader compile`. Stage/model/extensions live in
 the *source* (`[shader]`, `[[oxc::model]]`, `[[oxc::extension]]`, …) exactly like the CLI; the
 toolbar only carries the flags the CLI has (`-compile-output`, `--debug`, `--split`,
-`--keep-registers`, the three `--warn-*`, `--ignore-empty-files`, and `shader reflect` as the
-"Reflection only" switch). The Command tab prints the equivalent CLI line plus one DXC invocation
+`--keep-registers`, `-spirv-layout`, the three `--warn-*`, `--ignore-empty-files`, and
+`shader reflect` as the "Reflection only" switch). The `-spirv-layout` picker only unlocks when the
+compile can't touch DXIL (the target selector picks SPIR-V alone, or every parsed entry targets only
+SPIR-V), mirroring the compiler's own refusal; a locked picker always means `dx`, the shared layout. The Command tab prints the equivalent CLI line plus one DXC invocation
 per compile, read back from the compiler itself (`Compiler_buildCompileArgs` behind
 `oxc3_getCompileArgs`), so each line is exactly what that compile runs; without the module the DXC
 lines refuse like everything else that needs the compiler, and only the CLI line renders.

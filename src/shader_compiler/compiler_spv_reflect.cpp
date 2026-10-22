@@ -31,7 +31,7 @@
 #include "SPIRV-Reflect/spirv_reflect.h"
 #include "compiler_spv_internal.hpp"
 
-Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_rr) {
+Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Bool isPacked, Error *e_rr) {
 
 	Bool s_uccess = true;
 	SpvReflectNumericTraits numeric = desc->traits.numeric;
@@ -140,13 +140,36 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 			));
 	}
 
-	if(numeric.matrix.stride && numeric.matrix.stride != 0x10)
-		retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has matrix with stride != 16"));
+	//oiSB spaces a matrix's rows by the buffer's packing: back to back when tightly packed, otherwise each on
+	// its own 16-byte row.
+	//A binary spacing them any other way (a std430 float3x3 in a storage buffer, for example) can't be
+	// described, so it's refused instead of recorded at the wrong offsets.
+
+	if (numeric.matrix.stride) {
+
+		U32 impliedStride = (numeric.scalar.width >> 3) * numeric.matrix.column_count;
+
+		if(!isPacked)
+			impliedStride = (impliedStride + 15) & ~15;
+
+		if(numeric.matrix.stride != impliedStride)
+			retError(clean, Error_unsupportedOperation(
+				0, "spvTypeToESBType()::desc has a matrix stride this buffer's packing can't describe"
+			));
+	}
 
 	*type = (ESBType) ESBType_create(stride, prim, vector, matrix);
 
 clean:
 	return s_uccess;
+}
+
+//The stride oiSB implies for one array element or matrix of this type: back to back in a tightly packed
+// buffer, otherwise rounded up to start the next 16-byte row.
+
+static U32 Compiler_impliedStrideSPIRV(ESBType type, Bool isPacked) {
+	const U32 size = ESBType_getSize(type, isPacked);
+	return isPacked ? size : (size + 15) & ~15;
 }
 
 Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_rr) {
@@ -325,8 +348,20 @@ Bool Compiler_convertMemberSPIRV(
 		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() unsupported value in cbuffer member"));
 
 	if(!(var->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)) {
-		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, e_rr));
-		perElementStride = var->array.dims_count ? var->array.stride : ESBType_getSize(shType, isPacked);
+
+		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, isPacked, e_rr));
+
+		//Array elements and matrices are spaced by the stride oiSB implies for this buffer's packing.
+		//A binary spacing array elements differently (a std430 array of float3, for example) can't be
+		// described, so it's refused instead of recorded at the wrong offsets.
+
+		const Bool strided = var->array.dims_count || ESBType_getMatrix(shType) != ESBMatrix_N1;
+		perElementStride = strided ? Compiler_impliedStrideSPIRV(shType, isPacked) : ESBType_getSize(shType, isPacked);
+
+		if(var->array.dims_count && var->array.stride != perElementStride)
+			retError(clean, Error_unsupportedOperation(
+				0, "Compiler_convertMemberSPIRV() array element stride this buffer's packing can't describe"
+			));
 	}
 
 	else {
@@ -407,15 +442,22 @@ clean:
 Bool Compiler_convertShaderBufferSPIRV(
 	SpvReflectBlockVariable *block,
 	Bool isPacked,
+	Bool sharedLayout,
 	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
 
-	//StructuredBuffer; the inner element represents the whole buffer
+	//StructuredBuffer; the inner element represents the whole buffer.
+	//The claim is set at creation, before any variable is added, because oiSB applies its packing rules
+	// while adding to files that carry it.
 
-	ESBSettingsFlags packedFlags = isPacked ? ESBSettingsFlags_IsTightlyPacked : (ESBSettingsFlags) 0;
+	const ESBSettingsFlags sharedFlag = sharedLayout ? ESBSettingsFlags_HasSharedLayout : ESBSettingsFlags_None;
+
+	ESBSettingsFlags packedFlags = (ESBSettingsFlags) (
+		(isPacked ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None) | sharedFlag
+	);
 
 	if (!block->padded_size) {
 
@@ -429,7 +471,15 @@ Bool Compiler_convertShaderBufferSPIRV(
 		if(!innerStruct->member_count || !innerStruct->members || !innerStruct->padded_size) {
 
 			ESBType type{};
-			gotoIfError3(clean, spvTypeToESBType(innerStruct->type_description, &type, e_rr));
+			gotoIfError3(clean, spvTypeToESBType(innerStruct->type_description, &type, isPacked, e_rr));
+
+			if(
+				innerStruct->array.dims_count && innerStruct->array.stride &&
+				innerStruct->array.stride != Compiler_impliedStrideSPIRV(type, isPacked)
+			)
+				retError(clean, Error_unsupportedOperation(
+					0, "Compiler_convertShaderBufferSPIRV() array element stride this buffer's packing can't describe"
+				));
 
 			if(type && (innerStruct->members || innerStruct->member_count || innerStruct->padded_size))
 				retError(clean, Error_invalidState(
@@ -440,6 +490,18 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 			if(!isPacked)
 				paddedSize = (paddedSize + 15) &~ 15;
+
+			//The runtime array's stride is the element's size in the binary, so a binary sizing the element
+			// differently than this buffer's packing (a std430 float3x3 at 48 bytes, for example) can't be
+			// described and is refused instead of recorded at the wrong offsets.
+
+			const SpvReflectTypeDescription *elementType = innerStruct->type_description;
+			const U32 elementStride = elementType ? elementType->traits.array.stride : 0;
+
+			if(!innerStruct->array.dims_count && elementStride && elementStride != U32_MAX && elementStride != paddedSize)
+				retError(clean, Error_unsupportedOperation(
+					0, "Compiler_convertShaderBufferSPIRV() element stride this buffer's packing can't describe"
+				));
 
 			gotoIfError3(clean, SBFile_create(packedFlags, paddedSize, alloc, sbFile, e_rr));
 			CharString elementName = CharString_createRefCStrConst("$Element");
@@ -465,8 +527,20 @@ Bool Compiler_convertShaderBufferSPIRV(
 		const C8 *structNameC = innerStruct->type_description->type_name;
 		CharString structName = CharString_createRefCStrConst(structNameC);
 
-		gotoIfError3(clean, SBFile_create(packedFlags, innerStruct->padded_size, alloc, sbFile, e_rr));
-		gotoIfError3(clean, SBFile_addStruct(sbFile, &structName, SBStruct{ .stride = innerStruct->padded_size }, alloc, e_rr));
+		//spirv-reflect's padded_size sums the member sizes instead of reading the ArrayStride decoration
+		// (KhronosGroup/SPIRV-Reflect#280), so a struct whose stride includes tail padding reflects too
+		// small and falsely mismatches the DXIL side.
+		//The decorated stride is the ABI both backends run: it survives on the element's type (the variable's
+		// own array traits are cleared when the runtime array is flattened), with U32_MAX standing for unresolved.
+
+		U32 stride = innerStruct->padded_size;
+		const SpvReflectTypeDescription *innerType = innerStruct->type_description;
+
+		if(innerType && innerType->traits.array.stride != U32_MAX && innerType->traits.array.stride > stride)
+			stride = innerType->traits.array.stride;
+
+		gotoIfError3(clean, SBFile_create(packedFlags, stride, alloc, sbFile, e_rr));
+		gotoIfError3(clean, SBFile_addStruct(sbFile, &structName, SBStruct{ .stride = stride }, alloc, e_rr));
 
 		CharString element = CharString_createRefCStrConst("$Element");
 
@@ -490,7 +564,7 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 	//CBuffer or storage buffer (without dynamic entries)
 
-	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, block->padded_size, alloc, sbFile, e_rr));
+	gotoIfError3(clean, SBFile_create(packedFlags, block->padded_size, alloc, sbFile, e_rr));
 
 	for (U64 l = 0; l < block->member_count; ++l) {
 		SpvReflectBlockVariable var = block->members[l];
@@ -508,6 +582,7 @@ Bool Compiler_convertRegisterSPIRV(
 	ListSHRegisterRuntime *registers,
 	SpvReflectDescriptorBinding *binding,
 	U32 expectedSet,
+	U8 spirvLayout,
 	const Allocator *alloc,
 	Error *e_rr
 ) {
@@ -720,9 +795,14 @@ Bool Compiler_convertRegisterSPIRV(
 						1, "Compiler_convertRegisterSPIRV() buffer requires size and/or padded size to be set/unset"
 					));
 
+				const Bool packedLayout =
+					spirvLayout == ESpirvLayout_Scalar ||
+					binding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
 				gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
 					&binding->block,
-					binding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+					packedLayout,
+					spirvLayout == ESpirvLayout_Dx,
 					alloc,
 					&sbFile,
 					e_rr

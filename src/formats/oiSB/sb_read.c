@@ -78,7 +78,8 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	ESBSettingsFlags flags =
 		(isSubFile ? ESBSettingsFlags_HideMagicNumber : ESBSettingsFlags_None) |
-		((header.flags & ESBFlag_IsTightlyPacked) ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None);
+		((header.flags & ESBFlag_IsTightlyPacked) ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None) |
+		((header.flags & ESBFlag_HasSharedLayout) ? ESBSettingsFlags_HasSharedLayout : ESBSettingsFlags_None);
 
 	gotoIfError3(clean, SBFile_create(flags, header.bufferSize, alloc, sbFile, e_rr));
 	didAllocate = true;
@@ -202,6 +203,11 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	if (!isSubFile && *offset != stream->size)
 		retError(clean, Error_invalidState(0, "SBFile_read() file had unrecognized data at the end"));
+
+	//A file claiming a shared layout is refused when its layout can't keep the claim
+
+	if (sbFile->flags & ESBSettingsFlags_HasSharedLayout)
+		gotoIfError3(clean, SBFile_validateSharedLayout(sbFile, e_rr));
 
 clean:
 

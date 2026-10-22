@@ -169,6 +169,38 @@
 		return extraWarnings;
 	}
 
+	//-spirv-layout: dx (default, shared layout), gl or scalar; the compiler refuses non dx for any
+	// DXIL target, so a bad mix fails per file with the compiler's own message.
+
+	Bool CLI_parseSpirvLayout(const ParsedArgs *args, U8 *spirvLayout) {
+
+		*spirvLayout = ESpirvLayout_Dx;
+
+		if(!(args->parameters & EOperationHasParameter_SpirvLayout))
+			return true;
+
+		CharString layoutStr = (CharString) { 0 };
+
+		if(!ParsedArgs_getArg(args, EOperationHasParameter_SpirvLayoutShift, &layoutStr, NULL))
+			return false;
+
+		if(CharString_equalsCStringInsensitive(&layoutStr, "dx"))
+			*spirvLayout = ESpirvLayout_Dx;
+
+		else if(CharString_equalsCStringInsensitive(&layoutStr, "gl"))
+			*spirvLayout = ESpirvLayout_Gl;
+
+		else if(CharString_equalsCStringInsensitive(&layoutStr, "scalar"))
+			*spirvLayout = ESpirvLayout_Scalar;
+
+		else {
+			Log_errorLnx("Unknown -spirv-layout \"%s\", expected dx, gl or scalar", layoutStr.ptr);
+			return false;
+		}
+
+		return true;
+	}
+
 	Bool CLI_compileShader(const ParsedArgs *args) {
 
 		if(!args) return false;
@@ -202,6 +234,15 @@
 
 		U64 threadCount = 0;
 		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 0));
+
+		//SPIRV buffer layout
+
+		U8 spirvLayout = ESpirvLayout_Dx;
+
+		if(!CLI_parseSpirvLayout(args, &spirvLayout)) {
+			s_uccess = false;
+			goto clean;
+		}
 
 		//Compile type
 
@@ -269,6 +310,7 @@
 			args->flags & EOperationFlags_Debug,
 			args->flags & EOperationFlags_NoOpt,
 			args->flags & EOperationFlags_KeepRegisters,
+			spirvLayout,
 			extraWarnings,
 			args->flags & EOperationFlags_IgnoreEmptyFiles,
 			ECompileType_Compile,

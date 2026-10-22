@@ -76,7 +76,8 @@ typedef struct CompilerShaderFileJob {
 	Bool keepRegisters;
 	Bool ignoreEmptyFiles;
 	Bool enableLogging;
-	U8 padding[2];
+	U8 spirvLayout;                     //ESpirvLayout
+	U8 padding;
 
 } CompilerShaderFileJob;
 
@@ -331,6 +332,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		tempResult2.binary.ptr ? &tempResult2 : &combo->tempResult,
 		job->isDebug,
 		job->keepRegisters,
+		job->spirvLayout,
 		&binaryIdentifier,
 		&file->lock,
 		&file->runtimeEntries,
@@ -471,6 +473,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		job->isDebug,
 		job->noOpt,
 		job->keepRegisters,
+		job->spirvLayout,
 		ctx->isRt,
 		ctx->isGfxOrComp,
 		inputPath,
@@ -1179,6 +1182,7 @@ Bool Compiler_compileShaders(
 	Bool isDebug,
 	Bool noOpt,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,
 	ECompileType compileType,
@@ -1244,6 +1248,7 @@ Bool Compiler_compileShaders(
 			.isDebug = isDebug,
 			.noOpt = noOpt,
 			.keepRegisters = keepRegisters,
+			.spirvLayout = spirvLayout,
 			.ignoreEmptyFiles = ignoreEmptyFiles,
 			.enableLogging = enableLogging
 		};

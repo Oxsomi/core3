@@ -34,7 +34,7 @@ global.location = { protocol: "https:" };
 global.Worker = function () {};
 
 for (const f of ["js/util.js", "js/wasmload.js", "js/workspace.js", "js/intrinsics_data.js", "js/editor.js",
-  "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js", "js/tools/inspect.js"])
+  "js/intellisense.js", "js/asmmap.js", "js/tools/symbols.js", "js/tools/inspect.js", "js/tools/compile.js"])
   new Function(fs.readFileSync(path.join(ROOT, f), "utf8")).call(global);
 
 let failures = 0;
@@ -830,6 +830,26 @@ const IS = window.OxIntelliSense;
     U2.highlightPipeline("blend.enable = derived").indexOf('class="prov-derived"') !== -1);
   check("highlight: pipeline text escapes markup too",
     U2.highlightPipeline('"<b>"').indexOf("<b>") === -1);
+
+  /* ---- -spirv-layout gating: the picker's unlock rule and CLI spelling (compile.js) ---------- */
+
+  const un = OxCompile.spirvLayoutUnlocked;
+  check("layout: the spirv-only selector unlocks", un(["spv"], null));
+  check("layout: both targets stay locked without entries", !un(["spv", "dxil"], null));
+  check("layout: every entry targeting only spirv unlocks",
+    un(["spv", "dxil"], [{ targets: ["spirv"] }, { targets: ["spirv"] }]));
+  check("layout: one dxil-capable entry locks",
+    !un(["spv", "dxil"], [{ targets: ["spirv"] }, { targets: ["spirv", "dxil"] }]));
+  check("layout: entries without target info lock", !un(["spv", "dxil"], [{}]));
+  check("layout: an empty listing locks", !un(["spv", "dxil"], []));
+
+  const lay = OxCompile.cliLine("a.hlsl", { targets: ["spv"], spirvLayout: "scalar" });
+  check("layout: the CLI line spells -spirv-layout", lay.includes("-spirv-layout scalar"), lay);
+  check("layout: dx stays silent (the default)",
+    !OxCompile.cliLine("a.hlsl", { targets: ["spv"], spirvLayout: "dx" }).includes("-spirv-layout"));
+  check("layout: reflect strips the layout arg",
+    !OxCompile.cliLine("a.hlsl", { targets: ["spv"], spirvLayout: "scalar", reflectionOnly: true })
+      .includes("-spirv-layout"));
 
   console.log(failures ? `\n${failures} FAILURE(S)` : "\nALL PASS");
   process.exit(failures ? 1 : 0);

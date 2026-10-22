@@ -34,7 +34,7 @@
 
 #include <inttypes.h>
 
-Bool compileInlineShaders(
+Bool compileInlineShadersLayout(
 	const Allocator *alloc,
 	const C8 *const *srcs,
 	U64 count,
@@ -42,6 +42,7 @@ Bool compileInlineShaders(
 	U64 threadCount,
 	const C8 *namePrefix,   //Descriptive name so logs/errors read "<prefix>0.hlsl" instead of a generic one
 	Bool enableLogging,
+	U8 spirvLayout,
 	ListBuffer *out,
 	Error *e_rr
 ) {
@@ -83,6 +84,7 @@ Bool compileInlineShaders(
 		false,                              //isDebug
 		false,                              //noOpt
 		false,                              //keepRegisters
+		spirvLayout,
 		(ECompilerWarning) 0,
 		false,                              //ignoreEmptyFiles: we expect real output
 		ECompileType_Compile,
@@ -101,6 +103,22 @@ clean:
 	ListU8_free(&allCompileModes, alloc);
 	ListCharString_free(&includeDirs, alloc);
 	return s_uccess;
+}
+
+Bool compileInlineShaders(
+	const Allocator *alloc,
+	const C8 *const *srcs,
+	U64 count,
+	U8 mode,
+	U64 threadCount,
+	const C8 *namePrefix,
+	Bool enableLogging,
+	ListBuffer *out,
+	Error *e_rr
+) {
+	return compileInlineShadersLayout(
+		alloc, srcs, count, mode, threadCount, namePrefix, enableLogging, ESpirvLayout_Dx, out, e_rr
+	);
 }
 
 Bool compileFileShader(
@@ -155,7 +173,8 @@ Bool compileFileShader(
 
 	gotoIfError3(clean, Compiler_compileShaders(
 		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
-		1, false, false, keepRegisters, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs, enableLogging,
+		1, false, false, keepRegisters, ESpirvLayout_Dx, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs,
+		enableLogging,
 		alloc, out, e_rr
 	));
 

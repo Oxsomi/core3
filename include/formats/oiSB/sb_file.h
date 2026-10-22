@@ -38,7 +38,16 @@ typedef enum ESBSettingsFlags {
 	ESBSettingsFlags_HideMagicNumber    = 1 << 0,        //Only valid if the oiSH can be 100% confidently detected otherwise
 	ESBSettingsFlags_IsTightlyPacked    = 1 << 1,
 	ESBSettingsFlags_CreateNoReserve    = 1 << 2,        //Only for SBFile_create avoid reserve (when you already know the size)
-	ESBSettingsFlags_Invalid            = 0xFFFFFFFF << 2
+
+	//The layout claims to be expressible on every backend, so one application struct serves them all.
+	//Only files carrying it are bound by packing rules: every member aligned to its scalar size, struct
+	// strides aligned to their widest member, and cbuffer members kept inside DX's 16-byte rows.
+	//The rules apply while variables are added (so on read too) and again on write.
+	//A file without the claim records whatever its one binary declares, checked only for structure and
+	// bounds, and gains the claim only when SBFile_combine proves a merged layout keeps the rules.
+	ESBSettingsFlags_HasSharedLayout    = 1 << 3,
+
+	ESBSettingsFlags_Invalid            = 0xFFFFFFFF << 4
 } ESBSettingsFlags;
 
 typedef struct SBFile {
@@ -119,7 +128,15 @@ void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecurs
 // which backends use it and its children. The shape is the buffer object web/js/api.js documents.
 Bool SBFile_writeJson(const SBFile *sbFile, JsonWriter *w, Error *e_rr);
 
-//Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary)
+//Checks every packing rule ESBSettingsFlags_HasSharedLayout promises, the same ones
+// SBFile_addVariableAsType applies while adding, so a file written or promoted with the claim reads back.
+//Pass a NULL e_rr to probe.
+Bool SBFile_validateSharedLayout(const SBFile *sbFile, Error *e_rr);
+
+//Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary).
+//The result carries ESBSettingsFlags_HasSharedLayout when the merged layout satisfies its packing
+// rules, whether or not the inputs claimed it: agreement between two binaries is what the flag
+// promises, and the merge just proved it.
 Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SBFile *combined, Error *e_rr);
 
 void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc);
@@ -137,7 +154,8 @@ typedef enum ESBVersion {
 typedef enum ESBFlag {
 	ESBFlag_None               = 0,
 	ESBFlag_IsTightlyPacked    = 1 << 0,
-	ESBFlag_Unsupported        = 0xFFFFFFFF << 1
+	ESBFlag_HasSharedLayout    = 1 << 1,
+	ESBFlag_Unsupported        = 0xFFFFFFFF << 2
 } ESBFlag;
 
 typedef struct SBHeader {

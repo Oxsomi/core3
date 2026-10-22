@@ -368,6 +368,7 @@ Bool Compiler_describeCompile(
 	Bool isDebug,
 	Bool noOpt,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	Bool isRt,
 	Bool isGfxOrComp,
 	CharString inputPath,
@@ -386,12 +387,16 @@ Bool Compiler_describeCompile(
 			"Compiler_describeCompile()::entry, settings and identifier are required"
 		));
 
+	if(spirvLayout >= ESpirvLayout_Count)
+		retError(clean, Error_invalidParameter(6, 0, "Compiler_describeCompile()::spirvLayout out of bounds"));
+
 	*settings = (CompilerSettings) {
 		.string = input,
 		.path = inputPath,
 		.debug = isDebug,
 		.noOptimization = noOpt,
 		.keepUnusedRegisters = keepRegisters,
+		.spirvLayout = spirvLayout,
 		.isRt = isRt,
 		.containsGfxOrComp = isGfxOrComp,
 		.format = ECompilerFormat_HLSL,
@@ -424,6 +429,7 @@ Bool Compiler_compileShaderSingle(
 	Bool isDebug,
 	Bool noOpt,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	Bool isRt,
 	Bool isGfxOrComp,
 	CharString inputPath,
@@ -453,7 +459,7 @@ Bool Compiler_compileShaderSingle(
 
 	gotoIfError3(clean, Compiler_describeCompile(
 		&runtimeEntries->ptr[runtimeEntryId], combinationId, binaryType,
-		isDebug, noOpt, keepRegisters, isRt, isGfxOrComp,
+		isDebug, noOpt, keepRegisters, spirvLayout, isRt, isGfxOrComp,
 		inputPath, input, includeDirs,
 		&settings, &binaryIdentifier, e_rr
 	));
@@ -530,6 +536,7 @@ Bool Compiler_processSingle(
 	CompileResult *tempResult,
 	Bool isDebug,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	const SHBinaryIdentifier *binaryIdentifier,
 	SpinLock *lock,
 	const ListSHEntryRuntime *runtimeEntries,
@@ -544,7 +551,7 @@ Bool Compiler_processSingle(
 
 	if(!tempResult)
 		retError(clean, Error_nullPointer(5, "Compiler_processSingle()::tempResult is required"));
-		
+
 	gotoIfError3(clean, Compiler_process(
 		compiler,
 		binaryType,
@@ -552,6 +559,7 @@ Bool Compiler_processSingle(
 		&tempResult->registers,
 		isDebug,
 		keepRegisters,
+		spirvLayout,
 		binaryIdentifier,
 		lock,
 		runtimeEntries,

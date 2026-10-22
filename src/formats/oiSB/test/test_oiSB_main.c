@@ -51,6 +51,7 @@ OXC3_TEST_MAIN(formats_oiSB) {
 	Test_SBFileAddVarStructIdOutOfBounds(&t);
 	Test_SBFileAddStructVarMisalignedOffset(&t);
 	Test_SBFileAddStructZeroStride(&t);
+	Test_SBFileSharedLayout(&t);
 	Test_SBFileNameLengthBoundary(&t);
 	Test_SBFileAddVarEmptyArrayList(&t);
 	Test_SBFileReadInvalidStream(&t);

@@ -57,6 +57,7 @@
 //Compile switches, matching the CLI flags the toolbar offers one for one.
 
 typedef enum EWasmCompileFlag {
+
 	EWasmCompileFlag_Debug                = 1 << 0,        //--debug
 	EWasmCompileFlag_KeepRegisters        = 1 << 1,        //--keep-registers
 	EWasmCompileFlag_WarnUnusedRegisters  = 1 << 2,        //--warn-unused-registers
@@ -64,8 +65,20 @@ typedef enum EWasmCompileFlag {
 	EWasmCompileFlag_WarnBufferPadding    = 1 << 4,        //--warn-buffer-padding
 	EWasmCompileFlag_IgnoreEmptyFiles     = 1 << 5,        //--ignore-empty-files
 	EWasmCompileFlag_ReflectionOnly       = 1 << 6,        //shader reflect: compile, then strip the binaries
-	EWasmCompileFlag_NoOpt                = 1 << 7         //--no-opt: -Od, so debug line info survives per statement
+	EWasmCompileFlag_NoOpt                = 1 << 7,        //--no-opt: -Od, so debug line info survives per statement
+
+	//-spirv-layout as a two bit ESpirvLayout field; 0 (Dx) keeps every older caller unchanged
+	EWasmCompileFlag_SpirvLayoutShift     = 8,
+	EWasmCompileFlag_SpirvLayoutMask      = 3 << 8
+
 } EWasmCompileFlag;
+
+//The ESpirvLayout a caller's flags carry; the compiler itself refuses out of bounds values and non Dx
+// layouts whose target set includes DXIL, so this only unpacks.
+
+static U8 Wasm_spirvLayout(U32 flags) {
+	return (U8) ((flags & EWasmCompileFlag_SpirvLayoutMask) >> EWasmCompileFlag_SpirvLayoutShift);
+}
 
 //One Compiler for the module.
 //A Compiler is per thread and this build has one, so the page's calls all run against this one rather than
@@ -405,6 +418,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_compileShaders(const C8 *name, const C8 *source,
 		(flags & EWasmCompileFlag_Debug) != 0,
 		(flags & EWasmCompileFlag_NoOpt) != 0,
 		(flags & EWasmCompileFlag_KeepRegisters) != 0,
+		Wasm_spirvLayout(flags),
 		extraWarnings,
 		(flags & EWasmCompileFlag_IgnoreEmptyFiles) != 0,
 		ECompileType_Compile,
@@ -968,6 +982,19 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_parseEntrypoints(const C8 *name, const C8 *sourc
 				w, "lib", runtime->isShaderAnnotation && !SHEntryRuntime_containsGfxOrComp(*runtime), e_rr
 			));
 
+			//The backends this entry compiles for after [[oxc::binary(...)]], so the page can tell a
+			//SPIRV only file apart (the -spirv-layout picker unlocks for those).
+
+			U8 entryTargets = SHEntryRuntime_getBinaryTypes(runtime);
+
+			gotoIfError3(clean, JsonWriter_keyArray(w, "targets", e_rr));
+
+			for (U8 bt = 0; bt < EGfxBinaryType_Count; ++bt)
+				if ((entryTargets >> bt) & 1)
+					gotoIfError3(clean, JsonWriter_cstr(w, bt == EGfxBinaryType_SPIRV ? "spirv" : "dxil", e_rr));
+
+			gotoIfError3(clean, JsonWriter_endArray(w, e_rr));
+
 			//A combination id is a U16 by contract, so the space is capped rather than wrapped; a file
 			// anywhere near the cap is degenerate, not a workflow.
 
@@ -1189,6 +1216,7 @@ EMSCRIPTEN_KEEPALIVE void *oxc3_getCompileArgs(const C8 *name, const C8 *source,
 					(flags & EWasmCompileFlag_Debug) != 0,
 					(flags & EWasmCompileFlag_NoOpt) != 0,
 					(flags & EWasmCompileFlag_KeepRegisters) != 0,
+					Wasm_spirvLayout(flags),
 					isRt, isGfxOrComp,
 					nameStr, parseSettings.string, NULL,
 					&settings, &identifier, e_rr

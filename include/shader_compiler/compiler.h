@@ -104,6 +104,17 @@ static inline Bool Compiler_linksAsLib(EGfxPipelineStage stage) {
 
 #define COMPILER_KEEP_ALL_BINDINGS "-fhlsl-unused-resource-bindings=keep-all"
 
+//The SPIR-V buffer memory layout a compile targets. Dx matches DXIL, so the oiSB shared layout claim
+// holds and binaries stay combinable; any other choice only compiles when SPIRV is the sole target,
+// and its reflection drops the shared layout claim since the layout deliberately diverges from DXIL.
+
+typedef enum ESpirvLayout {
+	ESpirvLayout_Dx,             //-fvk-use-dx-layout, the default
+	ESpirvLayout_Gl,             //std140/std430, dxc's own default (no layout flag)
+	ESpirvLayout_Scalar,         //-fvk-use-scalar-layout; needs VK_EXT_scalar_block_layout on the device
+	ESpirvLayout_Count
+} ESpirvLayout;
+
 //Each compiler
 
 typedef struct Compiler {
@@ -132,6 +143,7 @@ typedef struct CompilerSettings {
 	Bool containsGfxOrComp;
 	Bool isRt;
 	Bool keepUnusedRegisters;   //Keep declared but unused resources bound and reflected (stable layouts across variants)
+	U8 spirvLayout;             //ESpirvLayout; non Dx only compiles when SPIRV is the sole target
 
 	//Compiler_reflect only: describe what parsed even when the source has errors.
 	//A build wants nothing from a source that doesn't compile, but an editor navigating a file being typed
@@ -359,6 +371,7 @@ Bool Compiler_process(
 	ListSHRegisterRuntime *registers,   //Required; Output registers
 	Bool isDebug,
 	Bool keepRegisters,                 //Keep declared but unused resources bound and reflected
+	U8 spirvLayout,                     //ESpirvLayout; ignored for DXIL
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,                     //If not NULL will be used before writing into entries
 	const ListSHEntryRuntime *entries,  //Array contains the current buffer's reflection for the entry and compatibility checks
@@ -519,6 +532,7 @@ Bool Compiler_describeCompile(
 	Bool isDebug,
 	Bool noOpt,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	Bool isRt,
 	Bool isGfxOrComp,
 	CharString inputPath,
@@ -617,6 +631,7 @@ Bool Compiler_compileShaders(
 	Bool isDebug,
 	Bool noOpt,                       //-Od; only meaningful with isDebug, where line info is the point
 	Bool keepRegisters,               //Keep declared but unused resources bound and reflected
+	U8 spirvLayout,                   //ESpirvLayout; non Dx refuses any DXIL target in the set
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,
 	ECompileType type,

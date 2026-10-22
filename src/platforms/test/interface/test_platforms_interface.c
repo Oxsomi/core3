@@ -365,9 +365,16 @@ static void Test_platformsFilePhysical(Test *t) {
 	Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err));
 	Test_assert(t, "hasDir", File_hasFolder(&dir, t->alloc));
 
+	//Adding a folder that already exists is a no-op, so an output folder can always be ensured
+	Test_assert(t, "addDirAgain", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err));
+
 	//Create file
 	Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, t->alloc, &t->err));
 	Test_assert(t, "hasFile", File_hasFile(&filePath, t->alloc));
+
+	//A file that already exists refuses, and so does a folder where a file sits
+	Test_assert(t, "addFileAgainRefused", !File_add(&filePath, EFileType_File, false, t->alloc, NULL));
+	Test_assert(t, "addDirOverFileRefused", !File_add(&filePath, EFileType_Folder, false, t->alloc, NULL));
 
 	//getInfo
 	Test_assert(t, "getInfo",      File_getInfo(&filePath, &info, t->alloc, &t->err));

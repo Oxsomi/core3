@@ -455,9 +455,15 @@ Bool ListSHRegisterRuntime_addBuffer(
 				0, "ListSHRegisterRuntime_addBuffer()::sbFile is required"
 			));
 
-		if(!(sbFile->flags & ESBSettingsFlags_IsTightlyPacked) != isCBV)
+		//DX keeps 16-byte rows in constant buffers and packs every other buffer, so only a layout claiming to be
+		// shared with DX has to follow that; a SPIR-V only layout (scalar packs a cbuffer too) records its own.
+
+		if(
+			(sbFile->flags & ESBSettingsFlags_HasSharedLayout) &&
+			!(sbFile->flags & ESBSettingsFlags_IsTightlyPacked) != isCBV
+		)
 			retError(clean, Error_invalidState(
-				0, "ListSHRegisterRuntime_addBuffer()::sbFile needs to packing to match CBV/SRV type"
+				0, "ListSHRegisterRuntime_addBuffer()::sbFile's packing has to match the CBV/SRV register kind"
 			));
 
 		if(isCBV && sbFile->bufferSize >= 64 * KIBI)

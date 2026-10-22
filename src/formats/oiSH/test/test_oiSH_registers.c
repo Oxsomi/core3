@@ -575,3 +575,52 @@ void Test_SHFileRegisterConstantBufferSizeLimit(Test *t) {
 	SBFile_free(&bigCB, t->alloc);
 	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
 }
+
+//DX ties a buffer's packing to its register kind (constant buffers keep 16-byte rows, every other buffer is tightly
+// packed), so only a buffer claiming a shared layout is held to it, while a SPIR-V only layout keeps its own.
+
+void Test_SHFileRegisterPackingNeedsClaim(Test *t) {
+
+	Test_setModule(t, "SHFile register: packing only has to match the register kind under a shared layout");
+
+	for (U8 shared = 0; shared < 2; ++shared) {
+
+		SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "csMain", false);
+		SBFile packedCB = makeTightSBFile(t);
+		SBFile rowsSB = makeCBufferSBFile(t);
+
+		if (shared) {
+			packedCB.flags = (ESBSettingsFlags) (packedCB.flags | ESBSettingsFlags_HasSharedLayout);
+			rowsSB.flags = (ESBSettingsFlags) (rowsSB.flags | ESBSettingsFlags_HasSharedLayout);
+		}
+
+		CharString cbName = CharString_createRefCStrConst("packedCB");
+		CharString sbName = CharString_createRefCStrConst("rowsSB");
+
+		//Refusals are the expected result under the claim, so e_rr stays NULL there
+
+		const Bool cbAdded = ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_ConstantBuffer, false, 0x1,
+			&cbName, NULL, &packedCB, makeSPIRVBinding(0, 0), t->alloc, shared ? NULL : &t->err
+		);
+
+		const Bool sbAdded = ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_StructuredBuffer, false, 0x1,
+			&sbName, NULL, &rowsSB, makeSPIRVBinding(0, 1), t->alloc, shared ? NULL : &t->err
+		);
+
+		if (shared) {
+			Test_assert(t, "a shared constant buffer that's tightly packed is refused", !cbAdded);
+			Test_assert(t, "a shared structured buffer with 16-byte rows is refused", !sbAdded);
+		}
+
+		else {
+			Test_assert(t, "an unclaimed tightly packed constant buffer is recorded", cbAdded);
+			Test_assert(t, "an unclaimed structured buffer with 16-byte rows is recorded", sbAdded);
+		}
+
+		SBFile_free(&packedCB, t->alloc);
+		SBFile_free(&rowsSB, t->alloc);
+		ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+	}
+}

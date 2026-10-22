@@ -44,6 +44,7 @@ void Test_SBFileAddVarParentIsPrimitive(Test *t);
 void Test_SBFileAddVarStructIdOutOfBounds(Test *t);
 void Test_SBFileAddStructVarMisalignedOffset(Test *t);
 void Test_SBFileAddStructZeroStride(Test *t);
+void Test_SBFileSharedLayout(Test *t);
 void Test_SBFileNameLengthBoundary(Test *t);
 void Test_SBFileAddVarEmptyArrayList(Test *t);
 void Test_SBFileReadInvalidStream(Test *t);

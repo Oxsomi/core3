@@ -77,6 +77,7 @@ void Test_shaderCompilerSamples(Test *t) {
 	ListBuffer buffers = (ListBuffer) { 0 };
 	CharString refPath = CharString_createNull();
 	CharString newPath = CharString_createNull();
+	CharString layoutLabel = CharString_createNull();
 	Buffer golden = Buffer_createNull();
 
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
@@ -111,7 +112,7 @@ void Test_shaderCompilerSamples(Test *t) {
 
 		Compiler_compileShaders(
 			&allFiles, &allShaderText, &allOutputs, &allCompileModes,
-			1, false, false, false, (ECompilerWarning) 0, false, ECompileType_Compile,
+			1, false, false, false, ESpirvLayout_Dx, (ECompilerWarning) 0, false, ECompileType_Compile,
 			&includeDirs, true, alloc, &buffers, e_rr
 		);
 
@@ -151,6 +152,20 @@ void Test_shaderCompilerSamples(Test *t) {
 
 			if(!produced)                    //Nothing compiled (broken, or a backend the file skips): nothing to pin
 				continue;
+
+			//Whatever its reference says, a SPIR-V sample has to record the buffer layouts its binary declares
+
+			if (type == EGfxBinaryType_SPIRV) {
+
+				CharString_free(&layoutLabel, alloc);
+
+				gotoIfError3(clean, CharString_format(
+					alloc, &layoutLabel, e_rr, "%.*s records the buffer layouts its SPIR-V declares",
+					(int) CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+				));
+
+				Test_assert(t, layoutLabel.ptr, oiSHDescribesSpirvLayout(alloc, buffers.ptr[i], layoutLabel.ptr, NULL));
+			}
 
 			//coop_vec's DXIL is not reproducible: the same source compiles to different bitcode from run to
 			//run, moving the container hash and scattered metadata bytes, so pinning it would only make this
@@ -266,6 +281,7 @@ clean:
 	ListBuffer_freeUnderlying(&buffers, alloc);
 	CharString_free(&refPath, alloc);
 	CharString_free(&newPath, alloc);
+	CharString_free(&layoutLabel, alloc);
 	Buffer_free(&golden, alloc);
 
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);

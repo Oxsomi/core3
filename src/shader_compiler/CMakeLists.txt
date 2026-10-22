@@ -169,6 +169,7 @@ if(EnableTests AND OxC3TestExecutables)
 		LIBS        OxC3_shader_compiler OxC3_platforms OxC3_types_test
 		SOURCES     "${CMAKE_CURRENT_SOURCE_DIR}/test/test_shader_compiler_samples.c"
 		            "${CMAKE_CURRENT_SOURCE_DIR}/test/test_shader_compiler_util.c"
+		            "${CMAKE_CURRENT_SOURCE_DIR}/test/test_shader_compiler_spirv_layout.c"
 		WORKING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.."
 		DATA        ${webSamples} ${sampleGoldens}
 	)

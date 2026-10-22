@@ -146,6 +146,7 @@ void Test_SHFileRegisterAddStructuredBuffer(Test *t);
 void Test_SHFileRegisterAddAccelerationStructure(Test *t);
 void Test_SHFileRegisterBufferWriteFlagRejections(Test *t);
 void Test_SHFileRegisterConstantBufferSizeLimit(Test *t);
+void Test_SHFileRegisterPackingNeedsClaim(Test *t);
 
 void Test_SHFileWriteJson(Test *t);          //The JSON view: entries, binaries, registers, and the members form
 

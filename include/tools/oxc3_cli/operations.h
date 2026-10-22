@@ -69,6 +69,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_PipelineSetShift,         //-pso-set: supply pipeline fields by the path the report prints
 	EOperationHasParameter_PipelineInputShift,       //-pso-input: replay a stored oiSP's values over the derived pipeline
 
+	EOperationHasParameter_SpirvLayoutShift,         //-spirv-layout: buffer layout for SPIRV-only compiles
+
 	EOperationHasParameter_CountEnum,                //How many enums there are
 
 	EOperationHasParameter_Start                     = EOperationHasParameter_FileFormatShift,
@@ -112,6 +114,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_PipelineOutput            = 1 << EOperationHasParameter_PipelineOutputShift,
 	EOperationHasParameter_PipelineSet               = 1 << EOperationHasParameter_PipelineSetShift,
 	EOperationHasParameter_PipelineInput             = 1 << EOperationHasParameter_PipelineInputShift,
+
+	EOperationHasParameter_SpirvLayout               = 1 << EOperationHasParameter_SpirvLayoutShift,
 
 	//The two parameter key sources (-aes / -aes-file); --aes-stdin is a flag (EOperationFlags_AESStdin), so a
 	//"any key source present" test must also check that flag separately.

@@ -295,7 +295,11 @@ Bool Compiler_convertShaderBufferDXIL(
 	D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
 	D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
 	ID3D12ShaderReflectionConstantBuffer *constantBuffer = NULL;
-	ESBSettingsFlags flags = ESBSettingsFlags_None;
+	//The compiler always claims the shared layout: everything it compiles is meant to serve every
+	// backend from one application struct, and the claim's validation turns a layout only one
+	// backend can express into a compile error instead of a combine failure later.
+
+	ESBSettingsFlags flags = ESBSettingsFlags_HasSharedLayout;
 	CharString name = CharString_createNull();
 	D3D_CBUFFER_TYPE cbufferType = D3D_CT_CBUFFER;
 	U32 variables = 0;
@@ -345,7 +349,7 @@ Bool Compiler_convertShaderBufferDXIL(
 	}
 
 	if(resourceDesc.Type != D3D_SIT_CBUFFER) {
-		flags = ESBSettingsFlags_IsTightlyPacked;
+		flags = (ESBSettingsFlags) (flags | ESBSettingsFlags_IsTightlyPacked);
 		cbufferType = D3D_CT_RESOURCE_BIND_INFO;
 	}
 

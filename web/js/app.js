@@ -125,6 +125,7 @@ function openFile(name) {
   $("#roBadge").classList.add("d-none");
   window.OxEditor.open(state.files[name].src, false, "f:" + name);
   reflectFollowOptions();
+  window.OxCompile.syncSpirvLayout(null);//stale entries can't hold the layout unlocked; the parse below re-syncs
   refreshParsedEntries();                //the picker refills from this file's own parse listing
   if (state.compiled) window.OxEditor.markDiags(state.compiled.diags.filter(d => d.file === name));
   renderRail(); renderTabs(); scheduleCommands();
@@ -309,8 +310,10 @@ function applyOptions(o) {
   $("#optRefl").checked = !!o.reflectionOnly; $("#optDebug").checked = !!o.debug; $("#optSplit").checked = !!o.split;
   $("#optNoOpt").checked = !!o.noOpt;
   $("#optKeepReg").checked = !!o.keepRegisters;
+  $("#optSpirvLayout").value = o.spirvLayout || "dx";
   $("#wUnusedReg").checked = !!o.warnUnusedRegisters; $("#wUnusedConst").checked = !!o.warnUnusedConstants;
   $("#wPad").checked = !!o.warnBufferPadding; $("#wIgnoreEmpty").checked = !!o.ignoreEmptyFiles;
+  window.OxCompile.syncSpirvLayout();    //radios set without change events, so the layout lock re-derives here
 }
 
 /* Hands a plain {name: src} map to the page as the working project; tabs, docs and stale compile
@@ -949,6 +952,7 @@ async function refreshParsedEntries() {
     if (entries && name === state.active) {
       state.parsed = { name, entries };
       reflectFollowOptions();
+      window.OxCompile.syncSpirvLayout(entries);
     }
   } catch (err) { /* the previous listing stands */ }
   finally {

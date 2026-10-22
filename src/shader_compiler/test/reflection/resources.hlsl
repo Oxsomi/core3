@@ -4,8 +4,25 @@
 
 struct Particle { uint x, y, z, w; };        //16 bytes
 
+//Members end at 22 bytes, but the U64 aligns the element stride to 24; both backends must reflect 24.
+
+struct PaddedTail {
+	float a, b;
+	uint64_t c;
+	uint16_t d;
+	float16_t e;
+	int16_t f;
+};
+
+//A vector crossing a 16-byte boundary: legal in a structured buffer (test lands at 4, stride 20), since only
+// cbuffers keep 16-byte rows.
+
+struct Straddle { uint pad; uint4 test; };
+
 StructuredBuffer<Particle> inBuf;
 RWStructuredBuffer<Particle> outBuf;
+RWStructuredBuffer<PaddedTail> padBuf;
+RWStructuredBuffer<Straddle> straddleBuf;
 ByteAddressBuffer rawIn;
 RWByteAddressBuffer rawOut;
 
@@ -23,7 +40,7 @@ SamplerComparisonState sampCmp;
 
 RaytracingAccelerationStructure tlas;
 
-[[oxc::extension("RayQuery")]]                //inline RT (RayQuery + acceleration structure)
+[[oxc::extension("RayQuery", "16BitTypes", "I64")]]        //inline RT; 16-bit + 64-bit for PaddedTail
 [[oxc::stage("compute")]]
 [numthreads(1, 1, 1)]
 void main(uint id : SV_DispatchThreadID) {
@@ -42,5 +59,7 @@ void main(uint id : SV_DispatchThreadID) {
 	if (q.CommittedStatus() != COMMITTED_NOTHING) c += 1;
 	rawOut.Store<uint>(0, rawIn.Load<uint>(0) + (uint)c.x);
 	outBuf[0] = inBuf[0];
+	padBuf[id].a = c.x;
+	straddleBuf[id].test = uint4(1, 2, 3, 4);
 	img[uint2(0, 0)] = c;
 }

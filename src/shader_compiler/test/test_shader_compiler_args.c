@@ -194,7 +194,7 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 
 		gotoIfError3(clean, Compiler_describeCompile(
 			runtime, combinationId, EGfxBinaryType_SPIRV,
-			false, false, false, aggRt, aggGfxComp,
+			false, false, false, ESpirvLayout_Dx, aggRt, aggGfxComp,
 			parseSettings.path, parseSettings.string, NULL,
 			&entrySettings, &identifier, e_rr
 		));
@@ -276,7 +276,7 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 
 		gotoIfError3(clean, Compiler_describeCompile(
 			runtime, combinationId, EGfxBinaryType_DXIL,
-			false, false, false, aggRt, aggGfxComp,
+			false, false, false, ESpirvLayout_Dx, aggRt, aggGfxComp,
 			parseSettings.path, parseSettings.string, NULL,
 			&libSettings, &identifier, e_rr
 		));
@@ -357,7 +357,7 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 
 		gotoIfError3(clean, Compiler_describeCompile(
 			uniformEntry, 0, EGfxBinaryType_DXIL,
-			false, false, false, false, true,
+			false, false, false, ESpirvLayout_Dx, false, true,
 			parseSettings.path, parseSettings.string, NULL,
 			&uniformSettings, &identifier, e_rr
 		));
@@ -468,6 +468,228 @@ void Test_shaderCompilerBuildArgs(Test *t) {
 		Test_assert(t, "the driver stores exactly the predicted binaries", converges);
 	}
 
+	//--- SPIRV layout choices: the argv follows the layout, and a DXIL target refuses anything but Dx
+	//--- at the one choke point every compile passes through (Compiler_buildCompileArgs) ---
+
+	{
+		CompilerSettings laySettings = (CompilerSettings) { 0 };
+		SHBinaryIdentifier layId = (SHBinaryIdentifier) { 0 };
+		const SHEntryRuntime *layRuntime = &parsed.shEntriesRuntime.ptr[0];
+
+		gotoIfError3(clean, Compiler_describeCompile(
+			layRuntime, 0, EGfxBinaryType_SPIRV,
+			false, false, false, ESpirvLayout_Scalar, false, true,
+			parseSettings.path, parseSettings.string, NULL,
+			&laySettings, &layId, e_rr
+		));
+
+		gotoIfError3(clean, Compiler_buildCompileArgs(&laySettings, &layId, &args, &amended, alloc, e_rr));
+
+		Test_assert(
+			t, "scalar layout swaps the layout flag",
+			argsContain(&args, "-fvk-use-scalar-layout") && !argsContain(&args, "-fvk-use-dx-layout")
+		);
+
+		ListCharString_freeUnderlying(&args, alloc);
+		CharString_free(&amended, alloc);
+
+		gotoIfError3(clean, Compiler_describeCompile(
+			layRuntime, 0, EGfxBinaryType_SPIRV,
+			false, false, false, ESpirvLayout_Gl, false, true,
+			parseSettings.path, parseSettings.string, NULL,
+			&laySettings, &layId, e_rr
+		));
+
+		gotoIfError3(clean, Compiler_buildCompileArgs(&laySettings, &layId, &args, &amended, alloc, e_rr));
+
+		Test_assert(
+			t, "gl layout passes no layout flag",
+			!argsContain(&args, "-fvk-use-scalar-layout") && !argsContain(&args, "-fvk-use-dx-layout")
+		);
+
+		ListCharString_freeUnderlying(&args, alloc);
+		CharString_free(&amended, alloc);
+
+		gotoIfError3(clean, Compiler_describeCompile(
+			layRuntime, 0, EGfxBinaryType_DXIL,
+			false, false, false, ESpirvLayout_Scalar, false, true,
+			parseSettings.path, parseSettings.string, NULL,
+			&laySettings, &layId, e_rr
+		));
+
+		//The refusal is the expected result, so e_rr stays NULL
+
+		Test_assert(
+			t, "a non Dx layout refuses any DXIL target",
+			!Compiler_buildCompileArgs(&laySettings, &layId, &args, &amended, alloc, NULL)
+		);
+	}
+
+	//--- A scalar layout SPIRV compile is a valid oiSH on its own whose buffers drop the shared layout
+	//--- claim, and the DXIL twin of the same source refuses to merge with it: the two halves of what
+	//--- oiSB's hasSharedLayout flag promises ---
+
+	{
+		static const C8 *laySrc =
+			"cbuffer CBuf { float a; float4 c; float arr[3]; }\n"
+			"RWByteAddressBuffer buf2;\n"
+			"[[oxc::stage(\"compute\")]]\n"
+			"[numthreads(1, 1, 1)]\n"
+			"void mainL(uint id : SV_DispatchThreadID) { buf2.Store<float>(id * 4, a + c.x); }\n";
+
+		const C8 *srcs2[] = { laySrc };
+
+		SHFile spvFile = (SHFile) { 0 };
+		SHFile dxilFile = (SHFile) { 0 };
+		SHFile merged = (SHFile) { 0 };
+		ListBuffer spvBufs = (ListBuffer) { 0 };
+		ListBuffer dxilBufs = (ListBuffer) { 0 };
+
+		Bool spvOk =
+			compileInlineShadersLayout(
+				alloc, srcs2, 1, (U8) EGfxBinaryType_SPIRV, 1, "args_layout_spv", true,
+				ESpirvLayout_Scalar, &spvBufs, e_rr
+			) &&
+			spvBufs.length == 1 && Buffer_length(spvBufs.ptr[0]) &&
+			readOiSH(alloc, spvBufs.ptr[0], &spvFile, e_rr) && spvFile.binaries.length == 1;
+
+		Bool dxOk =
+			compileInlineShaders(
+				alloc, srcs2, 1, (U8) EGfxBinaryType_DXIL, 1, "args_layout_dxil", true, &dxilBufs, e_rr
+			) &&
+			dxilBufs.length == 1 && Buffer_length(dxilBufs.ptr[0]) &&
+			readOiSH(alloc, dxilBufs.ptr[0], &dxilFile, e_rr) && dxilFile.binaries.length == 1;
+
+		const SBFile *spvSB = NULL;
+		const SBFile *dxSB = NULL;
+
+		if (spvOk)
+			for (U64 i = 0; i < spvFile.binaries.ptr[0].registers.length && !spvSB; ++i)
+				if (spvFile.binaries.ptr[0].registers.ptr[i].shaderBuffer.bufferSize)
+					spvSB = &spvFile.binaries.ptr[0].registers.ptr[i].shaderBuffer;
+
+		if (dxOk)
+			for (U64 i = 0; i < dxilFile.binaries.ptr[0].registers.length && !dxSB; ++i)
+				if (dxilFile.binaries.ptr[0].registers.ptr[i].shaderBuffer.bufferSize)
+					dxSB = &dxilFile.binaries.ptr[0].registers.ptr[i].shaderBuffer;
+
+		Test_assert(t, "a scalar layout compile produces a valid oiSH", spvOk && spvSB);
+
+		//The array right behind c pins that an unclaimed file sizes its bounds without DX's row padding,
+		// which would put arr[3] past the end of the scalar cbuffer.
+
+		Test_assert(
+			t, "the scalar cbuffer packs float4 at 4 and its array at 20, without the shared claim",
+			spvSB && spvSB->vars.length == 3 &&
+			spvSB->vars.ptr[0].offset == 0 && spvSB->vars.ptr[1].offset == 4 && spvSB->vars.ptr[2].offset == 20 &&
+			!(spvSB->flags & ESBSettingsFlags_HasSharedLayout)
+		);
+
+		Test_assert(
+			t, "the DXIL twin keeps the shared claim at dx offsets",
+			dxSB && dxSB->vars.length == 3 && dxSB->vars.ptr[1].offset == 16 && dxSB->vars.ptr[2].offset == 32 &&
+			(dxSB->flags & ESBSettingsFlags_HasSharedLayout)
+		);
+
+		//The refusal is the expected result, so e_rr stays NULL
+
+		Test_assert(
+			t, "the DXIL twin refuses to merge with the scalar layout",
+			spvOk && dxOk && !SHFile_combine(&spvFile, &dxilFile, alloc, &merged, NULL)
+		);
+
+		SHFile_free(&spvFile, alloc);
+		SHFile_free(&dxilFile, alloc);
+		SHFile_free(&merged, alloc);
+		ListBuffer_freeUnderlying(&spvBufs, alloc);
+		ListBuffer_freeUnderlying(&dxilBufs, alloc);
+	}
+
+	//--- A U64 right after a float in a structured buffer: the bytecode declares offset 8 and stride 24 on every path.
+	//--- DXC's linker builds the linked module without the data layout, so reflecting it falls back to LLVM's default
+	//--- i64 alignment of 4 and reports the U64 at 4 with stride 20.
+	//--- Every [shader] entry is linked, so the shared layout claim refuses [shader] on DXIL while [[oxc::stage]] passes.
+	//--- The known bug is pinned as is: the refusal assert turning red means DXC fixed it, and the case joins the
+	//--- layout assert above ---
+
+	{
+		static const C8 *u64Stage =
+			"struct Nicu { float a; uint64_t b; uint16_t c; float d; };\n"
+			"RWStructuredBuffer<Nicu> sb;\n"
+			"[[oxc::extension(\"16BitTypes\", \"I64\")]]\n"
+			"[[oxc::stage(\"compute\")]]\n"
+			"[numthreads(1, 1, 1)]\n"
+			"void main(uint id : SV_DispatchThreadID) { sb[id].b = 7; }\n";
+
+		static const C8 *u64Shader =
+			"struct Nicu { float a; uint64_t b; uint16_t c; float d; };\n"
+			"RWStructuredBuffer<Nicu> sb;\n"
+			"[[oxc::extension(\"16BitTypes\", \"I64\")]]\n"
+			"[shader(\"compute\")]\n"
+			"[numthreads(1, 1, 1)]\n"
+			"void main(uint id : SV_DispatchThreadID) { sb[id].b = 7; }\n";
+
+		const C8 *const u64Srcs[] = { u64Stage, u64Shader };
+
+		static const struct U64Case {
+			U8 type;
+			U8 srcId;               //Index into u64Srcs: 0 [[oxc::stage]], 1 [shader]
+			const C8 *prefix;
+		} u64Cases[] = {
+			{ EGfxBinaryType_SPIRV, 0, "args_u64_stage_spv" },
+			{ EGfxBinaryType_DXIL,  0, "args_u64_stage_dxil" },
+			{ EGfxBinaryType_SPIRV, 1, "args_u64_shader_spv" }
+		};
+		Bool agrees = true;
+
+		for (U64 i = 0; i < sizeof(u64Cases) / sizeof(u64Cases[0]); ++i) {
+
+			ListBuffer bufs = (ListBuffer) { 0 };
+			SHFile file = (SHFile) { 0 };
+			const SBFile *sb = NULL;
+
+			const Bool compiled =
+				compileInlineShaders(
+					alloc, &u64Srcs[u64Cases[i].srcId], 1, u64Cases[i].type, 1, u64Cases[i].prefix, true, &bufs, e_rr
+				) &&
+				bufs.length == 1 && Buffer_length(bufs.ptr[0]) &&
+				readOiSH(alloc, bufs.ptr[0], &file, e_rr) && file.binaries.length >= 1;
+
+			for (U64 j = 0; compiled && j < file.binaries.ptr[0].registers.length && !sb; ++j)
+				if (file.binaries.ptr[0].registers.ptr[j].shaderBuffer.bufferSize)
+					sb = &file.binaries.ptr[0].registers.ptr[j].shaderBuffer;
+
+			const Bool matches =
+				sb && sb->bufferSize == 24 && sb->vars.length == 5 && sb->vars.ptr[2].offset == 8 &&
+				(sb->flags & ESBSettingsFlags_HasSharedLayout);
+
+			if (!matches)
+				Log_debugLn(alloc, "a U64 after a float reflected differently in %s", u64Cases[i].prefix);
+
+			agrees &= matches;
+			SHFile_free(&file, alloc);
+			ListBuffer_freeUnderlying(&bufs, alloc);
+		}
+
+		Test_assert(t, "a U64 after a float lands at 8 with stride 24 wherever the reflection is sound", agrees);
+
+		//The refusal is the expected result of the bug, so the compile stays quiet into a local error
+
+		ListBuffer libBufs = (ListBuffer) { 0 };
+		Error libErr = Error_none();
+
+		const Bool libCompiled = compileInlineShaders(
+			alloc, &u64Srcs[1], 1, (U8) EGfxBinaryType_DXIL, 1, "args_u64_shader_dxil", false, &libBufs, &libErr
+		);
+
+		Test_assert(
+			t, "known DXC bug: a linked DXIL module reflects the U64 at 4, so the shared layout claim refuses [shader]",
+			!libCompiled
+		);
+
+		ListBuffer_freeUnderlying(&libBufs, alloc);
+	}
+
 clean:
 
 	Test_assert(t, "build args produced no error", s_uccess);
@@ -477,6 +699,9 @@ clean:
 	CharString_free(&amended, alloc);
 	ListU32_free(&compiles, alloc);
 	CompileResult_free(&parsed, alloc);
+	ListCompilerLinkStep_freeUnderlying(&steps, alloc);
+	ListBuffer_freeUnderlying(&outBufs, alloc);
+	SHFile_free(&shFile, alloc);
 
 	if(created)
 		Compiler_free(&comp, alloc);

@@ -113,6 +113,7 @@ extern "C" Bool Compiler_processSPIRV(
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
 	Bool keepRegisters,
+	U8 spirvLayout,
 	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,
 	const ListSHEntryRuntime *entries,
@@ -534,7 +535,9 @@ extern "C" Bool Compiler_processSPIRV(
 				if(!binding)
 					continue;
 
-				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, alloc, e_rr));
+				gotoIfError3(clean, Compiler_convertRegisterSPIRV(
+					registers, binding, descriptorSet.set, spirvLayout, alloc, e_rr
+				));
 			}
 		}
 
@@ -560,9 +563,14 @@ extern "C" Bool Compiler_processSPIRV(
 
 			SpvReflectBlockVariable var = spvMod.push_constant_blocks[k];
 
+			//DXC never gives push constants DX's 16-byte rows, packing them tightly under Dx and std430 under Gl,
+			// but under Dx oiSB records them with rows so they stay combinable with DXIL's cbuffer, and an array
+			// or matrix spacing that differs between the two is refused instead of recorded wrong.
+
 			gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
 				&var,
-				false,
+				spirvLayout != ESpirvLayout_Dx,
+				spirvLayout == ESpirvLayout_Dx,
 				alloc,
 				&sbFile,
 				e_rr
@@ -619,7 +627,9 @@ extern "C" Bool Compiler_processSPIRV(
 			}
 
 			if(!found)
-				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, binding->set, alloc, e_rr));
+				gotoIfError3(clean, Compiler_convertRegisterSPIRV(
+					registers, binding, binding->set, spirvLayout, alloc, e_rr
+				));
 		}
 
 	//Strip debug and optimize

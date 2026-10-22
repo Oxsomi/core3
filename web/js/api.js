@@ -34,7 +34,7 @@
  *       flags:{write,array,combined},
  *       bindings:{ spirv:{set,binding}|null /*push const* /, dxil:{letter,binding,space} },
  *       used:{spirv,dxil}, push, texture:{primitive,format}|null,
- *       buffer:{size,padding,packed,vars:[{offset,name,type,stride,arrays,used,children}]}|null  // SBFile (oiSB)
+ *       buffer:{size,padding,packed,sharedLayout,vars:[{offset,name,type,stride,arrays,used,children}]}|null  // SBFile (oiSB)
  *     }]
  *   }],
  *   includes: [{path, crc32c}],                          // SHInclude

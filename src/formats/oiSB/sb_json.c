@@ -172,6 +172,7 @@ Bool SBFile_writeJson(const SBFile *sbFile, JsonWriter *w, Error *e_rr) {
 		JsonWriter_keyU64(w, "size", sbFile->bufferSize, e_rr) &&
 		JsonWriter_keyU64(w, "padding", sbFile->bufferSize > used ? sbFile->bufferSize - used : 0, e_rr) &&
 		JsonWriter_keyBool(w, "packed", (sbFile->flags & ESBSettingsFlags_IsTightlyPacked) != 0, e_rr) &&
+		JsonWriter_keyBool(w, "sharedLayout", (sbFile->flags & ESBSettingsFlags_HasSharedLayout) != 0, e_rr) &&
 		JsonWriter_key(w, "vars", e_rr) &&
 		SBFile_writeJsonVars(sbFile, U16_MAX, w, e_rr) &&
 		JsonWriter_endObject(w, e_rr)

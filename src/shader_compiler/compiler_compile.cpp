@@ -93,6 +93,18 @@ Bool Compiler_buildCompileArgs(
 			0, 0, "Compiler_buildCompileArgs()::settings contains invalid format or outputType"
 		));
 
+	if(settings->spirvLayout >= ESpirvLayout_Count)
+		retError(clean, Error_invalidParameter(
+			0, 0, "Compiler_buildCompileArgs()::settings->spirvLayout out of bounds"
+		));
+
+	//A non Dx layout deliberately diverges from DXIL, so it only compiles when SPIRV is the sole target
+
+	if(settings->spirvLayout != ESpirvLayout_Dx && settings->outputType == EGfxBinaryType_DXIL)
+		retError(clean, Error_invalidParameter(
+			0, 0, "Compiler_buildCompileArgs()::settings->spirvLayout requires a compile that targets SPIRV alone"
+		));
+
 	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
 
 	//Scoped so the gotos above never jump past a live initializer.
@@ -161,7 +173,15 @@ Bool Compiler_buildCompileArgs(
 		if (settings->outputType == EGfxBinaryType_SPIRV) {
 
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr));
+
+			//ESpirvLayout_Gl is dxc's own default, so it passes no layout flag
+
+			if(settings->spirvLayout == ESpirvLayout_Dx) {
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr));
+			}
+
+			else if(settings->spirvLayout == ESpirvLayout_Scalar)
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-scalar-layout", alloc, e_rr));
 
 			//The SPIRV backend drops unused bindings regardless of the unused-resource-bindings mode, so preserve them too
 

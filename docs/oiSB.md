@@ -20,7 +20,7 @@ typedef struct SBHeader {		//Should be aligned to 4-byte
 	U32 magicNumber;			//oiSB (0x4253696F); optional if it's part of an oiSH.
 
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-    U8 flags;					//& 1 = isTightlyPacked
+    U8 flags;					//& 1 = isTightlyPacked, & 2 = hasSharedLayout
     U16 arrays;					//Multi dimensional arrays or 1D arrays geq 32Ki
 
     U16 structs;
@@ -125,11 +125,15 @@ The magic number in the header can only be absent if embedded in another file. A
 
 ESBType: F32x1x4 is defined as a F32x1 (single F32) of 4 (F32x1[4]) with an implied stride of 16. If tightly packing is set in the header (ESBSettingsFlags_IsTightlyPacked), this implied stride becomes 0 (tightly packed). With tightly packed, F32x1x4 is the same size as a F32x4, while without it would be the size of F32x4x4. The order is different than HLSL; where float3x4 = F32x4x3.
 
+These packing rules only bind a layout that sets hasSharedLayout (see below). Without it, oiSB records each variable where the binary put it (a SPIR-V std140, std430 or scalar layout included) and only checks the structure and bounds.
+
 Without the tightly packing flag, HLSL/DX-like CBuffer packing is used. This means that every struct and array needs to start at a 16-byte aligned offset. Matrices also have this, the 2nd+ matrix vector element needs to start at a 16-byte aligned position too. When a type spans a 16-byte boundary, it needs to be aligned to a 16-byte boundary.
 
 With the tightly packing flag, HLSL/DX-like StructuredBuffer packing is used. This means that every struct is aligned to the biggest primitive type (similar to C++) and that the stride for arrays is dependent on that too (so struct of only U8 needs 1-byte alignment, U16 needs 2-byte alignment, U32 needs 4-byte alignment, U64 needs 8-byte alignment). All other types are self aligned, so 8-byte types (U64x2, U64, etc.) need to be 8-byte aligned too.
 
 Overlapping memory is allowed, to allow (future) support for unions.
+
+The hasSharedLayout flag claims the layout is expressible on every backend, so one application-side struct (and one memcpy) serves them all: the packing rules above hold, and every member offset and struct stride is aligned to its scalar alignment (the widest component's size). The claim also ties the packing to the register kind the way DX does (constant buffers and push constants keep 16-byte rows, every other buffer is tightly packed), which oiSH checks when the buffer is added to a register; without the claim a SPIR-V only layout keeps its own packing, such as a scalar layout packing a constant buffer. A file carrying the flag checks these rules while variables are added (so on read too) and again on write, and is refused when it breaks one; a file without the flag records whatever its one binary declares, checked only for structure and bounds, with no cross-backend promise. The shader compiler sets the flag on all DXIL and on SPIR-V compiled with the default dx layout, which turns a layout the backends disagree on into a compile error naming the rule, instead of a combine failure later. SBFile_combine re-derives the flag from the merged result: two binaries agreeing on one valid layout is exactly what the flag promises, so a merge that proves it grants it, whether or not the inputs claimed it. The flag doesn't influence the hash (like the hidden magic number), since it's a claim about the layout, not part of it.
 
 The SBFile's ListSBVar and ListSBStruct can have duplicate names (which is fine), but a single struct (or the shader buffer itself) can't have duplicate names in its members (so `F32 a, a;` would be disallowed). However, duplicate struct names (even in current scope) is allowed.
 
@@ -167,4 +171,6 @@ bytes.
 0.1: Old ocore1 specification. A lot was still relevant, but some useful functionality is missing (such as marking data as 'unused', which can be useful for optimization).
 
 1.2: Basic format specification. Formalized from older version and added some nice to haves such as moving ESHType to ESBType. TextureFormat was used in OxC1, but isn't as nice, as a texture format != variable format (some don't even exist). Also added a missing stride to struct. Struct is now just a container rather than a variable placed at a position.
+
+1.2 (hasSharedLayout): flags gained bit 1, hasSharedLayout, without a version bump. Readers from before the bit treat it as unsupported and refuse any file carrying it, which is deliberate: they predate the claim's validation, so refusing loudly beats accepting a claim they can't check. Files without the claim are unaffected either way.
 

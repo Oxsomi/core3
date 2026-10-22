@@ -330,6 +330,28 @@ Bool File_add(
 		if(!CharString_startsWithStringInsensitive(&resolved, &Platform_instance->defaultDir, 0))
 			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."));
 
+		//Adding a folder that already exists is a no-op, so any caller can ensure an output folder exists.
+		//Adding a file that already exists stays an error, since what its bytes hold is unknown.
+
+		if (type == EFileType_Folder && !createParentOnly) {
+
+			Error errTmp = Error_none();
+			const Bool exists = File_getInfo(&resolved, &info, alloc, &errTmp);
+			const EFileType existingType = info.type;
+			FileInfo_free(&info, alloc);
+
+			if(!exists && errTmp.genericError != EGenericError_NotFound)
+				retError(clean, errTmp);
+
+			if (exists) {
+
+				if(existingType != EFileType_Folder)
+					retError(clean, Error_invalidOperation(1, "File_add() target already exists, but isn't a folder"));
+
+				goto clean;
+			}
+		}
+
 		const CharStringSplit split = (CharStringSplit) {
 			.s = &resolved,
 			.allocator = alloc,

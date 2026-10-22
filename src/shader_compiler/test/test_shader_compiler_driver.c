@@ -278,7 +278,7 @@ void Test_shaderCompilerDriver(Test *t) {
 					1,
 					true,                       //isDebug: the line info -Od exists to protect
 					pass == 1,                  //noOpt on the second pass only
-					false, (ECompilerWarning) 0, false, ECompileType_Compile,
+					false, ESpirvLayout_Dx, (ECompilerWarning) 0, false, ECompileType_Compile,
 					&includeDirs, false, alloc, &buffers, &e2
 				) &&
 				buffers.length == 1 &&
@@ -394,7 +394,7 @@ void Test_shaderCompilerDriver(Test *t) {
 			ListU8_pushBack(&modes, (U8) EGfxBinaryType_DXIL, alloc, NULL) &&
 			Compiler_compileShaders(
 				&files, &texts, &outs, &modes,
-				1, false, false, false, (ECompilerWarning) 0, false, ECompileType_Compile,
+				1, false, false, false, ESpirvLayout_Dx, (ECompilerWarning) 0, false, ECompileType_Compile,
 				&includeDirs, false, alloc, &buffers, &e2
 			) &&
 			buffers.length == 2 &&
@@ -506,7 +506,7 @@ void Test_shaderCompilerDriver(Test *t) {
 				ListU8_pushBack(&modes, (U8) EGfxBinaryType_DXIL, alloc, NULL) &&
 				Compiler_compileShaders(
 					&files, &texts, &outs, &modes,
-					1, false, false, false, (ECompilerWarning) 0, false, ECompileType_Compile,
+					1, false, false, false, ESpirvLayout_Dx, (ECompilerWarning) 0, false, ECompileType_Compile,
 					&includeDirs, false, alloc, &buffers, &e2
 				) &&
 				buffers.length == 2 && Buffer_length(buffers.ptr[1]) &&

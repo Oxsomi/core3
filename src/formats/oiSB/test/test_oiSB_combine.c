@@ -159,15 +159,18 @@ void Test_SBFileAddVarStructIdOutOfBounds(Test *t) {
 	}
 }
 
-//Non-16-byte-aligned offset for a struct variable in standard (non-tightly-packed) mode must fail.
+//A struct variable off a 16-byte row in standard (cbuffer) mode: refused by a file claiming a shared layout,
+// since the row is a DX packing rule, and recorded as declared by a file without the claim.
 void Test_SBFileAddStructVarMisalignedOffset(Test *t) {
 
 	Test_setModule(t, "SBFile validation: misaligned struct var offset in standard mode");
 
-	{
-		SBFile sb = { 0 };
+	for (U8 shared = 0; shared < 2; ++shared) {
 
-		if (!SBFile_create(ESBSettingsFlags_None, 64, t->alloc, &sb, &t->err)) {
+		SBFile sb = { 0 };
+		const ESBSettingsFlags flags = shared ? ESBSettingsFlags_HasSharedLayout : ESBSettingsFlags_None;
+
+		if (!SBFile_create(flags, 64, t->alloc, &sb, &t->err)) {
 			Test_assert(t, "create SBFile misalign", false);
 			goto doneMisalign;
 		}
@@ -176,11 +179,15 @@ void Test_SBFileAddStructVarMisalignedOffset(Test *t) {
 		CharString sName = CharString_createRefCStrConst("S");
 		Test_assert(t, "add struct", SBFile_addStruct(&sb, &sName, s, t->alloc, &t->err));
 
-		//offset=4 is not 16-byte aligned; must fail in standard (cbuffer) mode
+		//offset=4 is not 16-byte aligned; the refusal is the expected result when shared, so e_rr stays NULL
 		CharString vName = CharString_createRefCStrConst("bad");
-		Test_assert(t, "misaligned struct var fails",
-			!SBFile_addVariableAsStruct(&sb, &vName, 4, U16_MAX, 0, ESBVarFlag_None, NULL, t->alloc, NULL)
-		);
+		const Bool added =
+			SBFile_addVariableAsStruct(&sb, &vName, 4, U16_MAX, 0, ESBVarFlag_None, NULL, t->alloc, NULL);
+
+		if (shared)
+			Test_assert(t, "misaligned struct var fails with a shared layout", !added);
+
+		else Test_assert(t, "misaligned struct var is recorded without a shared layout", added);
 
 	doneMisalign:
 		SBFile_free(&sb, t->alloc);

@@ -45,6 +45,9 @@ Bool File_foreach(
 
 Bool File_remove(const CharString *loc, Ns maxTimeout, const Allocator *alloc, Error *e_rr);
 
+//Creates the file or folder at loc, along with any missing parent folders.
+//createParentOnly only ensures the parents and leaves the target itself untouched.
+//A folder that already exists is a no-op; a file that already exists is an error.
 Bool File_add(
 	const CharString *loc,
 	EFileType type,

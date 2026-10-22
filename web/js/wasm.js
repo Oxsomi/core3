@@ -43,6 +43,11 @@ const FLAG = {
   ignoreEmptyFiles: 1 << 5, reflectionOnly: 1 << 6
 };
 
+/* -spirv-layout as a two-bit ESpirvLayout field at bit 8 (EWasmCompileFlag_SpirvLayoutShift); the
+ * compiler refuses non-dx layouts whose target set includes DXIL, so misuse errors rather than lies. */
+const LAYOUT = { dx: 0, gl: 1, scalar: 2 };
+const LAYOUT_SHIFT = 8;
+
 const BACKEND = { spv: 0, spirv: 0, dxil: 1 };
 
 let M = null;                          // the instantiated module
@@ -247,7 +252,7 @@ api.builtinIncludes = async function builtinIncludes() {
   return frame(M._oxc3_builtinIncludes(), "builtinIncludes").doc.includes;
 };
 
-/* OxC3 shader compile. opts mirrors the toolbar: targets, debug, keepRegisters, reflectionOnly,
+/* OxC3 shader compile. opts mirrors the toolbar: targets, debug, keepRegisters, spirvLayout, reflectionOnly,
  * warnUnusedRegisters, warnUnusedConstants, warnBufferPadding, ignoreEmptyFiles. */
 api.compile = async function compile(name, files, opts) {
   const o = opts || {};
@@ -257,6 +262,7 @@ api.compile = async function compile(name, files, opts) {
     mask |= 1 << BACKEND[t];
   let flags = 0;
   for (const key of Object.keys(FLAG)) if (o[key]) flags |= FLAG[key];
+  flags |= (LAYOUT[o.spirvLayout] || 0) << LAYOUT_SHIFT;
 
   beginCapture();
   try {
@@ -349,6 +355,7 @@ api.getCompileArgs = async function getCompileArgs(name, files, opts) {
     mask |= 1 << BACKEND[t];
   let flags = 0;
   for (const key of Object.keys(FLAG)) if (o[key]) flags |= FLAG[key];
+  flags |= (LAYOUT[o.spirvLayout] || 0) << LAYOUT_SHIFT;
   beginCapture();
   try {
     return withPointers(hold =>

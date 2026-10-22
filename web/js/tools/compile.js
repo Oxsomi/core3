@@ -10,6 +10,7 @@ function targets() {
   return ["spv", "dxil"];
 }
 function opts() {
+  const layoutSel = $("#optSpirvLayout");
   return {
     targets: targets(),
     reflectionOnly: $("#optRefl").checked,
@@ -17,11 +18,33 @@ function opts() {
     noOpt: $("#optNoOpt").checked,
     split: $("#optSplit").checked,
     keepRegisters: $("#optKeepReg").checked,
+    spirvLayout: layoutSel.disabled ? "dx" : layoutSel.value,
     warnUnusedRegisters: $("#wUnusedReg").checked,
     warnUnusedConstants: $("#wUnusedConst").checked,
     warnBufferPadding: $("#wPad").checked,
     ignoreEmptyFiles: $("#wIgnoreEmpty").checked
   };
+}
+
+/* ---- -spirv-layout gating ------------------------------------------------------------- */
+
+/* A non-dx layout deliberately diverges from DXIL, so the picker only unlocks when the compile can't
+ * touch DXIL: the target selector picks SPIR-V alone, or every parsed entry targets only SPIR-V
+ * ([[oxc::binary("spirv")]] on each). Mirrors the compiler's own refusal rather than replacing it. */
+function spirvLayoutUnlocked(t, entries) {
+  if (t.length === 1 && t[0] === "spv") return true;
+  return !!(entries && entries.length &&
+    entries.every(e => e.targets && e.targets.length && e.targets.every(x => x === "spirv")));
+}
+
+let lastEntries = null;                              // the active file's parse listing, for re-syncs on target change
+
+function syncSpirvLayout(entries) {
+  if (entries !== undefined) lastEntries = entries;
+  const sel = $("#optSpirvLayout");
+  const unlocked = spirvLayoutUnlocked(targets(), lastEntries);
+  sel.disabled = !unlocked;
+  if (!unlocked) sel.value = "dx";
 }
 
 /* ---- equivalent CLI line ------------------------------------------------------------- */
@@ -33,12 +56,14 @@ function cliLine(fileName, o) {
   if (o.noOpt) parts.push("--no-opt");
   if (o.split) parts.push("--split");
   if (o.keepRegisters) parts.push("--keep-registers");
+  if (o.spirvLayout && o.spirvLayout !== "dx") parts.push(`-spirv-layout ${o.spirvLayout}`);
   if (o.warnUnusedRegisters) parts.push("--warn-unused-registers");
   if (o.warnUnusedConstants) parts.push("--warn-unused-constants");
   if (o.warnBufferPadding) parts.push("--warn-buffer-padding");
   if (o.ignoreEmptyFiles) parts.push("--ignore-empty-files");
   if (o.reflectionOnly) return parts.join(" ").replace("shader compile", "shader reflect")
-    .replace(/ -compile-output \w+/, "");                        // reflect has no -compile-output
+    .replace(/ -compile-output \w+/, "")                         // reflect has no -compile-output
+    .replace(/ -spirv-layout \w+/, "");                          // nor -spirv-layout
   return parts.join(" ");
   // Also valid: `OxC3 compile shaders -format HLSL …` (the pre-`shader`-category spelling),
   // and `-threads 0|50%|4` / `-include-dir <dir>`: the web version uses the file tree as roots.
@@ -190,10 +215,14 @@ async function run(state) {
 
 function wire(onOptionChange, onRawResult) {
   rawHandler = onRawResult || null;
+  /* the layout lock follows the target BEFORE the app re-reads opts, so a locked pick never leaks */
+  $$('input[name="target"]').forEach(r => r.addEventListener("change", () => syncSpirvLayout()));
   $$('input[name="target"]').forEach(r => r.addEventListener("change", onOptionChange));
-  ["optRefl", "optDebug", "optNoOpt", "optSplit", "optKeepReg", "wUnusedReg", "wUnusedConst", "wPad", "wIgnoreEmpty"]
-    .forEach(id => $("#" + id).addEventListener("change", onOptionChange));
+  [
+    "optRefl", "optDebug", "optNoOpt", "optSplit", "optKeepReg", "optSpirvLayout",
+    "wUnusedReg", "wUnusedConst", "wPad", "wIgnoreEmpty"
+  ].forEach(id => $("#" + id).addEventListener("change", onOptionChange));
 }
 
-window.OxCompile = { targets, opts, run, renderCommands, wire, cliLine };
+window.OxCompile = { targets, opts, run, renderCommands, wire, cliLine, spirvLayoutUnlocked, syncSpirvLayout };
 })();

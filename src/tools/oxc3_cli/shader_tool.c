@@ -600,6 +600,11 @@
 		if(!CLI_parseCompileTypes(args, &targetMask, &multipleModes))
 			retError(clean, Error_invalidParameter(0, 0, "CLI_shaderCommands() -compile-output isn't a valid mode"));
 
+		U8 spirvLayout = ESpirvLayout_Dx;
+
+		if(!CLI_parseSpirvLayout(args, &spirvLayout))
+			retError(clean, Error_invalidParameter(0, 0, "CLI_shaderCommands() -spirv-layout isn't a valid layout"));
+
 		CharString includeDir = (CharString) { 0 };
 
 		if (args->parameters & EOperationHasParameter_IncludeDir)
@@ -679,7 +684,7 @@
 
 				gotoIfError3(clean, Compiler_describeCompile(
 					runtime, combinationId, (EGfxBinaryType) bt,
-					isDebug, noOpt, keepRegisters, isRt, isGfxOrComp,
+					isDebug, noOpt, keepRegisters, spirvLayout, isRt, isGfxOrComp,
 					input, parseSettings.string, &includeDirs,
 					&settings, &identifier, e_rr
 				));

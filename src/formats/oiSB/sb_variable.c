@@ -187,20 +187,29 @@ Bool SBFile_addVariableAsType(
 	if (CharString_length(*name) > 128)
 		retError(clean, Error_invalidParameter(1, 0, "SBFile_addVariableAsType()::*name must be leq 128 bytes"));
 
-	//Padding happens each element of an array that isn't 16-byte aligned.
-	//The last element doesn't have padding
+	//Packing rules only bind a file claiming a shared layout, since only there does the layout have to
+	// be the one every backend runs (SBFile_validateSharedLayout checks the same rules on write).
+	//With the claim every member aligns to its scalar size, and a cbuffer keeps DX's 16-byte rows: no
+	// variable straddles one, and each array element that isn't 16-byte aligned is padded to a row.
+	//Without the claim the variable sits where its binary put it (a std140, std430 or scalar SPIR-V
+	// layout included), so bounds are checked against the smallest extent any layout gives it.
 
 	Bool isTightlyPacked = sbFile->flags & ESBSettingsFlags_IsTightlyPacked;
-	U32 size = ESBType_getSize(type, isTightlyPacked);
+	Bool sharedLayout = sbFile->flags & ESBSettingsFlags_HasSharedLayout;
+	Bool cbufferRows = sharedLayout && !isTightlyPacked;
+
+	U32 size = ESBType_getSize(type, !cbufferRows);
 	U8 typeSize = 1 << ESBType_getStride(type);
 
-	if (isTightlyPacked && ((offset + size - 1) >> 4) != (offset >> 4) && (offset & 15))
-		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset spans 16 bytes, not tightly packed"));
-
-	if (!isTightlyPacked && (offset & (typeSize - 1)))
+	if (sharedLayout && (offset & (typeSize - 1)))
 		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset doesn't follow req type alignment"));
 
-	U64 totalSizeBytes = isTightlyPacked ? size : ((size + 15) & ~15);
+	if (cbufferRows && ((offset + size - 1) >> 4) != (offset >> 4) && (offset & 15))
+		retError(clean, Error_invalidParameter(
+			5, 0, "SBFile_addVariableAsType()::offset makes the variable straddle a 16-byte cbuffer row"
+		));
+
+	U64 totalSizeBytes = cbufferRows ? ((size + 15) & ~15) : size;
 
 	if(arrays)
 		for (U64 i = 0; i < arrays->length; ++i) {
@@ -219,7 +228,7 @@ Bool SBFile_addVariableAsType(
 				));
 		}
 
-	if(!isTightlyPacked && (size & 15))
+	if(cbufferRows && (size & 15))
 		totalSizeBytes -= 16 - (size & 15);
 
 	size = (U32) totalSizeBytes;
@@ -247,7 +256,10 @@ Bool SBFile_addVariableAsType(
 
 		SBStruct strc = sbFile->structs.ptr[var.structId];
 
-		if (isTightlyPacked && (var.offset & (typeSize - 1)) && ((var.offset + strc.stride) & (typeSize - 1)))
+		if (
+			sharedLayout && isTightlyPacked &&
+			(var.offset & (typeSize - 1)) && ((var.offset + strc.stride) & (typeSize - 1))
+		)
 			retError(clean, Error_invalidState(0, "SBFile_addVariableAsType() parent struct doesn't respect alignment"));
 	}
 
@@ -391,11 +403,13 @@ Bool SBFile_addVariableAsStruct(
 	if(CharString_length(*name) > 128)
 		retError(clean, Error_invalidParameter(1, 0, "SBFile_addVariableAsStruct()::*name must be leq 128 bytes"));
 
-	//Alignment: starts at 16 byte boundary if CBuffer
+	//A cbuffer struct starts a new 16-byte row, a packing rule that only binds a file claiming a shared
+	// layout (see SBFile_addVariableAsType).
 
-	Bool isTightlyPacked = sbFile->flags & ESBSettingsFlags_IsTightlyPacked;
+	Bool cbufferRows =
+		(sbFile->flags & ESBSettingsFlags_HasSharedLayout) && !(sbFile->flags & ESBSettingsFlags_IsTightlyPacked);
 
-	if(!isTightlyPacked && (offset & 15))
+	if(cbufferRows && (offset & 15))
 		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsStruct()::offset needs 16-byte alignment"));
 
 	SBStruct strc = sbFile->structs.ptr[structId];

@@ -381,3 +381,246 @@ void Test_SBFileHashConsistency(Test *t) {
 		SBFile_free(&b, t->alloc);
 	}
 }
+
+//The shared layout claim: validation refuses misaligned layouts on flagged files, leaves unflagged
+// files free, and SBFile_combine grants the flag when the merged layout proves the rule.
+
+void Test_SBFileSharedLayout(Test *t) {
+
+	Test_setModule(t, "SBFile shared layout");
+
+	//Packing rules bind a file only through the claim, so each case builds its layout with and without it.
+
+	const ESBSettingsFlags packedShared = ESBSettingsFlags_IsTightlyPacked | ESBSettingsFlags_HasSharedLayout;
+
+	//uint pad; uint4 test; with test at 4, in all four claim and packing combinations.
+	//A cbuffer keeps DX's 16-byte rows only under the claim, so there test straddles a row and is refused
+	// while adding; unclaimed it is recorded (the scalar SPIR-V layout puts it there) and the probe reports
+	// the same straddle, which is what keeps combine from promoting a file that wouldn't read back.
+	//Tightly packed, 4 is the structured buffer layout itself and is accepted either way.
+
+	static const C8 *rowLabels[2][2] = {
+		{ "an unclaimed cbuffer records a U32x4 straddling a row", "an unclaimed structured buffer keeps a U32x4 at 4" },
+		{ "a shared cbuffer refuses a U32x4 straddling a row", "a shared structured buffer keeps a U32x4 at 4" }
+	};
+
+	for (U8 shared = 0; shared < 2; ++shared)
+		for (U8 packed = 0; packed < 2; ++packed) {
+
+			SBFile rows = { 0 };
+
+			const ESBSettingsFlags rowFlags = (ESBSettingsFlags) (
+				(shared ? ESBSettingsFlags_HasSharedLayout : ESBSettingsFlags_None) |
+				(packed ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None)
+			);
+
+			if (!SBFile_create(rowFlags, 32, t->alloc, &rows, &t->err)) {
+				Test_assert(t, "create row layout", false);
+				continue;
+			}
+
+			CharString padName = CharString_createRefCStrConst("pad");
+			CharString testName = CharString_createRefCStrConst("test");
+
+			const Bool padOk = SBFile_addVariableAsType(
+				&rows, &padName, 0, U16_MAX, ESBType_U32, ESBVarFlag_None, NULL, t->alloc, &t->err
+			);
+
+			//The refusal is the expected result for a shared cbuffer, so e_rr stays NULL
+
+			const Bool testOk = SBFile_addVariableAsType(
+				&rows, &testName, 4, U16_MAX, ESBType_U32x4, ESBVarFlag_None, NULL, t->alloc, NULL
+			);
+
+			const Bool valid = SBFile_validateSharedLayout(&rows, NULL);
+
+			Bool expected = padOk && testOk && valid;
+
+			if (shared && !packed)
+				expected = padOk && !testOk;
+
+			else if (!shared && !packed)
+				expected = padOk && testOk && !valid;
+
+			Test_assert(t, rowLabels[shared][packed], expected);
+			SBFile_free(&rows, t->alloc);
+		}
+
+	//A U64 at offset 4 breaks the scalar alignment rule; at 8 it keeps it
+
+	{
+		SBFile bad = { 0 };
+		SBFile good = { 0 };
+
+		//bad is built without the claim, where a U64 at 4 is recorded as declared, and only then claims a
+		// shared layout it can't keep, the way a stale or hand edited file would arrive.
+
+		Bool made =
+			SBFile_create(ESBSettingsFlags_IsTightlyPacked, 16, t->alloc, &bad, &t->err) &&
+			SBFile_create(packedShared, 16, t->alloc, &good, &t->err);
+
+		Test_assert(t, "create layouts", made);
+
+		if (made) {
+
+			CharString a0 = CharString_createRefCStrConst("a");
+			CharString c0 = CharString_createRefCStrConst("c");
+			CharString a1 = CharString_createRefCStrConst("a");
+			CharString c1 = CharString_createRefCStrConst("c");
+			CharString c2 = CharString_createRefCStrConst("c2");
+
+			Bool built =
+				SBFile_addVariableAsType(&bad, &a0, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(&bad, &c0, 4, U16_MAX, ESBType_U64, ESBVarFlag_None, NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(&good, &a1, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(&good, &c1, 8, U16_MAX, ESBType_U64, ESBVarFlag_None, NULL, t->alloc, &t->err);
+
+			bad.flags = (ESBSettingsFlags) (bad.flags | ESBSettingsFlags_HasSharedLayout);
+
+			Test_assert(t, "build layouts", built);
+			Test_assert(t, "misaligned U64 fails validation", !SBFile_validateSharedLayout(&bad, NULL));
+			Test_assert(t, "aligned U64 passes validation", SBFile_validateSharedLayout(&good, NULL));
+
+			//Refusals are the expected results below, so e_rr stays NULL on each negative call
+
+			U64 off = 0;
+			Test_assert(t, "flagged write refuses the broken claim", !SBFile_write(&bad, t->alloc, NULL, &off, NULL));
+
+			off = 0;
+			Test_assert(t, "flagged write keeps the valid claim", SBFile_write(&good, t->alloc, NULL, &off, &t->err));
+
+			Test_assert(
+				t, "a claimed file refuses a misaligned U64 while adding",
+				!SBFile_addVariableAsType(&good, &c2, 4, U16_MAX, ESBType_U64, ESBVarFlag_None, NULL, t->alloc, NULL)
+			);
+		}
+
+		SBFile_free(&bad, t->alloc);
+		SBFile_free(&good, t->alloc);
+	}
+
+	//Without the flag the same broken layout writes freely; only the probe reports it
+
+	{
+		SBFile any = { 0 };
+
+		if (SBFile_create(ESBSettingsFlags_IsTightlyPacked, 16, t->alloc, &any, &t->err)) {
+
+			CharString a0 = CharString_createRefCStrConst("a");
+			CharString c0 = CharString_createRefCStrConst("c");
+
+			Bool built =
+				SBFile_addVariableAsType(&any, &a0, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(&any, &c0, 4, U16_MAX, ESBType_U64, ESBVarFlag_None, NULL, t->alloc, &t->err);
+
+			U64 off = 0;
+			Test_assert(t, "unflagged probe still reports", built && !SBFile_validateSharedLayout(&any, NULL));
+			Test_assert(t, "unflagged write stays free", built && SBFile_write(&any, t->alloc, NULL, &off, &t->err));
+		}
+
+		else Test_assert(t, "create unflagged file", false);
+
+		SBFile_free(&any, t->alloc);
+	}
+
+	//A struct whose stride isn't aligned to its widest member breaks the claim too
+
+	{
+		SBFile strided = { 0 };
+
+		if (SBFile_create(packedShared, 12, t->alloc, &strided, &t->err)) {
+
+			CharString structName = CharString_createRefCStrConst("S");
+			CharString rootName = CharString_createRefCStrConst("s");
+			CharString memberName = CharString_createRefCStrConst("c");
+
+			Bool built =
+				SBFile_addStruct(&strided, &structName, (SBStruct) { .stride = 12 }, t->alloc, &t->err) &&
+				SBFile_addVariableAsStruct(&strided, &rootName, 0, U16_MAX, 0, ESBVarFlag_None, NULL, t->alloc, &t->err) &&
+				SBFile_addVariableAsType(&strided, &memberName, 0, 0, ESBType_U64, ESBVarFlag_None, NULL, t->alloc, &t->err);
+
+			Test_assert(
+				t, "12 byte stride with a U64 member fails validation",
+				built && !SBFile_validateSharedLayout(&strided, NULL)
+			);
+		}
+
+		else Test_assert(t, "create strided file", false);
+
+		SBFile_free(&strided, t->alloc);
+	}
+
+	//The merge grants the claim it just proved, and drops it for a layout it can't
+
+	{
+		SBFile a = { 0 };
+		SBFile b = { 0 };
+		SBFile combined = { 0 };
+
+		Bool made =
+			SBFile_create(ESBSettingsFlags_IsTightlyPacked, 16, t->alloc, &a, &t->err) &&
+			SBFile_create(packedShared, 16, t->alloc, &b, &t->err);
+
+		if (made) {
+
+			CharString nameA = CharString_createRefCStrConst("c");
+			CharString nameB = CharString_createRefCStrConst("c");
+
+			Bool built =
+				SBFile_addVariableAsType(
+					&a, &nameA, 8, U16_MAX, ESBType_U64, ESBVarFlag_IsUsedVarSPIRV, NULL, t->alloc, &t->err
+				) &&
+				SBFile_addVariableAsType(
+					&b, &nameB, 8, U16_MAX, ESBType_U64, ESBVarFlag_IsUsedVarDXIL, NULL, t->alloc, &t->err
+				);
+
+			Test_assert(
+				t, "flag mismatch between inputs still merges",
+				built && SBFile_combine(&a, &b, t->alloc, &combined, &t->err)
+			);
+			Test_assert(t, "the proven merge carries the claim", (combined.flags & ESBSettingsFlags_HasSharedLayout) != 0);
+		}
+
+		else Test_assert(t, "create promotion pair", false);
+
+		SBFile_free(&a, t->alloc);
+		SBFile_free(&b, t->alloc);
+		SBFile_free(&combined, t->alloc);
+	}
+
+	{
+		SBFile a = { 0 };
+		SBFile b = { 0 };
+		SBFile combined = { 0 };
+
+		Bool made =
+			SBFile_create(ESBSettingsFlags_IsTightlyPacked, 16, t->alloc, &a, &t->err) &&
+			SBFile_create(ESBSettingsFlags_IsTightlyPacked, 16, t->alloc, &b, &t->err);
+
+		if (made) {
+
+			CharString nameA = CharString_createRefCStrConst("c");
+			CharString nameB = CharString_createRefCStrConst("c");
+
+			Bool built =
+				SBFile_addVariableAsType(
+					&a, &nameA, 4, U16_MAX, ESBType_U64, ESBVarFlag_IsUsedVarSPIRV, NULL, t->alloc, &t->err
+				) &&
+				SBFile_addVariableAsType(
+					&b, &nameB, 4, U16_MAX, ESBType_U64, ESBVarFlag_IsUsedVarDXIL, NULL, t->alloc, &t->err
+				);
+
+			Test_assert(
+				t, "agreeing broken layouts still merge",
+				built && SBFile_combine(&a, &b, t->alloc, &combined, &t->err)
+			);
+			Test_assert(t, "the unprovable merge stays unclaimed", !(combined.flags & ESBSettingsFlags_HasSharedLayout));
+		}
+
+		else Test_assert(t, "create unpromoted pair", false);
+
+		SBFile_free(&a, t->alloc);
+		SBFile_free(&b, t->alloc);
+		SBFile_free(&combined, t->alloc);
+	}
+}

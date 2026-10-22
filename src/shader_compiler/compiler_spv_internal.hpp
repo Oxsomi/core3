@@ -29,7 +29,8 @@
 // (compiler_spv.cpp, compiler_spv_capability.cpp, compiler_spv_reflect.cpp)
 //These have C++ linkage and are not part of the public compiler interface.
 
-Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_rr);
+//isPacked: the buffer's packing, which decides the matrix stride oiSB can describe.
+Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Bool isPacked, Error *e_rr);
 
 Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *extension, Error *e_rr);
 
@@ -47,9 +48,17 @@ Bool Compiler_convertMemberSPIRV(
 	Error *e_rr
 );
 
+//sharedLayout: only the Dx SPIRV layout matches DXIL, so only its buffers claim
+// ESBSettingsFlags_HasSharedLayout (and with it oiSB's packing rules); gl and scalar buffers are
+// recorded exactly as the binary declares them.
+//isPacked follows the layout as well: scalar spaces every buffer back to back, while Dx and gl keep
+// 16-byte rows for uniform buffers only.
+//A stride the packing can't describe is refused.
+
 Bool Compiler_convertShaderBufferSPIRV(
 	SpvReflectBlockVariable *block,
 	Bool isPacked,
+	Bool sharedLayout,
 	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
@@ -59,6 +68,7 @@ Bool Compiler_convertRegisterSPIRV(
 	ListSHRegisterRuntime *registers,
 	SpvReflectDescriptorBinding *binding,
 	U32 expectedSet,
+	U8 spirvLayout,        //ESpirvLayout; decides both the shared claim and the packing
 	const Allocator *alloc,
 	Error *e_rr
 );

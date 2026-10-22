@@ -337,6 +337,8 @@ clean:
 	SHFile_free(&fg, alloc);
 }
 
+static const C8 *corpusLayoutNames[] = { "dx", "gl", "scalar" };
+
 //End-to-end snapshot test: enumerate the whole test/hlsl corpus (relative to the working directory,
 // which CMake points at the corpus folder) and run it through the real pipeline
 // (preprocess -> DXC compile -> reflect -> link -> oiSH assembly) targeting SPIRV, entirely in memory.
@@ -379,6 +381,8 @@ void Test_shaderCompilerCorpus(Test *t) {
 	#endif
 
 	CharString refPath = CharString_createNull();
+	CharString layoutLabel = CharString_createNull();
+	U64 layoutBuffers = 0;
 
 	//A disassembler used only to emit before/after SPIRV text on a byte-snapshot mismatch (see below).
 	Compiler disasmComp = (Compiler) { 0 };
@@ -432,6 +436,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 		false,                              //isDebug
 		false,                              //noOpt
 		false,                              //keepRegisters
+		ESpirvLayout_Dx,
 		(ECompilerWarning) 0,               //no extra warnings
 		true,                               //ignoreEmptyFiles
 		ECompileType_Compile,
@@ -467,6 +472,17 @@ void Test_shaderCompilerCorpus(Test *t) {
 		));
 
 		const CharString ref = CharString_createRefStrConst(refPath);
+
+		//Whatever the reference says, the buffers the oiSH records have to be the ones its SPIR-V reads
+
+		CharString_free(&layoutLabel, alloc);
+
+		gotoIfError3(clean, CharString_format(
+			alloc, &layoutLabel, e_rr, "%.*s records the buffer layouts its SPIR-V declares",
+			(int) CharString_length(ref), ref.ptr
+		));
+
+		Test_assert(t, layoutLabel.ptr, oiSHDescribesSpirvLayout(alloc, produced, ref.ptr, &layoutBuffers));
 
 		if (File_has(&ref, alloc)) {
 
@@ -517,6 +533,68 @@ void Test_shaderCompilerCorpus(Test *t) {
 			Log_warnLn(alloc, "Generated missing reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr);
 			Test_assert(t, ref.ptr, false);         //Red until the new reference is reviewed & committed
 		}
+	}
+
+	//A corpus that reflects no buffers would pass the layout check without comparing anything
+
+	Log_debugLn(alloc, "compared %" PRIu64 " SPIR-V buffer layouts against their decorations", layoutBuffers);
+	Test_assert(t, "the corpus compared SPIR-V buffer layouts against their decorations", layoutBuffers > 0);
+
+	//The SPIR-V only layouts aren't pinned, the dx compile above is, but the corpus has to compile under them too and
+	// record the buffer layouts each binary declares.
+
+	for (U8 layout = ESpirvLayout_Gl; layout < ESpirvLayout_Count; ++layout) {
+
+		ListBuffer layoutBufs = (ListBuffer) { 0 };
+		Error layoutErr = Error_none();
+		U64 comparedUnderLayout = 0;
+
+		Compiler_compileShaders(
+			&allFiles, &allShaderText, &allOutputs, &allCompileModes,
+			1, false, false, false, layout, (ECompilerWarning) 0, true, ECompileType_Compile, &includeDirs,
+			true,                               //enableLogging
+			alloc, &layoutBufs, &layoutErr
+		);
+
+		for (U64 i = 0; i < allBuffers.length && i < layoutBufs.length; ++i) {
+
+			if (!Buffer_length(allBuffers.ptr[i]))
+				continue;
+
+			const CharString out = allOutputs.ptr[i];
+
+			CharString_free(&layoutLabel, alloc);
+
+			const Bool formatted = CharString_format(
+				alloc, &layoutLabel, NULL, "%.*s under -spirv-layout %s records the buffer layouts its SPIR-V declares",
+				(int) CharString_length(out), out.ptr, corpusLayoutNames[layout]
+			);
+
+			if (!formatted)
+				layoutLabel = CharString_createRefStrConst(out);
+
+			//A refused shader comes back empty, after the compile logged why
+
+			Test_assert(
+				t, layoutLabel.ptr,
+				Buffer_length(layoutBufs.ptr[i]) &&
+				oiSHDescribesSpirvLayout(alloc, layoutBufs.ptr[i], layoutLabel.ptr, &comparedUnderLayout)
+			);
+		}
+
+		Log_debugLn(
+			alloc, "compared %" PRIu64 " SPIR-V buffer layouts under -spirv-layout %s",
+			comparedUnderLayout, corpusLayoutNames[layout]
+		);
+
+		Test_assert(
+			t, layout == ESpirvLayout_Gl ?
+				"the corpus compared buffer layouts under -spirv-layout gl" :
+				"the corpus compared buffer layouts under -spirv-layout scalar",
+			comparedUnderLayout > 0
+		);
+
+		ListBuffer_freeUnderlying(&layoutBufs, alloc);
 	}
 
 	//--- oiSR reflection snapshot: reflect every corpus source into an oiSR (frontend symbol AST) and byte-snapshot
@@ -910,7 +988,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
 			) &&
 			Compiler_compileShaders(
-				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, false, false, (ECompilerWarning) 0, true,
+				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, false, false, ESpirvLayout_Dx, (ECompilerWarning) 0, true,
 				ECompileType_Compile, &includeDirs, true, alloc, &dxBuffers, &dxErr
 			);
 
@@ -949,6 +1027,7 @@ clean:
 
 	Buffer_free(&golden, alloc);
 	CharString_free(&refPath, alloc);
+	CharString_free(&layoutLabel, alloc);
 	ListBuffer_freeUnderlying(&allBuffers, alloc);
 	ListCharString_freeUnderlying(&allFiles, alloc);
 	ListCharString_freeUnderlying(&allShaderText, alloc);

@@ -602,6 +602,7 @@ clean:
 			false,                              //isDebug
 			false,                              //noOpt
 			false,                              //keepRegisters
+			ESpirvLayout_Dx,
 			(ECompilerWarning) 0,
 			false,                              //ignoreEmptyFiles
 			ECompileType_Compile,

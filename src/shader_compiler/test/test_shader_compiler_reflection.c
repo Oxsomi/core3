@@ -147,6 +147,33 @@ void Test_shaderCompilerReflection(Test *t) {
 			CharString_free(&label, alloc);
 		}
 
+		//A stride with tail padding: PaddedTail's members end at 22 bytes but the U64 aligns the element
+		// stride to 24. The SPIRV side has to take the decorated ArrayStride over spirv-reflect's summed
+		// size (KhronosGroup/SPIRV-Reflect#280, handled in Compiler_convertShaderBufferSPIRV) or the two
+		// backends falsely refuse to combine.
+		{
+			const SHRegisterRuntime *r = ok ? findReg(&sh, "padBuf") : NULL;
+			if (!CharString_format(alloc, &label, &err, "padBuf element stride is 24 (%s)", bk))
+				label = CharString_createRefCStrConst("padBuf stride");
+			Test_assert(t, label.ptr, r && r->shaderBuffer.bufferSize == 24);
+			CharString_free(&label, alloc);
+		}
+
+		//A vector crossing a 16-byte boundary inside a structured buffer: test at 4, stride 20.
+		//Only cbuffers keep 16-byte rows, so the shared layout's packing rules accept it on both backends.
+		{
+			const SHRegisterRuntime *r = ok ? findReg(&sh, "straddleBuf") : NULL;
+			const SBFile *sb = r ? &r->shaderBuffer : NULL;
+			if (!CharString_format(alloc, &label, &err, "straddleBuf keeps test at 4 with stride 20 (%s)", bk))
+				label = CharString_createRefCStrConst("straddleBuf layout");
+			Test_assert(
+				t, label.ptr,
+				sb && sb->bufferSize == 20 && sb->vars.length == 3 && sb->vars.ptr[2].offset == 4 &&
+				(sb->flags & ESBSettingsFlags_HasSharedLayout)
+			);
+			CharString_free(&label, alloc);
+		}
+
 		//The binding for the backend we actually compiled is populated; other backends' slots stay U32_MAX
 		//(this per-backend duality is what lets SHFile_combine merge a SPIRV + DXIL binary's bindings).
 		{

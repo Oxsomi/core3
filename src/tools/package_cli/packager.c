@@ -826,6 +826,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 					settings->isDebug,
 					false,                        //noOpt; packaged shaders stay optimized even with symbols on
 					false,                        //keepRegisters; engine shaders keep the default (strip-friendly) mode
+					ESpirvLayout_Dx,
 					settings->extraWarnings,
 					settings->ignoreEmptyFiles,
 					ECompileType_Compile,
