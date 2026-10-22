@@ -21,7 +21,8 @@ What the platform provides from then on:
 - **The allocator.** Every allocation goes through it and is tracked, so the leaks left at exit are reported, in a
   debug build with where they were allocated. A custom allocator reports its own allocations to the same tracking.
 - **The machine.** CPU vendor, features and topology (physical and logical cores, hybrid core counts, caches),
-  and installed and available memory.
+  and installed and available memory, and where the system enforces a commit limit (Windows), how much the system can
+  still commit.
 - **The environment.** Variables read as UTF-8 on every platform, Windows included, with typed readers that refuse
   a malformed value rather than reading it as a default. The C++ layer (`oxc::env`) reads any integer or float
   width with its range checked, comma separated lists, and a settings form that logs a malformed value by name. An empty variable is unset everywhere, since Windows cannot
@@ -47,7 +48,9 @@ file systems an application mounts itself, and for network paths.
 
 Every call that opens a file takes a timeout: how long a failed open is retried before it fails. It defaults to 0
 everywhere, `FileHandle::open` and `FileStream::open` included, so a missing file fails at once. Pass a timeout only
-to wait out another process holding the file; `U64_MAX` retries a file that never appears forever.
+to wait out another process holding the file; `U64_MAX` retries a file that never appears forever. Between two tries
+the call sleeps a quarter of the timeout it was given plus a nanosecond, at most a second, and the same between every
+pair of tries (`File_retryPause`), so a long or unlimited timeout polls once a second rather than spinning.
 
 In CMake, a section is added with `add_virtual_files(TARGET t NAME section ROOT folder SELF dir)`, a dependency on
 another target's sections with `add_virtual_dependencies`, and both are applied by `apply_dependencies`.

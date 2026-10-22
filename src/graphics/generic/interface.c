@@ -456,6 +456,12 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 	}
 
+	U64 GraphicsDevice_getMemoryLimitExt(GraphicsDevice *device, Bool isDeviceLocal) {
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].deviceGetMemoryLimit(
+			device, isDeviceLocal
+		);
+	}
+
 	Bool GraphicsDevice_loadPipelineCacheExt(GraphicsDevice *device, Buffer driverData, Bool *accepted, Error *e_rr) {
 		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].deviceLoadPipelineCache(
 			device, driverData, accepted, e_rr

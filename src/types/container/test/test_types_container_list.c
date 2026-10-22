@@ -26,6 +26,8 @@
 #include "types/container/list_basic_types.h"
 #include "types/container/list_impl.h"
 #include "types/base/algorithm.h"
+#include "types/base/allocator.h"
+#include "types/base/buffer_base.h"
 
 //A 64 byte element, so GenericList_alignment derives 64 from the stride and the list goes through the aligned
 // allocator instead of the plain one.
@@ -60,6 +62,31 @@ static ECompareResult cmpU32ByKey(const void *a, const void *b, void *context) {
 	const U32 *keys = (const U32*) context;
 	const U32 x = keys[*(const U32*) a], y = keys[*(const U32*) b];
 	return x < y ? ECompareResult_Lt : (x > y ? ECompareResult_Gt : ECompareResult_Eq);
+}
+
+//Counts the allocations that are still alive, so a test can tell that a free left something behind
+// without depending on the leak report at the end of the suite.
+
+typedef struct CountingAllocator {
+	const Allocator *inner;
+	I64 live;
+} CountingAllocator;
+
+static Bool CountingAllocator_alloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
+
+	CountingAllocator *counting = (CountingAllocator*) allocator;
+
+	if(!counting->inner->alloc(counting->inner->ptr, length, output, e_rr))
+		return false;
+
+	++counting->live;
+	return true;
+}
+
+static void CountingAllocator_free(void *allocator, Buffer buf) {
+	CountingAllocator *counting = (CountingAllocator*) allocator;
+	--counting->live;
+	counting->inner->free(counting->inner->ptr, buf);
 }
 
 void Test_list(Test *t) {
@@ -439,6 +466,36 @@ void Test_list(Test *t) {
 
 		ListOverAligned_free(&l, alloc);
 		Test_assert(t, "freed clean", !l.ptr && !l.length);
+	}
+
+	// -- Freeing the elements of a list of lists ------------------------------------------------------
+
+	Test_setModule(t, "List/FreeUnderlying");
+
+	//More entries than a 16 bit index can count: a list longer than 65535 has to be walked with a full width index.
+	//The counting allocator checks that every element list is freed.
+
+	{
+		CountingAllocator counting = (CountingAllocator) { .inner = alloc };
+		const Allocator countingAlloc = (Allocator) {
+			.ptr = &counting, .alloc = CountingAllocator_alloc, .free = CountingAllocator_free
+		};
+
+		ListListU32 lists = (ListListU32) { 0 };
+		const U64 count = 70000;
+
+		Test_assert(t, "resize", ListListU32_resize(&lists, count, &countingAlloc, e_rr));
+
+		Bool created = lists.length == count;
+
+		for(U64 i = 0; created && i < count; ++i)
+			created &= ListU32_create(1, &countingAlloc, &lists.ptrNonConst[i], e_rr);
+
+		Test_assert(t, "elements created", created && counting.live == (I64) count + 1);
+
+		ListListU32_freeUnderlying(&lists, &countingAlloc);
+		Test_assert(t, "freeUnderlying empties", !lists.length && !lists.ptr);
+		Test_assert(t, "freeUnderlying frees every element", counting.live == 0);
 	}
 
 	Test_setModule(t, NULL);

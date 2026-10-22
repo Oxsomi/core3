@@ -380,11 +380,18 @@ typedef enum EGraphicsFeatures2 {
 	EGraphicsFeatures2_ExperimentTier1          = 1 << 13,
 	EGraphicsFeatures2_ExperimentTier2          = 1 << 14,
 
+	//Packed 4 x 8 bit integer dot products with a 32 bit accumulate in shaders (ESHExtension2_IntegerDot4x8:
+	// dot4add_i8packed, which is OpSDot over a packed vector on SPIR-V).
+	//D3D12 always, as shader model 6.4 is below the 6.5 a device needs here.
+	//Vulkan with VK_KHR_shader_integer_dot_product's shaderIntegerDotProduct.
+
+	EGraphicsFeatures2_IntegerDot4x8            = 1 << 15,
+
 	EGraphicsFeatures2_RaytracingFeats           =
 		EGraphicsFeatures2_RayReorderActual | EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS |
 		EGraphicsFeatures2_RayIndirectASBuild | EGraphicsFeatures2_RayMicromapOpacityActual | EGraphicsFeatures2_RaySoftware,
 
-	EGraphicsFeatures2_Count                    = 15
+	EGraphicsFeatures2_Count                    = 16
 
 } EGraphicsFeatures2;
 

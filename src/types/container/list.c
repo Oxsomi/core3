@@ -48,7 +48,7 @@ void ListBuffer_freeUnderlying(ListBuffer *list, const Allocator *alloc) {
 	if(!list)
 		return;
 
-	for(U16 i = 0; i < list->length; ++i)
+	for(U64 i = 0; i < list->length; ++i)
 		Buffer_free(&list->ptrNonConst[i], alloc);
 
 	ListBuffer_free(list, alloc);
@@ -59,7 +59,7 @@ void ListListU8_freeUnderlying(ListListU8 *list, const Allocator *alloc) {
 	if(!list)
 		return;
 
-	for(U16 i = 0; i < list->length; ++i)
+	for(U64 i = 0; i < list->length; ++i)
 		ListU8_free(&list->ptrNonConst[i], alloc);
 
 	ListListU8_free(list, alloc);
@@ -70,7 +70,7 @@ void ListListU16_freeUnderlying(ListListU16 *list, const Allocator *alloc) {
 	if(!list)
 		return;
 
-	for(U16 i = 0; i < list->length; ++i)
+	for(U64 i = 0; i < list->length; ++i)
 		ListU16_free(&list->ptrNonConst[i], alloc);
 
 	ListListU16_free(list, alloc);
@@ -81,7 +81,7 @@ void ListListU32_freeUnderlying(ListListU32 *list, const Allocator *alloc) {
 	if(!list)
 		return;
 
-	for(U16 i = 0; i < list->length; ++i)
+	for(U64 i = 0; i < list->length; ++i)
 		ListU32_free(&list->ptrNonConst[i], alloc);
 
 	ListListU32_free(list, alloc);
@@ -92,7 +92,7 @@ void ListListU64_freeUnderlying(ListListU64 *list, const Allocator *alloc) {
 	if(!list)
 		return;
 
-	for(U16 i = 0; i < list->length; ++i)
+	for(U64 i = 0; i < list->length; ++i)
 		ListU64_free(&list->ptrNonConst[i], alloc);
 
 	ListListU64_free(list, alloc);

@@ -214,7 +214,11 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		.memory = requirements.memoryRequirements,
 		.buffer = bufExt->buffer,
 		.flags =
-			(buf->resource.flags & EGraphicsResourceFlag_CPUReadBit ? EVkBlockFlags_Readback : EVkBlockFlags_None) |
+			(
+				buf->resource.flags & (EGraphicsResourceFlag_CPUReadBit | EGraphicsResourceFlag_HostMemoryReadBit) ?
+				EVkBlockFlags_Readback : EVkBlockFlags_None
+			) |
+			(buf->resource.flags & EGraphicsResourceFlag_HostMemoryBit ? EVkBlockFlags_HostMemory : EVkBlockFlags_None) |
 			(dedicatedReq.requiresDedicatedAllocation ? EVkBlockFlags_RequiresDedicated : EVkBlockFlags_None) |
 			(dedicatedReq.prefersDedicatedAllocation ? EVkBlockFlags_PrefersDedicated : EVkBlockFlags_None) |
 			(buf->usage & EDeviceBufferUsage_ASExt ? EVkBlockFlags_HighPriority : EVkBlockFlags_None)
@@ -242,6 +246,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	if (block.mappedMemoryExt)
 		buf->resource.mappedMemoryExt = block.mappedMemoryExt + buf->resource.blockOffset;
+
+	//HostMemoryRead without a cached memory type: the CPU's reads would be uncached, which DeviceBufferRef_hostMemory reports
+
+	buf->resource.hostUncached =
+		(buf->resource.flags & EGraphicsResourceFlag_HostMemoryReadBit) &&
+		!(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
 	//New device local memory is committed here, where D3D12 commits a heap, rather than in the first frame that uses
 	// it. Mapping doesn't commit it: ReBAR memory is mapped and still paid in its first frame. Host memory (staging,
@@ -520,7 +530,14 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 
 				//Allocate new staging buffer.
 
-				U64 newSize = prevSize * 2 + allocRange * 3;
+				const U64 newSize = GraphicsDeviceRef_stagingSizeFor(deviceRef, prevSize, allocRange);
+
+				if(!newSize)
+					retError(clean, Error_outOfBounds(
+						0, allocRange, device->info.capabilities.maxBufferSize / 3,
+						"DeviceBufferRef_flush() upload doesn't fit a third of the largest staging buffer"
+					));
+
 				gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
 				gotoIfError3(clean, AllocationBuffer_allocateBlock(
 					&(AllocationBufferAllocate) {

@@ -375,6 +375,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceShaderIntegerDotProductFeatures,
+		feat2 & EGraphicsFeatures2_IntegerDot4x8,
+		(VkPhysicalDeviceShaderIntegerDotProductFeatures) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES,
+			.shaderIntegerDotProduct = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceAddressBindingReportFeaturesEXT,
 		featEx & EVkGraphicsFeatures_AddressBindingReport,
 		(VkPhysicalDeviceAddressBindingReportFeaturesEXT) {
@@ -754,6 +763,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_ExperimentTier1:              on = feat2 & EGraphicsFeatures2_ExperimentTier1;            break;
 			case EOptExtensions_ExperimentTier2:              on = feat2 & EGraphicsFeatures2_ExperimentTier2;            break;
 			case EOptExtensions_SubgroupSizeControl:          on = featEx & EVkGraphicsFeatures_SubgroupSizeControl;      break;
+			case EOptExtensions_IntegerDotProduct:            on = feat2 & EGraphicsFeatures2_IntegerDot4x8;              break;
 
 			//Only for breadcrumbs, which also need the buffer marker
 
@@ -1430,6 +1440,12 @@ U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 	return VkGraphicsDevice_getMemoryUsage(device, isDeviceLocal, NULL);
 }
 
+U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryLimit)(GraphicsDevice *device, Bool isDeviceLocal) {
+	U64 budget = U64_MAX;
+	VkGraphicsDevice_getMemoryUsage(device, isDeviceLocal, &budget);
+	return budget;
+}
+
 U64 VkGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, U64 *budget) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1452,7 +1468,8 @@ U64 VkGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, 
 		instanceExt->getPhysicalDeviceMemoryProperties2((VkPhysicalDevice) device->info.ext, &properties);
 
 		if(budget)
-			*budget = propertiesMemoryBudget.heapBudget[deviceExt->heapIds[isDeviceLocal]];
+			*budget = device->budgetOverride ?
+				device->budgetOverride : propertiesMemoryBudget.heapBudget[deviceExt->heapIds[isDeviceLocal]];
 
 		return propertiesMemoryBudget.heapUsage[deviceExt->heapIds[isDeviceLocal]];
 	}
@@ -1477,7 +1494,7 @@ U64 VkGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, 
 				return U64_MAX;
 
 			if(budget)
-				*budget = vidMem.Budget;
+				*budget = device->budgetOverride ? device->budgetOverride : vidMem.Budget;
 
 			return vidMem.CurrentUsage;
 		}
@@ -2515,8 +2532,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			}
 		}
 
+		//The pool keeps its memory for the next recording of this frame, so the driver doesn't hand it out and take it back
+
 		else gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetCommandPool(
-				deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+				deviceExt->device, allocator->pool, 0
 			), e_rr
 		));
 
@@ -3038,8 +3057,10 @@ Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *
 		deviceExt, queue.resolvedQueueId, threadId, device->fifId, device->framesInFlight
 	);
 
+	//The pool keeps its memory here too
+
 	gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetCommandPool(
-		deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+		deviceExt->device, allocator->pool, 0
 	), e_rr));
 
 	//Re-open

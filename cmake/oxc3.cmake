@@ -799,6 +799,9 @@ endmacro()
 #       [DEPS       <targets/files...>]   # e.g. a DLL the exe loads but does not relink against, or a
 #                                         # package built by another target
 #       [NO_AUTORUN]                     # register with ctest but don't run it after building
+#       [EXPECT     <regex>]             # see oxc3_add_test_run
+#       [FAIL_ON    <regex>]             # see oxc3_add_test_run
+#       [NO_EXPECT]                      # judge by the exit code alone: for a test that does not print its result line
 #   )
 #
 # Tests run as a POST_BUILD step, so a target that didn't relink doesn't re-run: the build graph does the
@@ -808,8 +811,8 @@ endmacro()
 
 function(oxc3_add_test)
 
-	set(options NO_AUTORUN)
-	set(oneValue NAME FOLDER DIR WORKING_DIR)
+	set(options NO_AUTORUN NO_EXPECT)
+	set(oneValue NAME FOLDER DIR WORKING_DIR EXPECT FAIL_ON)
 	set(multiValue LIBS INCLUDES DATA DEPS SOURCES)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
@@ -866,6 +869,18 @@ function(oxc3_add_test)
 		list(APPEND runArgs NO_AUTORUN)
 	endif()
 
+	if(T_NO_EXPECT)
+		list(APPEND runArgs NO_EXPECT)
+	endif()
+
+	if(T_EXPECT)
+		list(APPEND runArgs EXPECT "${T_EXPECT}")
+	endif()
+
+	if(T_FAIL_ON)
+		list(APPEND runArgs FAIL_ON "${T_FAIL_ON}")
+	endif()
+
 	# Appended only when non empty, like the two above: an empty list would pass the keyword with no value,
 	# which is what a caller writing DATA and then forgetting the files looks like.
 
@@ -884,11 +899,20 @@ endfunction()
 # The run half on its own, for a target built by hand because it needs more than the wrapper does (a package attached
 # to it, a dylib it dlopens).
 # Registers with ctest, and runs it after building unless OxC3TestAutoRun is off.
+#
+# A run is judged by its exit code and by what it printed (see cmake/run_test.cmake).
+# EXPECT is a regex the output has to match, which defaults to the result line every suite prints when it ran to its end,
+# "-- End: Success (N)"; NO_EXPECT drops it for an executable that prints no such line.
+# FAIL_ON is a regex that fails the run when it matches either stream, which defaults to a UBSan report in a UBSan build,
+# where reports don't change the exit code.
+# The build step applies both.
+# ctest applies FAIL_ON (FAIL_REGULAR_EXPRESSION) and leaves EXPECT out: a PASS_REGULAR_EXPRESSION makes ctest ignore the
+# exit code, so a crash after the result line would pass.
 
 function(oxc3_add_test_run)
 
-	set(options NO_AUTORUN)
-	set(oneValue NAME FOLDER WORKING_DIR)
+	set(options NO_AUTORUN NO_EXPECT)
+	set(oneValue NAME FOLDER WORKING_DIR EXPECT FAIL_ON)
 	set(multiValue DATA DEPS)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
@@ -907,10 +931,22 @@ function(oxc3_add_test_run)
 		message(FATAL_ERROR "oxc3_add_test_run: ${T_NAME} is not a target")
 	endif()
 
+	if(NOT T_NO_EXPECT AND NOT T_EXPECT)
+		set(T_EXPECT "-- End: Success \\([0-9]+\\)")
+	endif()
+
+	if(NOT T_FAIL_ON AND EnableUBSAN)
+		set(T_FAIL_ON ": runtime error: |SUMMARY: UndefinedBehaviorSanitizer")
+	endif()
+
 	if(T_WORKING_DIR)
 		add_test(NAME ${T_NAME} COMMAND ${T_NAME} WORKING_DIRECTORY "${T_WORKING_DIR}")
 	else()
 		add_test(NAME ${T_NAME} COMMAND ${T_NAME})
+	endif()
+
+	if(T_FAIL_ON)
+		set_tests_properties(${T_NAME} PROPERTIES FAIL_REGULAR_EXPRESSION "${T_FAIL_ON}")
 	endif()
 
 	if(NOT OxC3TestAutoRun OR T_NO_AUTORUN OR CMAKE_CROSSCOMPILING)
@@ -936,6 +972,14 @@ function(oxc3_add_test_run)
 
 	if(T_WORKING_DIR)
 		list(APPEND runArgs -DTEST_WORKING_DIR=${T_WORKING_DIR})
+	endif()
+
+	if(T_EXPECT)
+		list(APPEND runArgs "-DTEST_EXPECT=${T_EXPECT}")
+	endif()
+
+	if(T_FAIL_ON)
+		list(APPEND runArgs "-DTEST_FAIL_ON=${T_FAIL_ON}")
 	endif()
 
 	# DATA is what makes a data driven suite honest: a test built from a golden, an HLSL corpus or a
@@ -1014,11 +1058,12 @@ endfunction()
 
 # A test that is not an executable of its own (the CLI suite drives a python script against a built binary).
 # It hangs off the target it exercises, so it re-runs when that binary changes.
+# EXPECT and FAIL_ON judge its output as for oxc3_add_test_run, but neither defaults: a command prints what it prints.
 
 function(oxc3_add_test_command)
 
 	set(options NO_AUTORUN)
-	set(oneValue NAME TARGET WORKING_DIR FOLDER)
+	set(oneValue NAME TARGET WORKING_DIR FOLDER EXPECT FAIL_ON)
 	set(multiValue COMMAND DATA DEPS)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
@@ -1039,6 +1084,20 @@ function(oxc3_add_test_command)
 		add_test(NAME ${T_NAME} COMMAND ${T_COMMAND})
 	endif()
 
+	if(T_FAIL_ON)
+		set_tests_properties(${T_NAME} PROPERTIES FAIL_REGULAR_EXPRESSION "${T_FAIL_ON}")
+	endif()
+
+	set(judgeArgs "")
+
+	if(T_EXPECT)
+		list(APPEND judgeArgs "-DTEST_EXPECT=${T_EXPECT}")
+	endif()
+
+	if(T_FAIL_ON)
+		list(APPEND judgeArgs "-DTEST_FAIL_ON=${T_FAIL_ON}")
+	endif()
+
 	if(OxC3TestAutoRun AND NOT T_NO_AUTORUN AND NOT CMAKE_CROSSCOMPILING AND TARGET ${T_TARGET})
 
 		set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
@@ -1055,7 +1114,7 @@ function(oxc3_add_test_command)
 			OUTPUT "${stamp}"
 			COMMAND ${CMAKE_COMMAND}
 				"-DTEST_COMMAND=${commandLine}" -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile}
-				-DTEST_WORKING_DIR=${T_WORKING_DIR} -P "${runScript}"
+				-DTEST_WORKING_DIR=${T_WORKING_DIR} ${judgeArgs} -P "${runScript}"
 			COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
 			DEPENDS ${T_TARGET} ${T_DATA} ${T_DEPS}
 			WORKING_DIRECTORY ${T_WORKING_DIR}

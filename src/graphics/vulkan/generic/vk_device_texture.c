@@ -297,7 +297,14 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 
 			//Allocate new staging buffer.
 
-			U64 newSize = prevSize * 2 + allocRange * 3;
+			const U64 newSize = GraphicsDeviceRef_stagingSizeFor(deviceRef, prevSize, allocRange);
+
+			if(!newSize)
+				retError(clean, Error_outOfBounds(
+					0, allocRange, device->info.capabilities.maxBufferSize / 3,
+					"DeviceTextureRef_flush() upload doesn't fit a third of the largest staging buffer"
+				));
+
 			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
 
 			allocBuffer = (AllocationBufferAllocate) {

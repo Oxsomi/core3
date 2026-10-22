@@ -316,6 +316,7 @@ typedef struct GraphicsObjectSizes {
 	typedef Bool (*GraphicsDevice_finishInitImpl)(GraphicsDeviceRef *deviceRef, Error *e_rr);
 
 	typedef U64 (*GraphicsDevice_getMemoryBudgetImpl)(GraphicsDevice *device, Bool isDeviceLocal);
+	typedef U64 (*GraphicsDevice_getMemoryLimitImpl)(GraphicsDevice *device, Bool isDeviceLocal);
 
 	typedef Bool (*GraphicsDevice_loadPipelineCacheImpl)(
 		GraphicsDevice *device,
@@ -437,6 +438,7 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDevice_freeImpl                          deviceFree;
 		GraphicsDevice_submitCommandsImpl                deviceSubmitCommands;
 		GraphicsDevice_getMemoryBudgetImpl               deviceGetMemoryBudget;
+		GraphicsDevice_getMemoryLimitImpl                deviceGetMemoryLimit;
 		GraphicsDevice_loadPipelineCacheImpl             deviceLoadPipelineCache;
 		GraphicsDevice_savePipelineCacheImpl             deviceSavePipelineCache;
 
@@ -645,6 +647,7 @@ Bool GraphicsDevice_initExt(
 Bool GraphicsDevice_finishInitExt(GraphicsDeviceRef *deviceRef, Error *e_rr);
 
 U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
+U64 GraphicsDevice_getMemoryLimitExt(GraphicsDevice *device, Bool isDeviceLocal);
 
 //The driver's half of a pipeline cache (GraphicsDeviceRef_setPipelineCache): load merges driverData into the device's
 // cache and ignores data from another device or driver; save hands out a copy of what the device's cache holds.

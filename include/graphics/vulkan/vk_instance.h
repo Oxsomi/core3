@@ -121,7 +121,9 @@ typedef enum EOptExtensions {
 	EOptExtensions_ExperimentTier1,        //EGraphicsFeatures2_ExperimentTier1
 	EOptExtensions_ExperimentTier2,        //EGraphicsFeatures2_ExperimentTier2
 
-	EOptExtensions_SubgroupSizeControl     //EVkGraphicsFeatures_SubgroupSizeControl
+	EOptExtensions_SubgroupSizeControl,    //EVkGraphicsFeatures_SubgroupSizeControl
+
+	EOptExtensions_IntegerDotProduct       //EGraphicsFeatures2_IntegerDot4x8
 
 } EOptExtensions;
 

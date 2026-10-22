@@ -153,6 +153,10 @@ U64 Platform_getAvailableRAM() {
 	#endif
 }
 
+U64 Platform_getAvailableCommit() {
+	return 0;        //An allocation is not refused up front here, so there is no limit to report
+}
+
 #if _PLATFORM_TYPE == PLATFORM_LINUX || _PLATFORM_TYPE == PLATFORM_ANDROID
 
 	//A small sysfs file whole, null terminated, or false when it isn't there

@@ -339,6 +339,24 @@ void Test_SHFileAddBinUniformUnderscoreStart(Test *t) {
 	SHFile_free(&sh, t->alloc);
 }
 
+//An underscore inside the name is what every UPPER_SNAKE uniform carries, so the body check has to take it.
+
+void Test_SHFileAddBinUniformUnderscoreBody(Test *t) {
+
+	Test_setModule(t, "SHFile addBinary: uniform name with an underscore inside accepted");
+
+	SHFile sh = (SHFile) { 0 };
+	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
+
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
+	SHUniformRuntime uni = { .name = CharString_createRefCStrConst("QUANT_TYPE"), .typeIdShort = 0, .dataOffset = 0 };
+	static U8 udata[4] = { 0 };
+	Test_assert(t, "createRef", ListU8_createRefConst(udata, 4, &info.identifier.uniformData, &t->err));
+	Test_assert(t, "createRef(1)", ListSHUniformRuntime_createRefConst(&uni, 1, &info.identifier.uniforms, &t->err));
+	Test_assert(t, "underscore-body accepted", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
+	SHFile_free(&sh, t->alloc);
+}
+
 void Test_SHFileAddBinUniformInvalidBodyChar(Test *t) {
 
 	Test_setModule(t, "SHFile addBinary: uniform name with invalid body character rejected");

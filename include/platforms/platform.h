@@ -150,6 +150,13 @@ impl Bool Platform_checkCPUSupport();   //SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();
 impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in bytes (0 if unknown)
 impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
+
+//What the system lets the process still commit, in bytes, where it enforces a commit limit.
+//On Windows that is the physical memory plus the page files, shared by every process, less what is committed.
+//It is 0 where there is no such limit or it is unknown (the unix platforms, which don't refuse a commit up front).
+
+impl U64 Platform_getAvailableCommit();
+
 impl Bool Platform_detectCPUInfo(PlatformCPUInfo *out, const Allocator *alloc, Error *e_rr);   //Called once at Platform_create
 
 //Reads an environment variable as UTF-8 on every platform; Windows converts from its UTF-16 block.

@@ -342,7 +342,7 @@ Bool CLI_execute(ListCharString argList) {
 		for(U64 j = 2; j < argList.length; ++j)
 			if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationHasParameter_names[i])) {
 
-				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
+				const U64 param = (U64)1 << i;
 
 				//Check neighbor and save as list entry
 
@@ -481,8 +481,8 @@ Bool CLI_execute(ListCharString argList) {
 		};
 	}
 
-	EOperationHasParameter reqParam = format.requiredParameters;
-	EOperationHasParameter optParam = format.optionalParameters;
+	U64 reqParam = format.requiredParameters;
+	U64 optParam = format.optionalParameters;
 	EOperationFlags opFlags            = format.operationFlags;
 
 	//An operation that accepts a -aes / -aes-file key parameter also accepts the --aes-stdin key flag.

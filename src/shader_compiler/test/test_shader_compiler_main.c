@@ -48,8 +48,8 @@ OXC3_TEST_ENTRY(shader_compiler) {
 	//See TEST_SHADER_ROOT in test_shader_compiler_shared.h.
 
 	#ifdef TEST_SHADER_SECTION
+	const RefPtrType memStreamType = MemoryStream_makeType(t.alloc);        //The mounted section refers to it until the end
 	{
-		const RefPtrType memStreamType = MemoryStream_makeType(t.alloc);
 		CharString section = CharString_createRefCStrConst(TEST_SHADER_SECTION);
 
 		if(!File_loadVirtual(&section, &memStreamType, NULL, NULL, t.alloc, &err))

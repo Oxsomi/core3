@@ -107,6 +107,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_pipeline_executable_properties (.pipelineExecutableInfo) as PipelineExecutableInfo (features2).
   - VK_EXT_device_fault (.deviceFault) as DeviceFault (features2).
   - VK_AMD_buffer_marker as WriteBufferImmediate (features2).
+  - VK_KHR_shader_integer_dot_product (.shaderIntegerDotProduct) as IntegerDot4x8 (features2).
   - VK_EXT_external_memory_host as Vk extension ExternalHostMemory.
   - VK_EXT_memory_priority (.memoryPriority) as Vk extension MemoryPriority.
   - VK_MESA_experiment_tier1 and VK_MESA_experiment_tier2 as ExperimentTier1 and ExperimentTier2 (features2), a tier the driver claims and OxC3 gives no meaning (see graphics_api.md).
@@ -488,6 +489,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - WriteBufferImmediateSupportFlags with D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT as WriteBufferImmediate (features2). Every command list is recorded for the direct queue today, so that is the only flag checked.
 - D3D12_FEATURE_ARCHITECTURE1 CacheCoherentUMA as EDxGraphicsFeatures_CacheCoherentUMA, which switches upload heaps to WRITE_BACK (snooping is free there, and WRITE_COMBINE would make CPU reads disastrous for no gain).
 - ExperimentTier1 and ExperimentTier2 (features2) are never set: D3D12 has no extension a driver could claim them through.
+- IntegerDot4x8 (features2) is always set: the packed dot product is shader model 6.4, below the 6.5 a device needs here.
 
 #### Direct3D12 specific extensions
 

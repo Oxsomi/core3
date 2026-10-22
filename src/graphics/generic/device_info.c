@@ -84,7 +84,8 @@ const C8 *EGraphicsFeatures2_names[EGraphicsFeatures2_Count] = {
 	"DeviceFault",
 	"WriteBufferImmediate",
 	"ExperimentTier1",
-	"ExperimentTier2"
+	"ExperimentTier2",
+	"IntegerDot4x8"
 };
 
 const C8 *EGraphicsDataTypes_names[EGraphicsDataTypes_Count] = {
@@ -328,6 +329,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(cap.flags.features2 & EGraphicsFeatures2_ExperimentTier2)
 			Log_debugLnx("\t\tExperiment tier 2 (claimed by the driver, meaning undefined by OxC3)");
+
+		if(cap.flags.features2 & EGraphicsFeatures2_IntegerDot4x8)
+			Log_debugLnx("\t\tInteger dot products (4 x 8 bit packed)");
 
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");

@@ -569,7 +569,23 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	c::Test_graphicsUnsafeExecution(t, deviceRef);
 	c::Test_graphicsExperimentTiers(t, deviceRef);
 
+	//The packed 4 x 8 bit integer dot product, on a device that claims it and refused on one that doesn't
+
+	c::Test_graphicsIntegerDot(t, deviceRef);
+
 	c::Test_graphicsDeviceMemory(t, deviceRef);
+	c::Test_graphicsDirtyRanges(t, deviceRef);
+	c::Test_graphicsRefusedBuffer(t, deviceRef);
+
+	//Host memory buffers: read by the device over the bus, by the CPU too for HostMemoryRead, and where each one lives
+
+	c::Test_graphicsHostMemory(t, deviceRef);
+	c::Test_graphicsHostPlacement(t, deviceRef);
+
+	//Forbidding the allocator to go past the OS budget, and the opt in leg that really fills the budget
+
+	c::Test_graphicsOverBudget(t, deviceRef);
+	c::Test_graphicsOverBudgetReal(t, deviceRef);
 
 	//39. Config variants run after this adapter's device is gone so the extra devices don't share its
 	// memory, so the handles are released here rather than left to the end of the scope.
@@ -804,7 +820,10 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 	{
 		const c::CharString graphicsSection = c::CharString_createRefCStrConst("//OxC3_graphics");
 		const c::CharString prebuiltShader = c::CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
-		const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
+
+		//The loaded section can keep streams that refer to this type, so it outlives the call.
+
+		static const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
 
 		if (
 			!c::File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) ||

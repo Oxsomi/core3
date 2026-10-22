@@ -255,6 +255,77 @@ void Test_SHFileReadExtension2Count(Test *t) {
 	SHFile_free(&sh, t->alloc);
 }
 
+//A writer whose ESHExtension2_Count was 2 couldn't have reflected IntegerDot4x8, so the reader marks it dormant.
+//The count is patched in place and the header's hash, which covers it, is recomputed.
+
+void Test_SHFileReadAutoDormant2(Test *t) {
+
+	const RefPtrType msType = MemoryStream_makeType(t->alloc);
+
+	Test_setModule(t, "SHFile read: a native extension2 past the writer's count is dormant");
+
+	SHFile sh = (SHFile) { 0 };
+	MemoryStreamRef *ms = NULL;
+	Buffer bytes = Buffer_createNull();
+	U64 writeOff = 0;
+
+	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
+
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
+
+	SHEntry e = (SHEntry) { 0 };
+	e.name = CharString_createRefCStrConst("cs");
+	e.stage = EGfxPipelineStage_Compute;
+	e.groupX = e.groupY = e.groupZ = 8;
+	U16 bid = 0;
+	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));
+	Test_assert(t, "addEntry", SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, &t->err));
+	Test_assert(t, "write", ms && SHFile_write((StreamRef*) ms, &writeOff, &sh, t->alloc, &t->err));
+	Test_assert(t, "bytes", ms && MemoryStream_move(&ms, &bytes, &t->err));
+
+	//Past the magic number; the hash covers everything from uniqueDefines on
+
+	const U64 countAt = sizeof(U32) + offsetof(SHHeader, extension2Count);
+	const U64 hashAt = sizeof(U32) + offsetof(SHHeader, hash);
+	const U64 hashFrom = sizeof(U32) + offsetof(SHHeader, uniqueDefines);
+	const U16 counts[2] = { ESHExtension2_Count, 2 };
+
+	for(U8 i = 0; i < 2 && writeOff > countAt + sizeof(U16) && writeOff <= Buffer_length(bytes); ++i) {
+
+		const Buffer count = Buffer_createRefConst(&counts[i], sizeof(U16));
+		Buffer_memcpy(Buffer_createRef(bytes.ptrNonConst + countAt, sizeof(U16)), count);
+
+		const U32 hash = Buffer_crc32c(Buffer_createRefConst(bytes.ptr + hashFrom, writeOff - hashFrom));
+		Buffer_memcpy(Buffer_createRef(bytes.ptrNonConst + hashAt, sizeof(U32)), Buffer_createRefConst(&hash, sizeof(U32)));
+
+		SHFile rt = (SHFile) { 0 };
+		MemoryStreamRef *in = NULL;
+		U64 readOff = 0;
+		Buffer region = Buffer_createRefFromBuffer(bytes, true);
+
+		const Bool read =
+			MemoryStream_createFromBuffer(&region, EMemoryStreamFlags_None, &msType, &in, &t->err) &&
+			SHFile_read((StreamRef*) in, &readOff, false, t->alloc, &rt, &t->err) && rt.binaries.length == 1;
+
+		const ESHExtension2 dormant = read ? rt.binaries.ptr[0].dormantExtensions2 : ESHExtension2_None;
+
+		if(!i)
+			Test_assert(t, "own count reads as written", read && !dormant);
+
+		else Test_assert(t, "count 2 reads IntegerDot4x8 dormant", read && (dormant & ESHExtension2_IntegerDot4x8));
+
+		RefPtr_dec(&in);
+		SHFile_free(&rt, t->alloc);
+	}
+
+	RefPtr_dec(&ms);
+	Buffer_free(&bytes, t->alloc);
+	SHFile_free(&sh, t->alloc);
+}
+
 void Test_SHFileRoundTripComputeGroupSize(Test *t) {
 
 	const RefPtrType msType = MemoryStream_makeType(t->alloc);

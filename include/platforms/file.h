@@ -25,10 +25,21 @@
 #include "types/container/file_base.h"
 #include "types/container/stream.h"
 #include "types/base/types.h"
+#include "types/base/constants.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+//The pause between two tries of a file call that was given maxTimeout to wait: a quarter of that timeout plus one
+// nanosecond, at most a second. The call works it out once, so it is the same between every pair of its tries.
+//It never wraps, so U64_MAX (wait as long as it takes) pauses a second between tries and does not spin.
+//Every physical file call that retries uses it.
+
+static inline Ns File_retryPause(Ns maxTimeout) {
+	const Ns pause = (maxTimeout >> 2) + 1;
+	return pause < SECOND ? pause : SECOND;
+}
 
 Bool File_getInfo(const CharString *loc, FileInfo *info, const Allocator *alloc, Error *e_rr);
 //Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.
@@ -207,7 +218,10 @@ typedef struct FileLoadVirtual {
 	const RefPtrType *encStreamType;
 } FileLoadVirtual;
 
-//Load a virtual section
+//Load a virtual section.
+//memoryStreamType (and encStreamType when given) must outlive the section:
+// entries above the medium size keep a stream that refers to the type until the section is unloaded,
+// so a type on the stack is a use after scope.
 Bool File_loadVirtual(
 	const CharString *loc,
 	const RefPtrType *memoryStreamType,

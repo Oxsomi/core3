@@ -123,6 +123,59 @@ namespace {
 	}
 }
 
+//A device of its own on the same adapter, so its cache is the one set and nothing else has built pipelines on it
+
+namespace {
+
+	bool TestPipelineCache_ownDevice(
+		oxc::c::Test *t, const oxc::c::GraphicsDevice *suite, oxc::c::RefPtrType *instanceType,
+		oxc::c::GraphicsInstanceRef **instanceRef, oxc::c::GraphicsDeviceRef **deviceRef
+	) {
+
+		using namespace oxc;
+
+		const c::Allocator *alloc = c::Platform_instance->alloc;
+		const c::GraphicsInstance *suiteInstance = RefPtr_data(suite->instance, c::GraphicsInstance);
+
+		const c::GraphicsApplicationInfo appInfo = { c::CharString_createRefCStrConst("OxC3 pipeline cache test"), 1, 0 };
+		*instanceType = c::GraphicsInstance_makeType(suiteInstance->api, alloc);
+
+		const c::EGraphicsInstanceFlags flags = (c::EGraphicsInstanceFlags) (
+			suiteInstance->flags | c::EGraphicsInstanceFlags_DisableGPUBV
+		);
+
+		if(!c::Test_assert(t, "ownInstance", c::GraphicsInstance_create(
+			&appInfo, suiteInstance->api, flags, alloc, instanceType, instanceRef, &t->err
+		)))
+			return false;
+
+		c::ListGraphicsDeviceInfo infos{};
+		bool created = false;
+
+		if(c::Test_assert(t, "ownInfos", c::GraphicsInstance_getDeviceInfos(
+			RefPtr_data(*instanceRef, c::GraphicsInstance), &infos, NULL, &t->err
+		))) {
+
+			for(c::U64 i = 0; !created && i < infos.length; ++i)
+				if(c::Buffer_eq(
+					c::Buffer_createRefConst(infos.ptr[i].name, sizeof(infos.ptr[i].name)),
+					c::Buffer_createRefConst(suite->info.name, sizeof(suite->info.name))
+				))
+					created = c::Test_assert(t, "ownDevice", c::GraphicsDeviceRef_create(
+						*instanceRef, &infos.ptr[i], c::EGraphicsDeviceFlags_None, c::EGraphicsBufferingMode_Default,
+						NULL, NULL, deviceRef, &t->err
+					));
+		}
+
+		c::ListGraphicsDeviceInfo_free(&infos, alloc);
+
+		if(!created)
+			c::RefPtr_dec(instanceRef);
+
+		return created;
+	}
+}
+
 extern "C" void Test_graphicsPipelineCache(oxc::c::Test *t, oxc::c::GraphicsDeviceRef *deviceRef) {
 
 	using namespace oxc;
@@ -276,4 +329,45 @@ extern "C" void Test_graphicsPipelineCache(oxc::c::Test *t, oxc::c::GraphicsDevi
 	c::Test_assert(t, "garbageIgnored", c::GraphicsDeviceRef_setPipelineCache(
 		deviceRef, c::Buffer_createRefConst(garbage, sizeof(garbage)), e_rr
 	));
+
+	//A cache set on a device that has only built its own pipelines is taken.
+	//Those are built at create, before an application can hand the device a cache, so they cannot be what refuses it.
+	//Taking it records the sizes the blob holds, and the blob of a device that built more pipelines holds more than
+	// the fresh device's own.
+
+	c::Test_setModule(t, "PipelineCache/internalPipelines");
+
+	c::RefPtrType ownType{};
+	c::GraphicsInstanceRef *ownInstance = nullptr;
+	c::GraphicsDeviceRef *ownDeviceRef = nullptr;
+
+	if(c::Test_assert(t, "getCacheForOwn", c::GraphicsDeviceRef_getPipelineCache(deviceRef, alloc, &blob, e_rr))) {
+
+		//The header is magic, version, flags, api, padding, then the size count at 8 and the driver's bytes at 16
+
+		const c::U32 sizeCount = c::Buffer_length(blob) >= 24 ? *(const c::U32*) (blob.ptr + 8) : 0;
+		const c::U64 driverBytes = c::Buffer_length(blob) >= 24 ? *(const c::U64*) (blob.ptr + 16) : 0;
+
+		if(!driverBytes)
+			c::Test_print(t, "The driver keeps no pipeline cache here, skipping");
+
+		else if(TestPipelineCache_ownDevice(t, device, &ownType, &ownInstance, &ownDeviceRef)) {
+
+			c::GraphicsDevice *own = RefPtr_data(ownDeviceRef, c::GraphicsDevice);
+			const c::U64 ownSizes = own->pipelineSizes.length / 2;
+
+			if(c::Test_assert(t, "someSizesToTake", sizeCount > ownSizes)) {
+				c::Test_assert(t, "setOwnCache", c::GraphicsDeviceRef_setPipelineCache(ownDeviceRef, blob, e_rr));
+				c::Test_assert(t, "ownCacheTaken", own->pipelineSizes.length / 2 >= sizeCount);
+			}
+		}
+	}
+
+	c::Buffer_free(&blob, alloc);
+
+	if(ownDeviceRef)
+		c::RefPtr_dec(&ownDeviceRef);
+
+	if(ownInstance)
+		c::RefPtr_dec(&ownInstance);
 }

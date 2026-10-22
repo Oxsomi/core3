@@ -121,9 +121,12 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 	c::GraphicsDevice *device = c::deviceOf(deviceRef);
 
 	Test_assert(t, "budgetNullDevice", c::GraphicsDeviceRef_getMemoryBudget(NULL, false) == c::U64_MAX);
+	Test_assert(t, "limitNullDevice", c::GraphicsDeviceRef_getMemoryLimit(NULL, true) == c::U64_MAX);
 
 	const c::U64 shared = dev.getMemoryBudget(false);
 	const c::U64 local = dev.getMemoryBudget(true);
+	const c::U64 sharedLimit = dev.getMemoryLimit(false);
+	const c::U64 localLimit = dev.getMemoryLimit(true);
 
 	//Vulkan needs VK_EXT_memory_budget to report usage; without it (e.g. the Android emulator) skip the checks
 
@@ -143,6 +146,18 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 			Test_assert(t, "budgetLocalDedicated", local && local != c::U64_MAX);
 
 		else Test_assert(t, "budgetLocalShared", !local);
+
+		//The OS's budget: of shared memory reported and above what is in use, of video memory on a dedicated device
+		// reported and at most the device's own, and 0 device local on a device without video memory like the usage
+
+		Test_assert(t, "limitShared", sharedLimit != c::U64_MAX && sharedLimit > shared);
+
+		if(dev.info().type == c::EGraphicsDeviceType_Dedicated)
+			Test_assert(t, "limitLocalDedicated",
+				localLimit && localLimit != c::U64_MAX && localLimit <= dev.info().capabilities.dedicatedMemory
+			);
+
+		else Test_assert(t, "limitLocalShared", !localLimit);
 	}
 
 	else Log::debugLn(
@@ -175,6 +190,37 @@ extern "C" void Test_graphicsDeviceMemory(oxc::c::Test *t, oxc::c::GraphicsDevic
 	Test_assert(t, "stagingSurvivesFailure",
 		device->staging && c::bufferOf(device->staging)->resource.size == oldSize
 	);
+
+	//Growth for an upload or readback is twice the size plus three times the need, and never past what the device
+	// can create as one buffer.
+	//The cap is the largest size whose thirds each align to 4096 within the largest buffer.
+	//A need that does not fit a third of the cap is refused (0) instead of resized.
+
+	{
+		const c::U64 cap = ((dev.info().capabilities.maxBufferSize / 3) &~ (c::U64) 4095) * 3;
+
+		if(Test_assert(t, "stagingCapUsable", cap >= 16 * c::MIBI)) {
+
+			Test_assert(t, "stagingSizeForNull", !c::GraphicsDeviceRef_stagingSizeFor(NULL, 0, 1));
+
+			Test_assert(t, "stagingSizeForGrows",
+				c::GraphicsDeviceRef_stagingSizeFor(deviceRef, 4 * c::MIBI, c::MIBI) == 11 * c::MIBI
+			);
+
+			Test_assert(t, "stagingSizeForCapped", c::GraphicsDeviceRef_stagingSizeFor(deviceRef, cap, c::MIBI) == cap);
+
+			Test_assert(t, "stagingSizeForCappedBig",
+				c::GraphicsDeviceRef_stagingSizeFor(deviceRef, cap / 2 + c::MIBI, cap / 3) == cap
+			);
+
+			Test_assert(t, "stagingSizeForOverflow",
+				c::GraphicsDeviceRef_stagingSizeFor(deviceRef, c::U64_MAX / 2, c::MIBI) == cap
+			);
+
+			Test_assert(t, "stagingSizeForFitsThird", c::GraphicsDeviceRef_stagingSizeFor(deviceRef, 0, cap / 3) == cap);
+			Test_assert(t, "stagingSizeForTooBig", !c::GraphicsDeviceRef_stagingSizeFor(deviceRef, 0, cap / 3 + 1));
+		}
+	}
 
 	//A resource over half a block gets a memory block sized to itself rather than one of twice its size, and that
 	// block goes as soon as the resource does.
@@ -969,6 +1015,98 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			}
 
 			Test_assert(t, "copyBufferContents", matches);
+		}
+	}
+
+	//A copy source in host memory across submits: one submit ends with a copy from the buffer, the next begins with a copy
+	// from it and then reads it in a shader scope.
+	//The second copy must find the buffer in the state its own submit expects: a heap whose buffers the API promotes
+	// implicitly (an upload or readback heap) otherwise has the debug layer refuse the barrier of the scope after it, and
+	// the run's validation check is what fails then. The copied bytes must arrive either way.
+
+	for (c::U32 kind = 0; kind < 2; ++kind) {
+
+		const c::EGraphicsResourceFlag kinds[2] = {
+			c::EGraphicsResourceFlag_HostMemory, c::EGraphicsResourceFlag_HostMemoryRead
+		};
+
+		c::U32 words[16];
+
+		for(c::U32 i = 0; i < 16; ++i)
+			words[i] = 0xB0000000u | i;
+
+		const c::U32 zeros[16] = {};
+		c::Buffer wordsRef = c::Buffer_createRefConst(words, sizeof(words));
+		c::Buffer zerosRef = c::Buffer_createRefConst(zeros, sizeof(zeros));
+
+		gfx::DeviceBuffer src, dstA, dstB;
+		gfx::CommandList first, second, pullList;
+
+		Test_assert(t, "copyBufferAcrossSrc", dev.createBufferData(
+			c::EDeviceBufferUsage_None,
+			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderRead | kinds[kind]),
+			"Copy across src", &wordsRef, src, nullptr, e_rr
+		));
+
+		Test_assert(t, "copyBufferAcrossDstA", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Copy across a", &zerosRef, dstA, nullptr, e_rr
+		));
+
+		Test_assert(t, "copyBufferAcrossDstB", dev.createBufferData(
+			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_CPUBacked, "Copy across b", &zerosRef, dstB, nullptr, e_rr
+		));
+
+		if (
+			src && dstA && dstB &&
+			Test_assert(t, "copyBufferAcrossList", dev.createCommandList(4 * c::KIBI, 16, 16, first, true, e_rr)) &&
+			Test_assert(t, "copyBufferAcrossList", dev.createCommandList(4 * c::KIBI, 16, 16, second, true, e_rr)) &&
+			Test_assert(t, "copyBufferAcrossList", dev.createCommandList(c::KIBI, 16, 8, pullList, true, e_rr))
+		) {
+
+			Test_assert(t, "copyBufferAcrossRecord", first.begin(true, e_rr));
+
+			{
+				gfx::CommandScope scope = first.scope({}, 1, {}, e_rr);
+				Test_assert(t, "copyBufferAcrossFirst", scope.copyBuffer(src, dstA, { 0, 0, 32 }, e_rr));
+			}
+
+			Test_assert(t, "copyBufferAcrossEnd", first.end(e_rr));
+			Test_assert(t, "copyBufferAcrossSubmit", dev.submit({ &first }, {}, 0, 0, e_rr));
+			Test_assert(t, "copyBufferAcrossWait", dev.wait(e_rr));
+
+			const c::Transition srcRead = {
+				.resource = src.handle(), .stage = c::EPipelineStage_Compute, .isWrite = false
+			};
+
+			Test_assert(t, "copyBufferAcrossRecord", second.begin(true, e_rr));
+
+			{
+				gfx::CommandScope scope = second.scope({}, 1, {}, e_rr);
+				Test_assert(t, "copyBufferAcrossSecond", scope.copyBuffer(src, dstA, { 32, 32, 32 }, e_rr));
+			}
+
+			{
+				gfx::CommandScope scope = second.scope({ srcRead }, 2, {}, e_rr);
+				Test_assert(t, "copyBufferAcrossRead", (c::Bool) scope);
+				Test_assert(t, "copyBufferAcrossKeep", scope.copyBuffer(dstA, dstB, { 0, 0, 16 }, e_rr));
+			}
+
+			Test_assert(t, "copyBufferAcrossEnd", second.end(e_rr));
+			Test_assert(t, "copyBufferAcrossSubmit", dev.submit({ &second }, {}, 0, 0, e_rr));
+			Test_assert(t, "copyBufferAcrossWait", dev.wait(e_rr));
+
+			Test_assert(t, "copyBufferAcrossPullBegin", pullList.begin(true, e_rr));
+			Test_assert(t, "copyBufferAcrossPullEnd", pullList.end(e_rr));
+
+			if(gfxtest::pullBuffer(t, dev, pullList, dstB)) {
+
+				const c::U32 *pulled = (const c::U32*) dstB.data()->cpuData.ptr;
+
+				Test_assert(
+					t, "copyBufferAcrossBytes",
+					pulled && c::Buffer_eq(c::Buffer_createRefConst(pulled, 16), c::Buffer_createRefConst(words, 16))
+				);
+			}
 		}
 	}
 

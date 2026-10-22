@@ -530,6 +530,11 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 			1, 0, "UnifiedTexture_create()::texturePtr->flags CPU flags are only allowed for DeviceTexture"
 		));
 
+	if(texture.resource.flags & EGraphicsResourceFlag_HostMemoryBit)
+		retError(clean, Error_invalidParameter(
+			1, 1, "UnifiedTexture_create()::texturePtr->flags HostMemoryBit is only allowed for a DeviceBuffer"
+		));
+
 	GraphicsDeviceRef *deviceRef = texture.resource.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const GraphicsDeviceInfo *info = &device->info;

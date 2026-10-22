@@ -1056,7 +1056,8 @@ Bool Compiler_registerShaderBinary(
 		retError(clean, Error_invalidState(0, "Compiler_registerShaderBinary() should return binary"));
 
 	gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
-		runtimeEntry, binaryIdentifier, compileMode, tempResult->binary, tempResult->demotion, &binaryInfo, e_rr
+		runtimeEntry, binaryIdentifier, compileMode, tempResult->binary, tempResult->demotion, tempResult->demotion2,
+		&binaryInfo, e_rr
 	));
 
 	//Add info regarding includes.

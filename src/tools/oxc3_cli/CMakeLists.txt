@@ -103,6 +103,22 @@ if(TARGET OxC3_rga)
 	add_dependencies(OxC3 OxC3_rga)
 endif()
 
+# The parameter masks of the CLI, driven with parameters at bits above 31: the table is part of the library, not of a build
+# of the executable, and no parameter of the CLI itself is that high.
+
+if(EnableTests AND OxC3TestExecutables)
+
+	include(../../../cmake/oxc3.cmake)
+
+	oxc3_add_test(
+		NAME     OxC3_cli_operations_test
+		FOLDER   Oxsomi/test/tools
+		LIBS     OxC3_types_container_test_util OxC3CLI
+		INCLUDES "../../../include"
+	)
+
+endif()
+
 # Functional CLI test (ctest): drives the built OxC3 binary through tools/test.py,
 # asserting on real command output (known hashes, round-trips, virtual "//" files, -oiCA operations, negative cases).
 # Runs from the binary directory so embedded virtual sections resolve.

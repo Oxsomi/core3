@@ -334,6 +334,19 @@ namespace oxc {
 				return c::DeviceBufferRef_markDirty(handle(), offset, count, e_rr);
 			}
 
+			//The CPU's view of a HostMemoryRead buffer's bytes; null for any other buffer, and where the CPU could only read
+			// them uncached (see DeviceBufferRef_hostMemory).
+
+			[[nodiscard]] const c::U8 *hostMemory() const noexcept {
+				return c::DeviceBufferRef_hostMemory(handle());
+			}
+
+			//The same bytes, writable by the buffer's owner (see DeviceBufferRef_hostMemoryWritable).
+
+			[[nodiscard]] c::U8 *hostMemoryWritable() noexcept {
+				return c::DeviceBufferRef_hostMemoryWritable(handle());
+			}
+
 			//Readback into cpuData (requires CPUBacked).
 			//The copy records after the next submit's lists so it sees that frame's results;
 			// callback fires once the frame finished on the device (see DeviceBufferRef_pullRegion),
@@ -2110,6 +2123,20 @@ namespace oxc {
 
 			[[nodiscard]] c::U64 getMemoryBudget(BoolArg isDeviceLocal) const noexcept {
 				return c::GraphicsDeviceRef_getMemoryBudget(handle(), isDeviceLocal);
+			}
+
+			//The memory the OS lets the process use in bytes; U64_MAX on error or where the api reports no budget
+			// (see GraphicsDeviceRef_getMemoryLimit).
+
+			[[nodiscard]] c::U64 getMemoryLimit(BoolArg isDeviceLocal) const noexcept {
+				return c::GraphicsDeviceRef_getMemoryLimit(handle(), isDeviceLocal);
+			}
+
+			//Takes one hold on the device's allocator going past the OS budget (true), or gives one back (false); see
+			// GraphicsDeviceRef_forbidOverBudgetFallback. The holds are counted.
+
+			[[nodiscard]] c::Bool forbidOverBudgetFallback(BoolArg forbid, c::Error *e_rr = nullptr) noexcept {
+				return c::GraphicsDeviceRef_forbidOverBudgetFallback(handle(), forbid, e_rr);
 			}
 
 			//The allocator every object of this device's instance was created with;

@@ -100,7 +100,10 @@ Bool DxGraphicsDevice_buildPipeline(
 
 			isStored = SUCCEEDED(library->lpVtbl->StorePipeline(library, name, *result));
 
-			if(isStored)
+			//The device's own pipelines don't count.
+			//It builds them at create, before an application can hand it a cache, so counting them would refuse every cache.
+
+			if(isStored && !(pipeline->flags & EPipelineFlags_InternalWeakDeviceRef))
 				++deviceExt->pipelineLibraryStored;
 
 			if(acq == ELockAcquire_Acquired)

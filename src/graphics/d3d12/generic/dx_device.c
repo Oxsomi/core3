@@ -630,6 +630,12 @@ U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 	return DxGraphicsDevice_getMemoryUsage(device, isDeviceLocal, NULL);
 }
 
+U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryLimit)(GraphicsDevice *device, Bool isDeviceLocal) {
+	U64 budget = U64_MAX;
+	DxGraphicsDevice_getMemoryUsage(device, isDeviceLocal, &budget);
+	return budget;
+}
+
 U64 DxGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, U64 *budget) {
 
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -653,7 +659,7 @@ U64 DxGraphicsDevice_getMemoryUsage(GraphicsDevice *device, Bool isDeviceLocal, 
 		return U64_MAX;
 
 	if(budget)
-		*budget = vidMem.Budget;
+		*budget = device->budgetOverride ? device->budgetOverride : vidMem.Budget;
 
 	return vidMem.CurrentUsage;
 }

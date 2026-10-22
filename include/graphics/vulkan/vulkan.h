@@ -105,7 +105,8 @@ typedef enum EVkBlockFlags {
 	EVkBlockFlags_Readback          = 1 << 0,        //The CPU reads it, so host cached memory is preferred
 	EVkBlockFlags_RequiresDedicated = 1 << 1,
 	EVkBlockFlags_PrefersDedicated  = 1 << 2,
-	EVkBlockFlags_HighPriority      = 1 << 3         //Paged out last: acceleration structures, render targets
+	EVkBlockFlags_HighPriority      = 1 << 3,        //Paged out last: acceleration structures, render targets
+	EVkBlockFlags_HostMemory        = 1 << 4         //HostMemoryBit: CPU sided, a block of its own, never video memory
 } EVkBlockFlags;
 
 //What VkDeviceMemoryAllocator_allocate takes as requirementsExt.
