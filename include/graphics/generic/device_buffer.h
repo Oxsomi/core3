@@ -126,6 +126,7 @@ Bool DeviceBuffer_readUploadSource(
 //host as a whole. size is what the resource will be; this does not read the stream to find out.
 //A reference is taken on the stream and dropped with the buffer. CPUBacked is refused, since that flag is a
 // host copy to read BACK into, which is the opposite of what a stream source is for.
+//keepSource is refused for a HostMemory buffer, which keeps no source after its first upload.
 
 Bool GraphicsDeviceRef_createBufferStream(
 	GraphicsDeviceRef *dev,
@@ -166,6 +167,18 @@ Bool GraphicsDeviceRef_createBufferData(
 	Error *e_rr
 );
 
+//The CPU's read only view of a HostMemoryRead buffer's bytes, valid while the buffer lives; they are the data given at
+// create once the submit after the create has completed.
+//NULL for any other buffer and where the CPU could only read the memory uncached (GraphicsResource::hostUncached).
+
+const U8 *DeviceBufferRef_hostMemory(const DeviceBufferRef *buffer);
+
+//The same bytes for the buffer's owner to write; NULL wherever DeviceBufferRef_hostMemory is.
+//A buffer made by createBuffer holds undefined bytes until its owner writes them.
+//The owner writes before the submit that reads them, never while a submitted list may still read them.
+
+U8 *DeviceBufferRef_hostMemoryWritable(DeviceBufferRef *buffer);
+
 //A raw buffer is WORD addressed: a D3D12 raw view takes its first element and its count in 4 byte units, so a
 //resource whose size stops inside a word would leave that word unreachable by any shader. The BACKEND
 //allocation is padded up to a whole word for that reason, and a view reaching the end of the resource rounds
@@ -181,7 +194,8 @@ static inline U64 DeviceBuffer_allocSize(U64 size) { return (size + 3) &~ (U64)3
 //Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
 //Call this as little as possible while still not copying too much data.
 //A range needs a source that can still be read: a CPU backed buffer, a stream backed one, or a CPUAllocated
-// one whose memory the caller wrote into directly. Anything else can only be marked for its first upload.
+// one whose memory the caller wrote into directly. Anything else can only be marked for its first upload, a HostMemory
+// buffer included.
 
 Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr);
 

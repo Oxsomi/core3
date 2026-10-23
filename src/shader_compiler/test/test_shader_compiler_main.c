@@ -26,7 +26,6 @@
 #include "types/base/error.h"
 #include "shader_compiler/compiler.h"
 #include "platforms/file.h"
-#include "types/container/memory_stream.h"
 #include "test_shader_compiler_shared.h"
 
 OXC3_TEST_ENTRY(shader_compiler) {
@@ -49,10 +48,9 @@ OXC3_TEST_ENTRY(shader_compiler) {
 
 	#ifdef TEST_SHADER_SECTION
 	{
-		const RefPtrType memStreamType = MemoryStream_makeType(t.alloc);
 		CharString section = CharString_createRefCStrConst(TEST_SHADER_SECTION);
 
-		if(!File_loadVirtual(&section, &memStreamType, NULL, NULL, t.alloc, &err))
+		if(!File_loadVirtual(&section, NULL, NULL, NULL, t.alloc, &err))
 			Test_print(&t, "WARN: couldn't mount the shader test data, file backed shaders will fail");
 	}
 	#endif

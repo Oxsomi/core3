@@ -457,6 +457,13 @@ ESHExtension2 Compiler_parseExtension2(CharString extensionName) {
 			case C8x8('e', 'n', 't', 'T', 'i', 'e', 'r', '2'):        return ESHExtension2_ExperimentTier2;
 		}
 
+	else if(
+		CharString_length(extensionName) == 13 &&
+		Buffer_readU64(buf, 0, NULL, NULL) == C8x8('I', 'n', 't', 'e', 'g', 'e', 'r', 'D') &&
+		Buffer_readU64(buf, 5, NULL, NULL) == C8x8('e', 'r', 'D', 'o', 't', '4', 'x', '8')
+	)
+		return ESHExtension2_IntegerDot4x8;
+
 	return (ESHExtension2)(1u << ESHExtension2_Count);
 }
 

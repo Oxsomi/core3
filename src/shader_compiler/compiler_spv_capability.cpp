@@ -25,10 +25,13 @@
 #include "SPIRV-Reflect/spirv_reflect.h"
 #include "compiler_spv_internal.hpp"
 
-Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *extension, Error *e_rr) {
+Bool spvMapCapabilityToESHExtension(
+	SpvCapability capability, ESHExtension *extension, ESHExtension2 *extension2, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
+	ESHExtension2 ext2 = ESHExtension2_None;
 
 	switch (capability) {
 
@@ -87,6 +90,13 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		//Full bindless (SM6.6 dynamic resources) lowers to SPV_EXT_descriptor_heap.
 		case SpvCapabilityDescriptorHeapEXT:
 			ext = ESHExtension_DescriptorHeap;
+			break;
+
+		//dot4add_i8packed / dot4add_u8packed lower to OpSDot / OpUDot of packed 4 x 8 bit inputs (SPV_KHR_integer_dot_product).
+		//The other input forms (8 bit vectors, any integer vector) stay refused below: no HLSL intrinsic emits them.
+		case SpvCapabilityDotProduct:
+		case SpvCapabilityDotProductInput4x8BitPacked:
+			ext2 = ESHExtension2_IntegerDot4x8;
 			break;
 
 		//Cooperative matrix (and, per spec, cooperative vector) require the Vulkan memory model.
@@ -417,8 +427,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 
 		case SpvCapabilityDotProductInputAll:
 		case SpvCapabilityDotProductInput4x8Bit:
-		case SpvCapabilityDotProductInput4x8BitPacked:
-		case SpvCapabilityDotProduct:
 
 		case SpvCapabilityShaderClockKHR:
 		case SpvCapabilityFragmentFullyCoveredEXT:
@@ -525,6 +533,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		));
 
 	*extension = ext;
+	*extension2 = ext2;
 
 clean:
 	return s_uccess;

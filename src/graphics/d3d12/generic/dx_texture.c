@@ -63,6 +63,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 	ListU16 temp16 = (ListU16) { 0 };
 	ELockAcquire acq = ELockAcquire_Invalid;
+	U32 dedicatedBlock = U32_MAX;        //A dedicated block that is pushed while its resource is not made yet
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture->resource.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -280,6 +281,23 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 			if(usedMem != U64_MAX && usedMem + allocInfo.SizeInBytes > maxAlloc)
 				retError(clean, Error_outOfMemory(0, "Dedicated memory block allocation would exceed available memory"));
 
+			//Forbidden from going past the OS budget (GraphicsDeviceRef_forbidOverBudgetFallback): refused before anything is
+			// set aside, and the resource is created not resident and made resident under the OS's budget
+
+			D3D12_HEAP_DESC heap = getDxHeapDesc(
+				device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, false, false, false, false
+			);
+
+			const Bool forbidden = DxGraphicsDevice_forbidsOverBudget(device);
+
+			if(forbidden) {
+				gotoIfError3(clean, DxGraphicsDevice_checkBudget(
+					device, DxGraphicsDevice_heapInVideoMemory(device, &heap), allocInfo.SizeInBytes, e_rr
+				));
+
+				heap.Flags |= D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT;
+			}
+
 			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
 			if(device->allocator.blocks.length >= U32_MAX)
@@ -287,6 +305,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			U32 blockId = (U32) device->allocator.blocks.length;
 			gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&device->allocator.blocks, block, alloc, e_rr));
+			dedicatedBlock = blockId;
 
 			AllocationBuffer *allocBuf = &device->allocator.blocks.ptrNonConst[blockId].allocations;
 
@@ -314,8 +333,6 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 
 			acq = ELockAcquire_Invalid;
 
-			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, false, false);
-
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
@@ -340,6 +357,11 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 				(void**)&managedImageExt->image
 			), e_rr));
 
+			if(forbidden)
+				gotoIfError3(clean, DxGraphicsDevice_makeResident(
+					device, (ID3D12Pageable*) managedImageExt->image, e_rr
+				));
+
 			DxGraphicsDevice_setResidencyPriority(
 				deviceExt, (ID3D12Pageable*) managedImageExt->image,
 				!!(texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit),
@@ -349,6 +371,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 			texture->resource.allocated = true;
 			texture->resource.blockId = blockId;
 			texture->resource.blockOffset = 0;
+			dedicatedBlock = U32_MAX;
 		}
 
 		else {
@@ -419,6 +442,27 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 	}
 
 clean:
+
+	//A dedicated block whose resource was not made is given back, since the texture never took it and so never frees it.
+	//Trailing inactive blocks go as well, as when a texture frees its block.
+
+	if(dedicatedBlock != U32_MAX) {
+
+		const ELockAcquire relock = acq == ELockAcquire_Acquired ? acq : SpinLock_lock(&device->allocator.lock, U64_MAX);
+
+		if(relock >= ELockAcquire_Success) {
+
+			DeviceMemoryBlock *pushed = &device->allocator.blocks.ptrNonConst[dedicatedBlock];
+			AllocationBuffer_free(&pushed->allocations, alloc);
+			pushed->isActive = false;
+
+			while(device->allocator.blocks.length && !ListDeviceMemoryBlock_last(device->allocator.blocks)->isActive)
+				ListDeviceMemoryBlock_popBack(&device->allocator.blocks, NULL, NULL);
+
+			if(relock == ELockAcquire_Acquired && acq != ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+		}
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->allocator.lock);

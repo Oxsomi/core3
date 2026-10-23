@@ -595,6 +595,7 @@ Bool Compiler_processSingle(
 		runtimeEntries,
 		isShaderAnnotation,
 		&tempResult->demotion,
+		&tempResult->demotion2,
 		&errors,
 		alloc,
 		e_rr

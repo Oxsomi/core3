@@ -110,9 +110,7 @@ Bool CLI_fileSplit(const ParsedArgs *args) {
 	U8 written = 0;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
-	const RefPtrType fileStreamType = FileStream_makeType(alloc);
+	const PlatformTypes *types = &Platform_instance->types;
 
 	if (args->format != EFormat_oiSH) {
 		Log_errorLnx("CLI_fileSplit() doesn't support the specified format");
@@ -154,17 +152,17 @@ Bool CLI_fileSplit(const ParsedArgs *args) {
 
 	if (File_isVirtual(inputArg)) {
 
-		if (!File_read(&inputArg, 100 * MS, 0, 0, &fileHandleType, &virtualBuf, e_rr)) {
+		if (!File_read(&inputArg, 100 * MS, 0, 0, NULL, &virtualBuf, e_rr)) {
 			Log_errorLnx("CLI_fileSplit() missing input");
 			goto clean;
 		}
 
-		if(!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &memoryStreamType, &readStream, e_rr))
+		if(!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &types->memoryStream, &readStream, e_rr))
 			goto clean;
 	}
 
 	else if (!File_openStream(
-		&inputArg, 100 * MS, EFileOpenType_Read, false, &fileHandleType, &fileStreamType, &readStream, e_rr
+		&inputArg, 100 * MS, EFileOpenType_Read, false, NULL, NULL, &readStream, e_rr
 	)) {
 		Log_errorLnx("CLI_fileSplit() missing input");
 		goto clean;
@@ -215,7 +213,7 @@ Bool CLI_fileSplit(const ParsedArgs *args) {
 		// output before knowing this one serializes is worse than holding a few KiB.
 
 		U64 writeOff = 0;
-		gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr));
+		gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &types->memoryStream, &writeStream, e_rr));
 		gotoIfError3(clean, SHFile_write((StreamRef*)writeStream, &writeOff, &half, alloc, e_rr));
 		gotoIfError3(clean, MemoryStream_move(&writeStream, &outBuf, e_rr));
 
@@ -223,7 +221,7 @@ Bool CLI_fileSplit(const ParsedArgs *args) {
 			alloc, &outPath, e_rr, "%.*s%s", (int) baseLen, outputArg.ptr, CLI_splitSuffixes[i]
 		));
 
-		gotoIfError3(clean, File_write(&outBuf, &outPath, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, File_write(&outBuf, &outPath, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 		Log_debugLnx(
 			"-- Split: %s -> %.*s (%"PRIu64" entrypoint(s), %"PRIu64" binary/binaries)",

@@ -27,6 +27,7 @@
 #include "shader_compiler/compiler.h"
 #include "platforms/process.h"
 #include "platforms/file.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"
@@ -481,11 +482,9 @@ Bool SpvISA_disassemble(
 
 	Bool s_uccess = true;
 
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-
 	CharString tmpDir = CharString_createNull(), tmpSpv = CharString_createNull(), tmpAsm = CharString_createNull();
 	CharString gfxip = CharString_createNull(), gfxipArg = CharString_createNull(), inputArg = CharString_createNull();
-	Buffer asmText = Buffer_createNull();
+	Buffer asmText = Buffer_createNull();        //File_read with a NULL type allocates it from the platform's allocator
 	Buffer llpcOut = Buffer_createNull(), llpcErr = Buffer_createNull();
 	ListCharString llpcArgs = (ListCharString) { 0 };
 	Bool madeTmp = false;
@@ -509,7 +508,7 @@ Bool SpvISA_disassemble(
 		alloc, &tmpAsm, e_rr, "%.*s/shader.s", (int) CharString_length(tmpDir), tmpDir.ptr
 	));
 
-	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+	gotoIfError3(clean, File_write(&spirv, &tmpSpv, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 	const Bool isWin = _PLATFORM_TYPE == PLATFORM_WINDOWS;
 
@@ -573,7 +572,7 @@ Bool SpvISA_disassemble(
 	//Surface amdllpc's own diagnostic (stderr, else stdout).
 
 	const Bool asmOk =
-		!llpcExit && File_read(&tmpAsm, 1 * SECOND, 0, 0, &fileHandleType, &asmText, NULL) && Buffer_length(asmText);
+		!llpcExit && File_read(&tmpAsm, 1 * SECOND, 0, 0, NULL, &asmText, NULL) && Buffer_length(asmText);
 
 	if(!asmOk) {
 
@@ -610,7 +609,7 @@ clean:
 	CharString_free(&gfxip, alloc);
 	CharString_free(&gfxipArg, alloc);
 	CharString_free(&inputArg, alloc);
-	Buffer_free(&asmText, alloc);
+	Buffer_free(&asmText, Platform_instance->alloc);
 	Buffer_free(&llpcOut, alloc);
 	Buffer_free(&llpcErr, alloc);
 	ListCharString_free(&llpcArgs, alloc);        //Elements are refs into owned strings freed above

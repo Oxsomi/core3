@@ -58,6 +58,7 @@ void Test_graphicsBindlessInterleave(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessSampler(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsUnsafeExecution(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsExperimentTiers(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsIntegerDot(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsStaticSamplerDevice(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsBindlessEverywhere(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsFrameGlobals(Test *t, GraphicsDeviceRef *deviceRef);
@@ -111,6 +112,12 @@ void Test_graphicsSubmitFailure(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsVirtualSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsPhysicalSwapchain(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsDeviceMemory(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsDirtyRanges(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsRefusedBuffer(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsHostMemory(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsHostPlacement(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsOverBudget(Test *t, GraphicsDeviceRef *deviceRef);
+void Test_graphicsOverBudgetReal(Test *t, GraphicsDeviceRef *deviceRef);
 void Test_graphicsGpuExecute(Test *t, GraphicsDeviceRef *deviceRef);
 
 //A buffer whose upload source is a stream rather than a host buffer.

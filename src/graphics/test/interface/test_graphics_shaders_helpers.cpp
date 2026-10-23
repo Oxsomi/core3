@@ -66,7 +66,7 @@ namespace oxc { namespace gfxtest {
 		const c::RefPtrType memStreamType = c::MemoryStream_makeType(alloc);
 		const c::RefPtrType fileHandleType = c::FileHandle_makeType(alloc);
 
-		c::File_loadVirtual(&section, &memStreamType, nullptr, nullptr, alloc, nullptr);
+		c::File_loadVirtual(&section, nullptr, nullptr, nullptr, alloc, nullptr);
 
 		if(!c::File_hasFile(&path, alloc))
 			return false;

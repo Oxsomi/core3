@@ -181,6 +181,12 @@ typedef struct DxGraphicsDevice {
 
 	ID3D12Fence *commitSemaphore;
 
+	//DxGraphicsDevice_makeResident's fence, made with the device.
+	//Not commitSemaphore, which the queue signals on every submit: each call takes the next residencyValue, refused or not.
+
+	ID3D12Fence *residencyFence;
+	AtomicI64 residencyValue;
+
 	ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
 
 	DxDescriptorHeapSingle cpuHeaps[ECPUDescriptorHeapType_Count];
@@ -243,6 +249,10 @@ typedef struct DxGraphicsDevice {
 	ID3D12PipelineLibrary *pipelineLibrary;
 	U64 pipelineLibraryStored;                      //PSOs stored this run; a loaded blob would discard them
 	Buffer pipelineLibraryData;
+
+	U8 padding1[16];
+
+	SpinLock residencyLock;                         //Held from taking a residency value to enqueueing it
 
 } DxGraphicsDevice;
 

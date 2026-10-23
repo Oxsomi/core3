@@ -107,6 +107,9 @@ Bool FileHandle_openStream(
 ) {
 	Bool s_uccess = true;
 
+	if(!streamType)
+		streamType = &Platform_instance->types.fileStream;        //NULL takes the platform's type, File_openStream's too
+
 	if(!handle || !*handle)
 		retError(clean, Error_nullPointer(0, "FileHandle_openStream()::handle is required"));
 

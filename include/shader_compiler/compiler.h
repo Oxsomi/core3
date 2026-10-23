@@ -221,6 +221,7 @@ typedef struct CompileResult {
 	ListCompileError compileErrors;
 
 	ESHExtension demotion;      //Compile result can signal "extension not found" to demote final binary
+	ESHExtension2 demotion2;    //The same for ESHExtension2
 
 	Bool isSuccess;
 	Bool infoAboutIncludes;
@@ -379,6 +380,7 @@ Bool Compiler_process(
 	const ListSHEntryRuntime *entries,  //Array contains the current buffer's reflection for the entry and compatibility checks
 	Bool isLib,                         //If input file was compiled as lib
 	ESHExtension *demotions,            //Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ESHExtension2 *demotions2,          //Required; the same for ESHExtension2
 	ListCompileError *errors,
 	const Allocator *alloc,
 	Error *e_rr

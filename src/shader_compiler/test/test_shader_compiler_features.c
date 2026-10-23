@@ -389,6 +389,120 @@ void Test_shaderCompilerFeatures(Test *t) {
 		err = Error_none();
 	}
 
+	//The packed integer dot product, ESHExtension2's third, which every binary carries in the second mask alone.
+	//Used, it is active on both backends; declared and unused, it is dormant on SPIR-V, whose capabilities reflect it,
+	// and active on DXIL, whose dot4add sets no requires flag.
+
+	static const struct { const C8 *file; Bool used; } integerDots[] = {
+		{ "features/integer_dot.hlsl",        true },
+		{ "features/integer_dot_unused.hlsl", false }
+	};
+
+	for (U64 i = 0; i < sizeof(integerDots) / sizeof(integerDots[0]); ++i)
+		for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			CharString label = CharString_createNull();
+
+			const C8 *file = integerDots[i].file;
+			const Bool compiled = compileFileShader(alloc, file, backends[b].mode, true, false, &out, &err);
+			const Bool read = compiled && out.length == 1 && readOiSH(alloc, out.ptr[0], &shFile, &err);
+			const Bool dormant = !integerDots[i].used && backends[b].mode == EGfxBinaryType_SPIRV;
+
+			const Bool carried =
+				read && shFile.binaries.length == 1 &&
+				!shFile.binaries.ptr[0].identifier.extensions &&
+				shFile.binaries.ptr[0].identifier.extensions2 == ESHExtension2_IntegerDot4x8 &&
+				shFile.binaries.ptr[0].dormantExtensions2 == (dormant ? ESHExtension2_IntegerDot4x8 : ESHExtension2_None) &&
+				oiSHRoundtrips(alloc, out.ptr[0], &err);
+
+			if (!carried)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "%s (%s)", file, backends[b].name))
+				label = CharString_createRefCStrConst(file);
+
+			Test_assert(t, label.ptr, carried);
+
+			CharString_free(&label, alloc);
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
+		}
+
+	//Combined with its DXIL twin the unused one is active, as DXIL can't tell it is unused.
+	//The SPIR-V half split off again stays active: a split keeps what the combine found.
+
+	{
+		ListBuffer dxil = (ListBuffer) { 0 }, spirv = (ListBuffer) { 0 };
+		SHFile dxilFile = (SHFile) { 0 }, spirvFile = (SHFile) { 0 }, combined = (SHFile) { 0 }, half = (SHFile) { 0 };
+		const C8 *file = "features/integer_dot_unused.hlsl";
+
+		const Bool ok =
+			compileFileShader(alloc, file, EGfxBinaryType_DXIL, true, false, &dxil, &err) &&
+			compileFileShader(alloc, file, EGfxBinaryType_SPIRV, true, false, &spirv, &err) &&
+			dxil.length == 1 && spirv.length == 1 &&
+			readOiSH(alloc, dxil.ptr[0], &dxilFile, &err) && readOiSH(alloc, spirv.ptr[0], &spirvFile, &err) &&
+			SHFile_combine(&dxilFile, &spirvFile, alloc, &combined, &err) && combined.binaries.length == 1 &&
+			SHFile_split(&combined, EGfxBinaryType_SPIRV, alloc, &half, &err) && half.binaries.length == 1;
+
+		if (!ok)
+			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+		Test_assert(t, "integer_dot_unused.hlsl combined is active", ok && !combined.binaries.ptr[0].dormantExtensions2);
+		Test_assert(t, "integer_dot_unused.hlsl split spirv is active", ok && !half.binaries.ptr[0].dormantExtensions2);
+
+		SHFile_free(&half, alloc);
+		SHFile_free(&combined, alloc);
+		SHFile_free(&spirvFile, alloc);
+		SHFile_free(&dxilFile, alloc);
+		ListBuffer_freeUnderlying(&spirv, alloc);
+		ListBuffer_freeUnderlying(&dxil, alloc);
+		err = Error_none();
+	}
+
+	//The SPIR-V it declares needs the extension named: DXC emits OpSDot with the DotProduct and
+	// DotProductInput4x8BitPacked capabilities, which map to ESHExtension2_IntegerDot4x8, and a capability whose
+	// extension the shader's annotations didn't enable is refused.
+	//The annotated twin compiles, so the refusal is the missing declaration's.
+
+	{
+		static const C8 *integerDot[2] = {
+
+			"RWStructuredBuffer<uint> buf;\n"
+			"[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(64, 1, 1)]\n"
+			"void main(uint3 id : SV_DispatchThreadID) {\n"
+			"\tbuf[id.x * 3 + 2] = asuint(dot4add_i8packed(buf[id.x * 3], buf[id.x * 3 + 1], int(buf[id.x * 3 + 2])));\n}\n",
+
+			"RWStructuredBuffer<uint> buf;\n"
+			"[[oxc::extension(\"IntegerDot4x8\")]]\n"
+			"[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(64, 1, 1)]\n"
+			"void main(uint3 id : SV_DispatchThreadID) {\n"
+			"\tbuf[id.x * 3 + 2] = asuint(dot4add_i8packed(buf[id.x * 3], buf[id.x * 3 + 1], int(buf[id.x * 3 + 2])));\n}\n"
+		};
+
+		ListBuffer out = (ListBuffer) { 0 };
+		Error declaredErr = Error_none();
+
+		const Bool declared = compileInlineShaders(
+			alloc, &integerDot[1], 1, EGfxBinaryType_SPIRV, 1, "integer_dot_declared", false, &out, &declaredErr
+		);
+
+		Test_assert(t, "integer dot with its extension compiles (spirv)", declared);
+		ListBuffer_freeUnderlying(&out, alloc);
+		out = (ListBuffer) { 0 };
+
+		Error bareErr = Error_none();
+
+		const Bool bare = compileInlineShaders(
+			alloc, &integerDot[0], 1, EGfxBinaryType_SPIRV, 1, "integer_dot_bare", false, &out, &bareErr
+		);
+
+		Test_assert(t, "integer dot without its extension is refused (spirv)", !bare);
+		ListBuffer_freeUnderlying(&out, alloc);
+	}
+
 	//The experiment's instruction survives to the binary: a pass that stripped its set would leave a module that
 	// compiles and validates nothing, so only the disassembly can tell.
 

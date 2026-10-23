@@ -240,13 +240,20 @@ typedef enum ESHExtension2 {
 	ESHExtension2_ExperimentTier1            = 1 << 0,
 	ESHExtension2_ExperimentTier2            = 1 << 1,
 
-	//What reflection detects, as ESHExtension_DxilNative and ESHExtension_SpirvNative are for the first mask: none
-	// of the above, so none of these is ever dormant.
+	//Packed 4 x 8 bit integer dot products with a 32 bit accumulate (dot4add_i8packed, dot4add_u8packed).
+	//SPIR-V declares them with the DotProduct and DotProductInput4x8BitPacked capabilities, which reflection detects;
+	// DXIL sets no requires flag for them, so reflection can't.
+	//The device needs EGraphicsFeatures2_IntegerDot4x8.
+
+	ESHExtension2_IntegerDot4x8              = 1 << 2,
+
+	//What reflection detects, as ESHExtension_DxilNative and ESHExtension_SpirvNative are for the first mask.
+	//SPIR-V detects IntegerDot4x8, so a SPIR-V binary that declares it without using it has it dormant; DXIL detects none.
 
 	ESHExtension2_DxilNative                 = ESHExtension2_None,
-	ESHExtension2_SpirvNative                = ESHExtension2_None,
+	ESHExtension2_SpirvNative                = ESHExtension2_IntegerDot4x8,
 
-	ESHExtension2_Count                      = 2,
+	ESHExtension2_Count                      = 3,
 
 	ESHExtension2_All                        = (1 << ESHExtension2_Count) - 1
 

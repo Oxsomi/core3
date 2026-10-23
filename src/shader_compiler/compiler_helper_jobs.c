@@ -1129,7 +1129,8 @@ Bool Compiler_registerShaderBinary(
 		retError(clean, Error_invalidState(0, "Compiler_registerShaderBinary() should return binary"));
 
 	gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
-		runtimeEntry, binaryIdentifier, compileMode, tempResult->binary, tempResult->demotion, &binaryInfo, e_rr
+		runtimeEntry, binaryIdentifier, compileMode, tempResult->binary, tempResult->demotion, tempResult->demotion2,
+		&binaryInfo, e_rr
 	));
 
 	//Add info regarding includes.
@@ -1277,8 +1278,7 @@ Bool Compiler_compileShaders(
 	Bool errorInPrevious = false;
 
 	MemoryStreamRef *ms = NULL;
-	const RefPtrType msType = MemoryStream_makeType(alloc);
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType msType = MemoryStream_makeType(alloc);        //Its buffer grows with alloc and is handed on
 
 	if(allBuffers)
 		gotoIfError3(clean, ListBuffer_resize(allBuffers, allOutputs->length, alloc, e_rr));
@@ -1406,7 +1406,7 @@ Bool Compiler_compileShaders(
 			}
 
 			else {
-				gotoIfError3(clean, File_write(&temp, &allOutputs->ptr[i], 0, 0, 100 * MS, true, &fileHandleType, e_rr));
+				gotoIfError3(clean, File_write(&temp, &allOutputs->ptr[i], 0, 0, 100 * MS, true, NULL, e_rr));
 				Buffer_free(&temp, alloc);
 			}
 		}

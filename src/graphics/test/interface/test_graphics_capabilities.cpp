@@ -177,6 +177,7 @@ extern "C" void Test_graphicsCapabilityDisable(oxc::c::Test *t) {
 		} },
 		{ "RaySoftware", c::EGraphicsApi_Vulkan, { .features2 = c::EGraphicsFeatures2_RaySoftware } },
 		{ "Timestamps", c::EGraphicsApi_Vulkan, { .features2 = c::EGraphicsFeatures2_Timestamps } },
+		{ "IntegerDot4x8", c::EGraphicsApi_Vulkan, { .features2 = c::EGraphicsFeatures2_IntegerDot4x8 } },
 		{ "I64", c::EGraphicsApi_Direct3D12, {
 			.dataTypes = (c::EGraphicsDataTypes) (c::EGraphicsDataTypes_I64 | c::EGraphicsDataTypes_AtomicI64)
 		} },

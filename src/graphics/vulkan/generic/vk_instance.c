@@ -192,6 +192,7 @@ static_assert(sizeof(VkSwapchain) % 16 == 0, "VkSwapchain has to be a multiple o
 			.deviceFree = VkGraphicsDevice_free,
 			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,
 			.deviceGetMemoryBudget = VkGraphicsDevice_getMemoryBudget,
+			.deviceGetMemoryLimit = VkGraphicsDevice_getMemoryLimit,
 			.deviceLoadPipelineCache = VkGraphicsDevice_loadPipelineCache,
 			.deviceSavePipelineCache = VkGraphicsDevice_savePipelineCache,
 
@@ -866,7 +867,9 @@ const C8 *optExtensionsName[] = {
 
 	"VK_MESA_experiment_tier1", "VK_MESA_experiment_tier2",
 
-	"VK_EXT_subgroup_size_control"
+	"VK_EXT_subgroup_size_control",
+
+	"VK_KHR_shader_integer_dot_product"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1448,6 +1451,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			optExtensions[EOptExtensions_IntegerDotProduct],
+			VkPhysicalDeviceShaderIntegerDotProductFeatures,
+			integerDotFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_PageableMemory],
 			VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT,
 			pageableFeat,
@@ -1731,6 +1741,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(optExtensions[EOptExtensions_ExperimentTier2])
 			capabilities.flags.features2 |= EGraphicsFeatures2_ExperimentTier2;
+
+		if(optExtensions[EOptExtensions_IntegerDotProduct] && integerDotFeat.shaderIntegerDotProduct)
+			capabilities.flags.features2 |= EGraphicsFeatures2_IntegerDot4x8;
 
 		if(optExtensions[EOptExtensions_ExternalMemoryHost])
 			capabilities.flags.featuresExt |= EVkGraphicsFeatures_ExternalHostMemory;

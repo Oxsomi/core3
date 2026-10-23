@@ -403,11 +403,13 @@ function(apply_dependencies target)
 			# file offset dyld refuses to load ("segment '__LINKEDIT' file offset out of order"), whether it
 			# adds one section or several. -sectcreate is the supported way in: the linker lays the segment
 			# out itself, so the result is well formed by construction.
-			# oplatform.c reads whatever it finds, it only cares that the segment name starts with @, so the
-			# naming (and the 15 character cap that keeps segname within Mach-O's 16) is unchanged.
+			# oplatform.c reads every segment whose name starts with +, as <target>/<package>.
+			# The 15 character cap keeps that name within Mach-O's 16.
+			# Not @: Apple's ld reads any argument starting with @ as a response file, even a -sectcreate segment.
+			# A second package of the same target would repeat it, which ld refuses ("recursively loading").
 
 			target_link_options(${target} PRIVATE
-				"LINKER:-sectcreate,@${TARGET_OF_PACKAGE},${PACKAGE_NAME},${file}"
+				"LINKER:-sectcreate,+${TARGET_OF_PACKAGE},${PACKAGE_NAME},${file}"
 			)
 
 			# The linker only reruns when an input changes, and a .oiCA named in a flag isn't one.
@@ -842,6 +844,9 @@ endmacro()
 #       [DEPS       <targets/files...>]   # e.g. a DLL the exe loads but does not relink against, or a
 #                                         # package built by another target
 #       [NO_AUTORUN]                     # register with ctest but don't run it after building
+#       [EXPECT     <regex>]             # see oxc3_add_test_run
+#       [FAIL_ON    <regex>]             # see oxc3_add_test_run
+#       [NO_EXPECT]                      # judge by the exit code alone: for a test that does not print its result line
 #   )
 #
 # Tests run as a POST_BUILD step, so a target that didn't relink doesn't re-run: the build graph does the
@@ -851,8 +856,8 @@ endmacro()
 
 function(oxc3_add_test)
 
-	set(options NO_AUTORUN)
-	set(oneValue NAME FOLDER DIR WORKING_DIR)
+	set(options NO_AUTORUN NO_EXPECT)
+	set(oneValue NAME FOLDER DIR WORKING_DIR EXPECT FAIL_ON)
 	set(multiValue LIBS INCLUDES DATA DEPS SOURCES)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
@@ -909,6 +914,18 @@ function(oxc3_add_test)
 		list(APPEND runArgs NO_AUTORUN)
 	endif()
 
+	if(T_NO_EXPECT)
+		list(APPEND runArgs NO_EXPECT)
+	endif()
+
+	if(T_EXPECT)
+		list(APPEND runArgs EXPECT "${T_EXPECT}")
+	endif()
+
+	if(T_FAIL_ON)
+		list(APPEND runArgs FAIL_ON "${T_FAIL_ON}")
+	endif()
+
 	# Appended only when non empty, like the two above: an empty list would pass the keyword with no value,
 	# which is what a caller writing DATA and then forgetting the files looks like.
 
@@ -927,11 +944,16 @@ endfunction()
 # The run half on its own, for a target built by hand because it needs more than the wrapper does (a package attached
 # to it, a dylib it dlopens).
 # Registers with ctest, and runs it after building unless OxC3TestAutoRun is off.
+#
+# A run is judged by its exit code and by what it printed (cmake/run_test.cmake).
+# EXPECT is a regex its stdout has to match (NO_EXPECT drops it), by default the "-- End: Success (N)" of a passed suite.
+# FAIL_ON is a regex that fails the run when either stream matches it, by default a UBSan report in a UBSan build.
+# The build step applies both, ctest only FAIL_ON (FAIL_REGULAR_EXPRESSION).
 
 function(oxc3_add_test_run)
 
-	set(options NO_AUTORUN)
-	set(oneValue NAME FOLDER WORKING_DIR)
+	set(options NO_AUTORUN NO_EXPECT)
+	set(oneValue NAME FOLDER WORKING_DIR EXPECT FAIL_ON)
 	set(multiValue DATA DEPS)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
@@ -950,10 +972,22 @@ function(oxc3_add_test_run)
 		message(FATAL_ERROR "oxc3_add_test_run: ${T_NAME} is not a target")
 	endif()
 
+	if(NOT T_NO_EXPECT AND NOT T_EXPECT)
+		set(T_EXPECT "-- End: Success \\([0-9]+\\)")
+	endif()
+
+	if(NOT T_FAIL_ON AND EnableUBSAN)
+		set(T_FAIL_ON ": runtime error: |SUMMARY: UndefinedBehaviorSanitizer")
+	endif()
+
 	if(T_WORKING_DIR)
 		add_test(NAME ${T_NAME} COMMAND ${T_NAME} WORKING_DIRECTORY "${T_WORKING_DIR}")
 	else()
 		add_test(NAME ${T_NAME} COMMAND ${T_NAME})
+	endif()
+
+	if(T_FAIL_ON)
+		set_tests_properties(${T_NAME} PROPERTIES FAIL_REGULAR_EXPRESSION "${T_FAIL_ON}")
 	endif()
 
 	if(NOT OxC3TestAutoRun OR T_NO_AUTORUN OR CMAKE_CROSSCOMPILING)
@@ -979,6 +1013,14 @@ function(oxc3_add_test_run)
 
 	if(T_WORKING_DIR)
 		list(APPEND runArgs -DTEST_WORKING_DIR=${T_WORKING_DIR})
+	endif()
+
+	if(T_EXPECT)
+		list(APPEND runArgs "-DTEST_EXPECT=${T_EXPECT}")
+	endif()
+
+	if(T_FAIL_ON)
+		list(APPEND runArgs "-DTEST_FAIL_ON=${T_FAIL_ON}")
 	endif()
 
 	# DATA is what makes a data driven suite honest: a test built from a golden, an HLSL corpus or a
@@ -1057,11 +1099,12 @@ endfunction()
 
 # A test that is not an executable of its own (the CLI suite drives a python script against a built binary).
 # It hangs off the target it exercises, so it re-runs when that binary changes.
+# EXPECT and FAIL_ON judge its output as for oxc3_add_test_run, without defaults.
 
 function(oxc3_add_test_command)
 
 	set(options NO_AUTORUN)
-	set(oneValue NAME TARGET WORKING_DIR FOLDER)
+	set(oneValue NAME TARGET WORKING_DIR FOLDER EXPECT FAIL_ON)
 	set(multiValue COMMAND DATA DEPS)
 	cmake_parse_arguments(T "${options}" "${oneValue}" "${multiValue}" ${ARGN})
 
@@ -1082,6 +1125,20 @@ function(oxc3_add_test_command)
 		add_test(NAME ${T_NAME} COMMAND ${T_COMMAND})
 	endif()
 
+	if(T_FAIL_ON)
+		set_tests_properties(${T_NAME} PROPERTIES FAIL_REGULAR_EXPRESSION "${T_FAIL_ON}")
+	endif()
+
+	set(judgeArgs "")
+
+	if(T_EXPECT)
+		list(APPEND judgeArgs "-DTEST_EXPECT=${T_EXPECT}")
+	endif()
+
+	if(T_FAIL_ON)
+		list(APPEND judgeArgs "-DTEST_FAIL_ON=${T_FAIL_ON}")
+	endif()
+
 	if(OxC3TestAutoRun AND NOT T_NO_AUTORUN AND NOT CMAKE_CROSSCOMPILING AND TARGET ${T_TARGET})
 
 		set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
@@ -1098,7 +1155,7 @@ function(oxc3_add_test_command)
 			OUTPUT "${stamp}"
 			COMMAND ${CMAKE_COMMAND}
 				"-DTEST_COMMAND=${commandLine}" -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile}
-				-DTEST_WORKING_DIR=${T_WORKING_DIR} -P "${runScript}"
+				-DTEST_WORKING_DIR=${T_WORKING_DIR} ${judgeArgs} -P "${runScript}"
 			COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
 			DEPENDS ${T_TARGET} ${T_DATA} ${T_DEPS}
 			WORKING_DIRECTORY ${T_WORKING_DIR}

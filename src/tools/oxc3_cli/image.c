@@ -96,18 +96,16 @@ static Bool CLI_imageRead(
 	Buffer file = Buffer_createNull();
 	StreamRef *in = NULL, *sink = NULL;
 	ListSubResourceData subresources = (ListSubResourceData) { 0 };
+	const PlatformTypes *types = &Platform_instance->types;
 
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType memType = MemoryStream_makeType(alloc);
-
-	gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, &fileHandleType, &file, e_rr));
+	gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, NULL, &file, e_rr));
 
 	//A memory stream frees the buffer it was made from, so both streams here get a ref over memory held elsewhere.
 
 	const Buffer fileRef = Buffer_createRefConst(file.ptr, Buffer_length(file));
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
-		fileRef, 0, Buffer_length(fileRef), EMemoryStreamFlags_None, &memType, (MemoryStreamRef**) &in, e_rr
+		fileRef, 0, Buffer_length(fileRef), EMemoryStreamFlags_None, &types->memoryStream, (MemoryStreamRef**) &in, e_rr
 	));
 
 	U64 off = 0;
@@ -119,7 +117,7 @@ static Bool CLI_imageRead(
 			HDRInfo info = (HDRInfo) { 0 };
 
 			gotoIfError3(clean, MemoryStream_create(
-				0, EMemoryStreamFlags_WriteResize, &memType, (MemoryStreamRef**) &sink, e_rr
+				0, EMemoryStreamFlags_WriteResize, &types->memoryStream, (MemoryStreamRef**) &sink, e_rr
 			));
 
 			gotoIfError3(clean, HDR_read(in, &off, EHDRReadFlags_None, &info, sink, 0, alloc, e_rr));
@@ -311,19 +309,16 @@ static Bool CLI_imageWrite(CharString path, EImageFile type, const CLIImage *ima
 	Bool s_uccess = true;
 	StreamRef *in = NULL, *out = NULL;
 	ListSubResourceData subresources = (ListSubResourceData) { 0 };
-
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType streamType = FileStream_makeType(alloc);
-	const RefPtrType memType = MemoryStream_makeType(alloc);
+	const PlatformTypes *types = &Platform_instance->types;
 
 	const Buffer pixelsRef = Buffer_createRefConst(image->pixels.ptr, Buffer_length(image->pixels));
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
-		pixelsRef, 0, Buffer_length(pixelsRef), EMemoryStreamFlags_None, &memType, (MemoryStreamRef**) &in, e_rr
+		pixelsRef, 0, Buffer_length(pixelsRef), EMemoryStreamFlags_None, &types->memoryStream, (MemoryStreamRef**) &in, e_rr
 	));
 
 	gotoIfError3(clean, File_openStream(
-		&path, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &out, e_rr
+		&path, 1 * SECOND, EFileOpenType_Write, true, NULL, NULL, &out, e_rr
 	));
 
 	U64 off = 0;

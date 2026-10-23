@@ -226,6 +226,7 @@ extern "C" Bool Compiler_processDXIL(
 	SpinLock *lock,
 	const ListSHEntryRuntime *entries,
 	ESHExtension *demotions,
+	ESHExtension2 *demotions2,
 	ListCompileError *errors,
 	const Allocator *alloc,
 	Error *e_rr
@@ -252,8 +253,14 @@ extern "C" Bool Compiler_processDXIL(
 
 	DxcBuffer inputBuf = DxcBuffer{};
 
-	if(!demotions || !result || !registers)
-		retError(clean, Error_nullPointer(0, "Compiler_processDXIL() demotions, result and registers are required"));
+	if(!demotions || !demotions2 || !result || !registers)
+		retError(clean, Error_nullPointer(
+			0, "Compiler_processDXIL() demotions, demotions2, result and registers are required"
+		));
+
+	//DXIL reflects nothing of ESHExtension2, as dot4add sets no requires flag, so none of it is demoted.
+
+	*demotions2 = ESHExtension2_None;
 
 	inputBuf = DxcBuffer{ .Ptr = result->ptr, .Size = Buffer_length(*result), .Encoding = 0 };
 

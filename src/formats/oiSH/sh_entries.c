@@ -601,6 +601,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 	EGfxBinaryType binaryType,
 	Buffer buf,
 	ESHExtension dormantExtensions,
+	ESHExtension2 dormantExtensions2,
 	SHBinaryInfo *binaryInfo,
 	Error *e_rr
 ) {
@@ -617,7 +618,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 
 	binaryInfo->identifier = *identifier;
 	binaryInfo->dormantExtensions = dormantExtensions;
-	binaryInfo->dormantExtensions2 = ESHExtension2_None;        //Nothing in it is reflected, so nothing is demoted
+	binaryInfo->dormantExtensions2 = dormantExtensions2;
 	binaryInfo->vendorMask = runtime->vendorMask;
 	binaryInfo->hasShaderAnnotation = runtime->isShaderAnnotation;
 	binaryInfo->binaries[binaryType] = Buffer_createRefFromBuffer(buf, true);

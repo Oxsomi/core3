@@ -271,6 +271,11 @@ Roughly ordered by how often the gap bites.
   and missing dependencies. A query publishes what OxC3 itself requests, for deduping now and device import later.
   The format gets variable length extension masks and optional tagged sections.
 
+- **Cache the device's own pipelines.** The device builds its internal pipelines (the image copy shaders) while it is
+  created, before `GraphicsDeviceRef_setPipelineCache` can hand it a cache, so they compile on every start. Wanted: a
+  pipeline cache given at device creation that they load from. On D3D12 that also stops the device's table of
+  pipeline sizes naming internal keys that an application's `ID3D12PipelineLibrary` may not hold.
+
 ### Usability (review 2 Oct 2026, detail in `docs/proposals/gfx_usability_review.md`)
 
 - **Dynamic graphics linking as the default**, static as an opt-in (performance, Android). Document which

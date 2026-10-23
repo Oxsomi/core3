@@ -178,12 +178,13 @@ typedef enum ESHExtension {
 } ESHExtension;
 
 //The extensions past ESHExtension, which is full: 1 << ESHExtension_Count has to stay an int.
-//None of these is detected by reflection, so their dormant mask is zero.
+//SPIR-V reflection detects IntegerDot4x8, so it can be dormant there; DXIL reflection detects none of these.
 
 typedef enum ESHExtension2 {
 	ESHExtension2_None						= 0,
 	ESHExtension2_ExperimentTier1			= 1 << 0,		//An experiment tier the driver claims; OxC3 gives it no meaning
-	ESHExtension2_ExperimentTier2			= 1 << 1		//(graphics_api.md, EGraphicsFeatures2_ExperimentTier1)
+	ESHExtension2_ExperimentTier2			= 1 << 1,		//(graphics_api.md, EGraphicsFeatures2_ExperimentTier1)
+	ESHExtension2_IntegerDot4x8				= 1 << 2		//Packed 4 x 8 bit integer dot products (dot4add_i8packed); needs EGraphicsFeatures2_IntegerDot4x8
 } ESHExtension2;
 
 //Maps to EGraphicsVendorId
@@ -640,3 +641,5 @@ frontend's recording pins the bytes end to end.
 1.2(.7): No major bump, no oiSH files exist in the wild yet. Added ESHExtension2, the extensions past ESHExtension's 32 bits, with ExperimentTier1 and ExperimentTier2: `BinaryInfoFixedSize` gains `extensions2` and `dormantExt2`, and `SHHeader` gains `extension2Count` (the writer's ESHExtension2_Count, held to 1 through 32 like extensionCount) and a padding U16. Not backwards compatible: both structs grew, so files written before read as invalid and are recompiled.
 
 1.2(.8): No major bump, no oiSH files exist in the wild yet. A uniform's data is stored at its type's width, as `uniformData`'s size above always said: `ETypeId_getBytes` had taken an element's size from its data type instead of its stride, one byte for every unsigned type, two for every signed one and eight for every float. Not backwards compatible for files with uniforms: their data was laid out at those sizes, which the reader either refuses as out of bounds or reads at the wrong offsets, so they are recompiled. Files without uniforms are unchanged.
+
+1.2(.9): No major bump, no oiSH files exist in the wild yet. Added ESHExtension2_IntegerDot4x8, which SPIR-V reflection detects; `SHHeader::extension2Count` is 3 from now on. Backwards compatible: a file with a count of 2 reads with it dormant, and a reader that doesn't know it refuses a binary that declares it.

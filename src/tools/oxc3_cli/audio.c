@@ -269,13 +269,11 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 				WAVFile wav = (WAVFile) { 0 };
 				StreamRef *outputStream = NULL;
 				StreamRef *inputStream = NULL;
-				RefPtrType fileHandleType = FileHandle_makeType(alloc);
-				RefPtrType streamType = FileStream_makeType(alloc);
 
 				Log_debugLnx("CLI_audioConvert() converting \"%.*s\"", (int) CharString_length(input), input.ptr);
 
 				gotoIfError3(clean, File_openStream(
-					&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &inputStream, e_rr
+					&input, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &inputStream, e_rr
 				));
 
 				gotoIfError3(clean, WAV_read(inputStream, 0, 0, alloc, &wav, e_rr));
@@ -295,7 +293,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 					retError(clean, Error_invalidState(0, "CLI_audioConvert() format wasn't supported to truncate to"));
 
 				gotoIfError3(clean, File_openStream(
-					&output, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &outputStream, e_rr
+					&output, 1 * SECOND, EFileOpenType_Write, true, NULL, NULL, &outputStream, e_rr
 				));
 
 				if(wav.fmt.channels == 1)

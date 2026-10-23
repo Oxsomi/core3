@@ -484,7 +484,7 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
-	Buffer tempBuffer = Buffer_createNull();
+	Buffer tempBuffer = Buffer_createNull();        //File_read with a NULL type allocates it from the platform's allocator
 	MemoryStreamRef *tempStream = NULL;
 	SHFile tmpBinary = (SHFile) { 0 };
 	DescriptorLayoutInfo pushDescriptors = (DescriptorLayoutInfo) { 0 };
@@ -495,19 +495,19 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	//Load prebuilt shaders
 
 	const CharString virtualSection = CharString_createRefCStrConst("//OxC3_graphics");
-	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
-	gotoIfError3(clean, File_loadVirtual(&virtualSection, &memStreamType, NULL, NULL, alloc, e_rr));
+	//The section outlives this device, so it takes the platform's stream type.
+
+	gotoIfError3(clean, File_loadVirtual(&virtualSection, NULL, NULL, NULL, alloc, e_rr));
 
 	//image_copy shaders, only the 2nd can rotate images
 
 	const CharString path = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
-	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, &fileHandleType, &tempBuffer, e_rr));
+	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, NULL, &tempBuffer, e_rr));
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
 		Buffer_createRefFromBuffer(tempBuffer, true), 0, Buffer_length(tempBuffer),
-		EMemoryStreamFlags_None, &memStreamType, &tempStream, e_rr
+		EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &tempStream, e_rr
 	));
 
 	U64 streamOffset = 0;
@@ -636,7 +636,7 @@ clean:
 	DescriptorLayoutInfo_free(&pushDescriptors, alloc);
 	SHFile_free(&tmpBinary, alloc);
 	RefPtr_dec(&tempStream);
-	Buffer_free(&tempBuffer, alloc);
+	Buffer_free(&tempBuffer, Platform_instance->alloc);
 	return s_uccess;
 }
 
@@ -1594,6 +1594,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	ESHExtension extensions = (bin->identifier.extensions &~ bin->dormantExtensions) & ESHExtension_All;
+	const ESHExtension2 extensions2 = (bin->identifier.extensions2 &~ bin->dormantExtensions2) & ESHExtension2_All;
 
 	//The unsafe markers and the tiers are declarations, so a binary's dormant bits never excuse them.
 
@@ -1625,6 +1626,8 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if(extensions & ESHExtension_Bindless)                  features |= EGraphicsFeatures_Bindless;
 	if(extensions & ESHExtension_DescriptorHeap)            features2 |= EGraphicsFeatures2_DescriptorHeap;
+
+	if(extensions2 & ESHExtension2_IntegerDot4x8)           features2 |= EGraphicsFeatures2_IntegerDot4x8;
 
 	if(extensions & ESHExtension_F64)                       dataTypes |= EGraphicsDataTypes_F64;
 	if(extensions & ESHExtension_I64)                       dataTypes |= EGraphicsDataTypes_I64;
@@ -2118,6 +2121,26 @@ clean:
 	return s_uccess;
 }
 
+U64 GraphicsDeviceRef_stagingSizeFor(GraphicsDeviceRef *deviceRef, U64 prevSize, U64 needed) {
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId) EGraphicsTypeId_GraphicsDevice)
+		return 0;
+
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//The resize aligns each third to 4096, so the cap is the largest size that still aligns to at most the largest buffer.
+
+	const U64 cap = ((device->info.capabilities.maxBufferSize / 3) &~ 4095) * 3;
+
+	if(needed > cap / 3)
+		return 0;
+
+	if(prevSize > (U64_MAX - needed * 3) / 2)
+		return cap;
+
+	return U64_min(prevSize * 2 + needed * 3, cap);
+}
+
 //Readback twin of the staging buffer; same thirds, same create then swap, but CPU readable memory.
 
 static Bool GraphicsDeviceRef_resizeStagingReadbackBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr) {
@@ -2567,7 +2590,15 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 			//Grown like the upload staging buffer, after which the allocation has to succeed
 
 			const U64 prevSize = DeviceBufferRef_ptr(device->stagingReadback)->resource.size;
-			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, prevSize * 2 + needed * 3, e_rr));
+			const U64 newSize = GraphicsDeviceRef_stagingSizeFor(deviceRef, prevSize, needed);
+
+			if(!newSize)
+				retError(clean, Error_outOfBounds(
+					0, needed, device->info.capabilities.maxBufferSize / 3,
+					"GraphicsDeviceRef_flushPendingPulls() readback doesn't fit a third of the largest staging buffer"
+				));
+
+			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingReadbackBuffer(deviceRef, newSize, e_rr));
 
 			allocations = &device->stagingReadbackAllocations[device->fifId];
 			base = DeviceBufferRef_ptr(device->stagingReadback)->resource.mappedMemoryExt;
@@ -2979,6 +3010,45 @@ U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDevic
 		return 0;
 
 	return GraphicsDevice_getMemoryBudgetExt(device, isDeviceLocal);
+}
+
+U64 GraphicsDeviceRef_getMemoryLimit(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal) {
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_GraphicsDevice)
+		return U64_MAX;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->info.type != EGraphicsDeviceType_Dedicated && isDeviceLocal)
+		return 0;
+
+	return GraphicsDevice_getMemoryLimitExt(device, isDeviceLocal);
+}
+
+Bool GraphicsDeviceRef_forbidOverBudgetFallback(GraphicsDeviceRef *deviceRef, Bool forbid, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || deviceRef->refPtrType->typeId != (TypeId)EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(
+			0, "GraphicsDeviceRef_forbidOverBudgetFallback()::deviceRef is required and has to be a GraphicsDevice"
+		));
+
+	AtomicI64 *count = &GraphicsDeviceRef_ptr(deviceRef)->noOverBudgetFallback;
+
+	if(forbid) {
+		AtomicI64_inc(count);
+		goto clean;
+	}
+
+	//Never below zero, so a give back without a take (or one twice) cannot forbid the fallback later
+
+	for(I64 now = AtomicI64_load(count); now > 0; now = AtomicI64_load(count))
+		if(AtomicI64_cmpStore(count, now, now - 1) == now)
+			break;
+
+clean:
+	return s_uccess;
 }
 
 Bool GraphicsDevice_logOnce(GraphicsDevice *device, EGraphicsDeviceMessage message) {

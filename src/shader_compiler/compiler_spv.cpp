@@ -120,6 +120,7 @@ extern "C" Bool Compiler_processSPIRV(
 	const ListSHEntryRuntime *entries,
 	Bool isLib,
 	ESHExtension *demotions,
+	ESHExtension2 *demotions2,
 	ListCompileError *errors,
 	const Allocator *alloc,
 	Error *e_rr
@@ -133,6 +134,7 @@ extern "C" Bool Compiler_processSPIRV(
 	Bool s_uccess = true;
 	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
 	ESHExtension exts = ESHExtension_None;
+	ESHExtension2 exts2 = ESHExtension2_None;
 	SpvReflectShaderModule spvMod{};
 	Bool isRt = !!(toCompile->extensions & ESHExtension_RayQuery);
 
@@ -175,8 +177,10 @@ extern "C" Bool Compiler_processSPIRV(
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned is invalid"));
 
-	if(!demotions || !result || !registers)
-		retError(clean, Error_nullPointer(0, "Compiler_processSPIRV() demotions, result and registers are required"));
+	if(!demotions || !demotions2 || !result || !registers)
+		retError(clean, Error_nullPointer(
+			0, "Compiler_processSPIRV() demotions, demotions2, result and registers are required"
+		));
 
 	//Fix alignment up front: the caller's Buffer can be a ref at any address, and the optimizer below indexes
 	// it as U32s.
@@ -212,21 +216,24 @@ extern "C" Bool Compiler_processSPIRV(
 	for (U64 i = 0; i < spvMod.capability_count; ++i) {
 
 		ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
+		ESHExtension2 ext2 = ESHExtension2_None;
 
 		if(allowsUnknown) {
-			if(!spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, NULL))
+			if(!spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, &ext2, NULL))
 				continue;
 		}
 
-		else gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr));
+		else gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, &ext2, e_rr));
 
 		//Check if extension was known to oiSH
 
 		if(!(ext >> ESHExtension_Count))
 			exts = (ESHExtension) (exts | ext);
+
+		exts2 = (ESHExtension2) (exts2 | ext2);
 	}
 
-	if((toCompile->extensions & exts) != exts)
+	if((toCompile->extensions & exts) != exts || (toCompile->extensions2 & exts2) != exts2)
 		retError(clean, Error_invalidState(
 			2, "Compiler_processSPIRV() SPIRV contained capability that wasn't enabled by oiSH file (use annotations)"
 		));
@@ -235,6 +242,7 @@ extern "C" Bool Compiler_processSPIRV(
 	//This is used to see if demotion is possible
 
 	*demotions = (ESHExtension)((~exts) & ESHExtension_SpirvNative);
+	*demotions2 = (ESHExtension2)((~exts2) & ESHExtension2_SpirvNative);
 
 	for(U64 i = 0; i < spvMod.push_constant_block_count; ++i)
 		if(spvMod.push_constant_blocks[i].offset)

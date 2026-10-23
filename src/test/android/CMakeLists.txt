@@ -105,4 +105,9 @@ if(TARGET OxC3_gtest)
 	add_virtual_dependencies(TARGET OxC3_atest DEPENDENCIES OxC3_gtest)
 endif()
 
+# platforms_interface reads its large entry out of this section, as OxC3_plinttst does
+
+include(${testRoot}/platforms/test/large_test_data.cmake)
+oxc3_add_large_test_data(OxC3_atest ${testRoot}/..)
+
 apply_dependencies(OxC3_atest)

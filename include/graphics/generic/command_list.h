@@ -46,7 +46,10 @@ typedef struct CommandList {
 
 	Buffer data;                                       //Data for all commands
 	ListCommandOpInfo commandOps;
-	HashSetRefPtr resources;                           //Resources used by this command list
+	//Resources used by this command list: CommandListRef_end references each one its transitions name, until the list
+	// is begun again with a clear, or freed.
+
+	HashSetRefPtr resources;
 
 	ListTransitionInternal transitions;                //Transitions that are pending
 	HashSetCommandScope activeScopes;                  //Scopes that were successfully inserted

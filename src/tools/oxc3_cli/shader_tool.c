@@ -50,9 +50,8 @@
 
 	static Bool CLI_shaderReadFile(CharString path, Buffer *out, Error *e_rr) {
 		Bool s_uccess = true;
-		const RefPtrType fileHandleType = FileHandle_makeType(Platform_instance->alloc);
 		CLI_ensureVirtualLoaded(&path);
-		gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, &fileHandleType, out, e_rr));
+		gotoIfError3(clean, File_read(&path, 1 * SECOND, 0, 0, NULL, out, e_rr));
 	clean:
 		return s_uccess;
 	}
@@ -64,14 +63,13 @@
 		Bool s_uccess = true;
 		const Allocator *alloc = Platform_instance->alloc;
 		Buffer buf = Buffer_createNull();
-		const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
 		StreamRef *stream = NULL;
 
 		gotoIfError3(clean, CLI_shaderReadFile(path, &buf, e_rr));
 
 		gotoIfError3(clean, MemoryStream_createFromBufferRegion(
 			Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf),
-			EMemoryStreamFlags_None, &memoryStreamType, &stream, e_rr
+			EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &stream, e_rr
 		));
 
 		U64 off = 0;
@@ -210,7 +208,6 @@
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
 		const Allocator *alloc = Platform_instance->alloc;
-		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 		Buffer buf = Buffer_createNull();
 		CharString text = CharString_createNull();
@@ -232,7 +229,7 @@
 			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
 			const Buffer textBuf = Buffer_createRefConst(text.ptr, CharString_length(text));
-			gotoIfError3(clean, File_write(&textBuf, &output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+			gotoIfError3(clean, File_write(&textBuf, &output, 0, 0, 1 * SECOND, true, NULL, e_rr));
 		}
 
 		else Log_debugLnx("%.*s", (int) CharString_length(text), text.ptr);
@@ -302,7 +299,6 @@
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
 		const Allocator *alloc = Platform_instance->alloc;
-		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 		Buffer buf = Buffer_createNull();
 		Buffer binary = Buffer_createNull();
@@ -321,7 +317,7 @@
 		hasCompiler = true;
 
 		gotoIfError3(clean, Compiler_assemble(&comp, CLI_shaderBinaryType(output), text, alloc, &binary, e_rr));
-		gotoIfError3(clean, File_write(&binary, &output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, File_write(&binary, &output, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 		Log_debugLnx("Assembled %"PRIu64" bytes -> %.*s", Buffer_length(binary), (int) CharString_length(output), output.ptr);
 
@@ -343,8 +339,6 @@
 
 		Bool s_uccess = true;
 		const Allocator *alloc = Platform_instance->alloc;
-		const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
-		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 		SHFile file = (SHFile) { 0 };
 		StreamRef *writeStream = NULL;
@@ -367,11 +361,14 @@
 				Buffer_free(&bin->binaries[j], alloc);
 		}
 
+		gotoIfError3(clean, MemoryStream_create(
+			0, EMemoryStreamFlags_WriteResize, &Platform_instance->types.memoryStream, &writeStream, e_rr
+		));
+
 		U64 writeOff = 0;
-		gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr));
 		gotoIfError3(clean, SHFile_write(writeStream, &writeOff, &file, alloc, e_rr));
 		gotoIfError3(clean, MemoryStream_move(&writeStream, &outBuf, e_rr));
-		gotoIfError3(clean, File_write(&outBuf, &path, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, File_write(&outBuf, &path, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 		Log_debugLnx("-- Reflect: stripped binaries -> reflection-only %.*s", (int) CharString_length(path), path.ptr);
 
@@ -446,8 +443,6 @@
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
 		const Allocator *alloc = Platform_instance->alloc;
-		const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
-		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 		Buffer buf = Buffer_createNull();
 		Buffer outBuf = Buffer_createNull();
@@ -494,11 +489,14 @@
 			CharString output = (CharString) { 0 };
 			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
+			gotoIfError3(clean, MemoryStream_create(
+				0, EMemoryStreamFlags_WriteResize, &Platform_instance->types.memoryStream, &writeStream, e_rr
+			));
+
 			U64 writeOff = 0;
-			gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr));
 			gotoIfError3(clean, SRFile_write(&reflection, alloc, writeStream, &writeOff, e_rr));
 			gotoIfError3(clean, MemoryStream_move(&writeStream, &outBuf, e_rr));
-			gotoIfError3(clean, File_write(&outBuf, &output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+			gotoIfError3(clean, File_write(&outBuf, &output, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 			Log_debugLnx(
 				"Reflected %"PRIu64" nodes -> %.*s",

@@ -246,6 +246,9 @@ typedef struct GraphicsDevice {
 
 	Ns firstSubmit;                                         //Start of time
 
+	AtomicI64 noOverBudgetFallback;                         //Forbids taken (GraphicsDeviceRef_forbidOverBudgetFallback)
+	U64 budgetOverride;                                     //Tests only, set directly: the OS budget in bytes, 0 = the OS's
+
 	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
 	HashSetRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];  //Resources in flight, per frame
@@ -513,6 +516,21 @@ TListNamed(SwapchainRef*, ListSwapchainRef);
 //It returns U64_MAX on error (e.g. if nullptr)
 U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
 
+//Returns the OS budget in bytes: the memory the process may use, which getMemoryBudget's usage counts against.
+//D3D12: DXGI_QUERY_VIDEO_MEMORY_INFO::Budget; Vulkan: the heap's budget of VK_EXT_memory_budget, else DXGI's on Windows.
+//isDeviceLocal is as for getMemoryBudget, and an iGPU/CPU returns 0 for device local.
+//It returns U64_MAX on error (e.g. nullptr) and where the api reports no budget.
+U64 GraphicsDeviceRef_getMemoryLimit(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
+
+//Turns the allocator's over budget fallbacks off for allocations made after the call (GraphicsDeviceRef_getMemoryLimit).
+//Forbids are counted per device: forbid true takes one and false gives one back; none is taken by default.
+//Vulkan: a device local block past the budget stays in video memory instead of moving to host memory.
+//D3D12: a new heap or dedicated resource is created not resident and made resident with
+// D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, so one past the budget fails with Error_outOfMemory instead of evicting.
+//Memory already allocated is not protected, and a deviceRef that isn't a graphics device is refused (Error_nullPointer).
+
+Bool GraphicsDeviceRef_forbidOverBudgetFallback(GraphicsDeviceRef *deviceRef, Bool forbid, Error *e_rr);
+
 //The allocator's state as JSON, for finding where memory goes: heap usage, a summary per category, every memory block
 // (size, bytes used, free ranges and the largest of them, dedicated or not, CPU side or not) and every registered
 // buffer and texture with the block and offset it occupies. The caller frees json.
@@ -651,6 +669,11 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 //Records the queued pullRegion reads into the command buffer; called by backends after the frame's commands.
 Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
 Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr);
+
+//The size a staging buffer of prevSize bytes grows to for an upload or readback of needed bytes: twice prevSize plus
+// three times needed, capped at the device's largest buffer.
+//Returns 0 when needed is over a third of that cap, and for a deviceRef that is not a device.
+U64 GraphicsDeviceRef_stagingSizeFor(GraphicsDeviceRef *deviceRef, U64 prevSize, U64 needed);
 
 //Shader targets this device's driver can compile for besides the device itself; empty on a backend or driver
 // that offers none, which is every one but AMD's D3D12 today.

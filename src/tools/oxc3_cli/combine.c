@@ -53,10 +53,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
 
 	const Allocator *alloc = Platform_instance->alloc;
-
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
-	const RefPtrType encryptionStreamType = EncryptionStream_makeType(alloc);
+	const PlatformTypes *types = &Platform_instance->types;
 
 	if (args->parameters & EOperationHasParameter_SplitBy) {
 		Log_debugLnx("CLI_fileCombine() failed, -split can't be used");
@@ -107,12 +104,12 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 
 	//Read input buffers
 
-	if (!File_read(&inputArg, 100 * MS, 0, 0, &fileHandleType, &buf[0], e_rr)) {
+	if (!File_read(&inputArg, 100 * MS, 0, 0, NULL, &buf[0], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (1)");
 		goto clean;
 	}
 
-	if (!File_read(&inputArg2, 100 * MS, 0, 0, &fileHandleType, &buf[1], e_rr)) {
+	if (!File_read(&inputArg2, 100 * MS, 0, 0, NULL, &buf[1], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (2)");
 		goto clean;
 	}
@@ -129,8 +126,8 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			U64 writeOff = 0;
 
 			if (
-				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &memoryStreamType, &readStream[0], e_rr) ||
-				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &memoryStreamType, &readStream[1], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &types->memoryStream, &readStream[0], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &types->memoryStream, &readStream[1], e_rr) ||
 				!SHFile_read((StreamRef*)readStream[0], &readOff[0], false, alloc, &tmp[0], e_rr) ||
 				!SHFile_read((StreamRef*)readStream[1], &readOff[1], false, alloc, &tmp[1], e_rr)
 			) {
@@ -144,7 +141,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			}
 
 			if (
-				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr) ||
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &types->memoryStream, &writeStream, e_rr) ||
 				!SHFile_write((StreamRef*)writeStream, &writeOff, &tmp[2], alloc, e_rr) ||
 				!MemoryStream_move(&writeStream, &buf[2], e_rr)
 			) {
@@ -176,14 +173,14 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			U64 writeOff = 0;
 
 			if (
-				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &memoryStreamType, &readStream[0], e_rr) ||
-				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &memoryStreamType, &readStream[1], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &types->memoryStream, &readStream[0], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &types->memoryStream, &readStream[1], e_rr) ||
 				!CAFile_read(
-					(StreamRef*)readStream[0], encryptionKey ? &encryptionStreamType : NULL, 0, encryptionKey, alloc,
+					(StreamRef*)readStream[0], encryptionKey ? &types->encryptionStream : NULL, 0, encryptionKey, alloc,
 					&tmp[0], e_rr
 				) ||
 				!CAFile_read(
-					(StreamRef*)readStream[1], encryptionKey ? &encryptionStreamType : NULL, 0, encryptionKey, alloc,
+					(StreamRef*)readStream[1], encryptionKey ? &types->encryptionStream : NULL, 0, encryptionKey, alloc,
 					&tmp[1], e_rr
 				)
 			) {
@@ -205,9 +202,9 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 				);
 
 			if (
-				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr) ||
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &types->memoryStream, &writeStream, e_rr) ||
 				!CAFile_write(
-					&tmp[2], encryptionKey ? &encryptionStreamType : NULL, (StreamRef*)writeStream, &writeOff, alloc, e_rr
+					&tmp[2], encryptionKey ? &types->encryptionStream : NULL, (StreamRef*)writeStream, &writeOff, alloc, e_rr
 				) ||
 				!MemoryStream_move(&writeStream, &buf[2], e_rr)
 			) {
@@ -251,15 +248,15 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			U64 writeOff = 0;
 
 			if (
-				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &memoryStreamType, &readStream[0], e_rr) ||
-				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &memoryStreamType, &readStream[1], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &types->memoryStream, &readStream[0], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &types->memoryStream, &readStream[1], e_rr) ||
 				!DLFile_read(
 					(StreamRef*)readStream[0], &readOff[0], encryptionKey, I32x4_zero(), false, false, alloc,
-					encryptionKey ? &encryptionStreamType : NULL, &tmp[0], e_rr
+					encryptionKey ? &types->encryptionStream : NULL, &tmp[0], e_rr
 				) ||
 				!DLFile_read(
 					(StreamRef*)readStream[1], &readOff[1], encryptionKey, I32x4_zero(), false, false, alloc,
-					encryptionKey ? &encryptionStreamType : NULL, &tmp[1], e_rr
+					encryptionKey ? &types->encryptionStream : NULL, &tmp[1], e_rr
 				)
 			) {
 				Log_warnLnx("CLI_fileCombine() one of two DLFile couldn't be parsed");
@@ -278,9 +275,9 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 				);
 
 			if (
-				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr) ||
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &types->memoryStream, &writeStream, e_rr) ||
 				!DLFile_write(
-					&tmp[2], alloc, (StreamRef*)writeStream, encryptionKey ? &encryptionStreamType : NULL, I32x4_zero(),
+					&tmp[2], alloc, (StreamRef*)writeStream, encryptionKey ? &types->encryptionStream : NULL, I32x4_zero(),
 					&writeOff, e_rr
 				) ||
 				!MemoryStream_move(&writeStream, &buf[2], e_rr)
@@ -321,7 +318,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			goto clean;
 	}
 
-	if (!File_write(&buf[2], &outputArg, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr)) {
+	if (!File_write(&buf[2], &outputArg, 0, 0, 1 * SECOND, true, NULL, e_rr)) {
 		Log_warnLnx("CLI_fileCombine() can't write to output file");
 		goto clean;
 	}

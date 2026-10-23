@@ -596,6 +596,9 @@ Bool File_open(
 	CharString resolved = CharString_createNull();
 	Bool created = false;
 
+	if(!ptrType)
+		ptrType = &Platform_instance->types.fileHandle;        //NULL takes the platform's type
+
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_open()::loc must be a valid file path"));
 
@@ -633,7 +636,7 @@ clean:
 	if(created && !s_uccess)
 		RefPtr_dec(handle);
 
-	CharString_free(&resolved, ptrType->alloc);
+	CharString_free(&resolved, ptrType ? ptrType->alloc : NULL);        //A NULL type was refused before resolving
 	return s_uccess;
 }
 
@@ -728,6 +731,9 @@ Bool File_write(
 	Bool s_uccess = true;
 	FileHandleRef *handle = NULL;
 
+	if(!ptrType)
+		ptrType = &Platform_instance->types.fileHandle;        //NULL takes the platform's type
+
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"));
 
@@ -760,6 +766,9 @@ Bool File_read(
 	Bool s_uccess = true;
 	Bool allocate = false;
 	FileHandleRef *handle = NULL;
+
+	if(!ptrType)
+		ptrType = &Platform_instance->types.fileHandle;        //NULL takes the platform's type, and so its allocator
 
 	if(!loc || !CharString_isValidFilePath(*loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"));
@@ -1426,9 +1435,27 @@ impl Bool File_loadVirtualInternal1(
 	Error *e_rr
 );
 
+//A loaded section stays in the platform's lists until an unload or Platform_cleanup frees it with the platform's
+// allocator, so it's made with that one too, whichever one the caller passed.
+
 Bool File_loadVirtualInternal(void *userDataGeneric, const CharString *loc, const Allocator *alloc, Error *e_rr) {
+
+	(void) alloc;
+
+	Bool s_uccess = true;
 	FileLoadVirtual *userData = (FileLoadVirtual*) userDataGeneric;
-	return File_loadVirtualInternal1(userData, loc, true, userData->memoryStreamType, userData->encStreamType, alloc, e_rr);
+
+	//Every platform reads a section it loads through a memory stream; a query (File_isVirtualLoaded) reads none
+
+	if(userData->doLoad && !userData->memoryStreamType)
+		retError(clean, Error_nullPointer(1, "File_loadVirtualInternal()::memoryStreamType is required"));
+
+	gotoIfError3(clean, File_loadVirtualInternal1(
+		userData, loc, true, userData->memoryStreamType, userData->encStreamType, Platform_instance->alloc, e_rr
+	));
+
+clean:
+	return s_uccess;
 }
 
 Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const Allocator *alloc, Error *e_rr) {
@@ -1466,7 +1493,7 @@ Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const All
 
 			const U64 id = section->loadedAndId << 1 >> 1;
 
-			CAFile_free(&Platform_instance->archives.ptrNonConst[id], alloc);
+			CAFile_free(&Platform_instance->archives.ptrNonConst[id], Platform_instance->alloc);        //As it was loaded
 			ListCAFile_erase(&Platform_instance->archives, id, NULL);
 			section->loadedAndId = 0;
 
@@ -1514,11 +1541,15 @@ Bool File_loadVirtual(
 	Error *e_rr
 ) {
 
+	//NULL takes the platform's types, which live as long as every section
+
+	const PlatformTypes *types = &Platform_instance->types;
+
 	FileLoadVirtual virt = (FileLoadVirtual) {
 		.doLoad = true,
 		.encryptionKey = encryptionKey,
-		.memoryStreamType = memoryStreamType,
-		.encStreamType = encStreamType
+		.memoryStreamType = memoryStreamType ? memoryStreamType : &types->memoryStream,
+		.encStreamType = encStreamType ? encStreamType : &types->encryptionStream
 	};
 
 	return File_virtualOp(loc, 1 * MS, File_loadVirtualInternal, &virt, false, alloc, e_rr);

@@ -44,7 +44,7 @@ static Bool PlyPerf_readOnce(
 ) {
 
 	Bool s_uccess = true;
-	const RefPtrType type = MemoryStream_makeType(alloc);
+	const RefPtrType type = MemoryStream_makeType(alloc);        //The sinks grow with alloc, so their type is alloc's
 
 	MemoryStreamRef *positions = NULL, *indices = NULL;
 
@@ -75,8 +75,6 @@ Bool Perf_plyParallelRead(const CharString *path, U64 threadCount, const Allocat
 
 	Bool s_uccess = true;
 
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType streamType = FileStream_makeType(alloc);
 	StreamRef *stream = NULL;
 
 	JobQueue jobs = (JobQueue) { 0 };
@@ -86,7 +84,7 @@ Bool Perf_plyParallelRead(const CharString *path, U64 threadCount, const Allocat
 		threadCount = Platform_getThreads();
 
 	gotoIfError3(clean, File_openStream(
-		path, 10 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
+		path, 10 * SECOND, EFileOpenType_Read, false, NULL, NULL, &stream, e_rr
 	));
 
 	MeshInfo headerInfo = (MeshInfo) { 0 };

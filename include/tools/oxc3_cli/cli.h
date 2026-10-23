@@ -61,13 +61,10 @@ Bool CLI_fileSplit(const ParsedArgs *args);          //The opposite of combine, 
 // callers get one type back; the archive has to outlive the stream, because that memory belongs to it.
 //The stream is returned with a reference the caller releases through RefPtr_dec, and the entry starts at
 // offset within it rather than at 0.
-//memType is supplied by the caller and has to outlive the returned stream, because a RefPtr keeps a POINTER
-// to its type; a type made here would die with this call and leave the stream's type dangling.
 //No allocator is taken: both shapes wrap what the archive already holds, so nothing is copied.
 Bool CLI_openArchiveEntry(
 	const CAFile *ca,
 	CAHandle h,
-	const RefPtrType *memType,
 	StreamRef **stream,
 	U64 *offset,
 	U64 *size,

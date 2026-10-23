@@ -993,6 +993,7 @@ Bool Compiler_processSPIRV(
 	const ListSHEntryRuntime *entries,   //Array contains the current buffer's reflection for the entry & compatibility checks
 	Bool isLibTarget,
 	ESHExtension *demotions,             //Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ESHExtension2 *demotions2,           //Required; the same for ESHExtension2
 	ListCompileError *errors,
 	const Allocator *alloc,
 	Error *e_rr
@@ -1007,6 +1008,7 @@ Bool Compiler_processDXIL(
 	SpinLock *lock,                      //If not NULL will be used before writing into entries
 	const ListSHEntryRuntime *entries,   //Array contains the current buffer's reflection for the entry and compatibility checks
 	ESHExtension *demotions,             //Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ESHExtension2 *demotions2,           //Required; the same for ESHExtension2
 	ListCompileError *errors,
 	const Allocator *alloc,
 	Error *e_rr
@@ -1025,6 +1027,7 @@ Bool Compiler_process(
 	const ListSHEntryRuntime *entries,
 	Bool isLib,
 	ESHExtension *demotions,
+	ESHExtension2 *demotions2,
 	ListCompileError *errors,
 	const Allocator *alloc,
 	Error *e_rr
@@ -1038,7 +1041,7 @@ Bool Compiler_process(
 
 			gotoIfError3(clean, Compiler_processSPIRV(
 				result, registers, isDebug, keepRegisters, spirvLayout, toCompile, lock, entries, isLib, demotions,
-				errors, alloc, e_rr
+				demotions2, errors, alloc, e_rr
 			));
 
 			break;
@@ -1046,7 +1049,7 @@ Bool Compiler_process(
 		case EGfxBinaryType_DXIL:
 
 			gotoIfError3(clean, Compiler_processDXIL(
-				compiler, result, registers, isDebug, toCompile, lock, entries, demotions, errors, alloc, e_rr
+				compiler, result, registers, isDebug, toCompile, lock, entries, demotions, demotions2, errors, alloc, e_rr
 			));
 
 			break;

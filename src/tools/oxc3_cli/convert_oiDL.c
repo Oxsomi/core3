@@ -67,9 +67,6 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 	Bool s_uccess = true;
 	DLSettings settings = (DLSettings) { .compressionType = EXXCompressionType_None };
 
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType fileStreamType = FileStream_makeType(alloc);
-	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
 	StreamRef *outStream = NULL;
 
 	ListBuffer buffers = { 0 };
@@ -132,7 +129,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 
 	if (convert->inputInfo->type == EFileType_File) {
 
-		gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr));
+		gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, NULL, &buf, e_rr));
 
 		//Create oiDL from text file.
 		//Splitting by enter or custom string
@@ -235,7 +232,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 			for (U64 i = 0; i < paths.length; ++i) {
 
 				CharString stri = paths.ptr[i];
-				gotoIfError3(clean, File_read(&stri, 100 * MS, 0, 0, &fileHandleType, &fileBuf, e_rr));
+				gotoIfError3(clean, File_read(&stri, 100 * MS, 0, 0, NULL, &fileBuf, e_rr));
 				gotoIfError3(clean, ListBuffer_pushBack(&buffers, fileBuf, alloc, e_rr));
 
 				fileBuf = Buffer_createNull();
@@ -247,7 +244,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 		else for (U64 i = 0; i < sortedPaths.length; ++i) {
 
 			CharString stri = sortedPaths.ptr[i];
-			gotoIfError3(clean, File_read(&stri, 100 * MS, 0, 0, &fileHandleType, &fileBuf, e_rr));
+			gotoIfError3(clean, File_read(&stri, 100 * MS, 0, 0, NULL, &fileBuf, e_rr));
 			gotoIfError3(clean, ListBuffer_pushBack(&buffers, fileBuf, alloc, e_rr));
 
 			fileBuf = Buffer_createNull();
@@ -270,13 +267,14 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 write:
 
 	gotoIfError3(clean, File_openStream(
-		convert->output, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &fileStreamType, &outStream, e_rr
+		convert->output, 1 * SECOND, EFileOpenType_Write, true, NULL, NULL, &outStream, e_rr
 	));
 
 	{
 		U64 startOffset = 0;
 		gotoIfError3(clean, DLFile_write(
-			&file, alloc, outStream, settings.encryptionType ? &encStreamType : NULL, I32x4_zero(), &startOffset, e_rr
+			&file, alloc, outStream, settings.encryptionType ? &Platform_instance->types.encryptionStream : NULL,
+			I32x4_zero(), &startOffset, e_rr
 		));
 	}
 
@@ -305,9 +303,6 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
-	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
 	StreamRef *inStream = NULL;
 
 	Buffer buf = Buffer_createNull();
@@ -326,10 +321,10 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 
 	//Read file
 
-	gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr));
+	gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, NULL, &buf, e_rr));
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
-		buf, 0, 0, EMemoryStreamFlags_None, &memoryStreamType, &inStream, e_rr
+		buf, 0, 0, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &inStream, e_rr
 	));
 
 	{
@@ -337,7 +332,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 		Bool hasEncryption = (convert->args->parameters & EOperationHasParameter_AnyAES) != 0;
 		gotoIfError3(clean, DLFile_read(
 			inStream, &readOffset, hasEncryption ? convert->encKey : NULL, I32x4_zero(), false, false, alloc,
-			hasEncryption ? &encStreamType : NULL, &file, e_rr
+			hasEncryption ? &Platform_instance->types.encryptionStream : NULL, &file, e_rr
 		));
 	}
 
@@ -388,7 +383,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 				file.settings.dataType == EDLDataType_String ? CharString_bufferConst(file.entryStrings.ptr[i]) :
 				file.entryBuffers.ptr[i];
 
-			gotoIfError3(clean, File_write(&fileDat, &filePathi, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+			gotoIfError3(clean, File_write(&fileDat, &filePathi, 0, 0, 1 * SECOND, true, NULL, e_rr));
 
 			CharString_free(&filePathi, alloc);
 		}
@@ -422,7 +417,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 		}
 
 		Buffer fileDat = Buffer_createRefConst(concatFile.ptr, CharString_length(concatFile));
-		gotoIfError3(clean, File_write(&fileDat, convert->output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+		gotoIfError3(clean, File_write(&fileDat, convert->output, 0, 0, 1 * SECOND, true, NULL, e_rr));
 		CharString_free(&concatFile, alloc);
 	}
 
