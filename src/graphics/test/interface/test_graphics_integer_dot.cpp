@@ -72,26 +72,33 @@ extern "C" void Test_graphicsIntegerDot(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		);
 	}
 
-	//Without the feature: refused by what is missing, and never a first fit
+	//Without the feature: refused, and never a first fit.
+	//On a device that also lacks bindless, which the first mask asks for, the binary is refused for that before features2.
+	//So a copy that declares the second mask alone has to be refused by the features2 check.
 
 	if (!supported) {
 
-		c::Bool refused = true;
+		c::Bool refused = true, refusedAlone = true;
 
 		for(c::U64 i = 0; i < file.entries.ptr[0].binaryIds.length; ++i) {
 
 			c::Error refusal = c::Error_none();
 			const c::SHBinaryInfo &bin = file.binaries.ptr[file.entries.ptr[0].binaryIds.ptr[i]];
 
-			refused &= !c::GraphicsDeviceRef_checkShaderFeatures(dev.handle(), &bin, &file.entries.ptr[0], &refusal);
+			c::SHBinaryInfo alone = bin;
+			alone.identifier.extensions = c::ESHExtension_None;
+
+			refused &= !c::GraphicsDeviceRef_checkShaderFeatures(dev.handle(), &bin, &file.entries.ptr[0], nullptr);
+			refusedAlone &= !c::GraphicsDeviceRef_checkShaderFeatures(dev.handle(), &alone, &file.entries.ptr[0], &refusal);
 
 			const c::CharString why = c::CharString_createRefCStrConst(refusal.errorStr ? refusal.errorStr : "");
 			const c::CharString missing = c::CharString_createRefCStrConst("features2");
 
-			refused &= c::CharString_containsStringSensitive(&why, &missing, 0, c::CharString_length(why));
+			refusedAlone &= c::CharString_containsStringSensitive(&why, &missing, 0, c::CharString_length(why));
 		}
 
 		Test_assert(t, "refusedWithoutFeature", refused);
+		Test_assert(t, "refusedForIntegerDot", refusedAlone);
 		Test_assert(t, "noFirstFit", dev.getFirstShaderEntry(file, "main") == c::U32_MAX);
 		return;
 	}

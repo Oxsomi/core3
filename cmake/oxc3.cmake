@@ -366,11 +366,13 @@ function(apply_dependencies target)
 			# file offset dyld refuses to load ("segment '__LINKEDIT' file offset out of order"), whether it
 			# adds one section or several. -sectcreate is the supported way in: the linker lays the segment
 			# out itself, so the result is well formed by construction.
-			# oplatform.c reads whatever it finds, it only cares that the segment name starts with @, so the
-			# naming (and the 15 character cap that keeps segname within Mach-O's 16) is unchanged.
+			# oplatform.c reads every segment whose name starts with +, as <target>/<package>.
+			# The 15 character cap keeps that name within Mach-O's 16.
+			# Not @: Apple's ld reads any argument starting with @ as a response file, even a -sectcreate segment.
+			# A second package of the same target would repeat it, which ld refuses ("recursively loading").
 
 			target_link_options(${target} PRIVATE
-				"LINKER:-sectcreate,@${TARGET_OF_PACKAGE},${PACKAGE_NAME},${file}"
+				"LINKER:-sectcreate,+${TARGET_OF_PACKAGE},${PACKAGE_NAME},${file}"
 			)
 
 			# The linker only reruns when an input changes, and a .oiCA named in a flag isn't one.

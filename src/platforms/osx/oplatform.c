@@ -112,7 +112,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 			for (U32 j = 0; j < seg->nsects; j++) {
 
-				if(seg->segname[0] != '@')        //Packages are marked with @ in front
+				if(seg->segname[0] != '+')        //Packages are marked with + in front, not @ (see cmake/oxc3.cmake)
 					continue;
 
 				gotoIfError3(clean, CharString_format(

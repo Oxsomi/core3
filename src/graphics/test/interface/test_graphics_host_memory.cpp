@@ -122,9 +122,14 @@ namespace {
 		for(c::U64 i = 0; i < bytes / 4; ++i)
 			words[i] = hostWord(seed, i);
 
+		//Bindful on a device without a bindless table, which doesn't change where the memory lives
+
+		const c::EGraphicsResourceFlag shaderRead =
+			dev.hasBindlessTable() ? c::EGraphicsResourceFlag_ShaderReadBindless : c::EGraphicsResourceFlag_ShaderRead;
+
 		const c::Bool created = dev.createBufferData(
 			c::EDeviceBufferUsage_None,
-			(c::EGraphicsResourceFlag) (memory | c::EGraphicsResourceFlag_ShaderReadBindless),
+			(c::EGraphicsResourceFlag) (memory | shaderRead),
 			name, &data, out, nullptr, &t->err
 		);
 
@@ -182,21 +187,27 @@ extern "C" void Test_graphicsHostMemory(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 	gfx::Device dev = gfx::Device::share(deviceRef);
 	c::Error *e_rr = &t->err;
 
-	//The refusals, which need no bindless table
+	//The refusals, which need no bindless table.
+	//Without one, exposing a buffer to it is refused before the host memory rules are checked, so these are bindful there.
+
+	const c::Bool bindless = dev.hasBindlessTable();
+
+	const c::EGraphicsResourceFlag shaderRead =
+		bindless ? c::EGraphicsResourceFlag_ShaderReadBindless : c::EGraphicsResourceFlag_ShaderRead;
 
 	const c::EGraphicsResourceFlag host =
-		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemory | c::EGraphicsResourceFlag_ShaderReadBindless);
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemory | shaderRead);
 
 	hostRefused(
 		t, dev, "hostBitAlone", c::EDeviceBufferUsage_None,
-		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemoryBit | c::EGraphicsResourceFlag_ShaderReadBindless)
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemoryBit | shaderRead)
 	);
 
 	//The CPU read bit alone names HostMemoryBit as what it needs
 
 	hostRefused(
 		t, dev, "hostReadBitAlone", c::EDeviceBufferUsage_None,
-		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemoryReadBit | c::EGraphicsResourceFlag_ShaderReadBindless)
+		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemoryReadBit | shaderRead)
 	);
 
 	hostRefused(
@@ -214,10 +225,13 @@ extern "C" void Test_graphicsHostMemory(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_HostMemory | c::EGraphicsResourceFlag_ShaderRWBindful)
 	);
 
-	hostRefused(
-		t, dev, "hostBindlessWrite", c::EDeviceBufferUsage_None,
-		(c::EGraphicsResourceFlag) (host | c::EGraphicsResourceFlag_ExposeBindlessWrite)
-	);
+	if(bindless)
+		hostRefused(
+			t, dev, "hostBindlessWrite", c::EDeviceBufferUsage_None,
+			(c::EGraphicsResourceFlag) (host | c::EGraphicsResourceFlag_ExposeBindlessWrite)
+		);
+
+	else c::Test_print(t, "Device has no bindless descriptor table, skipping the ExposeBindlessWrite refusal");
 
 	hostRefused(t, dev, "hostUsage", c::EDeviceBufferUsage_Vertex, host);
 

@@ -942,6 +942,12 @@ static void Test_fileRetryPause(Test *t) {
 	Test_assert(t, "pauseBounded", bounded);
 
 	//The calls: with the whole second as pause, one that has to wait for a file takes a second to find it
+	//Each waits on a helper thread, and web without pthreads can't spawn one.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
+		Test_print(t, "Web without pthreads can't spawn threads, skipping the calls that wait for a helper thread");
+		return;
+	#endif
 
 	RefPtrType fhType = FileHandle_makeType(t->alloc);
 	CharString dir = CharString_createRefCStrConst("platform_test_retry");

@@ -302,22 +302,32 @@ extern "C" void Test_graphicsOverBudget(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			gfx::DeviceBuffer buffer, output;
 		};
 
+		//Without a bindless table the buffers are bindful, so they are still made under the forbid but not read back
+
+		const c::Bool bindless = dev.hasBindlessTable();
+
+		const c::EGraphicsResourceFlag shaderRead =
+			bindless ? c::EGraphicsResourceFlag_ShaderReadBindless : c::EGraphicsResourceFlag_ShaderRead;
+
+		const c::EGraphicsResourceFlag shaderWrite =
+			bindless ? c::EGraphicsResourceFlag_ShaderWriteBindless : c::EGraphicsResourceFlag_ShaderWrite;
+
 		const c::U64 bytes = overBudgetBytes(device);
 		const c::U64 hostBytes = (c::U64) 4 << 20;
 		const c::EGraphicsResourceFlag cpuFlags =
-			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderReadBindless | c::EGraphicsResourceFlag_CPUAllocatedBit);
+			(c::EGraphicsResourceFlag) (shaderRead | c::EGraphicsResourceFlag_CPUAllocatedBit);
 
 		const c::EGraphicsResourceFlag hostFlags =
-			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderReadBindless | c::EGraphicsResourceFlag_HostMemoryRead);
+			(c::EGraphicsResourceFlag) (shaderRead | c::EGraphicsResourceFlag_HostMemoryRead);
 
 		Source sources[3] = {
-			{ "forbiddenOwnRead", c::EGraphicsResourceFlag_ShaderReadBindless, bytes, {}, {} },
+			{ "forbiddenOwnRead", shaderRead, bytes, {}, {} },
 			{ "forbiddenCpuRead", cpuFlags, bytes, {}, {} },
 			{ "forbiddenHostRead", hostFlags, hostBytes, {}, {} }
 		};
 
 		const c::EGraphicsResourceFlag outputFlags =
-			(c::EGraphicsResourceFlag) (c::EGraphicsResourceFlag_ShaderWriteBindless | c::EGraphicsResourceFlag_CPUBacked);
+			(c::EGraphicsResourceFlag) (shaderWrite | c::EGraphicsResourceFlag_CPUBacked);
 
 		constexpr c::U64 window = (c::U64) 16 << 10;
 
@@ -330,9 +340,12 @@ extern "C" void Test_graphicsOverBudget(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 		c::Error *e_rr = &t->err;
 		c::Bool created = true;
 
-		const c::Bool shader = dev.hasBindlessTable() && gfxtest::loadFile(
+		const c::Bool shader = bindless && gfxtest::loadFile(
 			t, "//OxC3_gtest/test_shaders/test_read_bindless.oiSH", file.list
 		);
+
+		if(!bindless)
+			c::Test_print(t, "Device has no bindless descriptor table, skipping the reads of the forbidden buffers");
 
 		if(c::Test_assert(t, "forbiddenData", c::Buffer_createUninitializedBytes(bytes, dev.alloc(), &data, e_rr))) {
 
