@@ -45,13 +45,17 @@
 #include "platforms/mouse.h"
 #include "platforms/file.h"
 #include "platforms/dynamic_library.h"
+#include "formats/oiCA/ca_lookup.h"
+#include "formats/oiCA/ca_props.h"
 #include "types/test/test.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/container/memory_stream.h"
+#include "types/container/encryption_stream.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
+#include "types/base/time.h"
 #include "types/container/string_unicode.h"
 #include "types/container/list_basic_types.h"
 
@@ -85,6 +89,8 @@ static const char *vLibrary        = "//" _OXC3_TEST_VFS_TARGET;
 static const char *vSection        = "//" _OXC3_TEST_VFS_TARGET "/testdata";
 static const char *vFileHello      = "//" _OXC3_TEST_VFS_TARGET "/testdata/hello.txt";
 static const char *vFileSub        = "//" _OXC3_TEST_VFS_TARGET "/testdata/sub/world.txt";
+static const char *vLargeSection   = "//" _OXC3_TEST_VFS_TARGET "/largedata";
+static const char *vFileLarge      = "//" _OXC3_TEST_VFS_TARGET "/largedata/large.txt";
 
 // -- 1. WindowManager lifecycle ------------------------------------------------
 
@@ -845,6 +851,218 @@ static void Test_fileRepeatedOpenClose(Test *t) {
 	File_remove(&dir, 50 * MS, t->alloc, NULL);
 }
 
+// -- 4f. File - Retry pause ----------------------------------------------------
+
+//The pause between two tries of a file call that retries: a quarter of the timeout the call was given plus a nanosecond,
+// at most a second, the same between every pair of tries.
+//U64_MAX (wait as long as it takes) and every timeout near it pause the full second. A pause that wrapped to a
+// nanosecond would keep a core spinning for as long as the file stays busy.
+//The calls themselves take their pause from File_retryPause: with U64_MAX as the timeout, a file that turns up (or is
+// let go) a moment after the first try is found by the try that follows the full second, where a pause that wrapped
+// finds it at once.
+
+//What a helper thread does a short while after it started: it releases a handle, or creates a file
+
+typedef struct FileRetryHelper {
+	const Allocator *alloc;
+	CharString path;
+	FileHandleRef *held;
+	Ns delay;
+} FileRetryHelper;
+
+static void Test_fileRetryHelper(void *ptr) {
+
+	FileRetryHelper *helper = (FileRetryHelper*) ptr;
+	Thread_sleep(helper->delay);
+
+	if(helper->held)
+		RefPtr_dec(&helper->held);
+
+	else (void) File_add(&helper->path, EFileType_File, false, helper->alloc, NULL);
+}
+
+//Starts a helper, runs the call that retries and returns how long it took
+
+static Ns Test_fileRetryRun(Test *t, FileRetryHelper *helper, Bool remove, const RefPtrType *type, Bool *succeeded) {
+
+	Thread *thread = NULL;
+	Bool started = Test_assert(t, "retryThread", Thread_create(t->alloc, Test_fileRetryHelper, helper, &thread, &t->err));
+
+	const Ns start = Time_now();
+	FileHandleRef *opened = NULL;
+
+	*succeeded = started && (
+		remove ? File_remove(&helper->path, U64_MAX, t->alloc, &t->err) :
+		File_open(&helper->path, U64_MAX, EFileOpenType_Read, false, type, &opened, &t->err)
+	);
+
+	const Ns elapsed = Time_now() - start;
+
+	if(opened)
+		RefPtr_dec(&opened);
+
+	if(thread)
+		Test_assert(t, "retryJoin", Thread_waitAndCleanup(t->alloc, &thread, &t->err));
+
+	return elapsed;
+}
+
+static void Test_fileRetryPause(Test *t) {
+
+	Test_setModule(t, "File/RetryPause");
+
+	Test_assert(t, "pauseZero", File_retryPause(0) == 1);
+	Test_assert(t, "pauseSmall", File_retryPause(3) == 1 && File_retryPause(4) == 2 && File_retryPause(100) == 26);
+	Test_assert(t, "pauseMs", File_retryPause(50 * MS) == 12500001);
+	Test_assert(t, "pauseBelowCap", File_retryPause(3 * SECOND) == 750000001);
+	Test_assert(t, "pauseAtCap", File_retryPause(4 * SECOND) == SECOND && File_retryPause(1 * HOUR) == SECOND);
+
+	Test_assert(t, "pauseMax", File_retryPause(U64_MAX) == SECOND);
+
+	//The timeouts closest to U64_MAX, where rounding the quarter up by adding to the timeout would wrap
+
+	Bool nearMax = true;
+
+	for(U64 i = 0; i < 16; ++i)
+		nearMax &= File_retryPause(U64_MAX - i) == SECOND;
+
+	Test_assert(t, "pauseNearMax", nearMax);
+
+	//Never zero (a zero pause is a spin), never above a second, never above a quarter of the time left plus one
+
+	Bool bounded = true;
+
+	for(U64 i = 0; i < 4096; ++i) {
+
+		const Ns timeout = i < 2048 ? i : i * 0x9E3779B97F4A7C15ULL;
+		const Ns pause = File_retryPause(timeout);
+		bounded &= pause >= 1 && pause <= SECOND && pause <= (timeout >> 2) + 1;
+	}
+
+	Test_assert(t, "pauseBounded", bounded);
+
+	//The calls: with the whole second as pause, one that has to wait for a file takes a second to find it
+	//Each waits on a helper thread, and web without pthreads can't spawn one.
+
+	#if _PLATFORM_TYPE == PLATFORM_WEB && !defined(__EMSCRIPTEN_PTHREADS__)
+		Test_print(t, "Web without pthreads can't spawn threads, skipping the calls that wait for a helper thread");
+		return;
+	#endif
+
+	RefPtrType fhType = FileHandle_makeType(t->alloc);
+	CharString dir = CharString_createRefCStrConst("platform_test_retry");
+	CharString file = CharString_createRefCStrConst("platform_test_retry/data.bin");
+
+	File_remove(&dir, 50 * MS, t->alloc, NULL);
+
+	if(!Test_assert(t, "retryDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err)))
+		return;
+
+	//Opening a missing file, which a helper creates after 100 ms
+
+	{
+		FileRetryHelper helper = { .alloc = t->alloc, .path = file, .delay = 100 * MS };
+		Bool opened = false;
+		const Ns elapsed = Test_fileRetryRun(t, &helper, false, &fhType, &opened);
+
+		Test_assert(t, "retryOpenFound", opened);
+		Test_assert(t, "retryOpenPauses", elapsed >= 500 * MS && elapsed < 30 * SECOND);
+	}
+
+	//Removing a file that is held open (Windows refuses to delete it), which a helper releases after 100 ms; elsewhere the
+	// file goes at once, so that leg has nothing to retry
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	{
+		FileHandleRef *held = NULL;
+
+		if(Test_assert(t, "retryHold", File_open(&file, 50 * MS, EFileOpenType_Read, false, &fhType, &held, &t->err))) {
+
+			FileRetryHelper helper = { .alloc = t->alloc, .path = file, .held = held, .delay = 100 * MS };
+			Bool removed = false;
+			const Ns elapsed = Test_fileRetryRun(t, &helper, true, &fhType, &removed);
+
+			Test_assert(t, "retryRemoveDone", removed);
+			Test_assert(t, "retryRemovePauses", elapsed >= 500 * MS && elapsed < 30 * SECOND);
+		}
+	}
+	#endif
+
+	File_remove(&dir, 50 * MS, t->alloc, NULL);
+}
+
+// -- 4g. File - the platform's types --------------------------------------------------------------
+
+//Whether a type is the one its maker gives for the platform's allocator.
+
+static Bool Test_isPlatformType(const RefPtrType *type, RefPtrType made) {
+	return type->typeId == made.typeId && type->lengthAndAlignment == made.lengthAndAlignment && type->alloc == made.alloc;
+}
+
+//Platform_create makes a type per object the file calls create, from the platform's allocator.
+//A file call given NULL for a type uses the platform's, so what it creates refers to that one.
+
+static void Test_filePlatformTypes(Test *t) {
+
+	Test_setModule(t, "File/PlatformTypes");
+
+	const PlatformTypes *types = &Platform_instance->types;
+	const Allocator *alloc = Platform_instance->alloc;
+
+	Test_assert(t, "memoryStreamType", Test_isPlatformType(&types->memoryStream, MemoryStream_makeType(alloc)));
+	Test_assert(t, "encryptionType", Test_isPlatformType(&types->encryptionStream, EncryptionStream_makeType(alloc)));
+	Test_assert(t, "fileHandleType", Test_isPlatformType(&types->fileHandle, FileHandle_makeType(alloc)));
+	Test_assert(t, "fileStreamType", Test_isPlatformType(&types->fileStream, FileStream_makeType(alloc)));
+
+	CharString dir  = CharString_createRefCStrConst("platform_test_types");
+	CharString file = CharString_createRefCStrConst("platform_test_types/data.bin");
+
+	const Buffer payload = Buffer_createRefConst("platform types", 14);
+	Buffer readBuf = Buffer_createNull();
+	FileHandleRef *handle = NULL;
+	StreamRef *stream = NULL;
+
+	File_remove(&dir, 50 * MS, alloc, NULL);
+
+	if(!Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, alloc, &t->err)))
+		return;
+
+	//File_write and File_read, whose output then comes from the platform's allocator
+
+	Test_assert(t, "writeNullType", File_write(&payload, &file, 0, 0, 50 * MS, false, NULL, &t->err));
+
+	if(Test_assert(t, "readNullType", File_read(&file, 50 * MS, 0, 0, NULL, &readBuf, &t->err)))
+		Test_assert(t, "readNullTypeContent", Buffer_eq(readBuf, payload));
+
+	Buffer_free(&readBuf, alloc);
+
+	//File_open, then FileHandle_openStream taking that handle over
+
+	if(Test_assert(t, "openNullType", File_open(&file, 50 * MS, EFileOpenType_Read, false, NULL, &handle, &t->err))) {
+
+		Test_assert(t, "openPlatformType", handle->refPtrType == &types->fileHandle);
+
+		if(Test_assert(t, "adoptNullType", FileHandle_openStream(&handle, NULL, &stream, &t->err)))
+			Test_assert(t, "adoptPlatformType", stream->refPtrType == &types->fileStream);
+	}
+
+	RefPtr_dec(&stream);
+	RefPtr_dec(&handle);
+
+	//File_openStream with both types NULL
+
+	const Bool opened = File_openStream(&file, 50 * MS, EFileOpenType_Read, false, NULL, NULL, &stream, &t->err);
+
+	if(Test_assert(t, "openStreamNullTypes", opened)) {
+		const FileStream *fileStream = RefPtr_data(stream, FileStream);
+		Test_assert(t, "openStreamPlatformType", stream->refPtrType == &types->fileStream);
+		Test_assert(t, "openStreamHandlePlatformType", fileStream->handle->refPtrType == &types->fileHandle);
+	}
+
+	RefPtr_dec(&stream);
+	File_remove(&dir, 50 * MS, alloc, NULL);
+}
+
 // -- 5. File (virtual) ---------------------------------------------------------
 
 static void Test_platformsFileVirtual(Test *t) {
@@ -1093,6 +1311,116 @@ static void Test_virtualEdgeCases(Test *t) {
 	Test_assert(t, "rootAlwaysExists", File_hasFolder(&vRoot, t->alloc));
 	U64 count = 0;
 	Test_assert(t, "rootEmpty", File_queryFileObjectCountAll(&vRoot, true, &count, t->alloc, &t->err) && count == 0);
+}
+
+// -- 5c. Virtual - the platform's stream type and allocator ----------------------------------------
+
+//Counts the allocations a caller's allocator still holds, to show that a mount keeps none of them.
+
+typedef struct VirtualCountingAllocator {
+	const Allocator *inner;
+	I64 live;
+} VirtualCountingAllocator;
+
+static Bool VirtualCountingAllocator_alloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
+
+	VirtualCountingAllocator *counting = (VirtualCountingAllocator*) allocator;
+
+	if(!counting->inner->alloc(counting->inner->ptr, length, output, e_rr))
+		return false;
+
+	++counting->live;
+	return true;
+}
+
+static void VirtualCountingAllocator_free(void *allocator, Buffer buf) {
+	VirtualCountingAllocator *counting = (VirtualCountingAllocator*) allocator;
+	--counting->live;
+	counting->inner->free(counting->inner->ptr, buf);
+}
+
+//Whether the loaded section keeps the entry in a stream of the platform's type rather than in a copy.
+
+static Bool Test_virtualKeepsPlatformStream(const C8 *sectionPath, const C8 *entry) {
+
+	const CharString path = CharString_createRefCStrConst(sectionPath + 2);        //Sections are stored without the //
+	const CharString name = CharString_createRefCStrConst(entry);
+	Bool keeps = false;
+
+	const ELockAcquire acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return false;
+
+	for(U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
+
+		const VirtualSection *section = Platform_instance->virtualSections.ptr + i;
+
+		if(!section->loadedAndId || !CharString_equalsStringInsensitive(&section->path, &path))
+			continue;
+
+		const CAFile *caFile = &Platform_instance->archives.ptr[section->loadedAndId << 1 >> 1];
+
+		U64 streamOff = U64_MAX;
+		StreamRef *stream = CAFile_getDataStream(caFile, CAFile_resolve(caFile, name), &streamOff);
+
+		keeps = stream && stream->refPtrType == &Platform_instance->types.memoryStream;
+		RefPtr_dec(&stream);
+	}
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
+
+	return keeps;
+}
+
+//NULL stream types mount with the platform's, which outlive the stream an entry above the medium size stays in.
+//Only the memory stream's can be seen: the build packages every section without a key, so none is encrypted.
+//The mount is the platform's, so the caller's allocator gives it nothing and frees nothing of it.
+//large.txt is "0123456789abcdef" 10240 times (oxc3_add_large_test_data in src/platforms/test/large_test_data.cmake).
+
+static void Test_virtualPlatformOwned(Test *t) {
+
+	Test_setModule(t, "Virtual/PlatformOwned");
+
+	VirtualCountingAllocator counting = (VirtualCountingAllocator) { .inner = t->alloc };
+
+	const Allocator countingAlloc = (Allocator) {
+		.ptr = &counting, .alloc = VirtualCountingAllocator_alloc, .free = VirtualCountingAllocator_free
+	};
+
+	CharString secPath   = CharString_createRefCStrConst(vLargeSection);
+	CharString largePath = CharString_createRefCStrConst(vFileLarge);
+
+	const C8 *digits = "0123456789abcdef";
+	const U64 largeSize = 10240 * 16;
+
+	RefPtrType fhType = FileHandle_makeType(t->alloc);
+	Buffer readBuf = Buffer_createNull();
+
+	if(!Test_assert(t, "loadNullType", File_loadVirtual(&secPath, NULL, NULL, NULL, &countingAlloc, &t->err)))
+		return;
+
+	Test_assert(t, "loadKeepsNoCallerMemory", counting.live == 0);
+	Test_assert(t, "keepsPlatformStream", Test_virtualKeepsPlatformStream(vLargeSection, "large.txt"));
+
+	//Read back through that stream, after the call that made it returned
+
+	if(Test_assert(t, "readLarge", File_read(&largePath, 50 * MS, 0, 0, &fhType, &readBuf, &t->err))) {
+
+		Bool matches = Buffer_length(readBuf) == largeSize;
+
+		for(U64 i = 0; matches && i < largeSize; ++i)
+			matches = readBuf.ptr[i] == (U8) digits[i & 15];
+
+		Test_assert(t, "largeContent", matches);
+	}
+
+	Buffer_free(&readBuf, t->alloc);
+
+	Test_assert(t, "unload", File_unloadVirtual(&secPath, &countingAlloc, &t->err));
+	Test_assert(t, "unloadFreesNoCallerMemory", counting.live == 0);
+	Test_assert(t, "unloaded", !File_isVirtualLoaded(&secPath, t->alloc, NULL));
 }
 
 // -- 6. DynamicLibrary ---------------------------------------------------------
@@ -1446,6 +1774,27 @@ static void Test_platformEnv(Test *t) {
 	Test_setEnv(t, name, NULL);
 }
 
+//The memory the machine reports.
+//Available memory is a part of the installed memory where that is known, and what can still be committed is only a
+// number where the system enforces a commit limit.
+
+static void Test_platformMemory(Test *t) {
+
+	Test_setModule(t, "Platform/memory");
+
+	const U64 physical = Platform_getPhysicalRAM();
+	const U64 available = Platform_getAvailableRAM();
+	const U64 commit = Platform_getAvailableCommit();
+
+	Test_assert(t, "availableWithinPhysical", !physical || available <= physical);
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		Test_assert(t, "commitKnown", commit != 0);
+	#else
+		Test_assert(t, "commitUnlimited", commit == 0);
+	#endif
+}
+
 static void Test_allocatorAlignment(Test *t) {
 
 	Test_setModule(t, "Platform/Allocator");
@@ -1582,15 +1931,19 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	Test_fileEdgeCases(&t);
 	Test_fileCaseAndUtf8(&t);
 	Test_fileRepeatedOpenClose(&t);
+	Test_fileRetryPause(&t);
+	Test_filePlatformTypes(&t);
 
 	Test_platformsFileVirtual(&t);
 	Test_virtualForeachRoundTrip(&t);
 	Test_virtualEdgeCases(&t);
+	Test_virtualPlatformOwned(&t);
 
 	Test_dynamicLibrary(&t);
 
 	Test_resolution(&t);
 	Test_windowNullguards(&t);
+	Test_platformMemory(&t);
 	Test_allocatorAlignment(&t);
 	Test_allocatorTracking(&t);
 	Test_platformEnv(&t);

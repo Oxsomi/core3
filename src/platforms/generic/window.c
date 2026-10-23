@@ -209,10 +209,6 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	Bool s_uccess = true;
 	FileStreamRef *stream = NULL;
 	MemoryStreamRef *memStream = NULL;
-	RefPtrType memStreamType = MemoryStream_makeType(alloc);
-
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType streamType = FileStream_makeType(alloc);
 
 	if (!w)
 		retError(clean, Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required"));
@@ -240,12 +236,14 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	}
 
 	gotoIfError3(clean, File_openStream(
-		&filePath, maxTimeout, EFileOpenType_Write, true, &fileHandleType, &streamType, &stream, e_rr
+		&filePath, maxTimeout, EFileOpenType_Write, true, NULL, NULL, &stream, e_rr
 	));
 
 	Buffer buf = Buffer_createRefFromBuffer(w->cpuVisibleBuffer, true);
 	U64 len = Buffer_length(buf);
-	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, EMemoryStreamFlags_None, &memStreamType, &memStream, e_rr));
+	gotoIfError3(clean, MemoryStream_createFromBuffer(
+		&buf, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &memStream, e_rr
+	));
 
 	SubResourceData subResource = (SubResourceData) { .stream = memStream, .streamLen = len };
 	ListSubResourceData resources = (ListSubResourceData) { 0 };

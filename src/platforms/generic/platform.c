@@ -23,7 +23,10 @@
 #include "types/container/list_impl.h"
 #include "types/container/hash_set_impl.h"
 #include "types/container/buffer.h"
+#include "types/container/memory_stream.h"
+#include "types/container/encryption_stream.h"
 #include "platforms/platform.h"
+#include "platforms/file.h"
 #include "platforms/logx.h"
 #include "formats/oiCA/ca_file.h"
 #include "types/base/allocator.h"
@@ -635,6 +638,12 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 		.cpuFeatures = Platform_detectCPUFeatures(),
 		.data = data,
 		.alloc = &Allocator_trackedAllocator,
+		.types = (PlatformTypes) {
+			.memoryStream = MemoryStream_makeType(&Allocator_trackedAllocator),
+			.encryptionStream = EncryptionStream_makeType(&Allocator_trackedAllocator),
+			.fileHandle = FileHandle_makeType(&Allocator_trackedAllocator),
+			.fileStream = FileStream_makeType(&Allocator_trackedAllocator)
+		},
 		.hashSeed = hashSeed
 	};
 

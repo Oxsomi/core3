@@ -94,6 +94,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileAddBinUniformEmptyName(&t);
 	Test_SHFileAddBinUniformDigitFirstChar(&t);
 	Test_SHFileAddBinUniformUnderscoreStart(&t);
+	Test_SHFileAddBinUniformUnderscoreBody(&t);
 	Test_SHFileAddBinUniformInvalidBodyChar(&t);
 	Test_SHFileAddBinUniformDuplicateName(&t);
 	Test_SHFileAddBinValid(&t);
@@ -138,6 +139,7 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRoundTripInclude(&t);
 	Test_SHFileRoundTripBinaryExtensions(&t);
 	Test_SHFileReadExtension2Count(&t);
+	Test_SHFileReadAutoDormant2(&t);
 	Test_SHFileRoundTripComputeGroupSize(&t);
 	Test_SHFileRoundTripRTStages(&t);
 	Test_SHFileRoundTripMultipleBinaries(&t);

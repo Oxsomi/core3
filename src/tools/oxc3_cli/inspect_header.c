@@ -163,9 +163,6 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	Bool success = false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType streamType = FileStream_makeType(alloc);
-	RefPtrType memStreamType = MemoryStream_makeType(alloc);
 
 	CharString path = CharString_createNull();
 	StreamRef *stream = NULL;
@@ -202,16 +199,18 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 
 	if (File_isVirtual(path)) {
 
-		if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &virtualBuf, &err)) {
+		if (!File_read(&path, 100 * MS, 0, 0, NULL, &virtualBuf, &err)) {
 			Log_errorLnx("Couldn't read virtual file.");
 			goto clean;
 		}
 
-		if (!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &memStreamType, &stream, &err))
+		if (!MemoryStream_createFromBuffer(
+			&virtualBuf, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &stream, &err
+		))
 			goto clean;
 	}
 
-	else if (!File_openStream(&path, 100 * MS, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, &err)) {
+	else if (!File_openStream(&path, 100 * MS, EFileOpenType_Read, false, NULL, NULL, &stream, &err)) {
 		Log_errorLnx("Couldn't open file.");
 		goto clean;
 	}

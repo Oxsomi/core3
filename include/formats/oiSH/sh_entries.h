@@ -179,6 +179,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 	EGfxBinaryType binaryType,
 	Buffer buf,
 	ESHExtension dormantExtensions,
+	ESHExtension2 dormantExtensions2,
 	SHBinaryInfo *binaryInfo,
 	Error *e_rr
 );

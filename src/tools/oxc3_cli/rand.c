@@ -384,7 +384,6 @@ Bool CLI_rand(const ParsedArgs *args) {
 	if (args->parameters & EOperationHasParameter_Output) {
 
 		CharString outputPath = CharString_createNull();
-		RefPtrType fhType = FileHandle_makeType(alloc);
 
 		if (!ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath, NULL)) {
 			errorString = "Invalid argument -output <string>, file path expected.";
@@ -394,7 +393,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 		}
 
 		errorString = "Couldn't write to output file";
-		gotoIfError3(clean, File_write(&outputFile, &outputPath, 0, 0, 1 * SECOND, true, &fhType, e_rr));
+		gotoIfError3(clean, File_write(&outputFile, &outputPath, 0, 0, 1 * SECOND, true, NULL, e_rr));
 	}
 
 	else {

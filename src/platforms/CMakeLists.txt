@@ -129,6 +129,9 @@ if(EnableTests AND OxC3TestExecutables)
 		SELF    ${CMAKE_CURRENT_SOURCE_DIR}/../..
 		FORCE_PACKAGER
 	)
+
+	include(test/large_test_data.cmake)
+	oxc3_add_large_test_data(OxC3_plinttst ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 	
 	apply_dependencies(OxC3_plinttst)
 

@@ -132,9 +132,20 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 	Bool shouldPush = false;
 
 	if(fullRange) {
+
 		gotoIfError3(clean, ListDevicePendingRange_clear(&texture->pendingChanges, e_rr));
 		texture->isPendingFullCopy = true;
 		shouldPush = true;
+
+		//The one pending range stands for the whole texture, since later marks are skipped while it is pending.
+		//The caller's region alone would leave the pixels of those marks behind.
+
+		x = 0;
+		y = 0;
+		z = 0;
+		w = (U16) utex->width;
+		h = (U16) utex->height;
+		l = (U16) utex->length;
 	}
 
 	//Otherwise we have to merge current pending ranges

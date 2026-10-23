@@ -73,7 +73,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 
 const C8 *ESHExtension2_defines[ESHExtension2_Count] = {
 	"EXPERIMENTTIER1",
-	"EXPERIMENTTIER2"
+	"EXPERIMENTTIER2",
+	"INTEGERDOT4X8"
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -111,7 +112,8 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 
 const C8 *ESHExtension2_names[ESHExtension2_Count] = {
 	"ExperimentTier1",
-	"ExperimentTier2"
+	"ExperimentTier2",
+	"IntegerDot4x8"
 };
 
 void SHExtensionSet_logNames(SHExtensionSet set, const Allocator *alloc) {

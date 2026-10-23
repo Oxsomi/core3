@@ -34,7 +34,6 @@
 Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	Buffer buf = Buffer_createNull();
 	CharString tmp = CharString_createNull();
@@ -44,7 +43,7 @@ Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 	if(!isFile)
 		buf = CharString_bufferConst(str);
 
-	else gotoIfError3(clean, File_read(&str, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr));
+	else gotoIfError3(clean, File_read(&str, 100 * MS, 0, 0, NULL, &buf, e_rr));
 
 	switch(format) {
 

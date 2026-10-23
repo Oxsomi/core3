@@ -67,7 +67,26 @@ typedef enum EGraphicsResourceFlag {
 
 	EGraphicsResourceFlag_InternalOwnsImages        = 1 << 8,
 
+	//A buffer in host memory that the device reads over the bus, never in video memory; set it through HostMemory.
+	//Only for a DeviceBuffer of usage None, filled at create (createBufferData or createBufferStream), without a CPU copy.
+	//CPUBacked, CPUReadBit, ShaderWrite and ExposeBindlessWrite are refused, and so are textures.
+
+	EGraphicsResourceFlag_HostMemoryBit             = 1 << 9,
+
+	//HostMemory with CPU cached pages, which the CPU reads and writes through DeviceBufferRef_hostMemory(Writable).
+	//Set it through HostMemoryRead; createBuffer accepts it without data.
+	//Not CPUReadBit, the internal staging memory pullRegion reads back into.
+
+	EGraphicsResourceFlag_HostMemoryReadBit         = 1 << 10,
+
 	EGraphicsResourceFlag_CPUAllocated              = EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUAllocatedBit,
+
+	EGraphicsResourceFlag_HostMemory                =
+		EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_HostMemoryBit,
+
+	EGraphicsResourceFlag_HostMemoryRead            =
+		EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_HostMemoryBit |
+		EGraphicsResourceFlag_HostMemoryReadBit,
 
 	EGraphicsResourceFlag_ShaderRWBindful           =
 		EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite,
@@ -230,7 +249,8 @@ typedef struct GraphicsResource {
 
 	U64 deviceAddress;                      //Contains the memory address on the device if available (otherwise 0)
 
-	U64 padding;                            //Padding to 16-byte to allow next element to have vectors
+	Bool hostUncached;                      //HostMemoryRead memory the CPU can only read uncached, so hostMemory returns NULL
+	U8 padding[7];                          //Padding to 16-byte to allow next element to have vectors
 
 } GraphicsResource;
 

@@ -93,6 +93,11 @@ const C8 *EOperationHasParameter_names[] = {
 	"-exposure"
 };
 
+static_assert(
+	sizeof(EOperationHasParameter_names) / sizeof(EOperationHasParameter_names[0]) == EOperationHasParameter_CountEnum,
+	"EOperationHasParameter_names needs one name per shift"
+);
+
 const C8 *EOperationHasParameter_descriptions[] = {
 	"File format",
 	"Input string or path (relative)",
@@ -124,6 +129,12 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Display transform from HDR to 8 bit: none, reinhard, aces, agx or neutral (the default, PBR Neutral).",
 	"Exposure in stops before the display transform (e.g. -1.5); automatic when absent, mid grey at the log average."
 };
+
+static_assert(
+	sizeof(EOperationHasParameter_descriptions) / sizeof(EOperationHasParameter_descriptions[0]) ==
+	EOperationHasParameter_CountEnum,
+	"EOperationHasParameter_descriptions needs one description per shift"
+);
 
 //Flags
 

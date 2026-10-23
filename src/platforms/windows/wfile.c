@@ -75,7 +75,7 @@ static Ns Ns_fromFileTime(FILETIME ft) {
 //Helper: retry loop
 #define FILE_RETRY_LOOP(maxTimeout, expr)                                            \
 	{                                                                                \
-		Ns _maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);              \
+		Ns _maxTimeoutTry = File_retryPause(maxTimeout);                             \
 		while((expr) && maxTimeout) {                                                \
 			Thread_sleep(_maxTimeoutTry);                                            \
 			if(maxTimeout <= _maxTimeoutTry) { maxTimeout = 0; break; }              \
@@ -336,7 +336,7 @@ Bool File_openPhysical(
  
 	HANDLE h = CreateFileW(buf, access, share, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL);
  
-	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);
+	Ns maxTimeoutTry = File_retryPause(maxTimeout);
 	while(h == INVALID_HANDLE_VALUE && maxTimeout) {
 		Thread_sleep(maxTimeoutTry);
 		h = CreateFileW(buf, access, share, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL);

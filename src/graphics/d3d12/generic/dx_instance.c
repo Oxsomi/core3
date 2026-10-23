@@ -190,6 +190,7 @@ static_assert(sizeof(DxSwapchain) % 16 == 0, "DxSwapchain has to be a multiple o
 			.deviceFree = D3D12GraphicsDevice_free,
 			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
 			.deviceGetMemoryBudget = D3D12GraphicsDevice_getMemoryBudget,
+			.deviceGetMemoryLimit = D3D12GraphicsDevice_getMemoryLimit,
 			.deviceLoadPipelineCache = D3D12GraphicsDevice_loadPipelineCache,
 			.deviceSavePipelineCache = D3D12GraphicsDevice_savePipelineCache,
 
@@ -879,6 +880,10 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasDRED)
 			caps.flags.features2 |= EGraphicsFeatures2_DeviceFault;
+
+		//Packed 4 x 8 bit integer dot products (dot4add_i8packed) are shader model 6.4, below the 6.5 a device needs here.
+
+		caps.flags.features2 |= EGraphicsFeatures2_IntegerDot4x8;
 
 		//Predication is core D3D12 (SetPredication), so every device carries the capability.
 

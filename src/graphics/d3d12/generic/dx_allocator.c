@@ -33,7 +33,8 @@
 #include "types/base/constants.h"
 
 D3D12_HEAP_DESC getDxHeapDesc(
-	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap
+	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap,
+	Bool hostMemory, Bool hostRead
 ) {
 
 	Bool hasReBAR = device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReBAR;
@@ -43,7 +44,7 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	if(!isGpu || hasReBAR)            //Force shared allocations if not dedicated or if ReBAR is available
 		*cpuSided = true;
 
-	if(readback)
+	if(readback || hostMemory)
 		*cpuSided = true;
 
 	//A heap's own alignment must be one of the legal D3D12 values:
@@ -64,8 +65,10 @@ D3D12_HEAP_DESC getDxHeapDesc(
 			//ReBAR is a window for CPU WRITES into video memory, so a readback heap has no business in L1: reading
 			// it back wants WRITE_BACK, which is only legal beside L0, and the two together are refused outright
 			// rather than downgraded. Every heap here becomes CUSTOM below, so nothing else catches it.
+			//Host memory (hostMemory) stays in L0 too, since L1 is video memory.
 
-			.MemoryPoolPreference = isGpu && hasReBAR && !readback ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
+			.MemoryPoolPreference =
+				isGpu && hasReBAR && !readback && !hostMemory ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
 			.CPUPageProperty = readback ? D3D12_CPU_PAGE_PROPERTY_WRITE_BACK : D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
 		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,        //Equal to vulkan behavior, clear manually
@@ -99,6 +102,19 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	if (!isGpu || hasReBAR)
 		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
 
+	//Host memory is a custom heap in L0 (host memory) on every adapter, which an upload heap or ReBAR's L1 isn't.
+	//The CPU reads it at memory speed from WRITE_BACK pages (hostRead), which a write combined mapping's uncached reads
+	// (a few hundred MB/s) are no substitute for. The device reads either over the bus.
+	//A UMA adapter that isn't cache coherent keeps its pages write combined, as every heap of it does. One that is
+	// coherent has write back pages for every CPU visible heap (the override below), host memory included.
+
+	if (hostMemory) {
+		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
+		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+		heapDesc.Properties.CPUPageProperty =
+			hostRead && isGpu ? D3D12_CPU_PAGE_PROPERTY_WRITE_BACK : D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+	}
+
 	//Coherent UMA snoops the CPU caches for free, so upload memory wants WRITE_BACK there;
 	// hardcoded WRITE_COMBINE is wrong on those and the debug layer rightly warns on every heap created with it.
 	//The ReBAR path above keeps its explicit L1 + WRITE_COMBINE, which is the point of ReBAR.
@@ -125,6 +141,79 @@ D3D12_HEAP_DESC getDxHeapDesc(
 	}
 
 	return heapDesc;
+}
+
+Bool DxGraphicsDevice_forbidsOverBudget(GraphicsDevice *device) {
+	return AtomicI64_load(&device->noOverBudgetFallback) > 0;
+}
+
+Bool DxGraphicsDevice_heapInVideoMemory(GraphicsDevice *device, const D3D12_HEAP_DESC *heap) {
+	return
+		device->info.type == EGraphicsDeviceType_Dedicated &&
+		(
+			heap->Properties.Type == D3D12_HEAP_TYPE_DEFAULT ||
+			(heap->Properties.Type == D3D12_HEAP_TYPE_CUSTOM && heap->Properties.MemoryPoolPreference == D3D12_MEMORY_POOL_L1)
+		);
+}
+
+Bool DxGraphicsDevice_checkBudget(GraphicsDevice *device, Bool isDeviceLocal, U64 bytes, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	U64 budget = U64_MAX;
+	const U64 used = DxGraphicsDevice_getMemoryUsage(device, isDeviceLocal, &budget);
+
+	if(used != U64_MAX && budget != U64_MAX && (used > budget || bytes > budget - used))
+		retError(clean, Error_outOfMemory(
+			0, "DxGraphicsDevice_checkBudget() the allocation would go past the OS budget, which "
+			"GraphicsDeviceRef_forbidOverBudgetFallback refuses"
+		));
+
+clean:
+	return s_uccess;
+}
+
+Bool DxGraphicsDevice_makeResident(GraphicsDevice *device, ID3D12Pageable *object, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	//EnqueueMakeResident signals its fence in call order, so a value is taken and enqueued under one lock: the fence
+	// then reaches each value only once its own object and every earlier one are resident.
+	//The wait is outside it, since it lasts as long as the OS takes to make the object resident.
+	//A refused request skips its value, so every later one waits for a value the fence hasn't reached.
+
+	const ELockAcquire acq = SpinLock_lock(&deviceExt->residencyLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "DxGraphicsDevice_makeResident() couldn't lock the residency fence"));
+
+	const U64 value = (U64) AtomicI64_inc(&deviceExt->residencyValue);
+
+	const HRESULT hr = deviceExt->device->lpVtbl->EnqueueMakeResident(
+		deviceExt->device, D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, 1, &object, deviceExt->residencyFence, value
+	);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&deviceExt->residencyLock);
+
+	if(hr == E_OUTOFMEMORY)
+		retError(clean, Error_outOfMemory(
+			1, "DxGraphicsDevice_makeResident() the OS refused to go past its budget for the allocation, which "
+			"GraphicsDeviceRef_forbidOverBudgetFallback asks for"
+		));
+
+	gotoIfError3(clean, dxCheck(hr, e_rr));
+
+	//A null event blocks until the fence reaches the value, which is when the object is resident
+
+	gotoIfError3(clean, dxCheck(deviceExt->residencyFence->lpVtbl->SetEventOnCompletion(
+		deviceExt->residencyFence, value, NULL
+	), e_rr));
+
+clean:
+	return s_uccess;
 }
 
 void DxGraphicsDevice_setResidencyPriority(DxGraphicsDevice *deviceExt, ID3D12Pageable *object, Bool cpuSide, Bool high) {
@@ -157,6 +246,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	ID3D12Heap *heap = NULL;
+	U32 pending = U32_MAX;        //The listed block whose heap is not resident yet
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		retError(clean, Error_nullPointer(
@@ -173,7 +263,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	const Bool readback = req.flags & EDxBlockFlags_Readback;
 	const Bool asHeap = req.flags & EDxBlockFlags_ASHeap;
 	const Bool requestedCpu = cpuSided;        //Before the device type can force it
-	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType, readback, asHeap);
+	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType, readback, asHeap, false, false);
 
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
@@ -210,8 +300,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Where the heap lives, which cpuSided doesn't say: ReBAR marks every heap CPU sided but puts it in video memory (L1)
 
-	const Bool inVideoMemory =
-		device->info.type == EGraphicsDeviceType_Dedicated && !readback && (asHeap || hasReBAR || !requestedCpu);
+	const Bool inVideoMemory = DxGraphicsDevice_heapInVideoMemory(device, &heapDesc);
 
 	const U64 blockSize = inVideoMemory ? device->blockSizeGpu : device->blockSizeCpu;
 	const Bool isDedicated = req.length > blockSize / 2;
@@ -304,6 +393,16 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		realBlockSize >>= 1;
 
 	heapDesc.SizeInBytes = realBlockSize;
+
+	//Forbidden from going past the budget (GraphicsDeviceRef_forbidOverBudgetFallback): refused before the heap exists,
+	// and created not resident otherwise so that the OS decides it fits when it is made resident
+
+	const Bool forbidden = DxGraphicsDevice_forbidsOverBudget(device);
+
+	if(forbidden) {
+		gotoIfError3(clean, DxGraphicsDevice_checkBudget(device, inVideoMemory, realBlockSize, e_rr));
+		heapDesc.Flags |= D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT;
+	}
 
 	if(
 		known && usedMem + realBlockSize > budget &&
@@ -403,21 +502,74 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		CharString_free(&temp, alloc);
 	}
 
+	//A heap that is not resident yet is listed without its heap, which keeps every other allocation out of it. The lock
+	// is not held while the OS makes it resident: that waits on the GPU, and each other allocation would spin through it.
+
+	DeviceMemoryBlock listed = block;
+
+	if(forbidden)
+		listed.ext = NULL;
+
 	if(i == allocator->blocks.length) {
 
 		if(i == U32_MAX)
 			retError(clean, Error_outOfBounds(0, i, U32_MAX, "D3D12DeviceMemoryAllocator_allocate() block out of bounds"));
 
-		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, block, alloc, e_rr));
+		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, listed, alloc, e_rr));
 	}
 
-	else allocator->blocks.ptrNonConst[i] = block;
+	else allocator->blocks.ptrNonConst[i] = listed;
+
+	if(forbidden) {
+
+		pending = (U32) i;
+
+		const Bool owned = acq == ELockAcquire_Acquired;
+
+		if(owned) {
+			SpinLock_unlock(&allocator->lock);
+			acq = ELockAcquire_Invalid;
+		}
+
+		gotoIfError3(clean, DxGraphicsDevice_makeResident(device, (ID3D12Pageable*) heap, e_rr));
+
+		if(owned)
+			acq = SpinLock_lock(&allocator->lock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
+			retError(clean, Error_invalidState(0, "D3D12DeviceMemoryAllocator_allocate() couldn't lock the allocator again"));
+
+		allocator->blocks.ptrNonConst[pending].ext = heap;
+		pending = U32_MAX;
+	}
 
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 	*resultBlock = block;
 
 clean:
+
+	//A heap that was listed but could not be made resident is given back, with the slot it took
+
+	if(pending != U32_MAX) {
+
+		const ELockAcquire relock = acq >= ELockAcquire_Success ? acq : SpinLock_lock(&allocator->lock, U64_MAX);
+
+		if(relock >= ELockAcquire_Success) {
+
+			DeviceMemoryBlock *listedBlock = &allocator->blocks.ptrNonConst[pending];
+			AllocationBuffer_free(&listedBlock->allocations, alloc);
+			listedBlock->isActive = false;
+
+			while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->isActive)
+				ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL, NULL);
+
+			if(relock == ELockAcquire_Acquired && acq < ELockAcquire_Success)
+				SpinLock_unlock(&allocator->lock);
+		}
+
+		block.allocations = (AllocationBuffer) { 0 };        //The list owns them
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&allocator->lock);

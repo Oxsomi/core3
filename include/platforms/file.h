@@ -25,10 +25,19 @@
 #include "types/container/file_base.h"
 #include "types/container/stream.h"
 #include "types/base/types.h"
+#include "types/base/constants.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+//The pause between two tries of a file call given maxTimeout to wait: a quarter of it plus a nanosecond, at most a second.
+//U64_MAX (wait as long as it takes) pauses a second between tries.
+
+static inline Ns File_retryPause(Ns maxTimeout) {
+	const Ns pause = (maxTimeout >> 2) + 1;
+	return pause < SECOND ? pause : SECOND;
+}
 
 Bool File_getInfo(const CharString *loc, FileInfo *info, const Allocator *alloc, Error *e_rr);
 //Callbacks always receive fully qualified paths: absolute for physical entries, //-prefixed for virtual ones.
@@ -165,6 +174,9 @@ typedef struct RefPtr RefPtr;
 typedef struct RefPtrType RefPtrType;
 typedef RefPtr FileHandleRef;
 
+//Every call below that takes a type uses the platform's (Platform_instance->types) when given NULL.
+//File_read allocates its output with its type's allocator, so with NULL that is the platform's.
+
 RefPtrType FileHandle_makeType(const Allocator *alloc);
 
 Bool File_open(
@@ -207,7 +219,9 @@ typedef struct FileLoadVirtual {
 	const RefPtrType *encStreamType;
 } FileLoadVirtual;
 
-//Load a virtual section
+//Load a virtual section.
+//A type that is passed must outlive the section; NULL, the platform's, always does.
+//alloc only serves the call: what the section keeps comes from the platform's allocator or from those types.
 Bool File_loadVirtual(
 	const CharString *loc,
 	const RefPtrType *memoryStreamType,

@@ -31,7 +31,9 @@
 
 Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_rr);
 
-Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *extension, Error *e_rr);
+Bool spvMapCapabilityToESHExtension(
+	SpvCapability capability, ESHExtension *extension, ESHExtension2 *extension2, Error *e_rr
+);
 
 Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_rr);
 

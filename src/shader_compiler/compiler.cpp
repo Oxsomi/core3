@@ -165,9 +165,8 @@ public:
 		Error *e_rr = NULL;
 		Bool s_uccess = true;
 
-		const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 		HRESULT hr = S_OK;
-		Buffer tempBuffer = Buffer_createNull();
+		Buffer tempBuffer = Buffer_createNull();        //File_read with a NULL type allocates it from the platform's allocator
 		CharString tempFile = CharString_createNull();
 		FileInfo fileInfo = FileInfo{};
 		Bool isVirtual = false;
@@ -273,7 +272,7 @@ public:
 
 					if (fileInfo.fileSize == prevInclude.fileSize) {
 
-						gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &tempBuffer, e_rr));
+						gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, NULL, &tempBuffer, e_rr));
 
 						gotoIfError3(clean, CharString_createCopy(
 							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
@@ -282,7 +281,7 @@ public:
 							e_rr
 						));
 
-						Buffer_free(&tempBuffer, alloc);
+						Buffer_free(&tempBuffer, Platform_instance->alloc);
 
 						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
 							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"));
@@ -344,7 +343,7 @@ public:
 			if(!isBuiltin) {
 
 				gotoIfError3(clean, File_getInfo(&resolved, &fileInfo, alloc, e_rr));
-				gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &tempBuffer, e_rr));
+				gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, NULL, &tempBuffer, e_rr));
 
 				Ns timestamp = fileInfo.timestamp;
 				FileInfo_free(&fileInfo, alloc);
@@ -380,7 +379,7 @@ public:
 
 				//Move buffer to includedData
 
-				Buffer_free(&tempBuffer, alloc);
+				Buffer_free(&tempBuffer, Platform_instance->alloc);
 
 				inc.includeInfo.file = resolved;
 				inc.data = tempFile;
@@ -455,7 +454,7 @@ public:
 		CharString_free(&resolved, alloc);
 		CharString_free(&fileName, alloc);
 		CharString_free(&tempFile, alloc);
-		Buffer_free(&tempBuffer, alloc);
+		Buffer_free(&tempBuffer, Platform_instance->alloc);
 		return hr;
 	}
 

@@ -103,6 +103,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	DxDeviceBuffer *bufExt = DeviceBuffer_ext(buf, Dx);
 	ListU16 name16 = (ListU16) { 0 };
+	U32 dedicatedBlock = U32_MAX;        //A dedicated block that is pushed while its resource is not made yet
 
 	//Query about alignment and size
 
@@ -227,13 +228,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 	const Bool readback = buf->resource.flags & EGraphicsResourceFlag_CPUReadBit;
+	const Bool hostMemory = buf->resource.flags & EGraphicsResourceFlag_HostMemoryBit;
+	const Bool hostRead = buf->resource.flags & EGraphicsResourceFlag_HostMemoryReadBit;
 
 	DeviceMemoryBlock block;
 
 	//When a buffer gets "too big" we will give it a dedicated allocation.
 	//This means ring buffers are always dedicated resources (they're always >64MiB).
+	//Host memory (EGraphicsResourceFlag_HostMemoryBit) always gets a committed resource of its own, sized to it.
 
-	if (buf->resource.size >= 64 * MIBI && device->info.type == EGraphicsDeviceType_Dedicated) {
+	if ((buf->resource.size >= 64 * MIBI && device->info.type == EGraphicsDeviceType_Dedicated) || hostMemory) {
 
 		block = (DeviceMemoryBlock) {
 			.isActive = true,
@@ -254,6 +258,24 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		if(usedMem != U64_MAX && usedMem + allocInfo.SizeInBytes > maxAlloc)
 			retError(clean, Error_outOfMemory(0, "Dedicated memory block allocation would exceed available memory"));
 
+		//Forbidden from going past the OS budget (GraphicsDeviceRef_forbidOverBudgetFallback): refused before anything is
+		// set aside, and the resource is created not resident and made resident under the OS's budget
+
+		D3D12_HEAP_DESC heap = getDxHeapDesc(
+			device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, readback,
+			!!(buf->usage & EDeviceBufferUsage_ASExt), hostMemory, hostRead
+		);
+
+		const Bool forbidden = DxGraphicsDevice_forbidsOverBudget(device);
+
+		if(forbidden) {
+			gotoIfError3(clean, DxGraphicsDevice_checkBudget(
+				device, DxGraphicsDevice_heapInVideoMemory(device, &heap), allocInfo.SizeInBytes, e_rr
+			));
+
+			heap.Flags |= D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT;
+		}
+
 		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
 		if(device->allocator.blocks.length >= U32_MAX)
@@ -261,6 +283,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		U32 blockId = (U32) device->allocator.blocks.length;
 		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&device->allocator.blocks, block, alloc, e_rr));
+		dedicatedBlock = blockId;
 
 		AllocationBuffer *allocBuf = &device->allocator.blocks.ptrNonConst[blockId].allocations;
 
@@ -288,10 +311,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 		acq = ELockAcquire_Invalid;
 
-		D3D12_HEAP_DESC heap = getDxHeapDesc(
-			device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined, readback,
-			!!(buf->usage & EDeviceBufferUsage_ASExt)
-		);
+		buf->resource.hostUncached = hostRead && heap.Properties.CPUPageProperty != D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(
@@ -315,6 +335,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			(void**)&bufExt->buffer
 		), e_rr));
 
+		if(forbidden)
+			gotoIfError3(clean, DxGraphicsDevice_makeResident(device, (ID3D12Pageable*) bufExt->buffer, e_rr));
+
 		DxGraphicsDevice_setResidencyPriority(
 			deviceExt, (ID3D12Pageable*) bufExt->buffer,
 			!!(buf->resource.flags & (EGraphicsResourceFlag_CPUAllocatedBit | EGraphicsResourceFlag_CPUReadBit)),
@@ -324,6 +347,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		buf->resource.allocated = true;
 		buf->resource.blockId = blockId;
 		buf->resource.blockOffset = 0;
+		dedicatedBlock = U32_MAX;
 	}
 
 	//Allocate as memory block
@@ -403,6 +427,27 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	bufExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 
 clean:
+
+	//A dedicated block whose resource was not made is given back, since the buffer never took it and so never frees it.
+	//Trailing inactive blocks go as well, as when a buffer frees its block.
+
+	if(dedicatedBlock != U32_MAX) {
+
+		const ELockAcquire relock = acq == ELockAcquire_Acquired ? acq : SpinLock_lock(&device->allocator.lock, U64_MAX);
+
+		if(relock >= ELockAcquire_Success) {
+
+			DeviceMemoryBlock *pushed = &device->allocator.blocks.ptrNonConst[dedicatedBlock];
+			AllocationBuffer_free(&pushed->allocations, alloc);
+			pushed->isActive = false;
+
+			while(device->allocator.blocks.length && !ListDeviceMemoryBlock_last(device->allocator.blocks)->isActive)
+				ListDeviceMemoryBlock_popBack(&device->allocator.blocks, NULL, NULL);
+
+			if(relock == ELockAcquire_Acquired && acq != ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+		}
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->allocator.lock);
@@ -596,7 +641,14 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 
 				//Allocate new staging buffer.
 
-				U64 newSize = prevSize * 2 + allocRange * 3;
+				const U64 newSize = GraphicsDeviceRef_stagingSizeFor(deviceRef, prevSize, allocRange);
+
+				if(!newSize)
+					retError(clean, Error_outOfBounds(
+						0, allocRange, device->info.capabilities.maxBufferSize / 3,
+						"DeviceBufferRef_flush() upload doesn't fit a third of the largest staging buffer"
+					));
+
 				gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
 
 				bufferAlloc = (AllocationBufferAllocate) {

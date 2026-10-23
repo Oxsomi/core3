@@ -1,4 +1,4 @@
-# Runs one test and judges it by its EXIT CODE alone.
+# Runs one test and judges it by its exit code, and optionally by what it printed.
 #
 # Needed because MSBuild's Exec task scans a command's output for error shaped lines and fails the step when it finds
 # one, whatever the process returned.
@@ -11,9 +11,14 @@
 # everything.
 #
 #   cmake -DTEST_EXE=<path> | -DTEST_COMMAND=<arg|arg|...>
-#        [-DTEST_NAME=<name>] [-DTEST_WORKING_DIR=<dir>] [-DTEST_ENV_FILE=<file>] -P run_test.cmake
+#        [-DTEST_NAME=<name>] [-DTEST_WORKING_DIR=<dir>] [-DTEST_ENV_FILE=<file>]
+#        [-DTEST_EXPECT=<regex>] [-DTEST_FAIL_ON=<regex>] -P run_test.cmake
 #
 # TEST_COMMAND is | separated, because a ; separated list would be split by -D itself.
+#
+# TEST_EXPECT is a regex the test's stdout has to match, such as the "-- End: Success (N)" of a suite that passed.
+# TEST_FAIL_ON is a regex that fails the test when either stream matches it, also with exit code 0 (a UBSan report).
+# Both are optional; without them a test is judged by its exit code alone.
 
 # TEST_EXE is one binary; TEST_COMMAND is a whole command line, which is what a suite driven by a script
 # needs. Exactly one of them.
@@ -100,7 +105,24 @@ execute_process(
 	ERROR_VARIABLE testError
 )
 
+set(testFailure "")
+
 if(NOT testResult EQUAL 0)
+	set(testFailure "exit ${testResult}")
+
+elseif(TEST_EXPECT AND NOT "${testOutput}" MATCHES "${TEST_EXPECT}")
+	set(testFailure "exit 0, but its output does not match \"${TEST_EXPECT}\"; it did not run to its end")
+
+elseif(TEST_FAIL_ON)
+
+	string(REGEX MATCH "[^\n]*(${TEST_FAIL_ON})[^\n]*" testReport "${testError}\n${testOutput}")
+
+	if(testReport)
+		set(testFailure "exit 0, but its output matches \"${TEST_FAIL_ON}\": ${testReport}")
+	endif()
+endif()
+
+if(testFailure)
 
 	message("${testOutput}")
 
@@ -108,7 +130,7 @@ if(NOT testResult EQUAL 0)
 		message("${testError}")
 	endif()
 
-	message(FATAL_ERROR "${TEST_NAME} FAILED (exit ${testResult})")
+	message(FATAL_ERROR "${TEST_NAME} FAILED (${testFailure})")
 endif()
 
 message(STATUS "${TEST_NAME} passed")

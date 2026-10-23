@@ -47,7 +47,7 @@ static inline Ns Ns_fromTimespec(struct timespec ts) {
 //Helper: retry loop
 #define FILE_RETRY_LOOP(maxTimeout, expr)                                           \
 	{                                                                               \
-		Ns _maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);             \
+		Ns _maxTimeoutTry = File_retryPause(maxTimeout);                            \
 		while((expr) && maxTimeout) {                                               \
 			Thread_sleep(_maxTimeoutTry);                                           \
 			if(maxTimeout <= _maxTimeoutTry) { maxTimeout = 0; break; }             \
@@ -320,7 +320,7 @@ Bool File_openPhysical(
  
 	int fd = open(resolved->ptr, flags, 0666);
  
-	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);
+	Ns maxTimeoutTry = File_retryPause(maxTimeout);
 	while(fd < 0 && maxTimeout) {
 		Thread_sleep(maxTimeoutTry);
 		fd = open(resolved->ptr, flags, 0666);

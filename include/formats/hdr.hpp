@@ -221,8 +221,6 @@ namespace oxc {
 			c::EHDRWriteFlags flags = c::EHDRWriteFlags_None, c::F32 exposure = 1, c::Error *e_rr = nullptr
 		) noexcept {
 
-			const c::RefPtrType streamType = c::FileStream_makeType(alloc);
-
 			//A ref of the caller's bytes: createFromBuffer takes ownership of an allocation, and these are borrowed,
 			// since a readback callback still owns them.
 
@@ -237,7 +235,7 @@ namespace oxc {
 			const RefPtr<c::OxStream> in = RefPtr<c::OxStream>::adopt(inRaw);
 
 			if(!c::File_openStream(
-				&loc.handle(), 0, c::EFileOpenType_Write, true, &types.fileHandle, &streamType, &outRaw, e_rr
+				&loc.handle(), 0, c::EFileOpenType_Write, true, &types.fileHandle, &types.fileStream, &outRaw, e_rr
 			))
 				return false;
 

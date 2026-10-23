@@ -202,9 +202,27 @@ D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data);
 D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset);
 
+//hostMemory (HostMemoryBit) is a custom heap in L0 (host memory) with write combined pages; hostRead (HostMemoryReadBit)
+// makes them WRITE_BACK, except on a UMA adapter that isn't cache coherent.
+//A cache coherent UMA adapter has WRITE_BACK pages for every CPU visible heap.
+
 D3D12_HEAP_DESC getDxHeapDesc(
-	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap
+	GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType, Bool readback, Bool asHeap,
+	Bool hostMemory, Bool hostRead
 );
+
+//While GraphicsDeviceRef_forbidOverBudgetFallback is in force (DxGraphicsDevice_forbidsOverBudget), a new heap or
+// committed resource that doesn't fit the budget the device knows for its segment is refused with Error_outOfMemory
+// (DxGraphicsDevice_checkBudget, DxGraphicsDevice_heapInVideoMemory).
+//Otherwise it is created with D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT and DxGraphicsDevice_makeResident makes it resident
+// with D3D12_RESIDENCY_FLAG_DENY_OVERBUDGET, which the OS can refuse (Error_outOfMemory).
+//makeResident waits on the GPU, so the allocator's lock is not held across it.
+//A device makes one object resident at a time, on a residency fence of its own.
+
+Bool DxGraphicsDevice_forbidsOverBudget(GraphicsDevice *device);
+Bool DxGraphicsDevice_heapInVideoMemory(GraphicsDevice *device, const D3D12_HEAP_DESC *heap);
+Bool DxGraphicsDevice_checkBudget(GraphicsDevice *device, Bool isDeviceLocal, U64 bytes, Error *e_rr);
+Bool DxGraphicsDevice_makeResident(GraphicsDevice *device, ID3D12Pageable *object, Error *e_rr);
 
 //Transitions entire resource rather than sub-resources
 

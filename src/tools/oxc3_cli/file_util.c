@@ -119,12 +119,11 @@ static Bool CLI_aesFromFile(CharString path, U32 outKey[8], Error *e_rr) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 	Buffer file = Buffer_createNull();
 
 	//File_read applies the CLI's working-directory sandbox, same as any other path argument.
 
-	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, &fileHandleType, &file, e_rr));
+	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, NULL, &file, e_rr));
 
 	const U64 read = Buffer_length(file);
 
@@ -268,18 +267,6 @@ void CLI_ensureVirtualLoaded(const CharString *path) {
 
 	const Bool isRoot = slash <= 2 || (slash == 3 && path->ptr[2] == '.');
 
-	//The loaded section (and the memory stream backing it) outlives this call and stays in Platform_instance,
-	// so the RefPtrType its RefPtr points at must outlive it too.
-	//A local RefPtrType would dangle -> keep it program-lifetime.
-
-	static RefPtrType memStreamType;
-	static Bool memStreamTypeInit = false;
-
-	if(!memStreamTypeInit) {
-		memStreamType = MemoryStream_makeType(alloc);
-		memStreamTypeInit = true;
-	}
-
 	const CharString section =
 		isRoot ? CharString_createRefCStrConst("//") :
 		CharString_createRefSizedConst(path->ptr, slash, false);
@@ -287,9 +274,10 @@ void CLI_ensureVirtualLoaded(const CharString *path) {
 	Error err = Error_none();
 
 	//File_loadVirtual is idempotent (already-loaded sections are skipped), so at root we just load unconditionally.
+	//The section outlives this call, so it takes the platform's stream type.
 
 	if(isRoot || !File_isVirtualLoaded(&section, alloc, NULL))
-		File_loadVirtual(&section, &memStreamType, NULL, NULL, alloc, &err);        //Best effort; the op reports real errors
+		File_loadVirtual(&section, NULL, NULL, NULL, alloc, &err);        //Best effort; the op reports real errors
 
 	if(err.genericError)
 		Error_print(alloc, &err, ELogLevel_Warn, ELogOptions_Default);
@@ -309,10 +297,7 @@ typedef enum EFileArchiveOp {
 static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType streamType = FileStream_makeType(alloc);
-	const RefPtrType memType = MemoryStream_makeType(alloc);
-	const RefPtrType encType = EncryptionStream_makeType(alloc);
+	const PlatformTypes *types = &Platform_instance->types;
 
 	CharString caPath = CharString_createNull(), input = CharString_createNull(), output = CharString_createNull();
 
@@ -342,10 +327,10 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 	//Read from the archive file via a stream so we never pull the whole (possibly huge) oiCA into memory.
 
 	gotoIfError3(clean, File_openStream(
-		&caPath, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &readStream, e_rr
+		&caPath, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &readStream, e_rr
 	));
 
-	gotoIfError3(clean, CAFile_read(readStream, &encType, 0, hasKey ? keyV : NULL, alloc, &caFile, e_rr));
+	gotoIfError3(clean, CAFile_read(readStream, &types->encryptionStream, 0, hasKey ? keyV : NULL, alloc, &caFile, e_rr));
 
 	switch(op) {
 
@@ -472,10 +457,10 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			//Separate destination: stream the new archive straight to the file, no full-archive buffer.
 
 			gotoIfError3(clean, File_openStream(
-				dest, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &writeStream, e_rr
+				dest, 1 * SECOND, EFileOpenType_Write, true, NULL, NULL, &writeStream, e_rr
 			));
 
-			gotoIfError3(clean, CAFile_write(&caFile, &encType, writeStream, &writeOff, alloc, e_rr));
+			gotoIfError3(clean, CAFile_write(&caFile, &types->encryptionStream, writeStream, &writeOff, alloc, e_rr));
 		}
 
 		else {
@@ -483,8 +468,11 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			//In-place: we can't stream-write the very file we're stream-reading, so buffer through a memory stream
 			//(the fallback), then release the source handles and overwrite the file.
 
-			gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memType, &writeStream, e_rr));
-			gotoIfError3(clean, CAFile_write(&caFile, &encType, writeStream, &writeOff, alloc, e_rr));
+			gotoIfError3(clean, MemoryStream_create(
+				0, EMemoryStreamFlags_WriteResize, &types->memoryStream, &writeStream, e_rr
+			));
+
+			gotoIfError3(clean, CAFile_write(&caFile, &types->encryptionStream, writeStream, &writeOff, alloc, e_rr));
 			gotoIfError3(clean, MemoryStream_move(&writeStream, &outBuf, e_rr));
 
 			CAFile_free(&caFile, alloc);
@@ -493,7 +481,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			RefPtr_dec(&dataStream);
 			RefPtr_dec(&readStream);
 
-			gotoIfError3(clean, File_write(&outBuf, &caPath, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+			gotoIfError3(clean, File_write(&outBuf, &caPath, 0, 0, 1 * SECOND, true, NULL, e_rr));
 		}
 
 		Log_debugLnx("Updated archive %.*s", (int) CharString_length(*dest), dest->ptr);
@@ -505,9 +493,9 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 		//(In practice copy/del always mutate, so this is a rare safety net.)
 
 		Buffer whole = Buffer_createNull();
-		gotoIfError3(clean, File_read(&caPath, 1 * SECOND, 0, 0, &fileHandleType, &whole, e_rr));
+		gotoIfError3(clean, File_read(&caPath, 1 * SECOND, 0, 0, NULL, &whole, e_rr));
 
-		if(!File_write(&whole, dest, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr))
+		if(!File_write(&whole, dest, 0, 0, 1 * SECOND, true, NULL, e_rr))
 			s_uccess = false;
 
 		Buffer_free(&whole, alloc);
@@ -656,8 +644,6 @@ Bool CLI_fileCopy(const ParsedArgs *args) {
 		return CLI_fileArchive(args, EFileArchiveOp_Copy);
 
 	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType streamType = FileStream_makeType(alloc);
 
 	CharString input = CharString_createNull(), output = CharString_createNull();
 	if(
@@ -685,8 +671,8 @@ Bool CLI_fileCopy(const ParsedArgs *args) {
 		Error verr = Error_none();
 
 		const Bool ok =
-			File_read(&input, 1 * SECOND, 0, 0, &fileHandleType, &vbuf, &verr) &&
-			File_write(&vbuf, &output, 0, 0, 1 * SECOND, true, &fileHandleType, &verr);
+			File_read(&input, 1 * SECOND, 0, 0, NULL, &vbuf, &verr) &&
+			File_write(&vbuf, &output, 0, 0, 1 * SECOND, true, NULL, &verr);
 
 		if(ok)
 			Log_debugLnx(
@@ -706,11 +692,11 @@ Bool CLI_fileCopy(const ParsedArgs *args) {
 	Error err = Error_none(), *e_rr = &err;
 
 	gotoIfError3(clean, File_openStream(
-		&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &inStream, e_rr
+		&input, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &inStream, e_rr
 	));
 
 	gotoIfError3(clean, File_openStream(
-		&output, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &outStream, e_rr
+		&output, 1 * SECOND, EFileOpenType_Write, true, NULL, NULL, &outStream, e_rr
 	));
 
 	gotoIfError3(clean, StreamCursor_create(inStream, CLI_STREAM_CACHE, false, alloc, &inCur, e_rr));
@@ -840,8 +826,6 @@ Bool CLI_fileCmp(const ParsedArgs *args) {
 	if(!args) return false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	RefPtrType streamType = FileStream_makeType(alloc);
 
 	CharString a = CharString_createNull(), b = CharString_createNull();
 	if(
@@ -865,8 +849,8 @@ Bool CLI_fileCmp(const ParsedArgs *args) {
 	const U64 lenA = infoA.fileSize, lenB = infoB.fileSize;
 	const U64 minLen = U64_min(lenA, lenB);
 
-	gotoIfError3(clean, File_openStream(&a, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sa, e_rr));
-	gotoIfError3(clean, File_openStream(&b, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sb, e_rr));
+	gotoIfError3(clean, File_openStream(&a, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &sa, e_rr));
+	gotoIfError3(clean, File_openStream(&b, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &sb, e_rr));
 	gotoIfError3(clean, StreamCursor_create(sa, CLI_STREAM_CACHE, false, alloc, &ca, e_rr));
 	gotoIfError3(clean, StreamCursor_create(sb, CLI_STREAM_CACHE, false, alloc, &cb, e_rr));
 
@@ -923,8 +907,6 @@ clean:
 
 static Bool CLI_peekMagic(
 	const CharString *path,
-	const RefPtrType *fileHandleType,
-	const RefPtrType *streamType,
 	const Allocator *alloc,
 	U32 *magic,
 	Error *e_rr
@@ -935,7 +917,7 @@ static Bool CLI_peekMagic(
 
 	*magic = 0;
 
-	gotoIfError3(clean, File_openStream(path, 1 * SECOND, EFileOpenType_Read, false, fileHandleType, streamType, &s, e_rr));
+	gotoIfError3(clean, File_openStream(path, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &s, e_rr));
 	gotoIfError3(clean, StreamCursor_create(s, CLI_STREAM_CACHE, false, alloc, &c, e_rr));
 	gotoIfError3(clean, StreamCursor_read(&c, Buffer_createRef(magic, sizeof(U32)), 0, 0, sizeof(U32), true, alloc, e_rr));
 
@@ -948,7 +930,6 @@ clean:
 Bool CLI_openArchiveEntry(
 	const CAFile *ca,
 	CAHandle h,
-	const RefPtrType *memType,
 	StreamRef **stream,
 	U64 *offset,
 	U64 *size,
@@ -958,9 +939,9 @@ Bool CLI_openArchiveEntry(
 	Bool s_uccess = true;
 	MemoryStreamRef *ms = NULL;
 
-	if(!stream || !offset || !size || !memType)
+	if(!stream || !offset || !size)
 		retError(clean, Error_nullPointer(
-			0, "CLI_openArchiveEntry()::stream, offset, size and memType are required"
+			0, "CLI_openArchiveEntry()::stream, offset and size are required"
 		));
 
 	*stream = NULL;
@@ -979,7 +960,7 @@ Bool CLI_openArchiveEntry(
 		const Buffer ref = Buffer_createRefConst(data.ptr, Buffer_length(data));
 
 		gotoIfError3(clean, MemoryStream_createFromBufferRegion(
-			ref, 0, Buffer_length(ref), EMemoryStreamFlags_None, memType, &ms, e_rr
+			ref, 0, Buffer_length(ref), EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &ms, e_rr
 		));
 
 		*stream = ms;
@@ -1024,11 +1005,8 @@ Bool CLI_writeStreamRegion(
 	if(!src || !loc)
 		retError(clean, Error_nullPointer(0, "CLI_writeStreamRegion()::src and loc are required"));
 
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType streamType = FileStream_makeType(alloc);
-
 	gotoIfError3(clean, File_openStream(
-		loc, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &dst, e_rr
+		loc, 1 * SECOND, EFileOpenType_Write, true, NULL, NULL, &dst, e_rr
 	));
 
 	gotoIfError3(clean, StreamCursor_create(src, CLI_STREAM_CACHE, false, alloc, &srcCur, e_rr));
@@ -1059,12 +1037,8 @@ Bool CLI_extractArchiveEntry(
 	Bool s_uccess = true;
 	StreamRef *src = NULL;
 
-	//Outlives src, which is released before this returns.
-
-	const RefPtrType memType = MemoryStream_makeType(alloc);
-
 	U64 off = 0, size = 0;
-	gotoIfError3(clean, CLI_openArchiveEntry(ca, h, &memType, &src, &off, &size, e_rr));
+	gotoIfError3(clean, CLI_openArchiveEntry(ca, h, &src, &off, &size, e_rr));
 	gotoIfError3(clean, CLI_writeStreamRegion(src, off, size, loc, alloc, e_rr));
 
 clean:
@@ -1159,8 +1133,6 @@ Bool CLI_fileDiff(const ParsedArgs *args) {
 	if(!args) return false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
-	const RefPtrType streamType = FileStream_makeType(alloc);
 
 	CharString a = CharString_createNull(), b = CharString_createNull();
 
@@ -1182,16 +1154,16 @@ Bool CLI_fileDiff(const ParsedArgs *args) {
 	//Both inputs must be the same archive type.
 
 	U32 magicA = 0, magicB = 0;
-	gotoIfError3(clean, CLI_peekMagic(&a, &fileHandleType, &streamType, alloc, &magicA, e_rr));
-	gotoIfError3(clean, CLI_peekMagic(&b, &fileHandleType, &streamType, alloc, &magicB, e_rr));
+	gotoIfError3(clean, CLI_peekMagic(&a, alloc, &magicA, e_rr));
+	gotoIfError3(clean, CLI_peekMagic(&b, alloc, &magicB, e_rr));
 
 	if(magicA != magicB)
 		retError(clean, Error_invalidParameter(
 			0, 0, "file diff: inputs are different formats (both must be oiCA or both oiDL)."
 		));
 
-	gotoIfError3(clean, File_openStream(&a, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sa, e_rr));
-	gotoIfError3(clean, File_openStream(&b, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sb, e_rr));
+	gotoIfError3(clean, File_openStream(&a, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &sa, e_rr));
+	gotoIfError3(clean, File_openStream(&b, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &sb, e_rr));
 
 	if(magicA == CAHeader_MAGIC) {
 
@@ -1293,15 +1265,12 @@ Bool CLI_fileWipe(const ParsedArgs *args) {
 	if(!args) return false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	CharString input = CharString_createNull();
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
 	}
-
-	RefPtrType streamType = FileStream_makeType(alloc);
 
 	FileInfo info = (FileInfo) { 0 };
 	Buffer zero = Buffer_createNull();
@@ -1325,7 +1294,7 @@ Bool CLI_fileWipe(const ParsedArgs *args) {
 		gotoIfError3(clean, Buffer_unsetAllBits(zero, e_rr));
 
 		gotoIfError3(clean, File_openStream(
-			&input, 1 * SECOND, EFileOpenType_ReadWrite, false, &fileHandleType, &streamType, &stream, e_rr
+			&input, 1 * SECOND, EFileOpenType_ReadWrite, false, NULL, NULL, &stream, e_rr
 		));
 
 		gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, true, alloc, &cur, e_rr));
@@ -1358,15 +1327,12 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	if(!args) return false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	CharString input = CharString_createNull();
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
 	}
-
-	RefPtrType streamType = FileStream_makeType(alloc);
 
 	Buffer buf = Buffer_createNull();
 	StreamRef *stream = NULL;
@@ -1413,7 +1379,7 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	}
 
 	gotoIfError3(clean, File_openStream(
-		&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
+		&input, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &stream, e_rr
 	));
 
 	gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, false, alloc, &cur, e_rr));
@@ -1483,15 +1449,12 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 	if(!args) return false;
 
 	const Allocator *alloc = Platform_instance->alloc;
-	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	CharString input = CharString_createNull();
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("file gmac requires -input <file>.");
 		return false;
 	}
-
-	RefPtrType streamType = FileStream_makeType(alloc);
 
 	Buffer buf = Buffer_createNull();
 	StreamRef *stream = NULL;
@@ -1538,7 +1501,7 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 		gotoIfError3(clean, Buffer_createUninitializedBytes(U64_min(effectiveChunk, size), alloc, &buf, e_rr));
 
 		gotoIfError3(clean, File_openStream(
-			&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
+			&input, 1 * SECOND, EFileOpenType_Read, false, NULL, NULL, &stream, e_rr
 		));
 
 		gotoIfError3(clean, StreamCursor_create(stream, CLI_STREAM_CACHE, false, alloc, &cur, e_rr));

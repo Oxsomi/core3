@@ -152,6 +152,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	const VkMemoryRequirements memReq = req.memory;
 	const Bool requiresDedicated = !!(req.flags & EVkBlockFlags_RequiresDedicated);
 	const Bool prefersDedicated = !!(req.flags & EVkBlockFlags_PrefersDedicated);
+	const Bool hostMemory = !!(req.flags & EVkBlockFlags_HostMemory);
 	U64 maxAllocationSize = allocator->device->info.capabilities.maxAllocationSize;
 
 	if(memReq.size > maxAllocationSize)
@@ -174,6 +175,12 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	Bool isDedicated = requiresDedicated;
 	isDedicated |= prefersDedicated && allocator->blocks.length < 2000;
+
+	//Host memory (EGraphicsResourceFlag_HostMemoryBit) is CPU sided whatever the caller says, and gets a block of its own:
+	// it is typically one large buffer per use, and a shared block of twice its size could not be allocated past a few GiB.
+
+	cpuSided |= hostMemory;
+	isDedicated |= hostMemory;
 
 	const Bool requestedCpu = cpuSided;                                  //Before the device type can force it
 
@@ -205,7 +212,9 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	// memory before going over it: the OS would page something out from under the device to make room.
 
 	const Bool readback = !!(req.flags & EVkBlockFlags_Readback);
-	const Bool canFallBack = !cpuSided && allocator->device->info.type == EGraphicsDeviceType_Dedicated;
+	const Bool canFallBack =
+		!cpuSided && allocator->device->info.type == EGraphicsDeviceType_Dedicated &&
+		!AtomicI64_load(&allocator->device->noOverBudgetFallback);
 
 	U64 usedMem = U64_MAX, budget = U64_MAX, maxAlloc = 0;
 
@@ -227,6 +236,17 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		gotoIfError3(clean, VkDeviceMemoryAllocator_findMemory(
 			deviceExt, cpuSided, readback, memReq.memoryTypeBits, &memoryId, &prop, e_rr
 		));
+
+		//Host memory on a dedicated device never takes a type of a device local heap, which is video memory
+
+		if(
+			hostMemory && allocator->device->info.type == EGraphicsDeviceType_Dedicated &&
+			(deviceExt->memoryProperties.memoryHeaps[deviceExt->memoryProperties.memoryTypes[memoryId].heapIndex].flags &
+			VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+		)
+			retError(clean, Error_unsupportedOperation(
+				0, "VkDeviceMemoryAllocator_allocate() the device has no host visible memory type outside video memory"
+			));
 
 		U32 blocksOfKind = 0;
 

@@ -35,6 +35,22 @@
 
 TListImpl(DevicePendingRange);
 
+const U8 *DeviceBufferRef_hostMemory(const DeviceBufferRef *buffer) {
+
+	const DeviceBuffer *buf =
+		buffer && buffer->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer ?
+		DeviceBufferRef_ptr((DeviceBufferRef*) buffer) : NULL;
+
+	if(!buf || !(buf->resource.flags & EGraphicsResourceFlag_HostMemoryReadBit) || buf->resource.hostUncached)
+		return NULL;
+
+	return (const U8*) buf->resource.mappedMemoryExt;
+}
+
+U8 *DeviceBufferRef_hostMemoryWritable(DeviceBufferRef *buffer) {
+	return (U8*) DeviceBufferRef_hostMemory(buffer);
+}
+
 Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -79,9 +95,15 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	//directly and the bytes are already where the device reads them. There is nothing to copy from, and the
 	// range only has to be recorded so an incoherent heap gets its flush.
 
+	//Host memory (HostMemoryBit) is CPUAllocated too, but its pointer is the owner's to write through
+	// (DeviceBufferRef_hostMemoryWritable) and a mark on it would have nothing to record, so it is refused.
+
 	const Bool anyRange =
 		(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) ||
-		(buffer->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit) ||
+		(
+			(buffer->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit) &&
+			!(buffer->resource.flags & EGraphicsResourceFlag_HostMemoryBit)
+		) ||
 		buffer->cpuStream;
 
 	const Bool firstFullUpload =
@@ -124,9 +146,16 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	Bool shouldPush = false;
 
 	if(fullRange) {
+
 		gotoIfError3(clean, ListDevicePendingRange_clear(&buffer->pendingChanges, e_rr));
 		buffer->isPendingFullCopy = true;
 		shouldPush = true;
+
+		//The one pending range stands for the whole buffer, since later marks are skipped while it is pending.
+		//The caller's range alone would leave the bytes of those marks behind.
+
+		offset = 0;
+		count = bufLen;
 	}
 
 	//Otherwise we have to merge current pending ranges
@@ -475,6 +504,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 
 	Bool s_uccess = true;
 	Bool allocated = false;
+	Bool referenced = false;
 
 	//Checked first, since getTypes on a NULL device yields a non NULL member pointer that faults in RefPtr_create.
 
@@ -502,6 +532,30 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			0, "GraphicsDeviceRef_createBufferIntern() can't expose resource for bindless without bindless"
 		));
 
+	//Host memory is read by shaders and written once by the upload, so nothing that writes it on the device, reads it
+	// back or keeps a CPU copy of it composes with it
+
+	if(
+		(resourceFlags & EGraphicsResourceFlag_HostMemoryBit) &&
+		(
+			!(resourceFlags & EGraphicsResourceFlag_CPUAllocatedBit) || usage ||
+			(resourceFlags & (
+				EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUReadBit | EGraphicsResourceFlag_ShaderWrite |
+				EGraphicsResourceFlag_ExposeBindlessWrite
+			))
+		)
+	)
+		retError(clean, Error_invalidState(
+			4,
+			"GraphicsDeviceRef_createBufferIntern() HostMemoryBit needs CPUAllocatedBit and usage None, and refuses "
+			"CPUBacked, CPUReadBit, ShaderWrite and ExposeBindlessWrite"
+		));
+
+	if((resourceFlags & EGraphicsResourceFlag_HostMemoryReadBit) && !(resourceFlags & EGraphicsResourceFlag_HostMemoryBit))
+		retError(clean, Error_invalidState(
+			5, "GraphicsDeviceRef_createBufferIntern() HostMemoryReadBit needs HostMemoryBit (use HostMemoryRead)"
+		));
+
 	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"));
 
@@ -526,9 +580,6 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			3, "GraphicsDeviceRef_createBufferIntern() predicate buffer requires the Predication feature"
 		));
 
-	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		gotoIfError3(clean, RefPtr_inc(dev));
-
 	//Which buffer and by how much: drivers differ by 2x on this limit (AMD's Windows driver reports 2 GiB where RADV
 	// reports 4), and an acceleration structure's size is the driver's own choice, so the caller can't predict it.
 
@@ -544,6 +595,14 @@ Bool GraphicsDeviceRef_createBufferIntern(
 			5, len, device->info.capabilities.maxBufferSize,
 			"GraphicsDeviceRef_createBufferIntern()::len exceeds maxBufferSize"
 		));
+	}
+
+	//The device is referenced only once every argument has been accepted.
+	//A refused buffer has no owner that releases the reference again.
+
+	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef)) {
+		gotoIfError3(clean, RefPtr_inc(dev));
+		referenced = true;
 	}
 
 	//Allocated only now that every argument has been accepted.
@@ -621,6 +680,11 @@ clean:
 	if(!s_uccess && allocated)
 		RefPtr_dec(ref);
 
+	//A buffer that was never allocated has nothing that releases the device for it.
+
+	else if(!s_uccess && referenced)
+		RefPtr_dec(&dev);
+
 	return s_uccess;
 }
 
@@ -634,11 +698,27 @@ Bool GraphicsDeviceRef_createBuffer(
 	DeviceBufferRef **buf,
 	Error *e_rr
 ) {
-	return GraphicsDeviceRef_createBufferIntern(
+
+	Bool s_uccess = true;
+
+	//Host memory keeps no CPU copy and nothing on the device writes it, so only the data given at create can fill it,
+	// except for a HostMemoryRead buffer, whose owner fills it through DeviceBufferRef_hostMemoryWritable
+
+	if((resourceFlags & EGraphicsResourceFlag_HostMemoryBit) && !(resourceFlags & EGraphicsResourceFlag_HostMemoryReadBit))
+		retError(clean, Error_invalidParameter(
+			2, 0,
+			"GraphicsDeviceRef_createBuffer() HostMemoryBit needs the buffer's data at create "
+			"(GraphicsDeviceRef_createBufferData) unless it is HostMemoryRead"
+		));
+
+	gotoIfError3(clean, GraphicsDeviceRef_createBufferIntern(
 		dev,
 		usage, resourceFlags, bindlessDescriptorTable, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked,
 		buf, e_rr
-	);
+	));
+
+clean:
+	return s_uccess;
 }
 
 Bool GraphicsDeviceRef_createBufferData(
@@ -716,6 +796,13 @@ Bool GraphicsDeviceRef_createBufferStream(
 
 	if(!size)
 		retError(clean, Error_invalidParameter(6, 0, "GraphicsDeviceRef_createBufferStream()::size is required"));
+
+	//Host memory keeps no source after its first upload, so there is nothing a later mark could read a range from
+
+	if(keepSource && (flags & EGraphicsResourceFlag_HostMemoryBit))
+		retError(clean, Error_invalidParameter(
+			7, 0, "GraphicsDeviceRef_createBufferStream()::keepSource is refused for HostMemoryBit, which keeps no source"
+		));
 
 	gotoIfError3(clean, GraphicsDeviceRef_createBufferIntern(
 		dev, usage, flags, bindlessDescriptorTable, name, size, false, buf, e_rr

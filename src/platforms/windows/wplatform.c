@@ -99,6 +99,12 @@ U64 Platform_getAvailableRAM() {
 	return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
 }
 
+U64 Platform_getAvailableCommit() {
+	MEMORYSTATUSEX status = (MEMORYSTATUSEX) { 0 };
+	status.dwLength = sizeof(status);
+	return GlobalMemoryStatusEx(&status) ? status.ullAvailPageFile : 0;
+}
+
 //The wide call reads the process block itself, which SetEnvironmentVariableW writes; the CRT's getenv reads
 // its own ANSI copy, where anything outside the active code page is already lost.
 //Sizing and reading are two calls, so a variable that grew in between is simply sized again.

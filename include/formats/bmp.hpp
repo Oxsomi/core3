@@ -70,8 +70,6 @@ namespace oxc {
 			info.textureFormatId = (c::U8) c::ETextureFormatId_BGRA8;
 			info.discardAlpha = discardAlpha;
 
-			const c::RefPtrType streamType = c::FileStream_makeType(alloc);
-
 			c::StreamRef *in = nullptr, *out = nullptr;
 			c::Bool s_uccess = false;
 
@@ -87,7 +85,7 @@ namespace oxc {
 
 				if(c::File_openStream(
 					&loc.handle(), 0, c::EFileOpenType_Write, true,
-					&types.fileHandle, &streamType, &out, e_rr
+					&types.fileHandle, &types.fileStream, &out, e_rr
 				)) {
 					c::U64 off = 0;
 					s_uccess = c::BMP_write(out, &off, &info, alloc, in, 0, inputIsFlipped, e_rr);
