@@ -170,6 +170,10 @@ function(oxc3_add_bundled_test)
 		"${T_ROOT}/platforms/test/interface/*.cpp"
 	)
 
+	# The math consumer test is its own project with its own main() (types/math/test/consumer), not a suite.
+
+	list(FILTER bundledSources EXCLUDE REGEX "/types/math/test/consumer/")
+
 	# CMakeLists.txt is a source so the bundle stays editable from the IDE, like every other test target.
 
 	if(T_SHARED)
@@ -194,7 +198,7 @@ function(oxc3_add_bundled_test)
 	target_link_libraries(${T_TARGET} PUBLIC
 		OxC3_platforms
 		OxC3_audio
-		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_types_mesh OxC3_formats_obj OxC3_formats_ply
+		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_formats_json OxC3_types_mesh OxC3_formats_obj OxC3_formats_ply
 		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
 		OxC3_formats_oiSH OxC3_formats_oiPL OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
 		OxC3_types_test
