@@ -378,7 +378,7 @@ Bool CLI_imageConvert(const ParsedArgs *args) {
 
 	CharString input = CharString_createNull(), output = CharString_createNull();
 
-	if(
+	if (
 		!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL) ||
 		!ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, NULL)
 	) {

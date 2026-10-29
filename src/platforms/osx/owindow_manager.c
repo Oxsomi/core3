@@ -27,12 +27,12 @@
 //The windows manage their own loops.
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
-	(void)w; (void) e_rr;
+	(void) w; (void) e_rr;
 	return false;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
-	(void)w;
+	(void) w;
 	return true;
 }
 

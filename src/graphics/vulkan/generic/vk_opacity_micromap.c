@@ -252,7 +252,7 @@ Bool VK_WRAP_FUNC(OpacityMicromapRef_flush)(
 		RefPtr_inc(pending);
 	}
 
-	if(
+	if (
 		micromap->base.tempScratchBuffer &&
 		!GraphicsDevice_isInFlight(device, micromap->base.tempScratchBuffer)
 	) {

@@ -157,4 +157,26 @@ static void Test_meshDeriveWords(Test *t) {
 void Test_meshDerive(Test *t) {
 	Test_meshDeriveNormals(t);
 	Test_meshDeriveWords(t);
+
+	DeriveMesh m;
+	MeshFlat flat;
+
+	DeriveMesh_create(&m);
+
+	if(!Test_assert(t, "validation mesh", DeriveMesh_flat(t, &m, &flat)))
+		return;
+
+	flat.vertexCount = 1;
+
+	Test_assert(t, "words reject index outside vertex count", !MeshFlat_computeWords(&flat, 0, NULL));
+	Test_assert(t, "normals reject index outside vertex count", !MeshFlat_computeNormals(&flat, t->alloc, NULL));
+
+	flat.vertexCount = DERIVE_VERTICES;
+	flat.attributes = Buffer_createRef(m.attributes, 1);
+
+	Test_assert(t, "normals reject short attribute stream", !MeshFlat_computeNormals(&flat, t->alloc, NULL));
+
+	flat.attributes = Buffer_createNull();
+
+	Test_assert(t, "normals reject missing attribute stream", !MeshFlat_computeNormals(&flat, t->alloc, NULL));
 }

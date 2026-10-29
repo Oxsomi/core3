@@ -81,7 +81,7 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 	//64-byte blocks
 
-	U64 ptr = (U64)(void*) buf.ptr, len = Buffer_length(buf);
+	U64 ptr = (U64) (void*) buf.ptr, len = Buffer_length(buf);
 	U8 block[64];
 
 	Bool padded = false;
@@ -105,7 +105,7 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 			U64 realLen = len;
 			U64 realPtr = ptr;
 
-			ptr = (U64)(void*) block;
+			ptr = (U64) (void*) block;
 			len = 64;
 			padded = true;
 
@@ -126,7 +126,7 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 				U64 currLen = Buffer_length(buf);
 
-				lenPtr[7] = (U8)(currLen << 3);
+				lenPtr[7] = (U8) (currLen << 3);
 				currLen >>= 5;
 
 				for(U64 k = 6; k != U64_MAX; --k) {
@@ -144,7 +144,7 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 				Buffer_memcpy(
 					Buffer_createRef(block, 64),
-					Buffer_createRefConst((const void*)realPtr, realLen)
+					Buffer_createRefConst((const void*) realPtr, realLen)
 				);
 
 				block[realLen] = 0x80;
@@ -170,7 +170,7 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 					//Keep 5 bits from the index in the block at lenPtr[7]
 					//Keep the others as big endian in [0-6]
 
-					lenPtr[7] = (U8)(currLen << 3);
+					lenPtr[7] = (U8) (currLen << 3);
 					currLen >>= 5;
 
 					for(U64 k = 6; k != U64_MAX; --k) {
@@ -190,7 +190,7 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 		I32x4 msgs[4];
 
 		for(U64 i = 0; i < 4; ++i)
-			msgs[i] = I32x4_shuffleBytes(I32x4_load4((const I32*)(void*)ptr + i * 4), MASK);
+			msgs[i] = I32x4_shuffleBytes(I32x4_load4((const I32*) (void*) ptr + i * 4), MASK);
 
 		//3 iterations: Rounds 0-11 (two different iterations; 0-3, 4-7, 8-11)
 

@@ -60,6 +60,7 @@ namespace {
 
 	void Payload_free(void *ptr, const void*) {
 		Payload *p = (Payload*) ptr;
+
 		if(p->freed)
 			++*p->freed;
 	}

@@ -262,10 +262,10 @@ Bool GenericList_createSubset(GenericList list, U64 index, U64 length, GenericLi
 	U64 stride = list.stride;
 
 	if (GenericList_isConstRef(list)) {
-		gotoIfError3(clean, GenericList_createRefConst((const U8*)list.ptr + index * stride, length, stride, result, e_rr));
+		gotoIfError3(clean, GenericList_createRefConst((const U8*) list.ptr + index * stride, length, stride, result, e_rr));
 	}
 
-	else gotoIfError3(clean, GenericList_createRef((U8*)list.ptrNonConst + index * stride, length, stride, result, e_rr));
+	else gotoIfError3(clean, GenericList_createRef((U8*) list.ptrNonConst + index * stride, length, stride, result, e_rr));
 
 clean:
 	return s_uccess;
@@ -393,9 +393,9 @@ Bool GenericList_set(GenericList list, U64 index, const Buffer *buf, Error *e_rr
 		retError(clean, Error_invalidOperation(0, "GenericList_set()::buf.length incompatible with list"));
 
 	if(bufLen)
-		Buffer_memcpy(Buffer_createRef((U8*)list.ptrNonConst + index * stride, stride), *buf);
+		Buffer_memcpy(Buffer_createRef((U8*) list.ptrNonConst + index * stride, stride), *buf);
 
-	else Buffer_unsetAllBits(Buffer_createRef((U8*)list.ptrNonConst + index * stride, stride), e_rr);
+	else Buffer_unsetAllBits(Buffer_createRef((U8*) list.ptrNonConst + index * stride, stride), e_rr);
 
 clean:
 	return s_uccess;
@@ -414,11 +414,11 @@ Bool GenericList_get(const GenericList list, U64 index, Buffer *result, Error *e
 		retError(clean, Error_outOfBounds(1, index, list.length, "GenericList_get()::index out of bounds"));
 
 	if (GenericList_isConstRef(list)) {
-		*result = Buffer_createRefConst((const U8*)list.ptr + index * stride, stride);
+		*result = Buffer_createRefConst((const U8*) list.ptr + index * stride, stride);
 		goto clean;
 	}
 
-	*result = Buffer_createRef((U8*)list.ptrNonConst + index * stride, stride);
+	*result = Buffer_createRef((U8*) list.ptrNonConst + index * stride, stride);
 
 clean:
 	return s_uccess;
@@ -501,8 +501,8 @@ Bool GenericList_swap(GenericList l, U64 i, U64 j, Error *e_rr) {
 
 	const U64 stride = l.stride;
 
-	if(stride > 1024 || !stride)        //Current limitation, because we don't allocate.
-		retError(clean, Error_invalidParameter(0, 0, "GenericList_swap()::l must be a stride of max 1024 (and >0)"));
+	if(!stride)
+		retError(clean, Error_invalidParameter(0, 0, "GenericList_swap()::l must have a nonzero stride"));
 
 	const U64 len = l.length;
 
@@ -516,18 +516,24 @@ Bool GenericList_swap(GenericList l, U64 i, U64 j, Error *e_rr) {
 		retError(clean, Error_constData(0, 0, "GenericList_swap()::list is const"));
 
 	U8 tmp[1024];
-	Buffer tmpBuf = Buffer_createRef(tmp, stride);
-
 	U8 *iptr = GenericList_ptr(l, i);
-	Buffer iptrBuf = Buffer_createRef(iptr, stride);
-
-	Buffer_memcpy(tmpBuf, iptrBuf);
-
 	U8 *jptr = GenericList_ptr(l, j);
-	Buffer jptrBuf = Buffer_createRef(jptr, stride);
 
-	Buffer_memcpy(iptrBuf, jptrBuf);
-	Buffer_memcpy(jptrBuf, tmpBuf);
+	if(i == j)
+		goto clean;
+
+	for(U64 off = 0; off < stride;) {
+
+		const U64 count = stride - off < sizeof(tmp) ? stride - off : sizeof(tmp);
+		const Buffer temporary = Buffer_createRef(tmp, count);
+		const Buffer a = Buffer_createRef(iptr + off, count);
+		const Buffer b = Buffer_createRef(jptr + off, count);
+
+		Buffer_memcpy(temporary, a);
+		Buffer_memcpy(a, b);
+		Buffer_memcpy(b, temporary);
+		off += count;
+	}
 
 clean:
 	return s_uccess;
@@ -573,13 +579,10 @@ Bool GenericList_eraseAllIndices(GenericList *list, const ListU64 *indices, Erro
 	//Since we're sorted from small to big,
 	// we can just easily fetch where our next block of memory should go and move it backwards
 
-	U64 curr = 0;
+	U64 curr = indicesPtr[0];
 	const U64 stride = list->stride;
 
 	for (const U64 *ptr = indicesPtr, *end = indicesEnd; ptr < end; ++ptr) {
-
-		if(!curr)
-			curr = *ptr;
 
 		const U64 me = *ptr + 1;
 		const U64 neighbor = ptr + 1 != end ? *(ptr + 1) : list->length;
@@ -588,8 +591,8 @@ Bool GenericList_eraseAllIndices(GenericList *list, const ListU64 *indices, Erro
 			continue;
 
 		Buffer_memmove(
-			Buffer_createRef((U8*)list->ptrNonConst + curr * stride, (neighbor - me) * stride),
-			Buffer_createRef((U8*)list->ptrNonConst + me * stride, (neighbor - me) * stride)
+			Buffer_createRef((U8*) list->ptrNonConst + curr * stride, (neighbor - me) * stride),
+			Buffer_createRef((U8*) list->ptrNonConst + me * stride, (neighbor - me) * stride)
 		);
 
 		curr += neighbor - me;
@@ -616,8 +619,8 @@ Bool GenericList_erase(GenericList *list, U64 index, Error *e_rr) {
 
 	if(index + 1 != list->length)
 		Buffer_memmove(
-			Buffer_createRef((U8*)list->ptrNonConst + index * list->stride, (list->length - 1 - index) * list->stride),
-			Buffer_createRef((U8*)list->ptrNonConst + (index + 1) * list->stride, (list->length - 1 - index) * list->stride)
+			Buffer_createRef((U8*) list->ptrNonConst + index * list->stride, (list->length - 1 - index) * list->stride),
+			Buffer_createRef((U8*) list->ptrNonConst + (index + 1) * list->stride, (list->length - 1 - index) * list->stride)
 		);
 
 	--list->length;
@@ -649,7 +652,7 @@ Bool GenericList_insert(GenericList *list, U64 index, const Buffer *buf, const A
 		gotoIfError3(clean, GenericList_resizeInternal(list, list->length + 1, allocator, false, e_rr));
 
 		Buffer_memcpy(
-			Buffer_createRef((U8*)list->ptrNonConst + index * list->stride, list->stride),
+			Buffer_createRef((U8*) list->ptrNonConst + index * list->stride, list->stride),
 			*buf
 		);
 
@@ -666,14 +669,14 @@ Bool GenericList_insert(GenericList *list, U64 index, const Buffer *buf, const A
 
 	if(prevSize)
 		Buffer_memmove(
-			Buffer_createRef((U8*)list->ptrNonConst + (index + 1) * list->stride, (prevSize - index) * list->stride),
-			Buffer_createRef((U8*)list->ptrNonConst + index * list->stride, (prevSize - index) * list->stride)
+			Buffer_createRef((U8*) list->ptrNonConst + (index + 1) * list->stride, (prevSize - index) * list->stride),
+			Buffer_createRef((U8*) list->ptrNonConst + index * list->stride, (prevSize - index) * list->stride)
 		);
 
 	//Copy the other data
 
 	Buffer_memcpy(
-		Buffer_createRef((U8*)list->ptrNonConst + index * list->stride, list->stride),
+		Buffer_createRef((U8*) list->ptrNonConst + index * list->stride, list->stride),
 		*buf
 	);
 
@@ -681,9 +684,10 @@ clean:
 	return s_uccess;
 }
 
-Bool GenericList_pushAll(GenericList *list, const GenericList other, const Allocator *allocator, Error *e_rr) {
+Bool GenericList_pushAll(GenericList *list, GenericList other, const Allocator *allocator, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Buffer copied = Buffer_createNull();
 
 	if(!list)
 		retError(clean, Error_nullPointer(0, "GenericList_pushAll()::list is required"));
@@ -700,21 +704,32 @@ Bool GenericList_pushAll(GenericList *list, const GenericList other, const Alloc
 	if(list->length + other.length < list->length)
 		retError(clean, Error_overflow(0, list->length + other.length, U64_MAX, "GenericList_pushAll() overflow"));
 
+	//An insertion can move or release storage referenced by its source.
+	const U64 sourceAddress = (U64) (uintptr_t) other.ptr;
+	const U64 targetAddress = (U64) (uintptr_t) list->ptr;
+
+	if(sourceAddress >= targetAddress && sourceAddress - targetAddress < GenericList_allocatedBytes(*list)) {
+		gotoIfError3(clean, Buffer_createCopy(GenericList_bufferConst(other), allocator, &copied, e_rr));
+		other.ptr = copied.ptr;
+	}
+
 	const U64 oldSize = GenericList_bytes(*list);
 	gotoIfError3(clean, GenericList_resizeInternal(list, list->length + other.length, allocator, false, e_rr));
 
 	Buffer_memcpy(
-		Buffer_createRef((U8*)list->ptrNonConst + oldSize, GenericList_bytes(other)),
+		Buffer_createRef((U8*) list->ptrNonConst + oldSize, GenericList_bytes(other)),
 		Buffer_createRefConst(other.ptr, GenericList_bytes(other))
 	);
 
 clean:
+	Buffer_free(&copied, allocator);
 	return s_uccess;
 }
 
-Bool GenericList_insertAll(GenericList *list, const GenericList other, U64 offset, const Allocator *allocator, Error *e_rr) {
+Bool GenericList_insertAll(GenericList *list, GenericList other, U64 offset, const Allocator *allocator, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Buffer copied = Buffer_createNull();
 
 	if(!list)
 		retError(clean, Error_nullPointer(0, "GenericList_insertAll()::list is required"));
@@ -734,6 +749,15 @@ Bool GenericList_insertAll(GenericList *list, const GenericList other, U64 offse
 	if(offset > list->length)
 		retError(clean, Error_outOfBounds(2, offset, list->length, "GenericList_insertAll()::offset out of bounds"));
 
+	//An insertion can move or release storage referenced by its source.
+	const U64 sourceAddress = (U64) (uintptr_t) other.ptr;
+	const U64 targetAddress = (U64) (uintptr_t) list->ptr;
+
+	if(sourceAddress >= targetAddress && sourceAddress - targetAddress < GenericList_allocatedBytes(*list)) {
+		gotoIfError3(clean, Buffer_createCopy(GenericList_bufferConst(other), allocator, &copied, e_rr));
+		other.ptr = copied.ptr;
+	}
+
 	const U64 prevSize = list->length;
 	gotoIfError3(clean, GenericList_resizeInternal(list, list->length + other.length, allocator, false, e_rr));
 
@@ -742,20 +766,21 @@ Bool GenericList_insertAll(GenericList *list, const GenericList other, U64 offse
 	if(prevSize)
 		Buffer_memmove(
 			Buffer_createRef(
-				(U8*)list->ptrNonConst + (offset + other.length) * list->stride,
+				(U8*) list->ptrNonConst + (offset + other.length) * list->stride,
 				(prevSize - offset) * list->stride
 			),
-			Buffer_createRef((U8*)list->ptrNonConst + offset * list->stride, (prevSize - offset) * list->stride)
+			Buffer_createRef((U8*) list->ptrNonConst + offset * list->stride, (prevSize - offset) * list->stride)
 		);
 
 	//Copy the other data
 
 	Buffer_memcpy(
-		Buffer_createRef((U8*)list->ptrNonConst + offset * list->stride, other.length * list->stride),
+		Buffer_createRef((U8*) list->ptrNonConst + offset * list->stride, other.length * list->stride),
 		GenericList_bufferConst(other)
 	);
 
 clean:
+	Buffer_free(&copied, allocator);
 	return s_uccess;
 }
 
@@ -772,11 +797,11 @@ Bool GenericList_resizeInternal(GenericList *list, U64 size, const Allocator *al
 	if (list->length == size)
 		goto clean;
 
-	if (size <= list->capacityAndRefInfo) {
+	if (size <= GenericList_capacity(*list)) {
 
 		if(doClear && size > list->length)
 			gotoIfError3(clean, Buffer_unsetAllBits(
-				Buffer_createRef((U8*)list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
+				Buffer_createRef((U8*) list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
 				e_rr
 			));
 
@@ -793,7 +818,7 @@ Bool GenericList_resizeInternal(GenericList *list, U64 size, const Allocator *al
 
 	if(doClear)
 		gotoIfError3(clean, Buffer_unsetAllBits(
-			Buffer_createRef((U8*)list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
+			Buffer_createRef((U8*) list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
 			e_rr
 		));
 
@@ -827,7 +852,7 @@ Bool GenericList_reserve(GenericList *list, U64 capacity, const Allocator *alloc
 
 	Buffer_memcpy(buffer, GenericList_bufferConst(*list));
 
-	Buffer curr = Buffer_createManagedPtr((U8*)list->ptrNonConst, GenericList_allocatedBytes(*list));
+	Buffer curr = Buffer_createManagedPtr((U8*) list->ptrNonConst, GenericList_allocatedBytes(*list));
 
 	if(Buffer_length(curr))
 		GenericList_dealloc(&curr, list->stride, allocator);
@@ -950,30 +975,30 @@ static inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, 
 
 	Buffer_memcpy(
 		Buffer_createRef(tmp, list.stride),
-		Buffer_createRefConst((const U8*)list.ptr + (begin + last) / 2 * list.stride, list.stride)
+		Buffer_createRefConst((const U8*) list.ptr + (begin + last) / 2 * list.stride, list.stride)
 	);
 
 	U64 i = begin - 1, j = last + 1;
 
 	while (true) {
 
-		while(++i < last && f((const U8*)list.ptr + i * list.stride, tmp, context) == ECompareResult_Lt);
-		while(--j > begin && f((const U8*)list.ptr + j * list.stride, tmp, context) == ECompareResult_Gt);
+		while(++i < last && f((const U8*) list.ptr + i * list.stride, tmp, context) == ECompareResult_Lt);
+		while(--j > begin && f((const U8*) list.ptr + j * list.stride, tmp, context) == ECompareResult_Gt);
 
 		if(i < j) {
 
 			Buffer_memcpy(
 				Buffer_createRef(tmp + list.stride, list.stride),
-				Buffer_createRefConst((const U8*)list.ptr + i * list.stride, list.stride)
+				Buffer_createRefConst((const U8*) list.ptr + i * list.stride, list.stride)
 			);
 
 			Buffer_memcpy(
-				Buffer_createRef((U8*)list.ptr + i * list.stride, list.stride),
-				Buffer_createRefConst((const U8*)list.ptr + j * list.stride, list.stride)
+				Buffer_createRef((U8*) list.ptr + i * list.stride, list.stride),
+				Buffer_createRefConst((const U8*) list.ptr + j * list.stride, list.stride)
 			);
 
 			Buffer_memcpy(
-				Buffer_createRef((U8*)list.ptrNonConst + j * list.stride, list.stride),
+				Buffer_createRef((U8*) list.ptrNonConst + j * list.stride, list.stride),
 				Buffer_createRefConst(tmp + list.stride, list.stride)
 			);
 		}
@@ -994,7 +1019,7 @@ static Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, Compa
 		if (pivot == U64_MAX)        //Does return a modified array, but it's not fully sorted
 			return false;
 
-		if ((I64)pivot - begin <= (I64)end - (pivot + 1)) {
+		if ((I64) pivot - begin <= (I64) end - (pivot + 1)) {
 			GenericList_qsortRecurse(list, begin, pivot, f, context);
 			begin = pivot + 1;
 			continue;
@@ -1121,7 +1146,7 @@ Bool GenericList_popBack(GenericList *list, Buffer *output, Error *e_rr) {
 		retError(clean, Error_constData(0, 0, "GenericList_popBack()::list must be managed memory"));
 
 	if(output)
-		Buffer_memcpy(*output, Buffer_createRefConst((const U8*)list->ptr + (list->length - 1) * list->stride, list->stride));
+		Buffer_memcpy(*output, Buffer_createRefConst((const U8*) list->ptr + (list->length - 1) * list->stride, list->stride));
 
 	--list->length;
 

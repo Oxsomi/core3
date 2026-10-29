@@ -41,6 +41,7 @@ void Test_CAVersion(Test *t);
 
 void Test_CARename(Test *t);
 void Test_CAMove(Test *t);
+void Test_CAMoveFolders(Test *t);
 
 void Test_CAForeach(Test *t);
 
@@ -54,6 +55,18 @@ void Test_CACombine(Test *t);
 
 void Test_CAMixedTree(Test *t);
 void Test_CAStress(Test *t);
+
+void Test_CAWriteFailures(Test *t);
+void Test_CAReadLargeNames(Test *t);
+void Test_CARenameSubtree(Test *t);
+void Test_CAEmptyStreamCompare(Test *t);
+void Test_CAReadBigHeader(Test *t);
+void Test_CAWriteCursorSize(Test *t);
+void Test_CAReadHugeCounts(Test *t);
+void Test_CAReadForgedEncryptedCounts(Test *t);
+void Test_CARefCopies(Test *t);
+void Test_CAFolderFileLimit(Test *t);
+void Test_CADateFlags(Test *t);
 
 void Test_CAWriteSizeConsistencyEmpty(Test *t);
 void Test_CAWriteSizeConsistencySingleFile(Test *t);
@@ -69,5 +82,6 @@ void Test_CASerializeHierarchy(Test *t);
 void Test_CASerializeMsDosDate(Test *t);
 void Test_CASerializeFullDate(Test *t);
 void Test_CASerializeEncrypted(Test *t);
+void Test_CASerializeEncryptedTamper(Test *t);
 void Test_CASerializeMultipleFiles(Test *t);
 void Test_CASerializeStreamBacked(Test *t);

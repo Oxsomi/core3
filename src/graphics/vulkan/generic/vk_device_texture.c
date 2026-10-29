@@ -158,7 +158,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			// the destination uses the region's measures, in block rows rather than texel rows
 
 			const U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
-			const U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			const U64 fullH2 = ((U64) texture->base.height + alignmentY - 1) / alignmentY;
 			const U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
@@ -171,14 +171,14 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 
 				if(w == texture->base.width)
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
+						Buffer_createRef(location + allocRange + (U64) rowLen * (k - z) * h2, rowLen * h2),
 						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (k - z) * fullH2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					const U64 yOff = (j - y) / alignmentY;
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
+						Buffer_createRef(location + allocRange + (U64) rowLen * (yOff + (k - z) * h2), rowLen),
 						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (yOff + (k - z) * fullH2), rowLen)
 					);
 				}
@@ -216,7 +216,8 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			0,
 			allocRange,
 			&deviceExt->bufferTransitions,
-			&dependency, alloc, e_rr));
+			&dependency, alloc, e_rr
+		));
 
 		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {        //TODO: Add range
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -355,7 +356,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			// only the staging destination uses the region's measures
 
 			U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
-			U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			U64 fullH2 = ((U64) texture->base.height + alignmentY - 1) / alignmentY;
 			U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
@@ -368,14 +369,14 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 
 				if(w == texture->base.width)
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
+						Buffer_createRef(location + allocRange + (U64) rowLen * (k - z) * h2, rowLen * h2),
 						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (k - z) * fullH2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					U64 yOff = (j - y) / alignmentY;
 					Buffer_memcpy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
+						Buffer_createRef(location + allocRange + (U64) rowLen * (yOff + (k - z) * h2), rowLen),
 						Buffer_createRefConst(texture->cpuData.ptr + start + fullRowLen * (yOff + (k - z) * fullH2), rowLen)
 					);
 				}
@@ -385,7 +386,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 
 			deviceExt->bufferImageCopyRanges.ptrNonConst[m] = (VkBufferImageCopy) {
 				//Relative to the staging resource rather than the frame region, since the copy offset is resource based
-				.bufferOffset = allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),
+				.bufferOffset = allocRange + (location - (const U8*) staging->resource.mappedMemoryExt),
 				.imageSubresource = range,
 				.imageOffset = (VkOffset3D) { .x = x, .y = y, .z = z },
 				.imageExtent = (VkExtent3D) { .width = w, .height = h, .depth = l }
@@ -437,7 +438,8 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
 			graphicsQueueId,
 			&range2,
 			&deviceExt->imageTransitions,
-			&dependency, alloc, e_rr));
+			&dependency, alloc, e_rr
+		));
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
 			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
@@ -574,7 +576,7 @@ Bool VK_WRAP_FUNC(DeviceTextureRef_pull)(
 	const U64 pitchTexels = *rowPitch / blockSize * alignX;
 
 	const U16 h = TextureRange_height(*range);
-	const U32 imageHeight = (U32)(h + alignY - 1) / alignY * alignY;
+	const U32 imageHeight = (U32) (h + alignY - 1) / alignY * alignY;
 
 	const VkBufferImageCopy copy = (VkBufferImageCopy) {
 		.bufferOffset = stagingOffset,

@@ -75,15 +75,33 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if(header.version != ESRVersion_V1_1 || (header.flags & ESRFlag_Unsupported))
 		retError(clean, Error_invalidState(0, "SRFile_read()::file didn't have the right version or flags"));
 
-	if(header.features & ~(U32)ESRFeature_All & ~(U32)ESRFeature_SymbolInfo)
+	if(header.features & ~(U32) ESRFeature_All & ~(U32) ESRFeature_SymbolInfo)
 		retError(clean, Error_invalidState(0, "SRFile_read()::header.features contained unsupported bits"));
 
 	Bool hasSymbols = header.flags & ESRFlag_HasSymbols;
 
 	//The SymbolInfo feature and the HasSymbols flag must agree
 
-	if((Bool)(header.features & ESRFeature_SymbolInfo) != hasSymbols)
+	if((Bool) (header.features & ESRFeature_SymbolInfo) != hasSymbols)
 		retError(clean, Error_invalidState(0, "SRFile_read()::header symbol feature and flag disagree"));
+
+	//The counts come from the file, so the stream has to hold every record they ask for before any list is sized.
+	//Each term is a U32 count times a record size, so the sum can't wrap a U64.
+
+	U64 recordBytes =
+		(U64) header.nodeCount * sizeof(SRNode) +
+		(hasSymbols ? (U64) header.nodeCount * sizeof(SRSymbol) : 0) +
+		(U64) header.annotationCount * sizeof(SRAnnotation) +
+		(U64) header.registerCount * sizeof(SRRegister) +
+		(U64) header.enumValueCount * sizeof(SREnumValue) +
+		(U64) header.typeCount * sizeof(SRType) +
+		(U64) header.arrayDimCount * sizeof(U32) +
+		(U64) header.interfaceCount * sizeof(SRInterface);
+
+	if(*offset > stream->size || stream->size - *offset < recordBytes)
+		retError(clean, Error_outOfBounds(
+			0, *offset, stream->size, "SRFile_read()::header counts are larger than the stream"
+		));
 
 	//Consume the fixed-size POD arrays
 
@@ -127,7 +145,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &names, e_rr));
 
-	if(
+	if (
 		names.settings.dataType != EDLDataType_String ||
 		names.settings.encryptionType ||
 		names.settings.compressionType
@@ -177,7 +195,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		//Direct children are emitted contiguously, so the child block must fit within the node array.
 
-		if((U64)i + node.childCount > nodes.length)
+		if((U64) i + node.childCount > nodes.length)
 			retError(clean, Error_invalidState(0, "SRFile_read() node.childCount out of bounds"));
 
 		if(node.fwdBckDeclareNode != U32_MAX && node.fwdBckDeclareNode >= nodes.length)
@@ -185,7 +203,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		//The forward-declaration flag is only meaningful on declarable symbols (matches the producer's allowFwdDeclare).
 
-		if(
+		if (
 			(node.flags & ESRNodeFlag_IsFwdDeclare) &&
 			node.type != ESRNodeType_Function && node.type != ESRNodeType_Enum &&
 			node.type != ESRNodeType_Struct && node.type != ESRNodeType_Union && node.type != ESRNodeType_Interface
@@ -203,7 +221,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		if(node.annotationCount) {
 
-			if(node.annotationStart == U32_MAX || (U64)node.annotationStart + node.annotationCount > annotations.length)
+			if(node.annotationStart == U32_MAX || (U64) node.annotationStart + node.annotationCount > annotations.length)
 				retError(clean, Error_invalidState(0, "SRFile_read() node annotation range out of bounds"));
 		}
 	}
@@ -279,7 +297,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(reg.nodeId >= nodes.length || nodes.ptr[reg.nodeId].type != ESRNodeType_Register)
 			retError(clean, Error_invalidState(0, "SRFile_read() register.nodeId doesn't reference a Register node"));
 
-		if(
+		if (
 			reg.type >= ESRResourceType_Count ||
 			reg.dimension >= ESRResourceDimension_Count ||
 			reg.returnType >= ESRResourceReturnType_Count
@@ -317,9 +335,11 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		U8 nt = nodes.ptr[ty.nodeId].type;
 
-		if(nt != ESRNodeType_Variable && nt != ESRNodeType_Parameter && nt != ESRNodeType_StaticVariable &&
+		if (
+			nt != ESRNodeType_Variable && nt != ESRNodeType_Parameter && nt != ESRNodeType_StaticVariable &&
 			nt != ESRNodeType_GroupsharedVariable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
-			nt != ESRNodeType_Union)
+			nt != ESRNodeType_Union
+		)
 			retError(clean, Error_invalidState(0, "SRFile_read() type.nodeId doesn't reference a value node"));
 
 		if(ty.typeClass >= ESRTypeClass_Count)
@@ -333,12 +353,14 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		//Go-to-definition + base class must reference a Struct/Union node (or be absent)
 
-		if(ty.defNodeId != U32_MAX && (ty.defNodeId >= nodes.length ||
+		if (
+			ty.defNodeId != U32_MAX && (ty.defNodeId >= nodes.length ||
 			(nodes.ptr[ty.defNodeId].type != ESRNodeType_Struct && nodes.ptr[ty.defNodeId].type != ESRNodeType_Union)
 		))
 			retError(clean, Error_invalidState(0, "SRFile_read() type.defNodeId doesn't reference a Struct/Union node"));
 
-		if(ty.baseNodeId != U32_MAX && (ty.baseNodeId >= nodes.length ||
+		if (
+			ty.baseNodeId != U32_MAX && (ty.baseNodeId >= nodes.length ||
 			(nodes.ptr[ty.baseNodeId].type != ESRNodeType_Struct && nodes.ptr[ty.baseNodeId].type != ESRNodeType_Union)
 		))
 			retError(clean, Error_invalidState(0, "SRFile_read() type.baseNodeId doesn't reference a Struct/Union node"));
@@ -356,8 +378,10 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		SRInterface itf = interfaces.ptr[i];
 
-		if(itf.nodeId >= nodes.length ||
-			(nodes.ptr[itf.nodeId].type != ESRNodeType_Struct && nodes.ptr[itf.nodeId].type != ESRNodeType_Union))
+		if (
+			itf.nodeId >= nodes.length ||
+			(nodes.ptr[itf.nodeId].type != ESRNodeType_Struct && nodes.ptr[itf.nodeId].type != ESRNodeType_Union)
+		)
 			retError(clean, Error_invalidState(0, "SRFile_read() interface.nodeId doesn't reference a Struct/Union node"));
 
 		if(itf.interfaceNodeId >= nodes.length || nodes.ptr[itf.interfaceNodeId].type != ESRNodeType_Interface)

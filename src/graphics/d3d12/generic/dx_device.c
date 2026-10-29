@@ -222,7 +222,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError3(clean, dxCheck(instanceExt->factory->lpVtbl->EnumAdapterByLuid(
 		instanceExt->factory, *(const LUID*)&physicalDevice->luid,
-		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
+		&IID_IDXGIAdapter4, (void**) &deviceExt->adapter4
 	), e_rr));
 
 	dxVerbose("D3D12: creating the device");
@@ -273,7 +273,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	dxVerbose("D3D12: querying the debug device");
 
-	if(
+	if (
 		(device->flags & EGraphicsDeviceFlags_IsDebug) &&
 		FAILED(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
@@ -324,7 +324,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 			D3D12_INFO_QUEUE_FILTER filter = (D3D12_INFO_QUEUE_FILTER) {
 				.DenyList = (D3D12_INFO_QUEUE_FILTER_DESC) {
-					.NumIDs = (U32)(sizeof(hide) / sizeof(hide[0])),
+					.NumIDs = (U32) (sizeof(hide) / sizeof(hide[0])),
 					.pIDList = hide
 				}
 			};
@@ -549,7 +549,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i) {
 
-		if(
+		if (
 			i == EExecuteIndirectCommand_DispatchRays &&
 			!(device->info.capabilities.flags.features & EGraphicsFeatures_RayPipeline)
 		)
@@ -594,7 +594,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			.Flags = D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER
 		};
 
-		if(
+		if (
 			deviceExt->breadcrumbMemory &&
 			SUCCEEDED(deviceExt->device->lpVtbl->QueryInterface(deviceExt->device, &IID_ID3D12Device3, (void**) &device3)) &&
 			SUCCEEDED(device3->lpVtbl->OpenExistingHeapFromAddress(
@@ -1324,7 +1324,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 					alloc, &temp, e_rr, "%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
 					queue.type == EDxCommandQueue_Graphics ? "Graphics" : (
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
-					), threadId, device->fifId));
+					), threadId, device->fifId
+				));
 
 				gotoIfError3(clean, CharString_toUTF16(temp, alloc, &temp16, e_rr));
 
@@ -1396,7 +1397,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		//Resolve the previous frame at this slot before buildTimings overwrites its entries; the fence wait above
 		// proved it done, so the readback its ResolveQueryData filled is ready. D3D12 timestamps are full 64-bit.
 
-		if(
+		if (
 			(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps) &&
 			device->submitId > device->framesInFlight && device->timingSlots[device->fifId]
 		) {
@@ -1424,6 +1425,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 			for(U64 i = 0; i < (commandLists ? commandLists->length : 0); ++i) {
 				CommandList *cl = CommandListRef_ptr(commandLists->ptr[i]);
+
 				for(U64 j = 0; j < cl->commandOps.length; ++j)
 					if(cl->commandOps.ptr[j].op == ECommandOp_DispatchRaysIndirect)
 						++driCount;

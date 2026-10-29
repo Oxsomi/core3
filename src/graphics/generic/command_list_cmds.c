@@ -165,7 +165,8 @@ Bool CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageCm
 
 	if(clearImages.length > U32_MAX)
 		retError(clean, Error_outOfBounds(
-			1, clearImages.length, U32_MAX, "CommandListRef_clearImages()::clearImages.length > U32_MAX"));
+			1, clearImages.length, U32_MAX, "CommandListRef_clearImages()::clearImages.length > U32_MAX"
+		));
 
 	GraphicsDeviceRef *device = commandList->device;
 
@@ -179,29 +180,33 @@ Bool CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageCm
 
 		if(tex.resource.device != device)
 			retError(clean, Error_unsupportedOperation(
-				0, "CommandListRef_clearImages()::clearImages[i].image belongs to other device"));
+				0, "CommandListRef_clearImages()::clearImages[i].image belongs to other device"
+			));
 
 		//TODO: Properly support this
 
 		if (clearImage.range.layerId != U32_MAX && clearImage.range.layerId >= 1)
 			retError(clean, Error_outOfBounds(
-				1, clearImage.range.layerId, 1, "CommandListRef_clearImages()::clearImages[i].range.layerId is invalid"));
+				1, clearImage.range.layerId, 1, "CommandListRef_clearImages()::clearImages[i].range.layerId is invalid"
+			));
 
 		if (clearImage.range.levelId != U32_MAX && clearImage.range.levelId >= 1)
 			retError(clean, Error_outOfBounds(
-				2, clearImage.range.levelId, 1, "CommandListRef_clearImages()::clearImages[i].range.levelId is invalid"));
+				2, clearImage.range.levelId, 1, "CommandListRef_clearImages()::clearImages[i].range.levelId is invalid"
+			));
 
 		//Add transition
 
 		gotoIfError3(clean, CommandListRef_transitionImage(
-			commandList, clearImage.image, clearImage.range, ETransitionType_Clear, EPipelineStage_Count, e_rr));
+			commandList, clearImage.image, clearImage.range, ETransitionType_Clear, EPipelineStage_Count, e_rr
+		));
 	}
 
 	//Copy buffer
 
 	gotoIfError3(clean, Buffer_createEmptyBytes(ListClearImageCmd_bytes(clearImages) + sizeof(U64) * 2, alloc, &buf, e_rr));
 
-	*(U64*)buf.ptrNonConst = (U64) clearImages.length;
+	*(U64*) buf.ptrNonConst = (U64) clearImages.length;
 	Buffer_memcpy(
 		Buffer_createRef(buf.ptrNonConst + sizeof(U64) * 2, ListClearImageCmd_bytes(clearImages)),
 		ListClearImageCmd_bufferConst(clearImages)
@@ -241,7 +246,8 @@ Bool CommandListRef_copyImageRegions(
 
 	if(regions.length > 128)
 		retError(clean, Error_outOfBounds(
-			4, regions.length, 128, "CommandListRef_copyImage()::regions.length should be less than 128"));
+			4, regions.length, 128, "CommandListRef_copyImage()::regions.length should be less than 128"
+		));
 
 	//Validate src and dst
 
@@ -686,7 +692,8 @@ Bool CommandListRef_startRegionDebugExt(CommandListRef *commandListRef, F32x4 co
 
 	if(commandList && commandList->debugRegionStack == U8_MAX)
 		retError(clean, Error_outOfBounds(
-			0, U8_MAX, U8_MAX, "CommandListRef_startRegionDebugExt() can only have depth of 255."));
+			0, U8_MAX, U8_MAX, "CommandListRef_startRegionDebugExt() can only have depth of 255."
+		));
 
 	gotoIfError3(clean, CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_StartRegionDebugExt, e_rr));
 
@@ -804,7 +811,8 @@ Bool CommandListRef_startTimingRegionExt(CommandListRef *commandListRef, U32 id,
 
 	if(commandList->timingRegionStack == U8_MAX)
 		retError(clean, Error_outOfBounds(
-			0, U8_MAX, U8_MAX, "CommandListRef_startTimingRegionExt() can only have depth of 255."));
+			0, U8_MAX, U8_MAX, "CommandListRef_startTimingRegionExt() can only have depth of 255."
+		));
 
 	gotoIfError3(clean, CommandList_timingRegionExt(commandListRef, id, name, ECommandOp_StartTimingRegion, e_rr));
 

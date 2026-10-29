@@ -53,6 +53,7 @@ static Bool Process_appendArg(CharString *cmd, CharString arg, const Allocator *
 
 	for(U64 i = 0; i < n && !needQuote; ++i) {
 		const C8 c = arg.ptr[i];
+
 		if(c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '"')
 			needQuote = true;
 	}
@@ -70,6 +71,7 @@ static Bool Process_appendArg(CharString *cmd, CharString arg, const Allocator *
 	for(U64 i = 0; i < n; ++i) {
 
 		U64 slashes = 0;
+
 		while(i < n && arg.ptr[i] == '\\') { ++slashes; ++i; }
 
 		if(i == n) {                                //Trailing backslashes: double them before the closing quote

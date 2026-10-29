@@ -74,7 +74,7 @@ Bool File_loadVirtualInternal1(
 
 		VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
-		if(
+		if (
 			!CharString_equalsStringInsensitive(loc, &section->path) &&
 			!CharString_startsWithStringInsensitive(&section->path, &isChild, 0)
 		)
@@ -140,14 +140,14 @@ Bool File_loadVirtualInternal1(
 		while(remaining) {
 
 			const U64 toRead = U64_min(remaining, 64 * MIBI);        //64 MB chunks
-			const ssize_t got = pread(fd, dst, (size_t)toRead, (off_t)currentOffset);
+			const ssize_t got = pread(fd, dst, (size_t) toRead, (off_t)currentOffset);
 
-			if(got < 0 || (U64)got != toRead)
+			if(got < 0 || (U64) got != toRead)
 				retError(clean, Error_invalidState(2, "File_loadVirtualInternal1() package wasn't readable"));
 
 			dst           += got;
-			currentOffset += (U64)got;
-			remaining     -= (U64)got;
+			currentOffset += (U64) got;
+			remaining     -= (U64) got;
 		}
 
 		close(fd);
@@ -167,7 +167,7 @@ Bool File_loadVirtualInternal1(
 		gotoIfError3(clean, ListCAFile_pushBack(&Platform_instance->archives, caFile, alloc, e_rr));
 		caFile = (CAFile) { 0 };
 
-		section->loadedAndId = archiveIndex | ((U64)1 << 63);
+		section->loadedAndId = archiveIndex | ((U64) 1 << 63);
 		foundAny = true;
 	}
 

@@ -226,6 +226,14 @@ jobs:
         if: inputs.os != 'steamos' && runner.os == 'Linux'
         run: sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev wayland-protocols
 
+      # The decimal comma tests (string, JSON, OBJ, PLY and HDR writers) need a locale whose decimal point isn't
+      # '.', and the hosted image only generates C and en_US. Without one they run in the C locale and say so.
+      - name: Generate a decimal comma locale
+        if: inputs.os != 'steamos' && runner.os == 'Linux'
+        run: |
+          sudo apt-get install --no-install-recommends -y locales
+          sudo locale-gen de_DE.UTF-8
+
       # Deliberately no VK_ICD_FILENAMES: the loader finds /usr/share/vulkan/icd.d/lvp_icd.json on its own, and
       # the arch-suffixed path most snippets use doesn't exist on Ubuntu, which fails looking like a missing driver.
       - name: Install software Vulkan (lavapipe)

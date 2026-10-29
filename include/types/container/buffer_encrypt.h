@@ -30,6 +30,29 @@
 	extern "C" {
 #endif
 
+//Key derivation, so one raw key can protect any number of files without two of them sharing an AES key.
+//AES256GCM is broken once a key sees the same iv twice, and random 96-bit ivs keep that unlikely for only about
+// 2^32 encryptions per key, across every file that key ever protects.
+//Each output instead encrypts under keys derived from the raw key and its own random root iv, one per use,
+// so that budget belongs to one output and a header's tag can't collide with its first chunk.
+//See docs/file/oiDL.md for the key schedule as stored.
+
+//What a derived key is for; each domain is its own HKDF info string, so one raw key and root iv give unrelated
+// keys for an oiDL header, an oiCA header and the encrypted stream data.
+typedef enum EEncryptionKeyDomain {
+	EEncryptionKeyDomain_StreamData,
+	EEncryptionKeyDomain_DLHeader,
+	EEncryptionKeyDomain_CAHeader,
+	EEncryptionKeyDomain_Count
+} EEncryptionKeyDomain;
+
+//The AES256 key for one domain of one output: HKDF-SHA256 over the raw key with rootIv's 12 bytes as salt.
+//The key has to be raw key material (32 random bytes), not a password: HKDF does no stretching.
+//rootIv has to be unique per output or embedded stream, since it is all that tells their keys apart.
+Bool Buffer_deriveEncryptionKey(
+	const U32 key[8], I32x4 rootIv, EEncryptionKeyDomain domain, U32 output[8], Error *e_rr
+);
+
 //AES256GCM encryption with auto generated iv.
 //Encrypt function encrypts target into target (in place).
 //Be careful about the following:
@@ -142,7 +165,8 @@ Bool Buffer_decryptAdvanced(const BufferEncrypt *restrict decrypt, Error *restri
 //- You init, update and finalize a context before using the result (correctly)
 //The context of important AES variables.
 //And encrypting/decrypting blocks and verifying tags.
-//These functions don't do any parameter checks since they're internal helper functions
+//The updates refuse what would silently break GCM (see Buffer_aesExpertEncUpdate); a refusal poisons the context, so its
+// Finalize fails and leaves a zero tag. Everything else, such as IV uniqueness and key use, is up to the caller.
 typedef struct AESEncryptionContext {
 
 	I32x4 key[15];
@@ -155,7 +179,12 @@ typedef struct AESEncryptionContext {
 	I32x4 iv;
 
 	EBufferEncryptionType encryptionType;
-	U32 padding[3];
+
+	U8 blockSizeMax;        //What Buffer_aesExpertCreate chose: H is expanded this far, so updates are clamped to it
+	U8 use256Or512;
+	U8 state;               //What the updates have seen so far, and whether one was refused
+	U8 padding0;
+	U32 padding1[2];
 
 } AESEncryptionContext;
 
@@ -195,25 +224,31 @@ Bool Buffer_aesExpertCreate(
 
 //Buffer's addr must be 16-byte aligned
 //There's a (theoretical) limit of U64_MAX / 8 bytes for all combined data.
-//blockSizeMax: See aesExpertCreate's blockSizeHint
-void Buffer_aesExpertUpdateAAD(AESEncryptionContext *restrict ctx, Buffer data, U8 blockSizeMax, U8 use256Or512);
+//blockSizeMax and use256Or512: what Buffer_aesExpertCreate output; larger values are clamped to them.
+//Refused (false, and the context is poisoned) when misaligned, after any data, or after AAD that ended on a partial block:
+// all AAD comes first, and only its last update may be a partial block.
+Bool Buffer_aesExpertUpdateAAD(AESEncryptionContext *restrict ctx, Buffer data, U8 blockSizeMax, U8 use256Or512);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertEncUpdate(
+//blockSizeMax and use256Or512: what Buffer_aesExpertCreate output; larger values are clamped to them.
+//Refused (false, and the context is poisoned) when misaligned, after data that ended on a partial block (only the last
+// update may be one), or when offsetInBlocks plus the data's blocks pass the 2^32 - 2 blocks GCM allows: the counter
+// would wrap into the one that masks the tag.
+Bool Buffer_aesExpertEncUpdate(
 	AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax, U8 use256Or512
 );
 
-//Buffer's addr must be 16-byte aligned
-//There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertDecUpdate(
+//Same rules as Buffer_aesExpertEncUpdate.
+Bool Buffer_aesExpertDecUpdate(
 	AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax, U8 use256Or512
 );
 
 //Don't use the data if the function returns false!
 //Clear or remove the generated data if encryption failed, or risk exposing sensitive data.
 //expectTag is the tag you expect.
-//It's OK to ignore the result for encryption, since there's no valid tag yet.
+//It's OK to ignore the result for encryption, since there's no valid tag yet: a context an update refused finalizes to a
+// zero tag, which nothing verifies.
 Bool Buffer_aesExpertFinalize(AESEncryptionContext *restrict ctx, U64 aadLen, U64 dataLen, I32x4 expectTag);
 
 #ifdef __cplusplus

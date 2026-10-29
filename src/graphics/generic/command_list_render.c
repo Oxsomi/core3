@@ -62,11 +62,13 @@ Bool CommandListRef_startRenderExt(
 
 	if(!(device->info.capabilities.flags.features & EGraphicsFeatures_DirectRendering))
 		retError(clean, Error_unsupportedOperation(
-			0, "CommandListRef_startRenderExt() requires directRendering extension, which was missing!"));
+			0, "CommandListRef_startRenderExt() requires directRendering extension, which was missing!"
+		));
 
 	if((!colors || !colors->length) && (!depthStencil || !depthStencil->image))
 		retError(clean, Error_invalidOperation(
-			1, "CommandListRef_startRenderExt() requires DepthStencil and/or colors"));
+			1, "CommandListRef_startRenderExt() requires DepthStencil and/or colors"
+		));
 
 	if(colors && colors->length > 8)
 		retError(clean, Error_outOfBounds(3, colors->length, 8, "CommandListRef_startRenderExt()::colors has to be <=8"));
@@ -134,9 +136,9 @@ Bool CommandListRef_startRenderExt(
 
 					const I64 v = prim == ETexturePrimitive_SInt ? (I64) info.color.colori[c] : (I64) info.color.coloru[c];
 
-					if(v > ((I64)1 << 24) - 1 || v < -(((I64)1 << 24) - 1))
+					if(v > ((I64) 1 << 24) - 1 || v < -(((I64) 1 << 24) - 1))
 						retError(clean, Error_outOfBounds(
-							7, (U64) (v < 0 ? -v : v), ((U64)1 << 24) - 1,
+							7, (U64) (v < 0 ? -v : v), ((U64) 1 << 24) - 1,
 							"CommandListRef_startRenderExt() integer clear value must fit in 24 bits, "
 							"since D3D12 clears integer render targets through a float conversion"
 						));
@@ -152,7 +154,7 @@ Bool CommandListRef_startRenderExt(
 
 		if(texture.type != ETextureType_2D)
 			retError(clean, Error_invalidParameter(
-				3, (U32)i, "CommandListRef_startRenderExt() image needs to be a 2D texture"
+				3, (U32) i, "CommandListRef_startRenderExt() image needs to be a 2D texture"
 			));
 
 		I32x2 currSize = I32x2_create2(texture.width, texture.height);
@@ -408,19 +410,19 @@ Bool CommandListRef_startRenderExt(
 
 		if(i < colors->length) {
 
-			startRender->activeMask |= (U8)1 << i;
+			startRender->activeMask |= (U8) 1 << i;
 
 			if(info.unusedAfterRender)
-				startRender->unusedAfterRenderMask |= (U8)1 << i;
+				startRender->unusedAfterRenderMask |= (U8) 1 << i;
 
 			if(info.readOnly)
-				startRender->readOnlyMask |= (U8)1 << i;
+				startRender->readOnlyMask |= (U8) 1 << i;
 
 			if(info.load == ELoadAttachmentType_Clear)
-				startRender->clearMask |= (U8)1 << i;
+				startRender->clearMask |= (U8) 1 << i;
 
 			else if(info.load == ELoadAttachmentType_Preserve)
-				startRender->preserveMask |= (U8)1 << i;
+				startRender->preserveMask |= (U8) 1 << i;
 
 			attachments[counter++] = (AttachmentInfoInternal) {
 				.color = info.color,
@@ -441,6 +443,7 @@ Bool CommandListRef_startRenderExt(
 		};
 
 		TransitionInternal *state = NULL;
+
 		if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
 
 			//Depth stencil is allowed to transition twice as Depth & Stencil.
@@ -482,7 +485,8 @@ Bool CommandListRef_startRenderExt(
 		commandList,
 		ECommandOp_StartRenderingExt,
 		Buffer_createRefConst(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * counter),
-		0, e_rr));
+		0, e_rr
+	));
 
 	//A clear load is a side effect all by itself, so a pass without draws still has to keep its scope alive;
 	// otherwise endScope rewinds the scope as untouched and the clear silently never reaches the GPU

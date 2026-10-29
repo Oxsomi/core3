@@ -105,7 +105,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 	Test_assert(t, "symbol tier consistent",
 		hasSyms
 			? (reflection.symbols.length == reflection.nodes.length && (reflection.features & ESRFeature_SymbolInfo))
-			: (reflection.symbols.length == 0));
+			: (reflection.symbols.length == 0)
+	);
 
 	//The struct and its members should be present (USER_TYPES tier)
 
@@ -146,7 +147,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		if (posTy) {
 
 			Test_assert(t, "member pos type is a 3-wide vector",
-				posTy->typeClass == ESRTypeClass_Vector && posTy->cols == 3);
+				posTy->typeClass == ESRTypeClass_Vector && posTy->cols == 3
+			);
 
 			CharString tn = posTy->typeNameId != U32_MAX ?
 				reflection.names.entryStrings.ptr[posTy->typeNameId] : CharString_createNull();
@@ -220,7 +222,8 @@ void Test_shaderCompilerReflectSR(Test *t) {
 				reflection.names.entryStrings.ptr[idTy->typeNameId] : CharString_createNull();
 			CharString u = CharString_createRefCStrConst("uint");
 			Test_assert(t, "parameter id type is uint",
-				idTy->typeClass == ESRTypeClass_Scalar && CharString_equalsStringSensitive(&tn, &u));
+				idTy->typeClass == ESRTypeClass_Scalar && CharString_equalsStringSensitive(&tn, &u)
+			);
 		}
 	}
 
@@ -253,7 +256,9 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "round-trip annotation count", roundTrip.annotations.length == reflection.annotations.length);
 		Test_assert(t, "round-trip type count", roundTrip.types.length == reflection.types.length);
 		Test_assert(t, "round-trip interface count",
-			roundTrip.interfaces.length == reflection.interfaces.length && reflection.interfaces.length > 0);
+			roundTrip.interfaces.length == reflection.interfaces.length && reflection.interfaces.length > 0
+		);
+
 		Test_assert(t, "round-trip hash matches", roundTrip.hash == reflection.hash);
 	}
 

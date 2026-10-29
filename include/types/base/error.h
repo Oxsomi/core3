@@ -63,7 +63,8 @@ typedef enum EGenericError {
 
 extern const C8 *EGenericError_TO_STRING[];
 
-//Only direct caller preserved to save space in release mode.
+//CMake and Conan export the library's frame count so consumer build modes cannot change the Error ABI.
+//Manual builds default to one frame in release and the full trace in debug.
 //Web spends one entry on the trace ring generation rather than a frame (see the web branch of
 // types/base/platforms/unix/uerror.c), so it needs one more entry to keep the same frame count.
 
@@ -73,11 +74,19 @@ extern const C8 *EGenericError_TO_STRING[];
 	#define ERROR_STACKTRACE_RESERVED 0
 #endif
 
-#ifdef NDEBUG
-	#define ERROR_STACKTRACE (1 + ERROR_STACKTRACE_RESERVED)
-#else
-	#define ERROR_STACKTRACE (STACKTRACE_SIZE + ERROR_STACKTRACE_RESERVED)
+#ifndef _OXC3_ERROR_STACKTRACE
+	#ifdef NDEBUG
+		#define _OXC3_ERROR_STACKTRACE 1
+	#else
+		#define _OXC3_ERROR_STACKTRACE STACKTRACE_SIZE
+	#endif
 #endif
+
+#if _OXC3_ERROR_STACKTRACE < 1 || _OXC3_ERROR_STACKTRACE > STACKTRACE_SIZE
+	#error "_OXC3_ERROR_STACKTRACE must be between 1 and STACKTRACE_SIZE"
+#endif
+
+#define ERROR_STACKTRACE (_OXC3_ERROR_STACKTRACE + ERROR_STACKTRACE_RESERVED)
 
 //
 
@@ -119,7 +128,8 @@ typedef struct Error {
 	goto x;                          \
 } while(0)
 
-impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);    //May fail if (stackSize + skip + 1 > 128)
+//Writes at most stackSize entries; short traces end in NULL and an unavailable trace starts with NULL.
+impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);
 
 #if _PLATFORM_TYPE == PLATFORM_WEB
 

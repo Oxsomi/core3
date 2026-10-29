@@ -204,7 +204,7 @@ static inline Bool GfxBinding_overlaps(
 	if(binaryType != EGfxBinaryType_DXIL)
 		return a.space == b.space && a.binding == b.binding;
 
-	if(
+	if (
 		a.space != b.space ||
 		EGfxRegisterType_dxilBindingClass(registerTypeA) != EGfxRegisterType_dxilBindingClass(registerTypeB)
 	)

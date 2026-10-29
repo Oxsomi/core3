@@ -73,8 +73,10 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 	const U64 linSizOld = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size), 1);
 	const U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz), 1);
 
-	if(linSizOld * 5 < linSizOld)
-		retError(clean, Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow"));
+	//The new size is grown by 5/4 and compared at 3/2
+
+	if(linSiz > U64_MAX / 5)
+		retError(clean, Error_overflow(2, linSiz, U64_MAX / 5, "Window_resizeCPUBuffer()::newSiz is too large"));
 
 	//We need to grow; we're out of bounds
 

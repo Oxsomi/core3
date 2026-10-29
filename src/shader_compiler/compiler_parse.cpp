@@ -70,7 +70,7 @@ Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
 	if(!threads)
 		retError(clean, Error_nullPointer(0, "Compiler_validateGroupSize() invalid threads"));
 
-	totalGroup = (U64)threads[0] * threads[1] * threads[2];
+	totalGroup = (U64) threads[0] * threads[1] * threads[2];
 
 	if(!totalGroup)
 		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() needs group size for compute"));
@@ -177,7 +177,8 @@ Bool Compiler_finalizeEntrypoint(
 	//Procedural geometry is unaffected, its ReportHit-produced attribute is reflected off the intersection shader,
 	// where 0 stays legal.
 
-	if(!intersectSize && (
+	if (
+		!intersectSize && (
 		entry->entry.stage == EGfxPipelineStage_ClosestHitExt ||
 		entry->entry.stage == EGfxPipelineStage_AnyHitExt
 	))
@@ -225,7 +226,7 @@ Bool Compiler_finalizeEntrypoint(
 
 	//Compare to ensure we have the exact same properties
 
-	else if(
+	else if (
 		entry->entry.groupX != localSize[0] ||
 		entry->entry.groupY != localSize[1] ||
 		entry->entry.groupZ != localSize[2] ||
@@ -360,7 +361,7 @@ Bool Compiler_parseValue(
 						retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected Bool/B1 'true'"));
 
 					str += 4;
-					value->vu64[0] |= (U64)1 << dstOff;
+					value->vu64[0] |= (U64) 1 << dstOff;
 				}
 
 				//false
@@ -384,7 +385,8 @@ Bool Compiler_parseValue(
 
 				const C8 *fStart = str;
 
-				while (C8_isDec(next = *str) ||
+				while (
+					C8_isDec(next = *str) ||
 					next == 'E' || next == 'e' ||
 					next == 'F' || next == 'f' ||
 					next == '-' || next == '+' ||
@@ -397,6 +399,7 @@ Bool Compiler_parseValue(
 
 				CharString val = CharString_createRefSizedConst(fStart, str - fStart, false);
 				F64 res = 0;
+
 				if(!CharString_parseDouble(val, &res))
 					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"));
 
@@ -422,7 +425,7 @@ Bool Compiler_parseValue(
 						//Reinterpret the float bits via a void* launder (strict-aliasing-safe).
 						const void *vptr = &v;
 
-						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*)vptr))
+						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*) vptr))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F32"
 							));
@@ -435,7 +438,7 @@ Bool Compiler_parseValue(
 
 						const void *resptr = &res;
 
-						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*)resptr))
+						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*) resptr))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F64"
 							));
@@ -464,6 +467,7 @@ Bool Compiler_parseValue(
 
 				CharString val = CharString_createRefSizedConst(strStart, str - strStart, false);
 				U64 res = 0;
+
 				if (!CharString_parseU64(val, &res))
 					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"));
 
@@ -471,7 +475,7 @@ Bool Compiler_parseValue(
 
 				if(bits != 64 && (res >> bits))
 					retError(clean, Error_outOfBounds(
-						0, res, ((U64)1 << bits) - 1, "Compiler_parseValue() parsed uint couldn't fit in the target bits"
+						0, res, ((U64) 1 << bits) - 1, "Compiler_parseValue() parsed uint couldn't fit in the target bits"
 					));
 
 				switch(bits) {
@@ -502,6 +506,7 @@ Bool Compiler_parseValue(
 
 				CharString val = CharString_createRefSizedConst(strStart, str - strStart, false);
 				U64 ures = 0;
+
 				if (!CharString_parseU64(val, &ures))
 					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"));
 
@@ -510,13 +515,13 @@ Bool Compiler_parseValue(
 				if(ures >> 63)
 					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() overflow on int value"));
 
-				I64 res = neg ? -(I64)ures : (I64)ures;
+				I64 res = neg ? -(I64) ures : (I64) ures;
 
 				U8 bits = ETypeId_getDataTypeBytes(typeId) << 3;
 
-				U64 miBits = (U64)1 << (bits - 1);
-				I64 mi = -(I64)miBits;
-				I64 ma = (I64)((U64)miBits - 1);
+				U64 miBits = (U64) 1 << (bits - 1);
+				I64 mi = -(I64) miBits;
+				I64 ma = (I64) ((U64) miBits - 1);
 
 				if(bits != 64 && (neg ? (res < mi) : (res > ma)))
 					retError(clean, Error_invalidParameter(
@@ -736,7 +741,7 @@ Bool Compiler_registerUniform(
 		SHUniformRuntime uniform = SHUniformRuntime{
 			.name = tmp,
 			.typeIdShort = ETypeId_toShortId(typeId),
-			.dataOffset = (U16)uniformDatLen
+			.dataOffset = (U16) uniformDatLen
 		};
 
 		TypeId val = ETypeId_arr[uniform.typeIdShort];
@@ -1074,6 +1079,7 @@ Bool Compiler_parse(
 		for (uint32_t j = nodeDesc.AnnotationCount; j-- > 0;) {
 
 			D3D12_HLSL_ANNOTATION annot;
+
 			if (FAILED(hr = reflectionData->GetAnnotationByIndex(funcDesc.NodeId, j, &annot)))
 				retError(clean, Error_invalidState(0, "Compiler_parse() failed to get node annot"));
 
@@ -1126,7 +1132,7 @@ Bool Compiler_parse(
 
 			for (U64 j = 0; j < runtimeEntry.extensions.length; ++j) {
 
-				if(
+				if (
 					runtimeEntry.entry.stage != EGfxPipelineStage_RaygenExt &&
 					(runtimeEntry.extensions.ptr[j].extensions & ESHExtension_RayReorder)
 				)
@@ -1141,7 +1147,7 @@ Bool Compiler_parse(
 						"Compiler_parse() one of the non raytracing stages uses PAQ, which isn't supported"
 					));
 
-				if(
+				if (
 					runtimeEntry.entry.stage != EGfxPipelineStage_Compute &&
 					runtimeEntry.entry.stage != EGfxPipelineStage_MeshExt &&
 					runtimeEntry.entry.stage != EGfxPipelineStage_TaskExt &&
@@ -1359,10 +1365,10 @@ static Bool Compiler_reflectNode(
 	srNode.childCount = nodeDesc.ChildCount;
 	srNode.annotationStart = nodeDesc.AnnotationCount ? annotationStart : U32_MAX;
 	srNode.annotationCount = (U16) nodeDesc.AnnotationCount;
-	srNode.type = (U8)(nodeDesc.Type & 0x7F);        //Mask the fwd-declare reserved bit (1 << 7), tracked via flags below
+	srNode.type = (U8) (nodeDesc.Type & 0x7F);        //Mask the fwd-declare reserved bit (1 << 7), tracked via flags below
 	srNode.interpolation =
 		(U32) nodeDesc.InterpolationMode < (U32) ESRInterpolation_Count ? (U8) nodeDesc.InterpolationMode : 0;
-	srNode.flags = (U8)(nodeDesc.IsFwdDeclare ? ESRNodeFlag_IsFwdDeclare : ESRNodeFlag_None);
+	srNode.flags = (U8) (nodeDesc.IsFwdDeclare ? ESRNodeFlag_IsFwdDeclare : ESRNodeFlag_None);
 
 	if (srNode.type >= ESRNodeType_Count)
 		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node had an unrecognized type"));
@@ -1567,7 +1573,8 @@ static Bool Compiler_reflectDetails(
 
 				if (retParam && !FAILED(retParam->GetDesc(&rpd)))
 					gotoIfError3(clean, Compiler_pushParamType(
-						reflection, (U32) retId, rpd.Type, rpd.Class, rpd.Rows, rpd.Columns, alloc, e_rr));
+						reflection, (U32) retId, rpd.Type, rpd.Class, rpd.Rows, rpd.Columns, alloc, e_rr
+					));
 			}
 		}
 
@@ -1597,7 +1604,8 @@ static Bool Compiler_reflectDetails(
 				reflection->nodes.ptrNonConst[pnode].flags |= ESRNodeFlag_ParamOut;
 
 			gotoIfError3(clean, Compiler_pushParamType(
-				reflection, (U32) pnode, pd.Type, pd.Class, pd.Rows, pd.Columns, alloc, e_rr));
+				reflection, (U32) pnode, pd.Type, pd.Class, pd.Rows, pd.Columns, alloc, e_rr
+			));
 		}
 	}
 
@@ -1633,7 +1641,8 @@ static Bool Compiler_reflectDetails(
 		//the DESC1 ArrayInfo.
 
 		gotoIfError3(clean, Compiler_pushArrayDims(
-			reflection, &bindDesc.ArrayInfo, &reg.arrayDimStart, &reg.arrayDimCount, alloc, e_rr));
+			reflection, &bindDesc.ArrayInfo, &reg.arrayDimStart, &reg.arrayDimCount, alloc, e_rr
+		));
 
 		gotoIfError3(clean, ListSRRegister_pushBack(&reflection->registers, reg, alloc, e_rr));
 	}
@@ -1661,8 +1670,10 @@ static Bool Compiler_reflectDetails(
 
 			U64 valueNodeId = (U64) enumDesc.NodeId + 1 + j;
 
-			if (valueNodeId >= reflection->nodes.length ||
-				reflection->nodes.ptr[valueNodeId].type != ESRNodeType_EnumValue)
+			if (
+				valueNodeId >= reflection->nodes.length ||
+				reflection->nodes.ptr[valueNodeId].type != ESRNodeType_EnumValue
+			)
 				continue;
 
 			SREnumValue ev = SREnumValue{};
@@ -1686,8 +1697,10 @@ static Bool Compiler_reflectDetails(
 
 		U8 nt = reflection->nodes.ptr[i].type;
 
-		if (nt != ESRNodeType_Variable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
-			nt != ESRNodeType_Union && nt != ESRNodeType_StaticVariable && nt != ESRNodeType_GroupsharedVariable)
+		if (
+			nt != ESRNodeType_Variable && nt != ESRNodeType_Typedef && nt != ESRNodeType_Struct &&
+			nt != ESRNodeType_Union && nt != ESRNodeType_StaticVariable && nt != ESRNodeType_GroupsharedVariable
+		)
 			continue;
 
 		ID3D12ShaderReflectionType *rt = nullptr;

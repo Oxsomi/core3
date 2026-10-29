@@ -715,6 +715,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 				CharString_free(&tmp1, alloc);
 
 				CharString sub = CharString_createNull();
+
 				if(!CharString_cutBeforeLastSensitive(&pathi, '/', &sub))
 					sub = CharString_createRefSizedConst(pathi.ptr, CharString_length(pathi), false);
 
@@ -888,7 +889,8 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			#endif
 
-			if((args->parameters & EOperationHasParameter_Output) && (
+			if (
+				(args->parameters & EOperationHasParameter_Output) && (
 				binaryType == EGfxBinaryType_Count ||
 				!binaryMode ||
 				!(args->parameters & EOperationHasParameter_Entry)
@@ -906,6 +908,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			#ifdef CLI_RGA
 				const Bool asicAutoEntry = hasAsic && !doEntry && binaryMode && count == 1;
+
 				if(asicAutoEntry)
 					doEntry = true;
 			#endif

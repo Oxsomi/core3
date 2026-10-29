@@ -103,8 +103,9 @@ Bool DLFile_addEntryStream(
 		retError(clean, Error_nullPointer(1, "DLFile_addEntryStream()::stream is required"));
 
 	U64 siz = RefPtr_data(*stream, OxStream)->size;
-	if (dataOff + len > siz)
-		retError(clean, Error_outOfBounds(3, dataOff + len, siz, "DLFile_setStream()::off + len out of bounds"));
+
+	if (dataOff > siz || siz - dataOff < len)
+		retError(clean, Error_outOfBounds(3, dataOff, siz, "DLFile_addEntryStream()::off + len out of bounds"));
 
 	if (dlFile->settings.dataType == EDLDataType_String) {
 		gotoIfError3(clean, ListCharString_pushBack(&dlFile->entryStrings, CharString_createNull(), alloc, e_rr));
@@ -357,8 +358,9 @@ Bool DLFile_setStream(DLFile *dlFile, U64 id, StreamRef **stream, U64 dataOff, U
 			retError(clean, Error_nullPointer(1, "DLFile_setStream() type of stream is invalid"));
 
 		U64 siz = RefPtr_data(*stream, OxStream)->size;
-		if (dataOff + len > siz)
-			retError(clean, Error_outOfBounds(3, dataOff + len, siz, "DLFile_setStream()::off + len out of bounds"));
+
+		if (dataOff > siz || siz - dataOff < len)
+			retError(clean, Error_outOfBounds(3, dataOff, siz, "DLFile_setStream()::off + len out of bounds"));
 	}
 
 	if (dlFile->entryStreams.ptr[id].stream)

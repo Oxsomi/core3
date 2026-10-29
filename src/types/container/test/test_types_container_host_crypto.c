@@ -73,7 +73,7 @@ void Test_hostCrypto(Test *t) {
 				continue;
 
 			for(U64 j = 0; j < len; ++j)
-				data.ptrNonConst[j] = (U8)(j * 31 + i);
+				data.ptrNonConst[j] = (U8) (j * 31 + i);
 
 			Buffer view = Buffer_createRefConst(data.ptr, len);
 
@@ -96,6 +96,7 @@ void Test_hostCrypto(Test *t) {
 			if(len && Buffer_createCopy(Buffer_createRefConst(data.ptr, len), t->alloc, &copy, NULL)) {
 
 				U32 key[8];
+
 				for(U8 j = 0; j < 8; ++j) key[j] = 0x01020304u + j;
 
 				I32x4 iv = I32x4_create4(0x11111111, 0x22222222, 0x33333333, 0);

@@ -320,7 +320,7 @@ extern "C" void Test_graphicsHostMemory(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	gfx::CommandList commandList, emptyList;
 
-	if(
+	if (
 		!c::Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
 		!c::Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) ||
 		!c::Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr)) ||
@@ -363,7 +363,7 @@ extern "C" void Test_graphicsHostMemory(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			return;
 	}
 
-	if(
+	if (
 		!hostCreate(t, dev, hostSmallBytes, hostSmallSeed, "hostSmall", small) ||
 		!hostCreate(
 			t, dev, hostReadBytes, hostReadSeed, "hostReadable", readable, c::EGraphicsResourceFlag_HostMemoryRead
@@ -574,7 +574,7 @@ extern "C" void Test_graphicsHostPlacement(oxc::c::Test *t, oxc::c::GraphicsDevi
 
 		gfx::DeviceBuffer read, plain;
 
-		if(
+		if (
 			!hostCreate(t, dev, sizes[i], 1, "hostPlacementRead", read, c::EGraphicsResourceFlag_HostMemoryRead) ||
 			!hostCreate(t, dev, sizes[i], 2, "hostPlacementPlain", plain)
 		)

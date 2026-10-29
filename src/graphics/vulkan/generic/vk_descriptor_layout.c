@@ -246,7 +246,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
 
 		gotoIfError3(clean, ListU64_pushBack(
-			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, NULL, e_rr
+			&sortedList, ((U64) info.bindings.ptr[i].binding.space << 32) | i, NULL, e_rr
 		));
 
 		DescriptorBinding binding = info.bindings.ptr[i];
@@ -257,7 +257,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			if(sets[j] == binding.binding.space)
 				break;
 
-		if(
+		if (
 			(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) ||
 			((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding.count > 1)
 		)
@@ -324,7 +324,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		if(type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
 			bindFlags &=~ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
-		if(
+		if (
 			!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
 			!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
 		)
@@ -363,7 +363,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			//A push descriptor set layout can't have sets allocated from it. Without native push descriptors,
 			// this stays a regular layout so emulation can allocate sets with a lifetime tied to their frame.
 
-			if(
+			if (
 				hasPushDescriptor &&
 				(device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_PerformantPushDescriptor)
 			)

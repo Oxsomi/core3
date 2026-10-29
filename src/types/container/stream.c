@@ -328,12 +328,22 @@ clean:
 	return s_uccess;
 }
 
+//A cursor over an encrypted stream caches its plaintext, which doesn't go back to the allocator readable.
+static void StreamCursor_wipeCache(StreamCursor *cursor) {
+
+	const OxStream *stream = cursor->stream ? RefPtr_data(cursor->stream, OxStream) : NULL;
+
+	if (stream && (stream->streamType & EStreamType_Encrypted))
+		Buffer_clearAllSecure(cursor->cacheData);
+}
+
 void StreamCursor_close(StreamCursor *cursor, const Allocator *alloc) {
 
 	if (!cursor)
 		return;
 
 	StreamCursor_flush(cursor, alloc, NULL);
+	StreamCursor_wipeCache(cursor);
 	Buffer_free(&cursor->cacheData, alloc);
 	RefPtr_dec(&cursor->stream);
 
@@ -457,6 +467,7 @@ Bool StreamCursor_resize(StreamCursor *cursor, U64 newSize, Bool disableFlush, c
 	if(!disableFlush)
 		gotoIfError3(clean, StreamCursor_flush(cursor, alloc, e_rr));
 
+	StreamCursor_wipeCache(cursor);
 	Buffer_free(&cursor->cacheData, alloc);
 	gotoIfError3(clean, Buffer_createUninitializedBytes(newSize, alloc, &cursor->cacheData, e_rr));
 	cursor->lastLocation = cursor->lastWriteLocation = U64_MAX;
@@ -511,7 +522,7 @@ Bool StreamCursor_copyStream(
 
 	if (!length) {
 
-		if (srcOff >= inputSize)
+		if (srcOff > inputSize)
 			retError(clean, Error_outOfBounds(2, srcOff, inputSize, "StreamCursor_copyStream()::srcOff out of bounds"));
 
 		length = inputSize - srcOff;
@@ -542,6 +553,21 @@ clean:
 	return s_uccess;
 }
 
+//Where a write window starting at start ends. On a stream with blocks (an EncryptionStream's chunks) it ends on a block,
+// so a full window flushes whole blocks and the window after it starts on one; a cache smaller than a block can't, and
+// keeps its whole length.
+static U64 StreamCursor_windowEnd(const StreamCursor *cursor, const OxStream *stream, U64 start) {
+
+	const U64 end = start + Buffer_length(cursor->cacheData);
+	const U64 block = stream->blockSize;
+
+	if (block <= 1)
+		return end;
+
+	const U64 onBlock = end - end % block;
+	return onBlock > start ? onBlock : end;
+}
+
 Bool StreamCursor_write(
 	StreamCursor *cursor,
 	Buffer buf,
@@ -569,8 +595,18 @@ Bool StreamCursor_write(
 	if ((srcOff >> 48) || (dstOff >> 48) || (length >> 48))
 		retError(clean, Error_invalidParameter(2, 0, "StreamCursor_write()::dst/src off limited to 48b"));
 
+	const U64 bufLen = Buffer_length(buf);
+
+	if (srcOff > bufLen || length > bufLen - srcOff)
+		retError(clean, Error_outOfBounds(2, srcOff, bufLen, "StreamCursor_write()::source buffer out of bounds"));
+
 	if (!length)
-		length = Buffer_length(buf);
+		length = bufLen - srcOff;
+
+	const U64 maxSize = U64_MAX >> 16;
+
+	if (length > maxSize - dstOff)
+		retError(clean, Error_outOfBounds(3, dstOff, maxSize, "StreamCursor_write()::range exceeds 48 bits"));
 
 	if (dstOff + length > stream->size && !(stream->streamType & EStreamType_Resizable))
 		retError(clean, Error_outOfBounds(
@@ -583,7 +619,7 @@ Bool StreamCursor_write(
 	U64 cursorEnd = 0;
 
 	if (cursor->lastLocation != U64_MAX)
-		cursorEnd = cursor->lastLocation + cursorLen;
+		cursorEnd = StreamCursor_windowEnd(cursor, stream, cursor->lastLocation);
 
 	//If the writing dst is in our stream, we can write it in memory for the remaining bytes.
 	//When the cache is full, we can flush it to disk / output.
@@ -602,14 +638,15 @@ Bool StreamCursor_write(
 
 		else {
 
-			U64 bytesToCopy = U64_min(cursorLen - dstRel, length);
+			U64 bytesToCopy = U64_min(cursorEnd - dstOff, length);
 
 			//Guarded on bytesToCopy so a zero length write never forms buf.ptr + srcOff when buf.ptr is NULL.
 			//A null source buffer is legal for an empty append, but NULL + 0 is undefined behaviour that UBSan flags.
 			//Copying zero bytes is pointless regardless.
+			//The source can be this cache (bytes already in place, or elsewhere in it), so the copy may overlap.
 
-			if(bytesToCopy && cursor->cacheData.ptr != buf.ptr)
-				Buffer_memcpy(
+			if(bytesToCopy && cursor->cacheData.ptr + dstRel != buf.ptr + srcOff)
+				Buffer_memmove(
 					Buffer_createRef(cursor->cacheData.ptrNonConst + dstRel, bytesToCopy),
 					Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)
 				);
@@ -625,11 +662,34 @@ Bool StreamCursor_write(
 	if (!length)
 		goto clean;
 
-	//The part that can't fit in the stream but needs to go into the target, we can write directly
+	//Pending writes must reach the stream before a later direct write can overlap their range.
 
-	if (length > cursorLen || bypassCache) {
+	if (cursor->lastLocation != U64_MAX)
+		gotoIfError3(clean, StreamCursor_flush(cursor, alloc, e_rr));
 
-		U64 len = bypassCache ? length : length - cursorLen;
+	//What can't fit in a window from here is written directly and the rest is cached.
+	//On a stream with blocks the direct part ends on a block, so the cached rest starts its window on one.
+
+	const U64 end = dstOff + length;
+	U64 cacheFrom = dstOff;
+
+	if (bypassCache)
+		cacheFrom = end;
+
+	else if (end > StreamCursor_windowEnd(cursor, stream, dstOff)) {
+
+		cacheFrom = end - U64_min(cursorLen, length);
+
+		const U64 block = stream->blockSize;
+		const U64 onBlock = block > 1 ? end - end % block : 0;
+
+		if (onBlock > dstOff && end <= StreamCursor_windowEnd(cursor, stream, onBlock))
+			cacheFrom = onBlock;
+	}
+
+	if (cacheFrom > dstOff) {
+
+		const U64 len = cacheFrom - dstOff;
 
 		gotoIfError3(clean, stream->write(
 			stream,
@@ -648,22 +708,6 @@ Bool StreamCursor_write(
 	if (!length)
 		goto clean;
 
-	//Flush cache (if present), as we clearly don't have it in memory.
-
-	if (cursor->lastLocation != U64_MAX) {
-
-		gotoIfError3(clean, stream->write(
-			stream,
-			cursor->lastLocation,
-			cursor->lastWriteLocation - cursor->lastLocation,
-			cursor->cacheData,
-			alloc,
-			e_rr
-		));
-
-		cursor->lastLocation = cursor->lastWriteLocation = U64_MAX;
-	}
-
 	//The remainder of the file that can fit in the stream is loaded in two places.
 	//This should be avoided by using File_read/FileHandle_read if the file is only accessed once and linearly.
 	//However, in some cases, the file isn't necessarily read like that and/or only parts are accessed.
@@ -673,8 +717,10 @@ Bool StreamCursor_write(
 	cursor->lastLocation = dstOff;
 	cursor->lastWriteLocation = dstOff + length;
 
-	if(cursor->cacheData.ptr != buf.ptr)
-		Buffer_memcpy(cursor->cacheData, Buffer_createRef(buf.ptrNonConst + srcOff, length));
+	if(cursor->cacheData.ptr != buf.ptr + srcOff)
+		Buffer_memmove(
+			Buffer_createRef(cursor->cacheData.ptrNonConst, length), Buffer_createRefConst(buf.ptr + srcOff, length)
+		);
 
 clean:
 	return s_uccess;
@@ -796,16 +842,24 @@ Bool StreamCursor_read(
 	//In that case, you don't want to load the entire file, but you might want to keep the next info ready just in case.
 	//It would minimize IO access at the cost of memory and potentially unnecessary copies.
 
-	cursor->lastLocation = srcOff;
+	//A failed fill can overwrite the old cache, so neither window remains valid until the read succeeds.
+
+	cursor->lastLocation = U64_MAX;
+	cursor->lastWriteLocation = U64_MAX;
+
+	const U64 readLength = U64_min(streamLen, stream->size - srcOff);
 
 	gotoIfError3(clean, stream->read(
 		stream,
 		srcOff,
-		U64_min(streamLen, stream->size - srcOff),
+		readLength,
 		cursor->cacheData,
 		alloc,
 		e_rr
 	));
+
+	cursor->lastLocation = srcOff;
+	cursor->lastWriteLocation = srcOff + readLength;
 
 	if (bufLen)
 		Buffer_memcpy(Buffer_createRef(buf.ptrNonConst + dstOff, length), cursor->cacheData);

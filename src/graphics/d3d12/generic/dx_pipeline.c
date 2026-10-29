@@ -42,7 +42,7 @@ void DxPipeline_trackMemory(Pipeline *pipeline, ID3D12PipelineState *pso, U64 by
 
 void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	if(!pipeline)
 		return;

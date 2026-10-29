@@ -51,6 +51,13 @@ OXC3_TEST_MAIN(formats_hdr) {
 	Test_HDRReadBeginRefusesOutput(&t);
 	Test_HDRReadUnwritableSink(&t);
 
+	Test_HDRReadHugeHeader(&t);
+	Test_HDRReadCRLF(&t);
+	Test_HDRFloatRoundTripStable(&t);
+	Test_HDRExposureLocale(&t);
+	Test_HDRWriteFailedWrites(&t);
+	Test_HDRReadUnalignedOutput(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);
 }

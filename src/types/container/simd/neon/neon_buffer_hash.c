@@ -109,7 +109,7 @@ static inline I32x4 I32x4_msg1(I32x4 a, I32x4 b) {
 }
 
 static inline I32x4 I32x4_msg2(I32x4 a, I32x4 b, I32x4 c) {
-	(void)a;
+	(void) a;
 	return vreinterpretq_s32_u32(
 		vsha256su1q_u32(vreinterpretq_u32_s32(a), vreinterpretq_u32_s32(b), vreinterpretq_u32_s32(c))
 	);

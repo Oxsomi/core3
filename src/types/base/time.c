@@ -51,7 +51,7 @@ Ns Time_now() {
 	if(!timespec_get(&ts, TIME_UTC))
 		return (Ns) U64_MAX;
 
-	return (Ns)ts.tv_sec * SECOND + (Ns)ts.tv_nsec;
+	return (Ns) ts.tv_sec * SECOND + (Ns) ts.tv_nsec;
 }
 
 #if _PLATFORM_TYPE == PLATFORM_WEB
@@ -97,7 +97,7 @@ Ns Time_now() {
 
 static inline void setNum(TimeFormat format, I64 offset, U64 length, U64 v) {
 
-	I64 off = (I64)(offset + length) - 1;
+	I64 off = (I64) (offset + length) - 1;
 
 	while (v && off >= offset) {
 		format[off] = '0' + v % 10;
@@ -129,15 +129,18 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 		Buffer_createRefConst(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
+	if(isLocalTime)
+		timeString[sizeof(FORMAT_STR) - 2] = '\0';
+
 	if(!success)
 		return;
 
-	setNum(timeString, OFFSETS[0], SIZES[0], (U64)t.tm_year + 1900);
-	setNum(timeString, OFFSETS[1], SIZES[1], (U64)t.tm_mon + 1);
-	setNum(timeString, OFFSETS[2], SIZES[2], (U64)t.tm_mday);
-	setNum(timeString, OFFSETS[3], SIZES[3], (U64)t.tm_hour);
-	setNum(timeString, OFFSETS[4], SIZES[4], (U64)t.tm_min);
-	setNum(timeString, OFFSETS[5], SIZES[5], (U64)t.tm_sec);
+	setNum(timeString, OFFSETS[0], SIZES[0], (U64) t.tm_year + 1900);
+	setNum(timeString, OFFSETS[1], SIZES[1], (U64) t.tm_mon + 1);
+	setNum(timeString, OFFSETS[2], SIZES[2], (U64) t.tm_mday);
+	setNum(timeString, OFFSETS[3], SIZES[3], (U64) t.tm_hour);
+	setNum(timeString, OFFSETS[4], SIZES[4], (U64) t.tm_min);
+	setNum(timeString, OFFSETS[5], SIZES[5], (U64) t.tm_sec);
 	setNum(timeString, OFFSETS[6], SIZES[6], inNs);
 }
 
@@ -145,49 +148,40 @@ static const C8 separators[] = "--T::.Z";
 
 Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
-	if (!time)
+	if (!time || !format)
 		return false;
 
 	const U64 length = CharString_calcStrLen(format, SHORTSTRING_LEN - 1);
+	const U64 parseLength = length + isLocalTime;
 
-	U64 curr = 0, currSep = 0, prevI = U64_MAX;
+	if(parseLength < 22 || parseLength > 30)
+		return false;
+
+	U64 curr = 0, currSep = 0, fieldStart = 0;
 
 	Date date = { 0 };
 
-	for (U64 i = 0; i < length; ++i) {
+	for (U64 i = 0; i < parseLength; ++i) {
 
 		const C8 c = format[i];
 
 		if (C8_isDec(c)) {
 
-			if(curr == U64_MAX)
+			if(currSep >= sizeof(separators) - 1 || i - fieldStart >= SIZES[currSep])
 				return false;
 
-			curr *= 10;
-
-			const U64 prev = curr;
-			curr += C8_dec(c);
-
-			if(curr < prev)
-				return false;
-
-			if (curr * 10 < curr)
-				curr = U64_MAX;
-
+			curr = curr * 10 + C8_dec(c);
 			continue;
 		}
 
-		if (currSep == sizeof(separators) - 1 || c != separators[currSep])
+		if (
+			currSep == sizeof(separators) - 1 ||
+			c != (currSep == 6 && isLocalTime ? '\0' : separators[currSep])
+		)
 			return false;
 
-		if(currSep < 6) {
-
-			if (curr > U16_MAX)
-				return false;
-
-			if (currSep && curr > U8_MAX)            //Everything but year is 8-bit
-				return false;
-		}
+		if(i == fieldStart || (currSep < 6 && i - fieldStart != SIZES[currSep]))
+			return false;
 
 		switch (currSep) {
 
@@ -199,21 +193,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 			case 5:        date.second = (U8) curr;       break;
 
 			case 6: {    //Nanoseconds
-
-				const int dif = (int)(i - prevI);
-
-				if(dif == 0)
-					return false;
-
-				const U64 mul = U64_exp10(9 - dif);
-
-				if(mul == U64_MAX)
-					return false;
-
-				if (curr * mul >= SECOND)
-					return false;
-
-				date.ns = (U32)(curr * mul);
+				date.ns = (U32) (curr * U64_exp10(9 - (U8) (i - fieldStart)));
 				break;
 			}
 
@@ -223,8 +203,11 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 		curr = 0;
 		++currSep;
-		prevI = i + 1;
+		fieldStart = i + 1;
 	}
+
+	if(currSep != sizeof(separators) - 1 || fieldStart != parseLength)
+		return false;
 
 	const Ns res = Time_date(&date, isLocalTime);
 
@@ -237,14 +220,21 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 Ns Time_date(const Date *date, Bool isLocalTime) {
 
-	if(
+	if (
 		!date ||
 		date->year < 1970 ||
 		date->month < 1 || date->month > 12 ||
-		date->day > 31 ||
+		date->day < 1 || date->day > 31 ||
 		date->hour >= 24 || date->minute >= 60 || date->second >= 60 ||
 		date->ns >= SECOND
 	)
+		return U64_MAX;
+
+	static const U8 MONTH_DAYS[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+	const Bool leapYear = !(date->year % 4) && (date->year % 100 || !(date->year % 400));
+	const U8 monthDays = MONTH_DAYS[date->month - 1] + (date->month == 2 && leapYear);
+
+	if(date->day > monthDays)
 		return U64_MAX;
 
 	struct tm tm = {
@@ -257,10 +247,10 @@ Ns Time_date(const Date *date, Bool isLocalTime) {
 
 	const time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
 
-	if (ts == (time_t)-1 || (U64)ts * SECOND + date->ns < (U64)ts)
+	if(ts < 0 || (U64) ts > (U64_MAX - 1 - date->ns) / SECOND)
 		return U64_MAX;
 
-	return (Ns)ts * SECOND + date->ns;
+	return (Ns) ts * SECOND + date->ns;
 }
 
 Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime) {
@@ -279,18 +269,18 @@ Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime) {
 	if(!success)
 		return false;
 
-	if(t.tm_year > 1900 + U16_MAX)
+	if(t.tm_year < -1900 || t.tm_year > U16_MAX - 1900)
 		return false;
 
 	if (!date)
 		return false;
 
-	date->ns = (U32)(timestamp % SECOND);
-	date->year = (U16)(t.tm_year + 1900);
-	date->month = (U8)(t.tm_mon + 1);
-	date->day = (U8)t.tm_mday;
-	date->hour = (U8)t.tm_hour;
-	date->minute = (U8)t.tm_min;
-	date->second = (U8)t.tm_sec;
+	date->ns = (U32) (timestamp % SECOND);
+	date->year = (U16) (t.tm_year + 1900);
+	date->month = (U8) (t.tm_mon + 1);
+	date->day = (U8) t.tm_mday;
+	date->hour = (U8) t.tm_hour;
+	date->minute = (U8) t.tm_min;
+	date->second = (U8) t.tm_sec;
 	return true;
 }

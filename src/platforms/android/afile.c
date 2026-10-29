@@ -76,7 +76,7 @@ Bool File_loadVirtualInternal1(
 
 		VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
-		if(
+		if (
 			!CharString_equalsStringInsensitive(loc, &section->path) &&
 			!CharString_startsWithStringInsensitive(&section->path, &isChild, 0)
 		)
@@ -168,7 +168,7 @@ Bool File_loadVirtualInternal1(
 		gotoIfError3(clean, ListCAFile_pushBack(&Platform_instance->archives, caFile, alloc, e_rr));
 		caFile = (CAFile) { 0 };
 
-		section->loadedAndId = archiveIndex | ((U64)1 << 63);
+		section->loadedAndId = archiveIndex | ((U64) 1 << 63);
 		foundAny = true;
 	}
 

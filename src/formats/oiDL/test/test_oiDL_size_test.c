@@ -242,7 +242,7 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 		for (U8 i = 0; i < 5 && addOk; ++i) {
 			Buffer buf = Buffer_createNull();
 			Buffer_createUninitializedBytes(32, t->alloc, &buf, &t->err);
-			Buffer_setAllToU8(buf, (U8)(0xA0 + i), NULL);
+			Buffer_setAllToU8(buf, (U8) (0xA0 + i), NULL);
 			addOk = DLFile_addEntry(&f, &buf, t->alloc, &t->err);
 			Buffer_free(&buf, t->alloc);
 		}
@@ -269,7 +269,7 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 		for (U8 i = 0; i < 5 && addOk; ++i) {
 			Buffer buf = Buffer_createNull();
 			Buffer_createUninitializedBytes(32, t->alloc, &buf, &t->err);
-			Buffer_setAllToU8(buf, (U8)(0xB0 + i), NULL);
+			Buffer_setAllToU8(buf, (U8) (0xB0 + i), NULL);
 			addOk = DLFile_addEntry(&f, &buf, t->alloc, &t->err);
 			Buffer_free(&buf, t->alloc);
 		}

@@ -26,6 +26,7 @@
 #include "types/container/string.h"
 #include "types/base/error.h"
 #include "formats/oiPL/pl_file.h"
+#include "types/container/test/failing_stream.h"
 
 static Bool buildLayout(Test *t, PLFile *pl) {
 
@@ -202,7 +203,7 @@ static Bool tamper(Test *t, const C8 *label, StreamRef *stream, U64 offset, U8 v
 
 	MemoryStream *ms = RefPtr_data(stream, MemoryStream);
 
-	if(offset >= Buffer_length(ms->data))
+	if(offset >= ms->parent.size)
 		return Test_assert(t, label, false);
 
 	const U8 previous = ms->data.ptr[offset];
@@ -323,7 +324,7 @@ static void Test_PLValidate(Test *t) {
 	pl.bindings.ptrNonConst[2].registerType |= EGfxRegisterType_IsWrite;
 	Test_assert(t, "writeFlagRefused", !PLDescriptorBinding_validate(&pl.bindings.ptr[2], U64_MAX, U64_MAX, false, NULL));
 
-	pl.bindings.ptrNonConst[2].registerType &= ~(U32)EGfxRegisterType_IsWrite;
+	pl.bindings.ptrNonConst[2].registerType &= ~(U32) EGfxRegisterType_IsWrite;
 	pl.bindings.ptrNonConst[2].bindings.arr[EGfxBinaryType_SPIRV].space = OXC3_RESERVED_SPACE;
 	Test_assert(t, "reservedRefused", !PLDescriptorBinding_validate(&pl.bindings.ptr[2], U64_MAX, U64_MAX, false, NULL));
 	Test_assert(t, "reservedExempt", PLDescriptorBinding_validate(&pl.bindings.ptr[2], U64_MAX, U64_MAX, true, NULL));
@@ -369,6 +370,149 @@ clean:
 	PLFile_free(&pl, t->alloc);
 }
 
+//Padding is part of the record: a file whose padding differs from what the writer produces is not one it wrote
+
+static void Test_PLPadding(Test *t) {
+
+	Test_setModule(t, "PLFile: nonzero padding is refused on read");
+
+	PLFile pl = (PLFile) { 0 };
+	StreamRef *stream = NULL;
+
+	if(!buildLayout(t, &pl))
+		goto clean;
+
+	const RefPtrType msType = MemoryStream_makeType(t->alloc);
+
+	if(!Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &stream, &t->err)))
+		goto clean;
+
+	U64 off = 0;
+
+	if(!Test_assert(t, "write", PLFile_write(&pl, t->alloc, stream, &off, &t->err)))
+		goto clean;
+
+	const U64 B = 4 + 4;
+
+	tamper(t, "bindingPadding", stream, B + 40 + 36, 1);
+	tamper(t, "pushConstantPadding", stream, B + 120 + 36, 1);
+	tamper(t, "samplerPadding", stream, B + 160 + 14, 1);
+
+clean:
+	RefPtr_dec(&stream);
+	PLFile_free(&pl, t->alloc);
+}
+
+//Rows that bind one register twice, or a push constant that isn't a push constant, are not a layout
+
+static void Test_PLStructure(Test *t) {
+
+	Test_setModule(t, "PLFile: overlapping rows and a bad push constant are refused on write and read");
+
+	for(U8 pass = 0; pass < 2; ++pass) {
+
+		PLFile pl = (PLFile) { 0 };
+		StreamRef *stream = NULL;
+		PLFile reread = (PLFile) { 0 };
+
+		if(!buildLayout(t, &pl))
+			goto next;
+
+		if(pass == 0)
+			Test_assert(t, "duplicateRow", ListPLDescriptorBinding_pushBack(
+				&pl.bindings, pl.bindings.ptr[1], t->alloc, &t->err
+			));
+
+		else pl.pushConstant.registerType = EGfxRegisterType_Texture2D;
+
+		const RefPtrType msType = MemoryStream_makeType(t->alloc);
+
+		if(!Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &stream, &t->err)))
+			goto next;
+
+		U64 off = 0, readOff = 0;
+
+		Test_assert(t, "invalid structure refused by writer", !PLFile_write(&pl, t->alloc, stream, &off, NULL));
+		Test_assert(t, "failure preserves offset", off == 0);
+		Test_assert(t, "invalid structure refused in size mode", !PLFile_write(&pl, t->alloc, NULL, &off, NULL));
+		Test_assert(t, "size failure preserves offset", off == 0);
+
+		if (pass == 0)
+			ListPLDescriptorBinding_popBack(&pl.bindings, NULL, NULL);
+
+		else pl.pushConstant.registerType = EGfxRegisterType_PushConstants;
+
+		off = 0;
+
+		if(Test_assert(t, "write", PLFile_write(&pl, t->alloc, stream, &off, &t->err))) {
+
+			MemoryStream *memory = RefPtr_data(stream, MemoryStream);
+			const U64 base = sizeof(U32) + sizeof(PLHeader);
+			const U64 target = base + (pass ? pl.bindings.length : 2) * sizeof(PLDescriptorBinding);
+			PLDescriptorBinding invalid = pass ? pl.pushConstant : pl.bindings.ptr[1];
+
+			if (pass)
+				invalid.registerType = EGfxRegisterType_Texture2D;
+
+			Buffer_memcpy(Buffer_createRef(memory->data.ptrNonConst + target, sizeof(invalid)),
+				Buffer_createRefConst(&invalid, sizeof(invalid))
+			);
+
+			Test_assert(
+				t, pass ? "pushConstantNotPush" : "overlap",
+				!PLFile_read(stream, &readOff, false, t->alloc, &reread, NULL)
+			);
+		}
+
+	next:
+		PLFile_free(&reread, t->alloc);
+		RefPtr_dec(&stream);
+		PLFile_free(&pl, t->alloc);
+	}
+}
+
+//A write that fails anywhere has to fail the writer, the cursor's own flush included
+
+static void Test_PLWriteFailures(Test *t) {
+
+	Test_setModule(t, "PLFile write: every failing write is reported");
+
+	PLFile pl = (PLFile) { 0 };
+
+	if(!buildLayout(t, &pl))
+		goto clean;
+
+	const RefPtrType msType = MemoryStream_makeType(t->alloc);
+	StreamRef *stream = NULL;
+	U64 off = 0;
+
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &stream, &t->err));
+	FailingStream_arm(stream, 0);
+	Test_assert(t, "counting write", PLFile_write(&pl, t->alloc, stream, &off, &t->err));
+
+	const U64 writes = FailingStream_writes();
+
+	RefPtr_dec(&stream);
+	Test_assert(t, "the writer writes", writes > 0);
+
+	for(U64 i = 1; i <= writes; ++i) {
+
+		off = 0;
+		Test_assert(t, "stream again", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &stream, &t->err));
+		FailingStream_arm(stream, i);
+
+		const Bool ok = PLFile_write(&pl, t->alloc, stream, &off, NULL);
+
+		Test_assert(t, "the write was reached", FailingStream_failed());
+		Test_assert(t, "a failed write fails the writer", !ok);
+		Test_assert(t, "a failed write leaves the offset", !off);
+		RefPtr_dec(&stream);
+	}
+
+clean:
+	PLFile_free(&pl, t->alloc);
+}
+
 OXC3_TEST_MAIN(formats_oiPL) {
 
 	const Allocator alloc = BasicAllocator_instance;
@@ -381,6 +525,9 @@ OXC3_TEST_MAIN(formats_oiPL) {
 	Test_PLCopy(&t);
 	Test_PLTamper(&t);
 	Test_PLValidate(&t);
+	Test_PLPadding(&t);
+	Test_PLStructure(&t);
+	Test_PLWriteFailures(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

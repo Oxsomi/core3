@@ -32,9 +32,9 @@ static Bool failingAlloc(void *allocator, U64 length, Buffer *output, Error *e_r
 
 	Bool s_uccess = true;
 
-	(void)allocator;
-	(void)length;
-	(void)output;
+	(void) allocator;
+	(void) length;
+	(void) output;
 
 	retError(clean, Error_outOfMemory(0, "failingAlloc() simulated OOM"));
 
@@ -43,8 +43,42 @@ clean:
 }
 
 static void failingFree(void *allocator, Buffer buf) {
-	(void)allocator;
-	(void)buf;
+	(void) allocator;
+	(void) buf;
+}
+
+typedef struct LogFailAllocator {
+	const Allocator *alloc;
+	U64 remaining, live;
+	Buffer buffers[8];
+} LogFailAllocator;
+
+static Bool LogFail_alloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
+
+	Bool s_uccess = true;
+	LogFailAllocator *state = (LogFailAllocator*) allocator;
+
+	if(!state->remaining)
+		retError(clean, Error_outOfMemory(0, "LogFail_alloc() injected failure"));
+
+	--state->remaining;
+	gotoIfError3(clean, state->alloc->alloc(state->alloc->ptr, length, output, e_rr));
+	state->buffers[state->live++] = *output;
+
+clean:
+	return s_uccess;
+}
+
+static void LogFail_free(void *allocator, Buffer buffer) {
+
+	LogFailAllocator *state = (LogFailAllocator*) allocator;
+
+	for(U64 i = 0; i < state->live; ++i)
+		if(state->buffers[i].ptr == buffer.ptr) {
+			state->buffers[i] = state->buffers[--state->live];
+			state->alloc->free(state->alloc->ptr, buffer);
+			return;
+		}
 }
 
 void Test_logOOM(Test *t) {
@@ -69,4 +103,21 @@ void Test_logOOM(Test *t) {
 	const Error err = Error_outOfMemory(0, "Test_logOOM() fake error to print under OOM");
 	Error_print(&oom, &err, ELogLevel_Debug, ELogOptions_NewLine);
 	Test_assert(t, "Error_print survives OOM", true);
+
+	StackTrace trace = { 0 };
+
+	Error_captureStackTrace(trace, STACKTRACE_SIZE, 0);
+
+	for(U64 count = 1; count < 4; ++count) {
+
+		LogFailAllocator state = { .alloc = t->alloc, .remaining = count };
+		const Allocator partial = { .ptr = &state, .alloc = LogFail_alloc, .free = LogFail_free };
+
+		Log_printCapturedStackTrace(&partial, trace, ELogLevel_Debug, ELogOptions_NewLine | ELogOptions_NoBreak);
+
+		Test_assert(t, "symbol capture allocation failure releases partial frame", !state.live);
+
+		while(state.live)
+			LogFail_free(&state, state.buffers[state.live - 1]);
+	}
 }

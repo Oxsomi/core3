@@ -33,3 +33,5 @@ void Test_SRReadStreamShape(Test *t);               //truncated stream, trailing
 void Test_SRFileStructuralRoundTrips(Test *t);      //empty, anonymous node, 1-node, large-N, interpolation + fwd field
 void Test_SRFileHashAndName(Test *t);               //hash determinism + content sensitivity, ESRNodeType_name coverage
 void Test_SRFileCreateAndWriteGuards(Test *t);      //create flag/feature/memleak guards, write/finalize symbol-parallel guards
+void Test_SRReadHugeCounts(Test *t);                //every header count too big for the stream, before anything is allocated
+void Test_SRWriteFailures(Test *t);                 //each failing write of the stream fails the writer

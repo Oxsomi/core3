@@ -36,7 +36,43 @@
 //---------------------------------------------------------------- Reading the flat form back
 
 static U32 MeshFlat_index(const MeshFlat *mesh, U64 at) {
-	return mesh->narrowIndices ? ((const U16*) mesh->indices.ptr)[at] : ((const U32*) mesh->indices.ptr)[at];
+
+	U32 index = 0;
+	const U8 bytes = mesh->narrowIndices ? 2 : 4;
+
+	Buffer_memcpy(Buffer_createRef(&index, bytes), Buffer_createRefConst(mesh->indices.ptr + at * bytes, bytes));
+	return index;
+}
+
+static Bool MeshFlat_checkGeometry(const MeshFlat *mesh, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!ETextureFormatId_canCodec((ETextureFormatId) mesh->positionFormat))
+		retError(clean, Error_invalidParameter(0, 0, "MeshFlat_checkGeometry()::positionFormat is invalid"));
+
+	const U64 positionBytes = (U64) mesh->vertexCount * ETextureFormatId_texelBytes((ETextureFormatId) mesh->positionFormat);
+	const U64 indexCount = (U64) mesh->triangleCount * 3;
+	const U64 indexBytes = indexCount * (mesh->narrowIndices ? 2 : 4);
+
+	if(Buffer_length(mesh->positions) < positionBytes || (positionBytes && !mesh->positions.ptr))
+		retError(clean, Error_outOfBounds(
+			0, positionBytes, Buffer_length(mesh->positions), "MeshFlat_checkGeometry()::positions"
+		));
+
+	if(Buffer_length(mesh->indices) < indexBytes || (indexBytes && !mesh->indices.ptr))
+		retError(clean, Error_outOfBounds(0, indexBytes, Buffer_length(mesh->indices), "MeshFlat_checkGeometry()::indices"));
+
+	for(U64 i = 0; i < indexCount; ++i) {
+
+		const U32 index = MeshFlat_index(mesh, i);
+
+		if(index >= mesh->vertexCount)
+			retError(clean, Error_outOfBounds(0, index, mesh->vertexCount, "MeshFlat_checkGeometry()::index"));
+	}
+
+clean:
+	return s_uccess;
 }
 
 //A quantized position is the extent the bounds describe, so decoding one needs them; a float position is what
@@ -129,7 +165,7 @@ Bool MeshFlat_fromInfo(
 			3, Buffer_length(indices), indexBytes, "MeshFlat_fromInfo()::indices is shorter than indexCount"
 		));
 
-	if(
+	if (
 		Buffer_length(attributes) &&
 		Buffer_length(attributes) < (U64) flat->vertexCount * flat->attributeLayout.stride
 	)
@@ -158,10 +194,30 @@ Bool MeshFlat_computeNormals(const MeshFlat *mesh, const Allocator *alloc, Error
 	if(!mesh)
 		retError(clean, Error_nullPointer(0, "MeshFlat_computeNormals()::mesh is required"));
 
+	gotoIfError3(clean, MeshFlat_checkGeometry(mesh, e_rr));
+
+	if(mesh->attributeLayout.entryCount > MeshAttributeLayout_maxEntries)
+		retError(clean, Error_invalidParameter(0, 0, "MeshFlat_computeNormals()::attributeLayout is invalid"));
+
 	const MeshAttributeEntry *entry = MeshAttributeLayout_find(&mesh->attributeLayout, EMeshAttribute_Normal);
 
 	if(!entry)
 		retError(clean, Error_invalidState(0, "MeshFlat_computeNormals()::mesh has no normal attribute"));
+
+	if(entry->encoding >= EMeshAttributeEncoding_Count || !ETextureFormatId_canCodec((ETextureFormatId) entry->format))
+		retError(clean, Error_invalidParameter(0, 0, "MeshFlat_computeNormals()::normal encoding is invalid"));
+
+	const U8 bytes = entry->encoding == EMeshAttributeEncoding_Oct ? 4 : ETextureFormatId_texelBytes(entry->format);
+
+	if(entry->offset > mesh->attributeLayout.stride || bytes > mesh->attributeLayout.stride - entry->offset)
+		retError(clean, Error_invalidParameter(0, 0, "MeshFlat_computeNormals()::normal exceeds the attribute stride"));
+
+	const U64 attributeBytes = (U64) mesh->vertexCount * mesh->attributeLayout.stride;
+
+	if(Buffer_length(mesh->attributes) < attributeBytes || (attributeBytes && !mesh->attributes.ptr))
+		retError(clean, Error_outOfBounds(
+			0, attributeBytes, Buffer_length(mesh->attributes), "MeshFlat_computeNormals()::attributes is too short"
+		));
 
 	if(Buffer_isConstRef(mesh->attributes))
 		retError(clean, Error_constData(0, 0, "MeshFlat_computeNormals()::mesh attributes are read only"));
@@ -181,11 +237,6 @@ Bool MeshFlat_computeNormals(const MeshFlat *mesh, const Allocator *alloc, Error
 			continue;
 
 		for(U8 c = 0; c < 3; ++c) {
-
-			if(corners[c] >= mesh->vertexCount)
-				retError(clean, Error_outOfBounds(
-					0, corners[c], mesh->vertexCount, "MeshFlat_computeNormals() index past the vertex count"
-				));
 
 			F32 *sum = sums.ptrNonConst + (U64) corners[c] * 3;
 			F32x4_store3(sum, F32x4_add(F32x4_load3(sum), n));
@@ -228,12 +279,17 @@ Bool MeshFlat_computeWords(const MeshFlat *mesh, U32 material, Error *e_rr) {
 	if(!mesh)
 		retError(clean, Error_nullPointer(0, "MeshFlat_computeWords()::mesh is required"));
 
+	gotoIfError3(clean, MeshFlat_checkGeometry(mesh, e_rr));
+
 	if(material >= MeshTriangle_maxMaterials)
 		retError(clean, Error_outOfBounds(
 			1, material, MeshTriangle_maxMaterials, "MeshFlat_computeWords()::material past what a word holds"
 		));
 
-	if(Buffer_length(mesh->triangles) < (U64) mesh->triangleCount * sizeof(U32))
+	if (
+		Buffer_length(mesh->triangles) < (U64) mesh->triangleCount * sizeof(U32) ||
+		(mesh->triangleCount && !mesh->triangles.ptr)
+	)
 		retError(clean, Error_outOfBounds(
 			0, Buffer_length(mesh->triangles), (U64) mesh->triangleCount * sizeof(U32),
 			"MeshFlat_computeWords()::mesh has no triangle stream to write"
@@ -242,19 +298,21 @@ Bool MeshFlat_computeWords(const MeshFlat *mesh, U32 material, Error *e_rr) {
 	if(Buffer_isConstRef(mesh->triangles))
 		retError(clean, Error_constData(0, 0, "MeshFlat_computeWords()::mesh triangles are read only"));
 
-	U32 *words = (U32*) mesh->triangles.ptrNonConst;
-
 	for(U64 t = 0; t < mesh->triangleCount; ++t) {
 
 		U32 corners[3];
 		const F32x4 n = MeshFlat_faceNormal(mesh, t, corners);
 		const F32 len2 = F32x4_sqLen3(n);
 
-		//A degenerate triangle has no side to be on. Its normal packs to the +z encoding, which is what
-		// unpacking a zero word yields, and the material still rides above it.
+		//A degenerate triangle uses the +z normal; material bits are independent of the normal encoding.
 
 		const U32 oct = len2 > 0 ? U32_packOct18(F32x4_normalize3(n)) : U32_packOct18(F32x4_create3(0, 0, 1));
-		words[t] = MeshTriangle_pack(oct, material);
+		const U32 word = MeshTriangle_pack(oct, material);
+
+		Buffer_memcpy(
+			Buffer_createRef(mesh->triangles.ptrNonConst + t * sizeof(word), sizeof(word)),
+			Buffer_createRefConst(&word, sizeof(word))
+		);
 	}
 
 clean:

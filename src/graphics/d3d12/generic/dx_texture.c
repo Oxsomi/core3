@@ -41,7 +41,8 @@ void DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 		const DxUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Dx, 0, i);
 
-		if(image->image && (
+		if (
+			image->image && (
 			utex.resource.type != EResourceType_Swapchain ||
 			(utex.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)
 		))
@@ -255,7 +256,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 		//Dedicated allocations for depth stencil and render targets that are >=512px
 		//Magic number from NV best practices and seems to match Vulkan's behavior closely.
 
-		if(
+		if (
 			imageCount == 1 &&
 			!isDeviceTexture &&
 			texture->width >= 512 && texture->height >= 512 &&
@@ -270,7 +271,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 			};
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
-				Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
+				Error_captureStackTrace(block.stackTrace, (U8) (sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 			if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
 				retError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"));
@@ -354,7 +355,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 				texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
 				NULL, 0, NULL,
 				&IID_ID3D12Resource,
-				(void**)&managedImageExt->image
+				(void**) &managedImageExt->image
 			), e_rr));
 
 			if(forbidden)
@@ -420,7 +421,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 					texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
 					0, NULL,
 					&IID_ID3D12Resource,
-					(void**)&imageExt->image
+					(void**) &imageExt->image
 				), e_rr));
 			}
 		}

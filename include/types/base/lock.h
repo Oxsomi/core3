@@ -37,9 +37,6 @@ typedef struct SpinLock {
 
 typedef struct Error Error;
 
-//Even though maxTime is in Ns it may be interpreted as a different unit by the runtime.
-//Ex. Windows uses ms so it'll round up to ms
-
 typedef enum ELockAcquire {
 
 	ELockAcquire_Invalid = -2,
@@ -51,6 +48,9 @@ typedef enum ELockAcquire {
 
 } ELockAcquire;
 
+//maxTime is a monotonic timeout in nanoseconds; 0 only attempts acquisition and U64_MAX waits without a deadline.
+//Returns Invalid for a null lock or an unavailable monotonic clock when a bounded wait is needed.
+//Only Acquired transfers ownership and must be paired with unlock; AlreadyLocked leaves the outer owner responsible.
 ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime);
 
 static inline Bool SpinLock_unlock(SpinLock *l) {
@@ -66,7 +66,7 @@ static inline Bool SpinLock_unlock(SpinLock *l) {
 }
 
 static inline Bool SpinLock_isLockedForThread(SpinLock *l) {
-	return l && AtomicI64_load(&l->lockedThreadId) == (I64)Thread_getId();
+	return l && AtomicI64_load(&l->lockedThreadId) == (I64) Thread_getId();
 }
 
 #ifdef __cplusplus

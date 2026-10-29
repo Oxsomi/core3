@@ -76,8 +76,8 @@ static void LOutput_mode(
 		return;
  
 	LOutputInfo *info = (LOutputInfo*) data;
-	info->pixelWidth  = (U16)width;
-	info->pixelHeight = (U16)height;
+	info->pixelWidth  = (U16) width;
+	info->pixelHeight = (U16) height;
 	info->refreshRate = refresh;   // mHz
 }
  
@@ -110,7 +110,7 @@ static void LWindowManager_seatCapabilities(
 }
 
 static void LWindowManager_seatName(void *data, struct wl_seat *seat, const C8 *name) {
-	(void)data; (void)seat; (void)name;
+	(void) data; (void) seat; (void) name;
 }
 
 static const struct wl_seat_listener LWindowManager_seatListener = {
@@ -263,7 +263,7 @@ static inline Monitor LOutputInfo_toMonitor(const LOutputInfo *info) {
 		.offsetG      = spG,
 		.offsetB      = spB,
 		.sizeMm       = I32x2_create2(info->mmWidth,    info->mmHeight),
-		.refreshRate  = info->refreshRate > 0 ? (F32)info->refreshRate / 1000.f : 0.f,
+		.refreshRate  = info->refreshRate > 0 ? (F32) info->refreshRate / 1000.f : 0.f,
 		.orientation  = (EMonitorOrientation) info->transform,
 	};
 }
@@ -390,7 +390,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	manager->cursorTheme = wl_cursor_theme_load(themeName, cursorSize, manager->shm);
 
 	if(!manager->cursorTheme)     //Fallback
-		manager->cursorTheme = wl_cursor_theme_load(NULL, (I32) (cursorSize & (U64)I32_MAX), manager->shm);
+		manager->cursorTheme = wl_cursor_theme_load(NULL, (I32) (cursorSize & (U64) I32_MAX), manager->shm);
 
 	if(!manager->cursorTheme)
 		Log_warnLnx("WindowManager_createNative(): could not load cursor theme, cursors will be hidden");

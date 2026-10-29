@@ -40,7 +40,7 @@ typedef enum EMemoryStreamFlags {
 		
 typedef struct MemoryStream {
 	OxStream parent;
-	Buffer data;
+	Buffer data;        //Capacity for owned buffers; parent.size is the readable length. Growth is amortized.
 } MemoryStream;
 
 typedef RefPtr MemoryStreamRef;
@@ -78,7 +78,7 @@ Bool MemoryStream_createFromBufferRegion(
 	Error *e_rr
 );
 
-//Move buffer out of stream (invalidates stream and takes it from everyone else referencing it)
+//Move the logical stream bytes out, excluding spare capacity (invalidates all references to the stream).
 Bool MemoryStream_move(MemoryStreamRef **stream, Buffer *output, Error *e_rr);
 
 #ifdef __cplusplus

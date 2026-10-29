@@ -32,8 +32,8 @@
 
 void GraphicsDevice_freeDepthStencil(void *depthStencilGeneric, const Allocator *alloc) {
 	DepthStencil *depthStencil = (DepthStencil*) depthStencilGeneric;
-	(void)alloc;
-	UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
+	(void) alloc;
+	UnifiedTexture_free((TextureRef*)((U8*) depthStencil - sizeof(RefPtr)));
 }
 
 Bool GraphicsDeviceRef_createDepthStencil(

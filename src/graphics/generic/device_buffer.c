@@ -203,7 +203,8 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 
 		if((buffer->pendingChanges.length + 1) >> 32)
 			retError(clean, Error_outOfBounds(
-				0, U32_MAX, U32_MAX, "DeviceBufferRef_markDirty() buffer pendingRanges is limited to U32_MAX"));
+				0, U32_MAX, U32_MAX, "DeviceBufferRef_markDirty() buffer pendingRanges is limited to U32_MAX"
+			));
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
 		gotoIfError3(clean, ListDevicePendingRange_pushBack(&buffer->pendingChanges, change, alloc, e_rr));
@@ -240,9 +241,9 @@ void DeviceBuffer_free(void *bufferGeneric, const Allocator *alloc) {
 
 	DeviceBuffer *buffer = (DeviceBuffer*) bufferGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
-	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
+	RefPtr *refPtr = (RefPtr*)((const U8*) buffer - sizeof(RefPtr));
 
 	SpinLock_lock(&buffer->lock, U64_MAX);
 
@@ -535,7 +536,7 @@ Bool GraphicsDeviceRef_createBufferIntern(
 	//Host memory is read by shaders and written once by the upload, so nothing that writes it on the device, reads it
 	// back or keeps a CPU copy of it composes with it
 
-	if(
+	if (
 		(resourceFlags & EGraphicsResourceFlag_HostMemoryBit) &&
 		(
 			!(resourceFlags & EGraphicsResourceFlag_CPUAllocatedBit) || usage ||

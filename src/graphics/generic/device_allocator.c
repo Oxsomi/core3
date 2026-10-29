@@ -293,7 +293,7 @@ Bool GraphicsDeviceRef_getMemoryStats(GraphicsDeviceRef *deviceRef, const Alloca
 		for(U64 j = 0; j < blockEntries->length; ++j) {
 
 			const AllocationBufferBlock e = blockEntries->ptr[j];
-			const U64 start = e.startAndNonLinearAndFree & (((U64)1 << 62) - 1);
+			const U64 start = e.startAndNonLinearAndFree & (((U64) 1 << 62) - 1);
 			const Bool isFree = (e.startAndNonLinearAndFree >> 63) & 1;
 
 			if(start > cursor) {        //The ring buffer's front, before its first entry

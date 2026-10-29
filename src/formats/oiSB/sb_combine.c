@@ -41,7 +41,11 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 	if(!a || !b)
 		retError(clean, Error_nullPointer(!a ? 0 : 1, "SBFile_combine()::a and b are required"));
 
-	if (a->bufferSize != b->bufferSize || a->flags != b->flags)
+	//HideMagicNumber is a write time flag, SBFile_equals leaves it out too
+
+	const ESBSettingsFlags mask = (ESBSettingsFlags) ~(U32) ESBSettingsFlags_HideMagicNumber;
+
+	if (a->bufferSize != b->bufferSize || (a->flags & mask) != (b->flags & mask))
 		retError(clean, Error_invalidState(0, "SBFile_combine()::bufferSize or flags mismatch"));
 
 	if (!combined)
@@ -55,6 +59,8 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 	gotoIfError3(clean, SBFile_create(a->flags | ESBSettingsFlags_CreateNoReserve, a->bufferSize, alloc, combined, e_rr));
 	allocated = true;
+
+	U64 hash = combined->hash;        //Flags and buffer size only; everything else is hashed again once merged
 
 	//Vars, structs and arrays can easily be copied from a
 
@@ -134,7 +140,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 			if (j == k || j == U64_MAX)
 				retError(clean, Error_invalidState(0, "SBFile_combine() variable not found, mismatching buffer layout"));
 
-			oldId = (U16)(j - a->structs.length);
+			oldId = (U16) (j - a->structs.length);
 		}
 
 		//Ensure both have the same properties
@@ -193,10 +199,10 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 			gotoIfError3(clean, ListU32_createRefConst(&array1DB, 1, &arrayB, e_rr));
 
 		if (array1DA >> 15)
-			arrayA = a->arrays.ptr[array1DA & (U32)I16_MAX];
+			arrayA = a->arrays.ptr[array1DA & (U32) I16_MAX];
 
 		if (array1DB >> 15)
-			arrayB = b->arrays.ptr[array1DB & (U32)I16_MAX];
+			arrayB = b->arrays.ptr[array1DB & (U32) I16_MAX];
 
 		//One of them might be flat and the other one might be dynamic
 
@@ -223,7 +229,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 				gotoIfError3(clean, ListU32_createCopy(arrayB, alloc, &tmp, e_rr));
 
-				if(combined->arrays.length + 1 >= (U16)I16_MAX)
+				if(combined->arrays.length + 1 >= (U16) I16_MAX)
 					retError(clean, Error_invalidState(0, "SBFile_combine() combined arrays exceeded 32768"));
 
 				combined->vars.ptrNonConst[oldId].arrayDimOrArrayId = ((U16) combined->arrays.length) | 0x8000;
@@ -244,6 +250,19 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 					retError(clean, Error_invalidState(0, "SBFile_combine() variable has mismatching array count"));
 		}
 	}
+
+	//Each indexed record contributes independently, so interleaving table appends does not change the hash.
+
+	for (U64 i = 0; i < combined->structs.length; ++i)
+		SBStruct_applyHash(&hash, combined->structs.ptr[i], combined->names.entryStrings.ptr[i], i);
+
+	for (U64 i = 0; i < combined->vars.length; ++i)
+		SBVar_applyHash(&hash, combined->vars.ptr[i], combined->names.entryStrings.ptr[combined->structs.length + i], i);
+
+	for (U64 i = 0; i < combined->arrays.length; ++i)
+		ListU32_applyHash(&hash, combined->arrays.ptr[i], i);
+
+	combined->hash = hash;
 
 clean:
 	if(allocated && !s_uccess)

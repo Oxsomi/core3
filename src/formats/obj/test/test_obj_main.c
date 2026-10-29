@@ -48,6 +48,8 @@ OXC3_TEST_MAIN(formats_obj) {
 	Test_objWriteRoundTrip(&t);
 	Test_objWriteQuantized(&t);
 	Test_objWriteGeometryOnly(&t);
+	Test_objWriteLocale(&t);
+	Test_objWriteNonFinite(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

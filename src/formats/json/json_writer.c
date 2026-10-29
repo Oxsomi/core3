@@ -33,7 +33,7 @@ JsonWriter JsonWriter_create(CharString *out, Bool pretty, const Allocator *allo
 }
 
 Bool JsonWriter_isComplete(const JsonWriter *w) {
-	return w && w->out && !w->depth;
+	return w && w->out && w->rootStarted && !w->depth;
 }
 
 static Bool JsonWriter_appendRaw(JsonWriter *w, const C8 *v, Error *e_rr) {
@@ -92,7 +92,7 @@ static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 			default:
 
 				if((U8) c < 0x20) {
-					gotoIfError3(clean, CharString_appendFormat(w->alloc, w->out, e_rr, "\\u%04x", (U32)(U8) c));
+					gotoIfError3(clean, CharString_appendFormat(w->alloc, w->out, e_rr, "\\u%04x", (U32) (U8) c));
 					break;
 				}
 
@@ -117,10 +117,18 @@ static Bool JsonWriter_valuePrefix(JsonWriter *w, Error *e_rr) {
 	if(!w || !w->out)
 		retError(clean, Error_nullPointer(0, "JsonWriter_valuePrefix()::w and w->out are required"));
 
-	if(!w->depth)
-		goto clean;
+	//A document is exactly one root value; a second one would parse as trailing garbage.
 
-	const U64 bit = (U64)1 << (w->depth - 1);
+	if(!w->depth) {
+
+		if(w->rootStarted)
+			retError(clean, Error_invalidState(1, "JsonWriter_valuePrefix() a document holds exactly one root value"));
+
+		w->rootStarted = true;
+		goto clean;
+	}
+
+	const U64 bit = (U64) 1 << (w->depth - 1);
 
 	if (w->objectMask & bit) {
 
@@ -148,10 +156,10 @@ static Bool JsonWriter_keyPrefix(JsonWriter *w, Error *e_rr) {
 	if(!w || !w->out)
 		retError(clean, Error_nullPointer(0, "JsonWriter_keyPrefix()::w and w->out are required"));
 
-	if(!w->depth || !(w->objectMask & ((U64)1 << (w->depth - 1))))
+	if(!w->depth || !(w->objectMask & ((U64) 1 << (w->depth - 1))))
 		retError(clean, Error_invalidState(0, "JsonWriter_keyPrefix() a key is only legal inside an object"));
 
-	const U64 bit = (U64)1 << (w->depth - 1);
+	const U64 bit = (U64) 1 << (w->depth - 1);
 
 	if(w->keyMask & bit)
 		retError(clean, Error_invalidState(1, "JsonWriter_keyPrefix() the previous key's value is still due"));
@@ -183,7 +191,7 @@ static Bool JsonWriter_begin(JsonWriter *w, Bool isObject, Error *e_rr) {
 
 	++w->depth;
 
-	const U64 bit = (U64)1 << (w->depth - 1);
+	const U64 bit = (U64) 1 << (w->depth - 1);
 	w->firstMask |= bit;
 	w->keyMask &= ~bit;
 
@@ -206,7 +214,7 @@ static Bool JsonWriter_end(JsonWriter *w, Bool isObject, Error *e_rr) {
 	if(!w->depth)
 		retError(clean, Error_invalidState(0, "JsonWriter_end() nothing is open"));
 
-	const U64 bit = (U64)1 << (w->depth - 1);
+	const U64 bit = (U64) 1 << (w->depth - 1);
 
 	if(((w->objectMask & bit) != 0) != isObject)
 		retError(clean, Error_invalidState(1, "JsonWriter_end() closes a container of the other kind"));
@@ -217,7 +225,7 @@ static Bool JsonWriter_end(JsonWriter *w, Bool isObject, Error *e_rr) {
 	//An empty container closes on the same line; one with elements closes on a line of its own
 
 	if(!(w->firstMask & bit))
-		gotoIfError3(clean, JsonWriter_indent(w, (U8)(w->depth - 1), e_rr));
+		gotoIfError3(clean, JsonWriter_indent(w, (U8) (w->depth - 1), e_rr));
 
 	gotoIfError3(clean, CharString_append(w->out, isObject ? '}' : ']', w->alloc, e_rr));
 	--w->depth;
@@ -342,7 +350,20 @@ Bool JsonWriter_i64(JsonWriter *w, I64 v, Error *e_rr) { return JsonWriter_fmt(w
 //JSON has no NaN or infinity (v - v is 0 for every finite v only), and 17 digits round trip a double
 
 Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr) {
-	return v - v != 0 ? JsonWriter_null(w, e_rr) : JsonWriter_fmt(w, e_rr, "%.17g", v);
+
+	Bool s_uccess = true;
+	C8 text[CharString_decimalLen];
+
+	if(v - v != 0)
+		return JsonWriter_null(w, e_rr);
+
+	if(!CharString_formatDecimal(v, 17, text))
+		retError(clean, Error_invalidState(0, "JsonWriter_f64() couldn't format"));
+
+	gotoIfError3(clean, JsonWriter_raw(w, text, e_rr));
+
+clean:
+	return s_uccess;
 }
 
 Bool JsonWriter_keyObject(JsonWriter *w, const C8 *key, Error *e_rr) {

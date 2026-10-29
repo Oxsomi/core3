@@ -30,7 +30,7 @@ void DescriptorHeap_free(void *heapGeneric, const Allocator *alloc) {
 
 	DescriptorHeap *heap = (DescriptorHeap*) heapGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	DescriptorHeap_freeExt(heap, alloc);
 
@@ -99,7 +99,7 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(
+	if (
 		(info->flags & EDescriptorHeapFlags_AllowBindless) &&
 		!(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless)
 	)

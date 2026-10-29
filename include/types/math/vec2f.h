@@ -49,12 +49,14 @@ static inline F32x2 F32x2_xx2(F32 x) { return F32x2_create2(x, x); }
 
 static inline F32x2 F32x2_load1(const void *arr) {        //Misaligned load 1 F32
 	F32x2 result = F32x2_zero;
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
 	return result;
 }
 
 static inline F32x2 F32x2_load2(const void *arr) {        //Misaligned load 2 F32s
 	F32x2 result = F32x2_zero;
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
 	return result;
 }
@@ -164,12 +166,12 @@ static inline F32x2 F32x2_exp2(F32x2 v) { NONE_OP2F(F32_exp2(v.v[i])); }
 
 //Boolean
 
-static inline F32x2 F32x2_eq(F32x2 a, F32x2 b) { NONE_OP2F((F32)(a.v[i] == b.v[i])); }
-static inline F32x2 F32x2_neq(F32x2 a, F32x2 b) { NONE_OP2F((F32)(a.v[i] != b.v[i])); }
-static inline F32x2 F32x2_geq(F32x2 a, F32x2 b) { NONE_OP2F((F32)(a.v[i] >= b.v[i])); }
-static inline F32x2 F32x2_gt(F32x2 a, F32x2 b) { NONE_OP2F((F32)(a.v[i] > b.v[i])); }
-static inline F32x2 F32x2_leq(F32x2 a, F32x2 b) { NONE_OP2F((F32)(a.v[i] <= b.v[i])); }
-static inline F32x2 F32x2_lt(F32x2 a, F32x2 b) { NONE_OP2F((F32)(a.v[i] < b.v[i])); }
+static inline F32x2 F32x2_eq(F32x2 a, F32x2 b) { NONE_OP2F((F32) (a.v[i] == b.v[i])); }
+static inline F32x2 F32x2_neq(F32x2 a, F32x2 b) { NONE_OP2F((F32) (a.v[i] != b.v[i])); }
+static inline F32x2 F32x2_geq(F32x2 a, F32x2 b) { NONE_OP2F((F32) (a.v[i] >= b.v[i])); }
+static inline F32x2 F32x2_gt(F32x2 a, F32x2 b) { NONE_OP2F((F32) (a.v[i] > b.v[i])); }
+static inline F32x2 F32x2_leq(F32x2 a, F32x2 b) { NONE_OP2F((F32) (a.v[i] <= b.v[i])); }
+static inline F32x2 F32x2_lt(F32x2 a, F32x2 b) { NONE_OP2F((F32) (a.v[i] < b.v[i])); }
 
 static inline Bool F32x2_all(F32x2 a) { return F32x2_reduce(F32x2_neq(a, F32x2_zero)) == 2; }
 static inline Bool F32x2_any(F32x2 a) { return F32x2_reduce(F32x2_neq(a, F32x2_zero)); }

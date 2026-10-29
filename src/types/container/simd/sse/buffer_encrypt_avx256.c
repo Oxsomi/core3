@@ -99,7 +99,7 @@ void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8
 
 	if (N2 > 1) {
 
-		for (U32 i = 0; i < (U32)(N2 >> 1); ++i) {
+		for (U32 i = 0; i < (U32) (N2 >> 1); ++i) {
 			U32 left = i << 1;
 			clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 1]);
 			clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 1]);
@@ -108,7 +108,7 @@ void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8
 
 		if (N2 > 2) {
 
-			for (U32 i = 0; i < (U32)(N2 >> 2); ++i) {
+			for (U32 i = 0; i < (U32) (N2 >> 2); ++i) {
 				U32 left = i << 2;
 				clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 2]);
 				clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 2]);
@@ -546,7 +546,7 @@ void AESEncryptionContext_blocks8(
 	const Bool isEncrypt,
 	const EBufferEncryptionType encryptionType
 ) {
-	(void)end;
+	(void) end;
 
 	//Prologue
 
@@ -562,20 +562,20 @@ void AESEncryptionContext_blocks8(
 	{
 		U32 counter = *counterForIv;
 
-		I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter));
-		I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 1));
+		I32x4 ivi0 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter));
+		I32x4 ivi1 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 1));
 		I32x8 ivi01 = I32x8_create4_4(ivi0, ivi1);
 
-		I32x4 ivi2 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 2));
-		I32x4 ivi3 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 3));
+		I32x4 ivi2 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 2));
+		I32x4 ivi3 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 3));
 		I32x8 ivi23 = I32x8_create4_4(ivi2, ivi3);
 
-		I32x4 ivi4 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 4));
-		I32x4 ivi5 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 5));
+		I32x4 ivi4 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 4));
+		I32x4 ivi5 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 5));
 		I32x8 ivi45 = I32x8_create4_4(ivi4, ivi5);
 
-		I32x4 ivi6 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 6));
-		I32x4 ivi7 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 7));
+		I32x4 ivi6 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 6));
+		I32x4 ivi7 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 7));
 		I32x8 ivi67 = I32x8_create4_4(ivi6, ivi7);
 
 		*counterForIv += 8;
@@ -616,26 +616,26 @@ void AESEncryptionContext_blocks8(
 
 	I32x4 tag = *tagPtr;
 
-	//Contents
+	//Contents: whole batches of 8 only, a shorter rest is left to the smaller batches
 
-	while (*next + 4 <= end) {
+	while (*next + 8 <= end) {
 
 		U32 counter = *counterForIv;
 
-		I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter));
-		I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 1));
+		I32x4 ivi0 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter));
+		I32x4 ivi1 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 1));
 		I32x8 ivi01 = I32x8_create4_4(ivi0, ivi1);
 
-		I32x4 ivi2 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 2));
-		I32x4 ivi3 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 3));
+		I32x4 ivi2 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 2));
+		I32x4 ivi3 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 3));
 		I32x8 ivi23 = I32x8_create4_4(ivi2, ivi3);
 
-		I32x4 ivi4 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 4));
-		I32x4 ivi5 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 5));
+		I32x4 ivi4 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 4));
+		I32x4 ivi5 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 5));
 		I32x8 ivi45 = I32x8_create4_4(ivi4, ivi5);
 
-		I32x4 ivi6 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 6));
-		I32x4 ivi7 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 7));
+		I32x4 ivi6 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 6));
+		I32x4 ivi7 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 7));
 		I32x8 ivi67 = I32x8_create4_4(ivi6, ivi7);
 
 		*counterForIv += 8;

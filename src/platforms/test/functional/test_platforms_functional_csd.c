@@ -92,6 +92,7 @@
 		// (e.g. KWin) there is no barSurface and this test is not applicable.
 		{
 			LWindow *lwin = WindowExt(w, LWindow);
+
 			if(!lwin->barSurface) {
 				Test_print(t, "[SSD compositor] no CSD bar present, skipping F16");
 				goto clean;

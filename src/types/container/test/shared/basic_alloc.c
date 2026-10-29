@@ -47,7 +47,7 @@ Bool ourAlloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	(void)allocator;
+	(void) allocator;
 
 	if (!output)
 		retError(clean, Error_nullPointer(2, "ourAlloc()::output is required"));
@@ -59,17 +59,17 @@ Bool ourAlloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 
 	*output = Buffer_createManagedPtr(ptr, length);
 	AtomicI64_inc(&allocCounter);
-	AtomicI64_add(&allocBytes, (I64)length);
+	AtomicI64_add(&allocBytes, (I64) length);
 
 clean:
 	return s_uccess;
 }
 
 void ourFree(void *allocator, Buffer buf) {
-	(void)allocator;
-	free((void*)buf.ptrNonConst);
+	(void) allocator;
+	free((void*) buf.ptrNonConst);
 	AtomicI64_dec(&allocCounter);
-	AtomicI64_sub(&allocBytes, (I64)Buffer_length(buf));
+	AtomicI64_sub(&allocBytes, (I64) Buffer_length(buf));
 }
 
 Allocator BasicAllocator_instance = {

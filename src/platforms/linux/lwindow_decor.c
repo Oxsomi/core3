@@ -41,7 +41,7 @@
 static void LDecor_fillRect(U32 *px, U32 stride4, I32 x, I32 y, I32 w, I32 h, U32 col) {
 	for(I32 r = y; r < y + h; ++r)
 		for(I32 c = x; c < x + w; ++c)
-			px[r * (I32)stride4 + c] = col;
+			px[r * (I32) stride4 + c] = col;
 }
 
 static void LDecor_drawMinimise(U32 *px, U32 stride4, I32 bx, I32 by, U32 col) {
@@ -59,9 +59,10 @@ static void LDecor_drawMaximise(U32 *px, U32 stride4, I32 bx, I32 by, U32 col) {
 
 static void LDecor_drawClose(U32 *px, U32 stride4, I32 bx, I32 by, U32 col) {
 	I32 sx = bx + 18, sy = by + (LWINDOW_DECOR_BTN_H - 10) / 2;
+
 	for(I32 i = 0; i < 10; ++i) {
-		px[(sy + i) * (I32)stride4 + sx + i]     = col;
-		px[(sy + i) * (I32)stride4 + sx + 9 - i] = col;
+		px[(sy + i) * (I32) stride4 + sx + i]     = col;
+		px[(sy + i) * (I32) stride4 + sx + 9 - i] = col;
 	}
 }
 
@@ -166,17 +167,20 @@ static const U8 LDecor_font6x8[95][6] = {
 static void LDecor_drawChar(U32 *px, U32 stride4, I32 cx, I32 cy, C8 ch, U32 col) {
 	if(ch < 32 || ch > 126) return;
 	const U8 *glyph = LDecor_font6x8[ch - 32];
+
 	for(I32 row = 0; row < 6; ++row) {
 		U8 bits = glyph[row];
+
 		for(I32 col2 = 0; col2 < 6; ++col2) {
 			if(bits & (0x80u >> col2))
-				px[(cy + row) * (I32)stride4 + (cx + col2)] = col;
+				px[(cy + row) * (I32) stride4 + (cx + col2)] = col;
 		}
 	}
 }
 
 static void LDecor_drawString(U32 *px, U32 stride4, I32 x, I32 y, const C8 *str, U32 col, I32 maxW) {
 	I32 cx = x;
+
 	while(*str && (cx + 6) <= (x + maxW)) {
 		LDecor_drawChar(px, stride4, cx, y, *str, col);
 		cx += 7;
@@ -195,9 +199,9 @@ void LWindow_redrawBar(Window *w) {
 	U32 height = LWINDOW_DECOR_HEIGHT;
 	U32 stride = width;
 
-	LDecor_fillRect(lwin->barPixels, stride, 0, 0, (I32)width, (I32)height, DECOR_COL_BG);
+	LDecor_fillRect(lwin->barPixels, stride, 0, 0, (I32) width, (I32) height, DECOR_COL_BG);
 
-	I32 closeX = (I32)width  - LWINDOW_DECOR_BTN_W;
+	I32 closeX = (I32) width  - LWINDOW_DECOR_BTN_W;
 	I32 maxX   = closeX      - LWINDOW_DECOR_BTN_W;
 	I32 minX   = maxX        - LWINDOW_DECOR_BTN_W;
 
@@ -228,7 +232,7 @@ void LWindow_redrawBar(Window *w) {
 		LDecor_drawString(lwin->barPixels, stride, 8, titleY, w->title.ptr, DECOR_COL_TITLE, titleAreaW);
 
 	wl_surface_attach(lwin->barSurface, lwin->barBuffer, 0, 0);
-	wl_surface_damage_buffer(lwin->barSurface, 0, 0, (I32)width, (I32)height);
+	wl_surface_damage_buffer(lwin->barSurface, 0, 0, (I32) width, (I32) height);
 	wl_surface_commit(lwin->barSurface);
 }
 
@@ -248,7 +252,7 @@ Bool LWindow_initBar(Window *w, U32 width, Error *e_rr) {
 		goto clean;
 	}
 
-	U64 barSize = (U64)width * LWINDOW_DECOR_HEIGHT * 4;
+	U64 barSize = (U64) width * LWINDOW_DECOR_HEIGHT * 4;
 
 	if(lwin->barBuffer) {
 		wl_buffer_destroy(lwin->barBuffer);
@@ -257,7 +261,7 @@ Bool LWindow_initBar(Window *w, U32 width, Error *e_rr) {
 	}
 
 	if(lwin->barPixels) {
-		munmap(lwin->barPixels, (U64)lwin->barWidth * LWINDOW_DECOR_HEIGHT * 4);
+		munmap(lwin->barPixels, (U64) lwin->barWidth * LWINDOW_DECOR_HEIGHT * 4);
 		lwin->barPixels = NULL;
 	}
 
@@ -268,15 +272,15 @@ Bool LWindow_initBar(Window *w, U32 width, Error *e_rr) {
 
 	gotoIfError3(clean, LWindow_openShmFd(barSize, &fd, e_rr));
 
-	lwin->barPool = wl_shm_create_pool(manager->shm, fd, (I32)barSize);
+	lwin->barPool = wl_shm_create_pool(manager->shm, fd, (I32) barSize);
 
 	if(!lwin->barPool)
 		retError(clean, Error_invalidState(0, "LWindow_initBar() wl_shm_create_pool failed"));
 
 	lwin->barBuffer = wl_shm_pool_create_buffer(
 		lwin->barPool, 0,
-		(I32)width, LWINDOW_DECOR_HEIGHT,
-		(I32)(width * 4), WL_SHM_FORMAT_XRGB8888
+		(I32) width, LWINDOW_DECOR_HEIGHT,
+		(I32) (width * 4), WL_SHM_FORMAT_XRGB8888
 	);
 
 	if(!lwin->barBuffer)

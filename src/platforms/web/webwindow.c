@@ -127,7 +127,7 @@ static void WebWindow_canvasSelector(U32 canvasId, C8 selector[WEBWINDOW_SELECTO
 	U8 digitCount = 0;
 
 	for(U32 rest = canvasId; rest; rest /= 10)
-		digits[digitCount++] = C8_createDec((U8)(rest % 10));
+		digits[digitCount++] = C8_createDec((U8) (rest % 10));
 
 	while(digitCount)
 		selector[len++] = digits[--digitCount];

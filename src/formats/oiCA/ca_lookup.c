@@ -94,7 +94,7 @@ Bool CAFile_getFullName(
 			if (!fi)
 				retError(clean, Error_invalidParameter(1, 0, "CAFile_getFullName()::invalid handle in chain"));
 
-			length += (U32)DLFile_entrySize(&caFile->names, caFile->folders.length + CAHandle_getId(cur));
+			length += (U32) DLFile_entrySize(&caFile->names, caFile->folders.length + CAHandle_getId(cur));
 			cur = CAHandle_makeFolder(CAFileInfo_getParent(*fi));
 
 		} else {
@@ -104,7 +104,7 @@ Bool CAFile_getFullName(
 			if (!fi)
 				retError(clean, Error_invalidParameter(1, 0, "CAFile_getFullName()::invalid handle in chain"));
 
-			length += (U32)DLFile_entrySize(&caFile->names, CAHandle_getId(cur));
+			length += (U32) DLFile_entrySize(&caFile->names, CAHandle_getId(cur));
 			cur = CAHandle_makeFolder(fi->parent);
 		}
 	}

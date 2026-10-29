@@ -382,7 +382,7 @@ void GraphicsDevice_startBreadcrumbs(GraphicsDevice *device) {
 
 		const Allocator *alloc = GraphicsDevice_getAlloc(device);
 
-		if(
+		if (
 			ListU32_resize(&device->breadcrumbUnfinishedSlots, scopes.length, alloc, NULL) &&
 			ListU32_createCopy(scopes, alloc, &device->breadcrumbUnfinishedScopes, NULL)
 		) {

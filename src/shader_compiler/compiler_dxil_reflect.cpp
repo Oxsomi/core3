@@ -250,18 +250,20 @@ Bool Compiler_convertMemberDXIL(
 				retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing member or member name"));
 
 			D3D12_SHADER_TYPE_DESC memberDesc{};
+
 			if(FAILED(member->GetDesc(&memberDesc)))
 				retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing member desc"));
 
 			U32 memberSize = 0;
 
 			if(j + 1 == typeDesc.Members)
-				memberSize = (U32)perElementStride - memberDesc.Offset;
+				memberSize = (U32) perElementStride - memberDesc.Offset;
 
 			else {
 
 				D3D12_SHADER_TYPE_DESC neighborDesc{};
 				ID3D12ShaderReflectionType *neighbor = type->GetMemberTypeByIndex((U32) (j + 1));
+
 				if(!neighbor || FAILED(neighbor->GetDesc(&neighborDesc)))
 					retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing neighbor member desc"));
 
@@ -422,12 +424,12 @@ Bool Compiler_convertShaderBufferDXIL(
 
 			type = variable->GetType();
 
-			if(
+			if (
 				variableDesc.DefaultValue ||
 				!variableDesc.Name ||
 				(variableDesc.uFlags && variableDesc.uFlags != D3D_SVF_USED) ||
-				(*(const U64*)startTextureU64 && *(const U64*)startTextureU64 != U32_MAX) ||
-				(*(const U64*)startSamplerU64 && *(const U64*)startSamplerU64 != U32_MAX)
+				(*(const U64*) startTextureU64 && *(const U64*) startTextureU64 != U32_MAX) ||
+				(*(const U64*) startSamplerU64 && *(const U64*) startSamplerU64 != U32_MAX)
 			)
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertShaderBufferDXIL() DXIL contained illegal buffer variable"
@@ -440,6 +442,7 @@ Bool Compiler_convertShaderBufferDXIL(
 			variableDesc.Name = cbufVariableTypeRoot->GetMemberTypeName(k - 1);
 
 			D3D12_SHADER_TYPE_DESC memberDesc{};
+
 			if (!type || FAILED(type->GetDesc(&memberDesc)))
 				retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing member desc"));
 
@@ -458,12 +461,13 @@ Bool Compiler_convertShaderBufferDXIL(
 		if (cbufVariableRoot) {
 			
 			if(k + 1 == variables)
-				varSize = (U32)constantBufferDesc.Size - variableDesc.StartOffset;
+				varSize = (U32) constantBufferDesc.Size - variableDesc.StartOffset;
 
 			else {
 
 				D3D12_SHADER_TYPE_DESC neighborDesc{};
 				ID3D12ShaderReflectionType *neighbor = cbufVariableTypeRoot->GetMemberTypeByIndex((U32) k);
+
 				if(!neighbor || FAILED(neighbor->GetDesc(&neighborDesc)))
 					retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing neighbor member desc"));
 
@@ -748,7 +752,7 @@ Bool Compiler_convertRegisterDXIL(
 		case D3D_SIT_UAV_RWBYTEADDRESS:
 		case D3D_SIT_BYTEADDRESS:
 
-			if(
+			if (
 				input->ReturnType != D3D_RETURN_TYPE_MIXED ||
 				input->NumSamples ||
 				input->Dimension != D3D_SRV_DIMENSION_BUFFER
@@ -774,7 +778,7 @@ Bool Compiler_convertRegisterDXIL(
 
 		case D3D_SIT_CBUFFER:
 
-			if(
+			if (
 				input->BindCount != 1 ||
 				input->Dimension ||
 				input->NumSamples ||
@@ -805,7 +809,7 @@ Bool Compiler_convertRegisterDXIL(
 
 			U32 stride = input->NumSamples;
 
-			if(
+			if (
 				input->ReturnType != D3D_RETURN_TYPE_MIXED ||
 				!stride ||
 				input->Dimension != D3D_SRV_DIMENSION_BUFFER
@@ -836,7 +840,7 @@ Bool Compiler_convertRegisterDXIL(
 
 		case D3D_SIT_RTACCELERATIONSTRUCTURE:
 
-			if(
+			if (
 				(input->ReturnType != D3D_RETURN_TYPE_SINT && input->ReturnType != D3D_RETURN_TYPE_UINT) ||
 				input->NumSamples != U32_MAX ||
 				input->Dimension != D3D_SRV_DIMENSION_UNKNOWN

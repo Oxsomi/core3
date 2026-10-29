@@ -29,21 +29,24 @@
 #include "types/base/allocator.h"
 #include "types/container/buffer.h"
 
-Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *streamRef, U64 *offset, Error *e_rr) {
+Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *streamRef, U64 *startOffset, Error *e_rr) {
 
 	Bool s_uccess = true;
+	U64 offset = 0;
 	StreamCursor cursor = (StreamCursor) { 0 };
 
 	if(!srFile)
 		retError(clean, Error_nullPointer(0, "SRFile_write()::srFile is undefined"));
 
-	if(!offset)
+	if(!startOffset)
 		retError(clean, Error_nullPointer(!streamRef ? 2 : 3, "SRFile_write()::offset is required"));
+
+	offset = *startOffset;
 
 	if(streamRef && streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidOperation(0, "SRFile_write()::streamRef invalid type"));
 
-	if(*offset & 15)
+	if(offset & 15)
 		retError(clean, Error_unsupportedOperation(0, "SRFile_write() at misaligned offset is unsupported (16-byte)"));
 
 	Bool hasSymbols = srFile->flags & ESRSettingsFlags_HasSymbols;
@@ -99,15 +102,15 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	headerSize = (headerSize + 15) & ~15;
 
 	if(!stream) {
-		*offset += headerSize;
-		gotoIfError3(clean, DLFile_write(&srFile->names, alloc, NULL, NULL, I32x4_zero(), offset, e_rr));
+		offset += headerSize;
+		gotoIfError3(clean, DLFile_write(&srFile->names, alloc, NULL, NULL, I32x4_zero(), &offset, e_rr));
 		goto clean;
 	}
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	if(stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, offset + headerSize, alloc, e_rr));
 
 	SRHeader header = (SRHeader) {
 		.version = ESRVersion_V1_1,
@@ -123,44 +126,53 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 	};
 
 	if(!(srFile->flags & ESRSettingsFlags_HideMagicNumber))
-		gotoIfError3(clean, StreamCursor_appendU32(&cursor, offset, SRHeader_MAGIC, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, &offset, SRHeader_MAGIC, alloc, e_rr));
 
-	gotoIfError3(clean, StreamCursor_append(&cursor, offset, &header, sizeof(header), alloc, e_rr));
-	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRNode_bufferConst(srFile->nodes), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &header, sizeof(header), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, ListSRNode_bufferConst(srFile->nodes), alloc, e_rr));
 
 	if(hasSymbols)
-		gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRSymbol_bufferConst(srFile->symbols), alloc, e_rr));
+		gotoIfError3(
+			clean, StreamCursor_appendBuffer(&cursor, &offset, ListSRSymbol_bufferConst(srFile->symbols), alloc, e_rr)
+		);
 
 	gotoIfError3(
-		clean, StreamCursor_appendBuffer(&cursor, offset, ListSRAnnotation_bufferConst(srFile->annotations), alloc, e_rr)
+		clean, StreamCursor_appendBuffer(&cursor, &offset, ListSRAnnotation_bufferConst(srFile->annotations), alloc, e_rr)
 	);
 
-	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRRegister_bufferConst(srFile->registers), alloc, e_rr));
 	gotoIfError3(
-		clean, StreamCursor_appendBuffer(&cursor, offset, ListSREnumValue_bufferConst(srFile->enumValues), alloc, e_rr)
+		clean, StreamCursor_appendBuffer(&cursor, &offset, ListSRRegister_bufferConst(srFile->registers), alloc, e_rr)
 	);
 
-	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSRType_bufferConst(srFile->types), alloc, e_rr));
-	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListU32_bufferConst(srFile->arrayDims), alloc, e_rr));
 	gotoIfError3(
-		clean, StreamCursor_appendBuffer(&cursor, offset, ListSRInterface_bufferConst(srFile->interfaces), alloc, e_rr)
+		clean, StreamCursor_appendBuffer(&cursor, &offset, ListSREnumValue_bufferConst(srFile->enumValues), alloc, e_rr)
+	);
+
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, ListSRType_bufferConst(srFile->types), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, ListU32_bufferConst(srFile->arrayDims), alloc, e_rr));
+	gotoIfError3(
+		clean, StreamCursor_appendBuffer(&cursor, &offset, ListSRInterface_bufferConst(srFile->interfaces), alloc, e_rr)
 	);
 
 	//Need to make sure the names oiDL is 16-byte aligned
 
 	U8 pad[16] = { 0 };
-	U64 utilized = *offset & 15;
+	U64 utilized = offset & 15;
 
 	if(utilized)
-		gotoIfError3(clean, StreamCursor_append(&cursor, offset, pad, 16 - utilized, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, pad, 16 - utilized, alloc, e_rr));
 
-	//Append names
+	//Append names; close can't report a failed write, so what the cursor holds is flushed first
 
+	gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
 	StreamCursor_close(&cursor, alloc);
 
-	gotoIfError3(clean, DLFile_write(&srFile->names, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
+	gotoIfError3(clean, DLFile_write(&srFile->names, alloc, streamRef, NULL, I32x4_zero(), &offset, e_rr));
 
 clean:
+	if(s_uccess)
+		*startOffset = offset;
+
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

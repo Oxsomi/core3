@@ -145,7 +145,8 @@ void Test_quatAngleAxis(Test *test) {
 
 	for (U64 i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i)
 		Test_assert(test, "QuatF32_angleAxis",
-			!QuatF32_neq(QuatF32_angleAxis(axes[i % axisCount], angles[i / axisCount]), expected[i]));
+			!QuatF32_neq(QuatF32_angleAxis(axes[i % axisCount], angles[i / axisCount]), expected[i])
+		);
 }
 
 void Test_quatFromEuler(Test *test) {
@@ -182,7 +183,8 @@ void Test_quatFromEuler(Test *test) {
 
 	for (U64 i = 0; i < sizeof(eulerAngles) / sizeof(eulerAngles[0]); ++i)
 		Test_assert(test, "QuatF32_fromEuler",
-			!QuatF32_neq(QuatF32_fromEuler(eulerAngles[i]), expected[i]));
+			!QuatF32_neq(QuatF32_fromEuler(eulerAngles[i]), expected[i])
+		);
 }
 
 void Test_quatToEuler(Test *test) {
@@ -214,7 +216,18 @@ void Test_quatToEuler(Test *test) {
 
 		for (U8 j = 0; j < 3; ++j)
 			Test_assert(test, "QuatF32_toEuler",
-				!F32x4_neqApproxAdv4(backMat[j], checkMat[j], 2e-2f, 2e-2f));
+				!F32x4_neqApproxAdv4(backMat[j], checkMat[j], 2e-2f, 2e-2f)
+			);
+	}
+
+	const F32 pitches[] = { -89.9f, -85, 85, 89.9f };
+
+	for(U64 i = 0; i < sizeof(pitches) / sizeof(pitches[0]); ++i) {
+
+		const QuatF32 input = QuatF32_fromEuler(F32x4_create3(10, pitches[i], 20));
+		const QuatF32 output = QuatF32_fromEuler(QuatF32_toEuler(input));
+
+		Test_assert(test, "near vertical Euler preserves orientation", F32x4_eqApproxAdv4(input, output, 1e-3f, 1e-3f));
 	}
 }
 
@@ -247,7 +260,8 @@ void Test_quatMul(Test *test) {
 
 	for (U32 i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i)
 		Test_assert(test, "QuatF32_mul",
-			!QuatF32_neq(QuatF32_mul(mulA[i], mulB[i]), expected[i]));
+			!QuatF32_neq(QuatF32_mul(mulA[i], mulB[i]), expected[i])
+		);
 }
 
 void Test_quatApplyToNormal(Test *test) {
@@ -287,7 +301,8 @@ void Test_quatApplyToNormal(Test *test) {
 
 	for (U32 i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i)
 		Test_assert(test, "QuatF32_applyToNormal",
-			!F32x4_neqApprox4(QuatF32_applyToNormal(rots[i], normals[i]), expected[i]));
+			!F32x4_neqApprox4(QuatF32_applyToNormal(rots[i], normals[i]), expected[i])
+		);
 }
 
 void Test_quatSlerp(Test *test) {
@@ -321,6 +336,17 @@ void Test_quatSlerp(Test *test) {
 		Test_assert(test, "QuatF32_slerp t=0",  !QuatF32_neq(QuatF32_slerp(slerpA[i], slerpB[i], 0.0f),  slerpA[i]));
 		Test_assert(test, "QuatF32_slerp t=1",  !QuatF32_neq(QuatF32_slerp(slerpA[i], slerpB[i], 1.0f),  slerpB[i]));
 		Test_assert(test, "QuatF32_slerp t=.5", !QuatF32_neq(QuatF32_slerp(slerpA[i], slerpB[i], 0.5f), expected50[i]));
+	}
+
+	const QuatF32 halfTurn = QuatF32_create(0, 0, 1, 0);
+	const F32 fractions[] = { 0.25f, 0.75f };
+
+	for(U64 i = 0; i < sizeof(fractions) / sizeof(fractions[0]); ++i) {
+
+		const QuatF32 expected = QuatF32_angleAxis(F32x4_create3(0, 0, 1), F32_PI * fractions[i]);
+		const QuatF32 actual = QuatF32_slerp(QuatF32_identity(), halfTurn, fractions[i]);
+
+		Test_assert(test, "SLERP preserves angular speed", F32x4_eqApproxAdv4(actual, expected, 1e-5f, 1e-5f));
 	}
 }
 
@@ -368,7 +394,48 @@ void Test_quatTargetDirection(Test *test) {
 
 	for (U64 i = 0; i < sizeof(fwd) / sizeof(fwd[0]); ++i)
 		Test_assert(test, "QuatF32_targetDirection",
-			!QuatF32_neq(QuatF32_targetDirection(F32x4_zero(), fwd[i], up[i]), expected[i]));
+			!QuatF32_neq(QuatF32_targetDirection(F32x4_zero(), fwd[i], up[i]), expected[i])
+		);
+
+	for(I32 direction = -1; direction <= 1; direction += 2) {
+
+		const F32x4 vertical = F32x4_create3(0, (F32) direction, 0);
+		const QuatF32 rotation = QuatF32_targetDirection(F32x4_zero(), vertical, F32x4_create3(0, 1, 0));
+
+		Test_assert(test, "parallel up fallback is finite", F32_isValid(F32x4_sqLen4(rotation)));
+		Test_assert(test, "parallel up fallback points at target", F32x4_eqApproxAdv4(
+			QuatF32_forward(rotation), vertical, 1e-5f, 1e-5f
+		));
+	}
+}
+
+static void Test_quatOrientation(Test *test) {
+
+	Test_setModule(test, "QuatF32_fromOrientation");
+
+	for(I32 x = -2; x <= 2; ++x)
+		for(I32 y = -2; y <= 2; ++y)
+			for(I32 z = -2; z <= 2; ++z) {
+
+				const QuatF32 original = QuatF32_fromEuler(F32x4_create3(x * 70.0f, y * 65.0f, z * 80.0f));
+				const F32x4 right = QuatF32_right(original);
+				const F32x4 up = QuatF32_up(original);
+				const F32x4 forward = QuatF32_forward(original);
+				const QuatF32 actual = QuatF32_fromOrientation(right, up, forward);
+				const QuatF32 targeted = QuatF32_targetDirection(F32x4_zero(), forward, up);
+
+				Test_assert(test, "orientation preserves right", F32x4_eqApproxAdv4(
+					QuatF32_right(actual), right, 1e-5f, 1e-5f
+				));
+
+				Test_assert(test, "orientation preserves forward", F32x4_eqApproxAdv4(
+					QuatF32_forward(actual), forward, 1e-5f, 1e-5f
+				));
+
+				Test_assert(test, "target direction preserves orientation", F32x4_eqApproxAdv4(
+					QuatF32_right(targeted), right, 1e-5f, 1e-5f
+				) && F32x4_eqApproxAdv4(QuatF32_forward(targeted), forward, 1e-5f, 1e-5f));
+			}
 }
 
 void Test_quat(Test *test) {
@@ -380,4 +447,5 @@ void Test_quat(Test *test) {
 	Test_quatApplyToNormal(test);
 	Test_quatSlerp(test);
 	Test_quatTargetDirection(test);
+	Test_quatOrientation(test);
 }

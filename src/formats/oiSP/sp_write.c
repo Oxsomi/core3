@@ -29,21 +29,24 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 
-Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *streamRef, U64 *offset, Error *e_rr) {
+Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *streamRef, U64 *startOffset, Error *e_rr) {
 
 	Bool s_uccess = true;
+	U64 offset = 0;
 	StreamCursor cursor = (StreamCursor) { 0 };
 
 	if(!spFile)
 		retError(clean, Error_nullPointer(0, "SPFile_write()::spFile is undefined"));
 
-	if(!offset)
+	if(!startOffset)
 		retError(clean, Error_nullPointer(!streamRef ? 2 : 3, "SPFile_write()::offset is required"));
+
+	offset = *startOffset;
 
 	if(streamRef && streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidOperation(0, "SPFile_write()::streamRef invalid type"));
 
-	if(*offset & 15)
+	if(offset & 15)
 		retError(clean, Error_unsupportedOperation(0, "SPFile_write() at misaligned offset is unsupported (16-byte)"));
 
 	if(spFile->pipelines.length >> 32)
@@ -67,10 +70,10 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 
 		const SPPipelineBase pipeline = spFile->pipelines.ptr[i];
 
-		if((U64)pipeline.stageStart + pipeline.stageCount > spFile->stages.length)
+		if((U64) pipeline.stageStart + pipeline.stageCount > spFile->stages.length)
 			retError(clean, Error_invalidState(0, "SPFile_write()::pipeline stage range out of bounds"));
 
-		if((U64)pipeline.specializationStart + pipeline.specializationCount > spFile->specializations.length)
+		if((U64) pipeline.specializationStart + pipeline.specializationCount > spFile->specializations.length)
 			retError(clean, Error_invalidState(0, "SPFile_write()::pipeline specialization range out of bounds"));
 
 		if(pipeline.type == (U8) ESPPipelineType_Graphics && pipeline.stateIndex >= spFile->graphicsStates.length)
@@ -92,10 +95,10 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 
 		for (U8 j = 0; j < 16; ++j) {
 
-			if(SPVertexLayoutRuntime_bufferMask(state.inputAssembler.vertexLayout) & ((U16)1 << j))
+			if(SPVertexLayoutRuntime_bufferMask(state.inputAssembler.vertexLayout) & ((U16) 1 << j))
 				++vertexBufferCount;
 
-			if(SPVertexLayoutRuntime_attributeMask(state.inputAssembler.vertexLayout) & ((U16)1 << j))
+			if(SPVertexLayoutRuntime_attributeMask(state.inputAssembler.vertexLayout) & ((U16) 1 << j))
 				++vertexAttributeCount;
 		}
 	}
@@ -125,11 +128,11 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 
 	if (!stream) {
 
-		*offset += headerSize;
-		gotoIfError3(clean, DLFile_write(&spFile->names, alloc, NULL, NULL, I32x4_zero(), offset, e_rr));
+		offset += headerSize;
+		gotoIfError3(clean, DLFile_write(&spFile->names, alloc, NULL, NULL, I32x4_zero(), &offset, e_rr));
 
 		for(U64 i = 0; i < spFile->layouts.length; ++i)
-			gotoIfError3(clean, PLFile_write(&spFile->layouts.ptr[i], alloc, NULL, offset, e_rr));
+			gotoIfError3(clean, PLFile_write(&spFile->layouts.ptr[i], alloc, NULL, &offset, e_rr));
 
 		goto clean;
 	}
@@ -137,7 +140,7 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	if(stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, offset + headerSize, alloc, e_rr));
 
 	const SPHeader header = (SPHeader) {
 		.version = ESPVersion_V1_1,
@@ -154,18 +157,18 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 	};
 
 	if(!(spFile->flags & ESPSettingsFlags_HideMagicNumber))
-		gotoIfError3(clean, StreamCursor_appendU32(&cursor, offset, SPHeader_MAGIC, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, &offset, SPHeader_MAGIC, alloc, e_rr));
 
-	gotoIfError3(clean, StreamCursor_append(&cursor, offset, &header, sizeof(header), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &header, sizeof(header), alloc, e_rr));
 
 	gotoIfError3(clean, StreamCursor_appendBuffer(
-		&cursor, offset, ListSPPipelineBase_bufferConst(spFile->pipelines), alloc, e_rr
+		&cursor, &offset, ListSPPipelineBase_bufferConst(spFile->pipelines), alloc, e_rr
 	));
 
-	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListSPStage_bufferConst(spFile->stages), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, ListSPStage_bufferConst(spFile->stages), alloc, e_rr));
 
 	gotoIfError3(clean, StreamCursor_appendBuffer(
-		&cursor, offset, ListSPSpecialization_bufferConst(spFile->specializations), alloc, e_rr
+		&cursor, &offset, ListSPSpecialization_bufferConst(spFile->specializations), alloc, e_rr
 	));
 
 	//A graphics state is written without its blend attachments, which follow the ray tracing states as their own
@@ -175,11 +178,11 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 
 		const SPGraphicsStateStored stored = SPGraphicsState_store(spFile->graphicsStates.ptr[i]);
 
-		gotoIfError3(clean, StreamCursor_append(&cursor, offset, &stored, sizeof(stored), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &stored, sizeof(stored), alloc, e_rr));
 	}
 
 	gotoIfError3(clean, StreamCursor_appendBuffer(
-		&cursor, offset, ListSPRaytracingState_bufferConst(spFile->raytracingStates), alloc, e_rr
+		&cursor, &offset, ListSPRaytracingState_bufferConst(spFile->raytracingStates), alloc, e_rr
 	));
 
 	for (U64 i = 0; i < spFile->graphicsStates.length; ++i) {
@@ -189,7 +192,7 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 		for(U8 j = 0; j < 8; ++j)
 			if(SPBlendStateRuntime_storesAttachment(blend, j))
 				gotoIfError3(clean, StreamCursor_append(
-					&cursor, offset, &blend.attachments[j], sizeof(SPBlendAttachment), alloc, e_rr
+					&cursor, &offset, &blend.attachments[j], sizeof(SPBlendAttachment), alloc, e_rr
 				));
 	}
 
@@ -199,9 +202,9 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 		const U16 bufferMask = SPVertexLayoutRuntime_bufferMask(layout);
 
 		for(U8 j = 0; j < 16; ++j)
-			if(bufferMask & ((U16)1 << j))
+			if(bufferMask & ((U16) 1 << j))
 				gotoIfError3(clean, StreamCursor_appendU16(
-					&cursor, offset, layout.bufferStrides12_isInstance1[j], alloc, e_rr
+					&cursor, &offset, layout.bufferStrides12_isInstance1[j], alloc, e_rr
 				));
 	}
 
@@ -211,29 +214,33 @@ Bool SPFile_write(const SPFile *spFile, const Allocator *alloc, StreamRef *strea
 		const U16 attributeMask = SPVertexLayoutRuntime_attributeMask(layout);
 
 		for(U8 j = 0; j < 16; ++j)
-			if(attributeMask & ((U16)1 << j))
+			if(attributeMask & ((U16) 1 << j))
 				gotoIfError3(clean, StreamCursor_append(
-					&cursor, offset, &layout.attributes[j], sizeof(SPVertexAttribute), alloc, e_rr
+					&cursor, &offset, &layout.attributes[j], sizeof(SPVertexAttribute), alloc, e_rr
 				));
 	}
 
 	//Need to make sure the names oiDL is 16-byte aligned
 
 	U8 pad[16] = { 0 };
-	const U64 utilized = *offset & 15;
+	const U64 utilized = offset & 15;
 
 	if(utilized)
-		gotoIfError3(clean, StreamCursor_append(&cursor, offset, pad, 16 - utilized, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, pad, 16 - utilized, alloc, e_rr));
 
-	//Append names
+	//Append names. The cursor is flushed rather than just closed, since closing drops what a failed write left staged.
 
+	gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
 	StreamCursor_close(&cursor, alloc);
-	gotoIfError3(clean, DLFile_write(&spFile->names, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
+	gotoIfError3(clean, DLFile_write(&spFile->names, alloc, streamRef, NULL, I32x4_zero(), &offset, e_rr));
 
 	for(U64 i = 0; i < spFile->layouts.length; ++i)
-		gotoIfError3(clean, PLFile_write(&spFile->layouts.ptr[i], alloc, streamRef, offset, e_rr));
+		gotoIfError3(clean, PLFile_write(&spFile->layouts.ptr[i], alloc, streamRef, &offset, e_rr));
 
 clean:
+	if(s_uccess)
+		*startOffset = offset;
+
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

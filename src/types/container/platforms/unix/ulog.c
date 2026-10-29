@@ -30,6 +30,7 @@
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
+#include "types/base/lock.h"
 
 //Required for the _PLATFORM_TYPE / PLATFORM_* checks below.
 //Without it the preprocessor silently treats all of them as 0, the ANDROID/IOS exclusion below excludes *every* platform
@@ -40,7 +41,7 @@
 #include <stdlib.h>
 
 CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) {
-	(void) alloc; (void)e_rr;
+	(void) alloc; (void) e_rr;
 	return CharString_createNull();
 }
 
@@ -50,6 +51,14 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 	#include <unistd.h>
 	#include <string.h>
 	#include <stdio.h>
+
+	#if _PLATFORM_TYPE != PLATFORM_WEB
+		#include <errno.h>
+		#include <fcntl.h>
+		#include <spawn.h>
+		#include <sys/wait.h>
+		extern char **environ;
+	#endif
 
 	#ifdef __APPLE__
 		#include <mach-o/dyld.h>
@@ -100,6 +109,64 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 
 	#else
 
+	static FILE *Log_openSymbolizer(C8 *const *arguments, pid_t *process) {
+
+		int descriptors[2];
+
+		if(pipe(descriptors))
+			return NULL;
+
+		for(U64 i = 0; i < 2; ++i) {
+
+			if(descriptors[i] < 3) {
+
+				const int original = descriptors[i];
+
+				descriptors[i] = fcntl(original, F_DUPFD, 3);
+				close(original);
+			}
+
+			if(descriptors[i] < 0 || fcntl(descriptors[i], F_SETFD, FD_CLOEXEC)) {
+
+				close(descriptors[0]);
+				close(descriptors[1]);
+				return NULL;
+			}
+		}
+
+		posix_spawn_file_actions_t actions;
+
+		int result = posix_spawn_file_actions_init(&actions);
+
+		if(!result) {
+
+			result = posix_spawn_file_actions_adddup2(&actions, descriptors[1], STDOUT_FILENO);
+
+			if(!result)
+				result = posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+
+			if(!result)
+				result = posix_spawnp(process, arguments[0], &actions, NULL, arguments, environ);
+
+			posix_spawn_file_actions_destroy(&actions);
+		}
+
+		close(descriptors[1]);
+
+		FILE *output = result ? NULL : fdopen(descriptors[0], "r");
+
+		if(!output) {
+
+			close(descriptors[0]);
+
+			if(!result)
+				while(waitpid(*process, NULL, 0) < 0 && errno == EINTR)
+					;
+		}
+
+		return output;
+	}
+
 	void Log_printCapturedStackTraceCustom(
 		const Allocator *alloc,
 		const void **stackTrace,
@@ -116,6 +183,7 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 		//With 32 frames max, a simple O(n^2) grouping is fine.
 
 		U64 count = 0;
+
 		for(; count < stackSize && count < 64 && stackTrace[count]; ++count)
 			;
 
@@ -131,6 +199,7 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 			const CharString modStr = CharString_createRefCStrConst(mod);
 
 			Bool found = false;
+
 			for(U64 m = 0; m < moduleCount; ++m)
 				if(CharString_equalsCStringSensitive(&modStr, modules[m])) { found = true; break; }
 
@@ -144,8 +213,10 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 
 		for(U64 m = 0; m < moduleCount; ++m) {
 
-			//Build command with all addresses belonging to this module
-			C8 cmd[4096];
+			//Pass module paths as arguments so shell syntax and path length cannot alter the command.
+			C8 *arguments[71] = { 0 };
+			C8 addresses[64][32];
+			U64 argumentCount = 0;
 			U64 frameIndices[64];
 			U64 frameCount = 0;
 
@@ -153,82 +224,91 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 				//atos: atos -o <module> -l <base> <addr> <addr> ...
 				//We need dli_fbase for the load address
 				void *base = NULL;
+
 				for(U64 i = 0; i < count; ++i) {
 					Dl_info info = (Dl_info){ 0 };
 					dladdr(stackTrace[i], &info);
 					const C8 *mod = info.dli_fname ? info.dli_fname : "";
 					const CharString modStr = CharString_createRefCStrConst(mod);
+
 					if(CharString_equalsCStringSensitive(&modStr, modules[m])) {
 						base = info.dli_fbase;
 						break;
 					}
 				}
 
-				int written = snprintf(cmd, sizeof(cmd), "atos -o \"%s\" -l %p", modules[m], base);
+				C8 baseAddress[32];
+
+				snprintf(baseAddress, sizeof(baseAddress), "%p", base);
+				arguments[argumentCount++] = "atos";
+				arguments[argumentCount++] = "-o";
+				arguments[argumentCount++] = (C8*) modules[m];
+				arguments[argumentCount++] = "-l";
+				arguments[argumentCount++] = baseAddress;
 			#else
-				int written = snprintf(cmd, sizeof(cmd), "addr2line -Cpe \"%s\"", modules[m]);
+				arguments[argumentCount++] = "addr2line";
+				arguments[argumentCount++] = "-Cpe";
+				arguments[argumentCount++] = (C8*) modules[m];
 			#endif
 
-			for(U64 i = 0; i < count && written < (int)sizeof(cmd) - 32; ++i) {
+			for(U64 i = 0; i < count; ++i) {
+
 				Dl_info info = (Dl_info){ 0 };
 				dladdr(stackTrace[i], &info);
 				const C8 *mod = info.dli_fname ? info.dli_fname : "";
 				const CharString modStr = CharString_createRefCStrConst(mod);
+
 				if(!CharString_equalsCStringSensitive(&modStr, modules[m]))
 					continue;
 
 				#ifdef __APPLE__
-					written += snprintf(cmd + written, sizeof(cmd) - written, " %p", stackTrace[i]);
+					snprintf(addresses[frameCount], sizeof(addresses[0]), "%p", stackTrace[i]);
 				#else
-					uintptr_t offset = (uintptr_t)stackTrace[i] - (uintptr_t)info.dli_fbase;
-					written += snprintf(cmd + written, sizeof(cmd) - written, " 0x%"PRIxPTR, offset);
+					uintptr_t offset = (uintptr_t) stackTrace[i] - (uintptr_t) info.dli_fbase;
+					snprintf(addresses[frameCount], sizeof(addresses[0]), "0x%"PRIxPTR, offset);
 				#endif
 
+				arguments[argumentCount++] = addresses[frameCount];
 				frameIndices[frameCount++] = i;
 			}
 
-			snprintf(cmd + written, sizeof(cmd) - written, " 2>/dev/null");
+			pid_t process;
 
-			FILE *fp = popen(cmd, "r");
+			FILE *fp = Log_openSymbolizer(arguments, &process);
+
 			if(!fp)
 				continue;
 
-			//addr2line outputs one or two lines per address (function, then file:line)
-			//atos outputs one line per address
+			//Both tools produce one line per address with these options.
 
 			for(U64 f = 0; f < frameCount; ++f) {
 
-				#if _PLATFORM_TYPE == PLATFORM_OSX
+				C8 *line = output[frameIndices[f]];
 
-					C8 line[256] = { 0 };
+				if(!fgets(line, sizeof(output[0]), fp))
+					break;
 
-					if(!fgets(line, sizeof(line), fp))
-						break;
-					U64 len = CharString_calcStrLen(line, sizeof(line));
-					if(len && line[len-1] == '\n') line[len-1] = '\0';
-					if(line[0] && line[0] != '?') {
-						snprintf(output[frameIndices[f]], sizeof(output[0]), "%s", line);
-						resolved |= ((U64)1 << frameIndices[f]);
-					}
+				const U64 length = CharString_calcStrLen(line, sizeof(output[0]));
 
-				#else
+				if(length && line[length - 1] == '\n')
+					line[length - 1] = '\0';
 
-					if(!fgets(output[frameIndices[f]], sizeof(output[0]), fp))
-						break;
+				else {
 
-					U64 len = CharString_calcStrLen(output[frameIndices[f]], sizeof(output[0]));
-					if(len && output[frameIndices[f]][len-1] == '\n')
-						output[frameIndices[f]][len-1] = '\0';
+					int next;
 
-					if(output[frameIndices[f]][0] && output[frameIndices[f]][0] != '?')
-						resolved |= ((U64)1 << frameIndices[f]);
+					while((next = fgetc(fp)) != '\n' && next != EOF)
+						;
+				}
 
-					else output[frameIndices[f]][0] = '\0';
-					
-				#endif
+				if(line[0] && line[0] != '?')
+					resolved |= ((U64) 1 << frameIndices[f]);
 			}
 
-			pclose(fp);
+			fclose(fp);
+
+			while(waitpid(process, NULL, 0) < 0 && errno == EINTR)
+				;
 		}
 
 		//Print all frames in order, using resolved output or dladdr fallback
@@ -275,6 +355,8 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 			case ELogLevel_Error:          printf(FONT_RED    str FONT_RESET);        break;                   \
 		}
 
+	static SpinLock LogPrettyPrintLock = { 0 };
+
 	void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg) {
 
 		(void) alloc;
@@ -282,6 +364,11 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 		Ns t = Time_now();
 
 		if(lvl >= ELogLevel_Count)
+			return;
+
+		const ELockAcquire acq = SpinLock_lock(&LogPrettyPrintLock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
 			return;
 
 		//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
@@ -314,9 +401,12 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 
 		printColor(lvl,
 			"%.*s%s",
-			!arg ? 0 : (int)CharString_length(*arg), !arg ? "" : arg->ptr,
+			!arg ? 0 : (int) CharString_length(*arg), !arg ? "" : arg->ptr,
 			newLine
 		);
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&LogPrettyPrintLock);
 	}
 
 #endif

@@ -59,7 +59,7 @@ static inline Bool File_removeVirtual(const CharString *loc, Ns maxTimeout, cons
 }
 
 static inline Bool File_addVirtual(const CharString *loc, EFileType type, const Allocator *alloc, Error *e_rr) {
-	(void)type;
+	(void) type;
 	return File_virtualOp(loc, 0, NULL, NULL, true, alloc, e_rr);
 }
 
@@ -70,7 +70,7 @@ static inline Bool File_renameVirtual(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)newFileName;
+	(void) newFileName;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, alloc, e_rr);
 }
 
@@ -81,7 +81,7 @@ static inline Bool File_moveVirtual(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)directoryName;
+	(void) directoryName;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, alloc, e_rr);
 }
 
@@ -92,7 +92,7 @@ static inline Bool File_writeVirtual(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)buf;
+	(void) buf;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, alloc, e_rr);
 }
 
@@ -351,6 +351,7 @@ Bool File_add(
 	//Walk backwards to find deepest existing ancestor
 
 	U64 firstMissing = dirCount;
+
 	for (U64 i = dirCount; i > startComponent; --i) {
 
 		C8 *end = CharString_end(str.ptr[i - 1]);
@@ -498,6 +499,7 @@ Bool File_move(const CharString *loc, const CharString *directoryName, Ns maxTim
 
 	//Build destination path: resolvedDir / filename
 	CharString fileName = CharString_createNull();
+
 	if(!CharString_cutBeforeLastSensitive(&resolved, '/', &fileName))
 		fileName = resolved;
 
@@ -783,7 +785,7 @@ Bool File_virtualOp(
 	Error *e_rr
 ) {
 
-	(void)maxTimeout;
+	(void) maxTimeout;
 
 	Bool s_uccess = true;
 	Bool isVirtual = false;
@@ -918,6 +920,7 @@ Bool File_readVirtualInternal(void *outputGeneric, const CharString *loc, const 
 	StreamRef *streamRef = NULL;
 
 	const ELockAcquire acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
+
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_readVirtualInternal() couldn't lock virtualSectionsLock"));
 
@@ -1007,6 +1010,7 @@ Bool File_getInfoVirtualInternal(void *infoGeneric, const CharString *loc, const
 	const VirtualSection *section = NULL;
 
 	const ELockAcquire acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
+
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_getInfoVirtualInternal() couldn't lock virtualSectionsLock"));
 
@@ -1207,6 +1211,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 				retError(clean, Error_invalidState(0, "File_foreachVirtualInternal() cutAfterFirst failed"));
 
 			Bool contains = false;
+
 			for(U64 j = 0; j < visited.length; ++j)
 				if(CharString_equalsStringSensitive(&parent, &visited.ptr[j])) {
 					contains = true;
@@ -1266,6 +1271,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 			//Compute subpath within section (empty = section root)
 			CharString child = CharString_createNull();
+
 			if(queryInsideSection)
 				CharString_cut(&resolvedLower, CharString_length(secSlash), 0, &child);
 
@@ -1415,7 +1421,7 @@ clean:
 
 Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const Allocator *alloc, Error *e_rr) {
 
-	(void)userData;
+	(void) userData;
 
 	CharString isChild = CharString_createNull();
 	ELockAcquire acq = ELockAcquire_Invalid;
@@ -1438,7 +1444,7 @@ Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const All
 
 		VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
-		if(
+		if (
 			!CharString_equalsStringInsensitive(loc, &section->path) &&
 			!CharString_startsWithStringInsensitive(&section->path, &isChild, 0)
 		)
@@ -1468,7 +1474,7 @@ Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const All
 				const U64 otherId = other->loadedAndId << 1 >> 1;
 
 				if(otherId > id)
-					other->loadedAndId = (otherId - 1) | ((U64)1 << 63);
+					other->loadedAndId = (otherId - 1) | ((U64) 1 << 63);
 			}
 		}
 	}

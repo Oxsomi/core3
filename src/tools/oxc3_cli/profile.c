@@ -50,6 +50,7 @@ typedef struct ProfileThreadArg {
 
 void CLI_profileThreadCb(void *ptr) {
 	ProfileThreadArg *a = (ProfileThreadArg*) ptr;
+
 	if(!a->op(a->args, a->slice, &a->err) && !a->err.genericError)
 		a->err = Error_invalidState(0, "CLI_profileThreadCb() op failed");
 }
@@ -66,7 +67,7 @@ Bool CLI_profileDataThreaded(const ParsedArgs *args, ProfileOperation op, Buffer
 	ProfileThreadArg *targs = (ProfileThreadArg*) targsBuf.ptrNonConst;
 	Thread **ths = (Thread**) thsBuf.ptrNonConst;
 
-	const U64 sliceSize = (Buffer_length(dat) / threads) & ~(U64)63;        //64-byte aligned slices (AES/SIMD safe)
+	const U64 sliceSize = (Buffer_length(dat) / threads) & ~(U64) 63;        //64-byte aligned slices (AES/SIMD safe)
 
 	Log_debugLnx("Running on %"PRIu64" threads, %"PRIu64" bytes each:", threads, sliceSize);
 
@@ -98,7 +99,7 @@ Bool CLI_profileDataThreaded(const ParsedArgs *args, ProfileOperation op, Buffer
 
 	Log_debugLnx(
 		"Aggregate over %"PRIu64" threads: %"PRIu64" bytes in %fs (%f bytes/sec)",
-		spawned, total, (F64)(now - then) / SECOND, (F64) total / (now - then) * SECOND
+		spawned, total, (F64) (now - then) / SECOND, (F64) total / (now - then) * SECOND
 	);
 
 clean:
@@ -197,15 +198,15 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 	switch (inputType) {
 
 		case EFloatType_F64:
-			v = ((const U64*)ptr)[i];
+			v = ((const U64*) ptr)[i];
 			break;
 
 		case EFloatType_F32:
-			v = ((const U32*)ptr)[i];
+			v = ((const U32*) ptr)[i];
 			break;
 
 		default:
-			v = ((const U16*)ptr)[i];
+			v = ((const U16*) ptr)[i];
 			break;
 	}
 
@@ -216,10 +217,10 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 		case EProfileCastStep_Regular:
 
 			if(EFloatType_isDeN(inputType, v))
-				v += (U64)1 << EFloatType_exponentShift(inputType);
+				v += (U64) 1 << EFloatType_exponentShift(inputType);
 
 			else if(!EFloatType_isFinite(inputType, v))
-				v -= (U64)1 << EFloatType_exponentShift(inputType);
+				v -= (U64) 1 << EFloatType_exponentShift(inputType);
 
 			break;
 
@@ -230,7 +231,7 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 		case EProfileCastStep_NaN:
 
 			if(!EFloatType_mantissa(inputType, v))
-				v |= (U64)1 << EFloatType_mantissaShift(inputType);
+				v |= (U64) 1 << EFloatType_mantissaShift(inputType);
 
 			v |= EFloatType_exponentMask(inputType) << EFloatType_exponentShift(inputType);
 			break;
@@ -252,7 +253,7 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 
 Bool _CLI_profileCast(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 	Bool s_uccess = true;
 
 	//Scale the cast count to the buffer so a smaller -length still works.
@@ -290,8 +291,8 @@ Bool _CLI_profileCast(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 					"%s: %"PRIu64"x %s -> %s within %fs (%fns/op). (Operation hash: %"PRIu64")",
 					iterationNames[l], number,
 					floatTypeNames[k], floatTypeNames[j],
-					(F64)(now - then) / SECOND,
-					(F64)(now - then) / number,
+					(F64) (now - then) / SECOND,
+					(F64) (now - then) / number,
 					temp
 				);
 			}
@@ -303,8 +304,8 @@ Bool _CLI_profileCast(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Performed %"PRIu64" casts within %fs. Avg time per cast %fns.",
 		totalIt,
-		(F64)(nowOuter - thenOuter) / SECOND,
-		(F64)(nowOuter - thenOuter) / totalIt
+		(F64) (nowOuter - thenOuter) / SECOND,
+		(F64) (nowOuter - thenOuter) / totalIt
 	);
 
 clean:
@@ -318,7 +319,7 @@ Bool CLI_profileCast(const ParsedArgs *args) {
 
 Bool CLI_profileRNGImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 	(void) e_rr;
 
 	const Ns then = Time_now();
@@ -333,9 +334,9 @@ Bool CLI_profileRNGImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile RNG: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND
 	);
 
 	return true;
@@ -348,7 +349,7 @@ Bool CLI_profileRNG(const ParsedArgs *args) {
 
 Bool CLI_profileCRC32CImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 	(void) e_rr;
 
 	const Ns then = Time_now();
@@ -358,9 +359,9 @@ Bool CLI_profileCRC32CImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile CRC32C: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND,
 		hash
 	);
 
@@ -374,7 +375,7 @@ Bool CLI_profileCRC32C(const ParsedArgs *args) {
 
 Bool CLI_profileFNV1A64Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 	(void) e_rr;
 
 	const Ns then = Time_now();
@@ -384,9 +385,9 @@ Bool CLI_profileFNV1A64Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile FNV1a64: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND,
 		hash
 	);
 
@@ -400,7 +401,7 @@ Bool CLI_profileFNV1A64(const ParsedArgs *args) {
 
 Bool CLI_profileSHA256Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 	(void) e_rr;
 
 	const Ns then = Time_now();
@@ -413,9 +414,9 @@ Bool CLI_profileSHA256Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile SHA256: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND,
 		hash[0], hash[1], hash[2], hash[3],
 		hash[4], hash[5], hash[6], hash[7]
 	);
@@ -430,7 +431,7 @@ Bool CLI_profileSHA256(const ParsedArgs *args) {
 
 Bool CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 	(void) e_rr;
 
 	const Ns then = Time_now();
@@ -441,9 +442,9 @@ Bool CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 		"Profile MD5: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). "
 		"Random hash %04"PRIX32"%04"PRIX32"%04"PRIX32"%04"PRIX32".",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND,
 		md5.v[0], md5.v[1], md5.v[2], md5.v[3]
 	);
 
@@ -457,7 +458,7 @@ Bool CLI_profileMD5(const ParsedArgs *args) {
 
 Bool CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncryptionType encryptionType, Error *e_rr) {
 
-	(void)args;
+	(void) args;
 
 	Bool s_uccess = true;
 	Ns then = Time_now();
@@ -483,9 +484,9 @@ Bool CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncryp
 	Log_debugLnx(
 		"Encrypt AES GCM: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND
 	);
 
 	then = now;
@@ -505,9 +506,9 @@ Bool CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncryp
 	Log_debugLnx(
 		"Decrypt AES GCM: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64)(now - then) / Buffer_length(buf),
-		(F64)Buffer_length(buf) / (now - then) * SECOND
+		(F64) (now - then) / SECOND,
+		(F64) (now - then) / Buffer_length(buf),
+		(F64) Buffer_length(buf) / (now - then) * SECOND
 	);
 
 clean:
@@ -558,8 +559,8 @@ Bool CLI_profileMemcpyImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile memcpy: %"PRIu64" bytes (%"PRIu64" x %"PRIu64") in %fs (%f GB/s). (sink 0x%02x)",
 		total, iters, Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64) total / (F64)(now - then),
+		(F64) (now - then) / SECOND,
+		(F64) total / (F64) (now - then),
 		sink
 	);
 
@@ -593,8 +594,8 @@ Bool CLI_profileMemsetImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	Log_debugLnx(
 		"Profile memset: %"PRIu64" bytes (%"PRIu64" x %"PRIu64") in %fs (%f GB/s). (sink 0x%02x)",
 		total, iters, Buffer_length(buf),
-		(F64)(now - then) / SECOND,
-		(F64) total / (F64)(now - then),
+		(F64) (now - then) / SECOND,
+		(F64) total / (F64) (now - then),
 		sink
 	);
 
@@ -659,12 +660,13 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	F32x4 acc = F32x4_zero();
 	Ns then = Time_now();
+
 	for(U64 i = 0; i < iters; ++i)
 		acc = F32x4_add(acc, win[i & mask]);
 	Ns now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f add: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), (F64) F32x4_x(acc)
 	);
 
 	acc = F32x4_xxxx4(1);
@@ -674,7 +676,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f mul: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), (F64) F32x4_x(acc)
 	);
 
 	acc = F32x4_zero();
@@ -684,7 +686,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f fma: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), (F64) F32x4_x(acc)
 	);
 
 	F32x4 a0 = F32x4_zero(), a1 = F32x4_zero(), a2 = F32x4_zero(), a3 = F32x4_zero();
@@ -699,7 +701,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f fma x4 (independent): %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then),
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then),
 		(F64) F32x4_x(F32x4_add(F32x4_add(a0, a1), F32x4_add(a2, a3)))
 	);
 
@@ -713,7 +715,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f dot4: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) dAcc
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), (F64) dAcc
 	);
 
 	//min and max are where wasm SIMD128 pays for its semantics: f32x4.min/max propagate NaN as IEEE
@@ -728,7 +730,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f min/max: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then),
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then),
 		(F64) (F32x4_x(mnAcc) + F32x4_x(mxAcc))
 	);
 
@@ -744,7 +746,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f rsqrt: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(rAcc)
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), (F64) F32x4_x(rAcc)
 	);
 
 	F32x4 rfAcc = F32x4_zero();
@@ -754,7 +756,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f rsqrtFast: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(rfAcc)
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), (F64) F32x4_x(rfAcc)
 	);
 
 	//Lane extract is SIMD hostile by construction: scalar reads a float, the vector backends need an
@@ -779,7 +781,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f lane extract: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		extractIters, (F64)(now - then) / SECOND, (F64) extractIters / (F64)(now - then),
+		extractIters, (F64) (now - then) / SECOND, (F64) extractIters / (F64) (now - then),
 		(F64) (xAcc + F32x4_reduce(xVec))
 	);
 
@@ -811,7 +813,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f transpose4: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		transposeIters, (F64)(now - then) / SECOND, (F64) transposeIters / (F64)(now - then),
+		transposeIters, (F64) (now - then) / SECOND, (F64) transposeIters / (F64) (now - then),
 		(F64) F32x4_reduce(F32x4_add(F32x4_add(t0, t1), F32x4_add(t2, t3)))
 	);
 
@@ -839,7 +841,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile mat4 mul: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
-		matIters, (F64)(now - then) / SECOND, (F64) matIters / (F64)(now - then),
+		matIters, (F64) (now - then) / SECOND, (F64) matIters / (F64) (now - then),
 		(F64) F32x4_reduce(F32x4_add(F32x4_add(mSink.v[0], mSink.v[1]), F32x4_add(mSink.v[2], mSink.v[3])))
 	);
 
@@ -859,7 +861,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4i add x4 (independent): %"PRIu64" ops in %fs (%f Gop/s). (sink %i)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then),
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then),
 		I32x4_x(I32x4_add(I32x4_add(i0, i1), I32x4_add(i2, i3)))
 	);
 
@@ -874,7 +876,7 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4i swapEndianness: %"PRIu64" ops in %fs (%f Gop/s). (sink %i)",
-		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), I32x4_x(sAcc)
+		iters, (F64) (now - then) / SECOND, (F64) iters / (F64) (now - then), I32x4_x(sAcc)
 	);
 
 	//The realistic one: stream the whole buffer through a transform instead of spinning on an L1 window.
@@ -888,8 +890,8 @@ Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	now = Time_now();
 	Log_debugLnx(
 		"Profile vec4f streaming fma: %"PRIu64" ops in %fs (%f Gop/s, %f GiB/s). (sink %f)",
-		vecCount, (F64)(now - then) / SECOND, (F64) vecCount / (F64)(now - then),
-		(F64) (vecCount * sizeof(F32x4)) / (F64)(now - then) * SECOND / GIBI, (F64) F32x4_x(win[0])
+		vecCount, (F64) (now - then) / SECOND, (F64) vecCount / (F64) (now - then),
+		(F64) (vecCount * sizeof(F32x4)) / (F64) (now - then) * SECOND / GIBI, (F64) F32x4_x(win[0])
 	);
 
 clean:

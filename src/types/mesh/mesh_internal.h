@@ -138,6 +138,12 @@ Bool MeshSink_drain(MeshSink *sink, Error *e_rr);
 // used, and a sink that discards formats nothing at all rather than formatting and throwing it away.
 
 Bool MeshSink_writeFormatted(MeshSink *sink, Error *e_rr, const C8 *format, ...);
+
+//lead, then count floats (at most 3) separated by one space, each with `precision` significant digits and a '.'
+// for the decimal point whatever the locale, since the text forms are read back by parsers that expect one.
+//Every value must be finite.
+
+Bool MeshSink_writeFloats(MeshSink *sink, Error *e_rr, const C8 *lead, const F32 *values, U8 count, U8 precision);
 Bool MeshSink_flush(MeshSink *sink, Error *e_rr);
 void MeshSink_free(MeshSink *sink);
 

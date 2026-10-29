@@ -132,7 +132,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	I32 totalHeight = I32x2_y(size);
 
 	//Resize the bar whenever the window width changes.
-	gotoIfError3(clean, LWindow_initBar(w, (U32)totalWidth, e_rr));
+	gotoIfError3(clean, LWindow_initBar(w, (U32) totalWidth, e_rr));
 
 	//Tell the compositor the full visible extent of the window (including bar).
 	//Used for snap, shadows, and maximize geometry, must cover the whole surface.
@@ -143,8 +143,8 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	// the bar height (and drift further with every subsequent resize configure).
 
 	Bool hasBar = lwin->barSurface && !(w->flags & EWindowFlags_IsFullscreen);
-	I32  geomY  = hasBar ? -(I32)LWINDOW_DECOR_HEIGHT : 0;
-	I32  geomH  = totalHeight + (hasBar ? (I32)LWINDOW_DECOR_HEIGHT : 0);
+	I32  geomY  = hasBar ? -(I32) LWINDOW_DECOR_HEIGHT : 0;
+	I32  geomH  = totalHeight + (hasBar ? (I32) LWINDOW_DECOR_HEIGHT : 0);
 
 	xdg_surface_set_window_geometry(lwin->surface, 0, geomY, totalWidth, geomH);
 
@@ -155,7 +155,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		U32 width  = (U32) totalWidth;
 		U32 height = (U32) totalHeight;
 
-		U64 stride   = (U64)width * 4;
+		U64 stride   = (U64) width * 4;
 		U64 poolSize = stride * height * LWINDOW_BUFFER_COUNT;
 
 		if((width >> 24) || (height >> 24))
@@ -194,11 +194,11 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		lwin->fileDescriptor = fd;
 		fd = -1;
 
-		lwin->pixelStride = (U32)(width * 4);
+		lwin->pixelStride = (U32) (width * 4);
 		lwin->height      = (U16) height;
-		lwin->heightHi8   = (U8)(height >> 16);
+		lwin->heightHi8   = (U8) (height >> 16);
 
-		pool = wl_shm_create_pool(shm, lwin->fileDescriptor, (I32)poolSize);
+		pool = wl_shm_create_pool(shm, lwin->fileDescriptor, (I32) poolSize);
 
 		if(!pool)
 			retError(clean, Error_invalidState(0, "LWindow_initSize() wl_shm_create_pool failed"));
@@ -209,8 +209,8 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		for(U64 i = 0; i < nbuffers; ++i) {
 			lwin->buffers[i] = wl_shm_pool_create_buffer(
 				lwin->backBuffer,
-				(I32)(stride * height * i),
-				(I32)width, (I32)height, (I32)stride,
+				(I32) (stride * height * i),
+				(I32) width, (I32) height, (I32) stride,
 				w->hint & EWindowHint_Transparency ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888
 			);
 
@@ -242,6 +242,7 @@ clean:
 	if(!s_uccess) {
 
 		LWindow *l2 = WindowExt(w, LWindow);
+
 		for(U64 i = 0; i < buffersCreated; ++i) {
 			if(l2->buffers[i]) {
 				wl_buffer_destroy(l2->buffers[i]);
@@ -276,7 +277,7 @@ static void LWindow_updateSize(
 	Bool isFullscreen = false;
 
 	U32 *s = (U32*) states->data;
-	U32  n = (U32)(states->size / sizeof(U32));
+	U32  n = (U32) (states->size / sizeof(U32));
 
 	for(U32 i = 0; i < n; ++i) {
 		switch(s[i]) {
@@ -325,6 +326,7 @@ static void LWindow_updateSize(
 		//Still notify if the minimized state changed.
 		if(stateChanged && w->callbacks.onResize && (w->flags & EWindowFlags_IsFinalized)) {
 			Error err = Error_none();
+
 			if(!w->callbacks.onResize(w, &err))
 				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 		}
@@ -335,7 +337,7 @@ static void LWindow_updateSize(
 
 	lwin->configured = true;
 
-	if(height >= (I32)LWINDOW_DECOR_HEIGHT && lwin->barSurface && !isFullscreen)
+	if(height >= (I32) LWINDOW_DECOR_HEIGHT && lwin->barSurface && !isFullscreen)
 		height -= LWINDOW_DECOR_HEIGHT;
 
 	if(width  <= 0) width  = I32x2_x(w->size) ? I32x2_x(w->size) : 1280;
@@ -353,6 +355,7 @@ static void LWindow_updateSize(
 		return;
 
 	Error err = Error_none();
+
 	if(!LWindow_initSize(w, newContentSize, &err))
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
@@ -386,6 +389,7 @@ void WindowManager_freePhysical(Window *w) {
 	//Drain pending events so in-flight callbacks (e.g. frame callback) complete
 	// and dereference lwin before we free it.
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
+
 	if(w->nativeHandle && manager && manager->display)
 		wl_display_roundtrip(manager->display);
 
@@ -393,7 +397,7 @@ void WindowManager_freePhysical(Window *w) {
 	if(lwin->touch)         wl_touch_destroy(lwin->touch);
 	if(lwin->barPointer)    wl_pointer_destroy(lwin->barPointer);
 	if(lwin->barBuffer)     wl_buffer_destroy(lwin->barBuffer);
-	if(lwin->barPixels)     munmap(lwin->barPixels, (U64)lwin->barWidth * LWINDOW_DECOR_HEIGHT * 4);
+	if(lwin->barPixels)     munmap(lwin->barPixels, (U64) lwin->barWidth * LWINDOW_DECOR_HEIGHT * 4);
 	if(lwin->barPool)       wl_shm_pool_destroy(lwin->barPool);
 	if(lwin->barSubsurface) wl_subsurface_destroy(lwin->barSubsurface);
 	if(lwin->barSurface)    wl_surface_destroy(lwin->barSurface);
@@ -452,7 +456,7 @@ Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 
 	wl_surface_commit(surface);
 
-	LWindow_redrawBar((Window*)(uintptr_t)w);     //Redraw CSD bar with updated title if present
+	LWindow_redrawBar((Window*)(uintptr_t) w);     //Redraw CSD bar with updated title if present
 
 clean:
 	CharString_free(&copy, Platform_instance->alloc);
@@ -524,8 +528,10 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	//Find a free buffer
 	U64 chosen = U64_MAX;
+
 	for(U64 i = 0; i < LWINDOW_BUFFER_COUNT; ++i) {
-		U64 candidate = ((U64)lwin->backBufferId + i) % LWINDOW_BUFFER_COUNT;
+		U64 candidate = ((U64) lwin->backBufferId + i) % LWINDOW_BUFFER_COUNT;
+
 		if(!lwin->bufferBusy[candidate]) {
 			chosen = candidate;
 			break;
@@ -551,8 +557,8 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 		lwin->buffers[chosen] = wl_shm_pool_create_buffer(
 			lwin->backBuffer,
-			(I32)(stride * chosen),
-			(I32)lwin->pixelStride / 4, (I32)height, (I32)lwin->pixelStride,
+			(I32) (stride * chosen),
+			(I32) lwin->pixelStride / 4, (I32) height, (I32) lwin->pixelStride,
 			w->hint & EWindowHint_Transparency ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888
 		);
 
@@ -575,7 +581,7 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	wl_surface_commit(surface);
 
-	lwin->backBufferId      = (U8)((chosen + 1) % LWINDOW_BUFFER_COUNT);
+	lwin->backBufferId      = (U8) ((chosen + 1) % LWINDOW_BUFFER_COUNT);
 
 	//LWindow_initSize only prints its failure rather than tearing the window down, so a window whose shm pool
 	// never mapped still finalizes and reaches here with a null base and zero geometry.
@@ -730,6 +736,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 		if((manager->seatCapabilities & WL_SEAT_CAPABILITY_POINTER)) {
 
 			struct wl_pointer *pointer = wl_seat_get_pointer(manager->seat);
+
 			if(pointer) {
 				lwin->barPointer = pointer;
 				wl_pointer_add_listener(pointer, &LWindow_barPointerListener, w);
@@ -738,6 +745,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 		if((manager->seatCapabilities & WL_SEAT_CAPABILITY_TOUCH)) {
 			struct wl_touch *touch = wl_seat_get_touch(manager->seat);
+
 			if(touch) {
 				lwin->touch = touch;
 				lwin->primaryTouchId = -1;

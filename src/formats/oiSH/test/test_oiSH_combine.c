@@ -121,7 +121,7 @@ void Test_SHFileCombineMergesSPIRVAndDXIL(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	U16 binId = 0;
@@ -139,7 +139,7 @@ void Test_SHFileCombineMergesSPIRVAndDXIL(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 	infoB.binaries[EGfxBinaryType_DXIL] = Buffer_createRefConst(dxil, sizeof(dxil));
 
@@ -356,7 +356,7 @@ void Test_SHFileCombineRegistersMerged(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	infoA.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
@@ -394,7 +394,7 @@ void Test_SHFileCombineRegistersMerged(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	static const U8 dxil[5] = { 0x44, 0x58, 0x42, 0x43, 0x00 };
@@ -551,7 +551,7 @@ void Test_SHFileCombineConflictingBinaryContents(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	infoA.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(spirvA, sizeof(spirvA));
@@ -566,7 +566,7 @@ void Test_SHFileCombineConflictingBinaryContents(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 	infoB.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(spirvB, sizeof(spirvB));
 	Test_assert(t, "B addBin",   SHFile_addBinary(&shB, &infoB, t->alloc, &t->err));

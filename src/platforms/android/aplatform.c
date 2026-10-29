@@ -282,7 +282,7 @@ Bool Platform_hasPhysicalKeyboard() {
 	Bool hasKeyboard = false;
 	jclass cls = NULL;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void**) &env, JNI_VERSION_1_6) != JNI_OK) {
 		(*vm)->AttachCurrentThread(vm, &env, NULL);
 		attached = true;
 	}
@@ -322,7 +322,7 @@ Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void**) &env, JNI_VERSION_1_6) != JNI_OK) {
 		(*vm)->AttachCurrentThread(vm, &env, NULL);
 		attached = true;
 	}

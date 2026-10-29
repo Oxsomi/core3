@@ -51,7 +51,8 @@ void Test_vec4f(Test *test) {
 	const F32 src4[4] = { 11, 12, 13, 14 };
 	F32x4 loaded = F32x4_load3(src4);
 	Test_assert(test, "F32x4_load3", F32x4_x(loaded) == 11 && F32x4_y(loaded) == 12 && F32x4_z(loaded) == 13 &&
-		F32x4_w(loaded) == 0);
+		F32x4_w(loaded) == 0
+	);
 
 	F32 dst4[4] = { -1, -1, -1, -1 };
 	F32x4_store3(dst4, F32x4_load4(src4));
@@ -207,6 +208,9 @@ void Test_vec4f(Test *test) {
 
 	//rgb8 pack/unpack and srgb8 pack/unpack
 
+	Test_assert(test, "F32x4_rgb8Pack saturates channels", F32x4_rgb8Pack(F32x4_create4(-1, 2, 0.5f, 10)) == 0x00FF7F);
+	Test_assert(test, "F32x4_srgb8Pack saturates channels", F32x4_srgb8Pack(F32x4_create4(-1, 2, 0.5f, 10)) == 0x00FFBB);
+
 	const F32x4 valuesRGBA[] = {
 		F32x4_create4(0, 0, 0, 0), F32x4_create4(0, 0, 1, 0), F32x4_create4(0, 1, 0, 0),
 		F32x4_create4(0, 1, 1, 0), F32x4_create4(1, 0, 0, 0), F32x4_create4(1, 0, 1, 0),
@@ -269,4 +273,42 @@ void Test_vec4f(Test *test) {
 
 	c = F32x4_create4(big, -big, 0.5f, -0.25f);
 	Test_assert(test, "F32x4_rcpSafe", !F32x4_neqExact4(F32x4_rcpSafe(F32x4_create4(0, -0.0f, 2, -4)), c));
+	Test_assert(test, "lerp scalar endpoints", F32_lerp(1e20f, 3, 1) == 3 && F64_lerp(1e200, 3, 1) == 3);
+	Test_assert(test, "lerp vector endpoint", F32x4_x(F32x4_lerp(F32x4_xxxx4(1e20f), F32x4_xxxx4(3), 1)) == 3);
+	Test_assert(test, "RGB packing saturates", F32x4_rgb8Pack(F32x4_create3(-1, 2, 0.5f)) == 0x00FF7F);
+	Test_assert(test, "sRGB packing saturates", F32x4_srgb8Pack(F32x4_create3(-1, 2, 0)) == 0x00FF00);
+	Test_assert(test, "negate flips zero sign", U32_fromF32Bits(F32x4_x(F32x4_negate(F32x4_zero()))) == 0x80000000);
+	Test_assert(test, "reduce uses adjacent pairs", F32x4_reduce(F32x4_create4(1e20f, -1e20f, 3, 4)) == 7);
+	Test_assert(test, "dot4 uses adjacent pairs", F32x4_dot4(F32x4_create4(33554432, 1, -33554432, 1), F32x4_one()) == 0);
+
+	const F32 inf = F32_fromU32Bits(0x7F800000), quietNaN = F32_fromU32Bits(0x7FC00000);
+	const F32x4 specialSaturated = F32x4_saturate(F32x4_create4(quietNaN, -inf, inf, -0.f));
+
+	Test_assert(test, "saturate handles NaN and infinities", F32x4_eqExact4(specialSaturated, F32x4_create4(0, 0, 1, 0)));
+	Test_assert(test, "saturate canonicalizes zero", U32_fromF32Bits(F32x4_w(specialSaturated)) == 0);
+	Test_assert(
+		test, "RGB packing handles NaN and infinities",
+		F32x4_rgb8Pack(F32x4_create4(quietNaN, inf, -inf, quietNaN)) == 0xFF00
+	);
+
+	Test_assert(
+		test, "sRGB packing handles NaN and infinities",
+		F32x4_srgb8Pack(F32x4_create4(quietNaN, inf, -inf, quietNaN)) == 0xFF00
+	);
+
+	Test_assert(test, "dot3 ignores fourth lane", F32x4_dot3(F32x4_create4(1, 2, 3, inf), F32x4_one()) == 6);
+
+	const F32x4 negativeZeros = F32x4_create4(-0.f, -0.f, -0.f, 5);
+
+	Test_assert(test, "dot2 zero is positive", U32_fromF32Bits(F32x4_dot2(negativeZeros, F32x4_one())) == 0);
+	Test_assert(test, "dot3 zero is positive", U32_fromF32Bits(F32x4_dot3(negativeZeros, F32x4_one())) == 0);
+	Test_assert(test, "min selects second on unordered", F32x4_x(F32x4_min(F32x4_xxxx4(quietNaN), F32x4_one())) == 1);
+	Test_assert(test, "max selects second on unordered", F32_isNaN(F32x4_x(F32x4_max(F32x4_one(), F32x4_xxxx4(quietNaN)))));
+
+	const F32 fused = F32x4_x(F32x4_fma(
+		F32x4_xxxx4(1.00000011920928955078125f), F32x4_xxxx4(0.99999988079071044921875f), F32x4_xxxx4(-1)
+	));
+
+	Test_assert(test, "fma rounds once", fused == -1.42108547152020037174224853515625e-14f);
+
 }

@@ -338,7 +338,7 @@ void Test_bigIntBitScan(Test *t) {
 		}
 
 		const U16 got      = BigInt_bitScan(aBig);
-		const U16 expected = (U16)(127 - n);
+		const U16 expected = (U16) (127 - n);
 		Test_assert(t, "BigInt_bitScan", got == expected);
 	}
 
@@ -370,6 +370,122 @@ void Test_bigIntBitScan(Test *t) {
 	}
 }
 
+static void Test_bigIntBoundaries(Test *t) {
+
+	Test_setModule(t, "BigInt boundaries");
+
+	U64 limbs[] = { U64_MAX, U64_MAX, 0 }, one = 1;
+	BigInt value = { 0 }, increment = { 0 }, copy = { 0 };
+
+	if (!Test_assert(
+		t, "create arithmetic refs",
+		BigInt_createRef(limbs, 3, &value, &t->err) && BigInt_createRef(&one, 1, &increment, &t->err)
+	))
+		return;
+
+	Test_assert(
+		t, "carry propagates across extra limbs",
+		BigInt_add(&value, increment) && !limbs[0] && !limbs[1] && limbs[2] == 1
+	);
+
+	limbs[0] = limbs[1] = 0;
+	limbs[2] = 1;
+
+	Test_assert(
+		t, "borrow propagates across extra limbs",
+		BigInt_sub(&value, increment) && limbs[0] == U64_MAX && limbs[1] == U64_MAX && !limbs[2]
+	);
+
+	if (Test_assert(t, "copy succeeds", BigInt_createCopy(&value, t->alloc, &copy, &t->err))) {
+		Test_assert(t, "copy preserves source", limbs[0] == U64_MAX && limbs[1] == U64_MAX && !limbs[2]);
+		Test_assert(t, "copy preserves value", copy.data[0] == U64_MAX && copy.data[1] == U64_MAX);
+	}
+
+	BigInt_free(&copy, t->alloc);
+
+	const C8 *decimals[] = { "10", "255", "1000000", "18446744073709551615", "18446744073709551616" };
+	const U64 expected[] = { 10, 255, 1000000, U64_MAX };
+
+	for(U64 i = 0; i < sizeof(decimals) / sizeof(decimals[0]); ++i) {
+
+		const CharString text = CharString_createRefCStrConst(decimals[i]);
+		BigInt parsed = { 0 };
+		const BigIntCreate create = { .text = &text, .bitCount = i < 3 ? 0 : 64, .alloc = t->alloc, .big = &parsed };
+		const Bool ok = BigInt_createFromDec(&create, NULL);
+
+		Test_assert(t, "decimal width and overflow", ok == (i < 4));
+
+		if(ok && i < 4)
+			Test_assert(t, "decimal value", parsed.data[0] == expected[i]);
+
+		BigInt_free(&parsed, t->alloc);
+	}
+
+	for(U64 bit = 0; bit < 192; ++bit) {
+
+		limbs[0] = limbs[1] = limbs[2] = 0;
+		limbs[bit >> 6] = (U64) 1 << (bit & 63);
+
+		for(EIntEncoding encoding = EIntEncoding_Oct; encoding <= EIntEncoding_Nyto; ++encoding) {
+
+			CharString text = CharString_createNull();
+			BigInt parsed = { 0 };
+			const BigIntStringify stringify = { .alloc = t->alloc, .result = &text };
+			const BigIntCreate create = { .text = &text, .bitCount = 192, .alloc = t->alloc, .big = &parsed };
+
+			if (Test_assert(t, "format bit across limbs", BigInt_toString(&stringify, encoding, value, &t->err))) {
+
+				if (Test_assert(t, "parse formatted bit", BigInt_createFromBase2Type(&create, encoding, &t->err)))
+					Test_assert(t, "bit round trip", !BigInt_neq(value, parsed));
+			}
+
+			BigInt_free(&parsed, t->alloc);
+			CharString_free(&text, t->alloc);
+		}
+	}
+
+	limbs[0] = limbs[1] = limbs[2] = 0;
+
+	CharString zeroText = CharString_createNull();
+	const CharString expectedZero = CharString_createRefCStrConst("0x0");
+	const BigIntStringify stringify = { .alloc = t->alloc, .result = &zeroText };
+
+	Test_assert(
+		t, "zero formats as one digit",
+		BigInt_toString(&stringify, EIntEncoding_Hex, value, &t->err) &&
+		CharString_equalsStringSensitive(&zeroText, &expectedZero)
+	);
+
+	CharString_free(&zeroText, t->alloc);
+	limbs[0] = 0xFFF;
+
+	Test_assert(t, "format reused string first value", BigInt_toString(&stringify, EIntEncoding_Hex, value, &t->err));
+
+	limbs[0] = 0x100;
+
+	const CharString reusedExpected = CharString_createRefCStrConst("0x100");
+
+	Test_assert(
+		t, "format reused string clears previous digits",
+		BigInt_toString(&stringify, EIntEncoding_Hex, value, &t->err) &&
+		CharString_equalsStringSensitive(&zeroText, &reusedExpected)
+	);
+
+	CharString_free(&zeroText, t->alloc);
+
+	const CharString max128 = CharString_createRefCStrConst("340282366920938463463374607431768211455");
+	const CharString overflow128 = CharString_createRefCStrConst("340282366920938463463374607431768211456");
+	U128 parsed128 = U128_createFromDec(max128, t->alloc, &t->err);
+
+	Test_assert(t, "U128 maximum decimal", U128_lo(parsed128) == U64_MAX && U128_hi(parsed128) == U64_MAX);
+
+	Error overflowError = Error_none();
+
+	parsed128 = U128_createFromDec(overflow128, t->alloc, &overflowError);
+
+	Test_assert(t, "U128 decimal overflow", overflowError.genericError && !U128_lo(parsed128) && !U128_hi(parsed128));
+}
+
 void Test_bigInt(Test *t) {
 	Test_bigIntCmp(t);
 	Test_bigIntString(t);
@@ -379,4 +495,5 @@ void Test_bigInt(Test *t) {
 	Test_bigIntLsh(t);
 	Test_bigIntRsh(t);
 	Test_bigIntBitScan(t);
+	Test_bigIntBoundaries(t);
 }

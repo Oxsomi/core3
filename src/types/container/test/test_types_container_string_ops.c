@@ -48,6 +48,29 @@ static void Test_stringRefs(Test *t) {
 
 	Test_setModule(t, "CharString refs");
 
+	C8 borrowed[4] = { 0, 'x', 'y', 'z' };
+	CharString emptyRef = CharString_createRefSizedConst(borrowed, 0, true);
+
+	Test_assert(t, "append to empty const reference", CharString_append(&emptyRef, 'a', t->alloc, &t->err));
+	Test_assert(t, "empty const reference gets owned storage", emptyRef.ptr != borrowed && !CharString_isRef(emptyRef));
+	Test_assert(t, "empty const reference storage unchanged", !borrowed[0] && borrowed[1] == 'x');
+
+	CharString_free(&emptyRef, t->alloc);
+
+	CharString inserted = CharString_createNull();
+	const CharString nothing = CharString_createNull();
+
+	Test_assert(t, "insert bounds setup", CharString_createCopy(S("hello"), t->alloc, &inserted, &t->err));
+	Test_assert(t, "empty insert still validates index", !CharString_insertString(&inserted, &nothing, 6, t->alloc, NULL));
+
+	const CharString one = S("x");
+
+	Test_assert(t, "nonempty insert validates index", !CharString_insertString(&inserted, &one, 6, t->alloc, NULL));
+	Test_assert(t, "maximal insert index refused", !CharString_insertString(&inserted, &one, U64_MAX, t->alloc, NULL));
+	Test_assert(t, "invalid insert preserves string", Test_strEq(inserted, "hello"));
+
+	CharString_free(&inserted, t->alloc);
+
 	const CharString constRef = S("hello");
 
 	Test_assert(t, "const ref is a ref", CharString_isRef(constRef) && CharString_isConstRef(constRef));
@@ -329,6 +352,19 @@ static void Test_stringSearch(Test *t) {
 	}
 	else Test_assert(t, "findAll", false);
 
+	CharStringFind emptyFind = { .s = &empty, .alloc = t->alloc, .result = &finds };
+
+	Test_assert(t, "findAll empty succeeds", CharString_findAllSensitive(&emptyFind, 'a', NULL) && !finds.length);
+
+	ListU64_free(&finds, t->alloc);
+
+	Test_assert(
+		t, "findAllString empty succeeds",
+		CharString_findAllStringSensitive(&emptyFind, &hello, NULL) && !finds.length
+	);
+
+	ListU64_free(&finds, t->alloc);
+
 	//Comparison
 	const CharString a = S("abc"), b = S("abd"), aUpper = S("ABC");
 	Test_assert(t, "equals", CharString_equalsStringSensitive(&a, &a));
@@ -455,6 +491,16 @@ static void Test_stringSplit(Test *t) {
 		ListCharString_free(&parts, t->alloc);
 	}
 	else Test_assert(t, "splitString", false);
+
+	static const C8 *const terminated[] = { "a\n", "a\r\n", "a\r", "" };
+
+	for(U64 i = 0; i < sizeof(terminated) / sizeof(terminated[0]); ++i) {
+
+		Test_assert(t, "splitLine terminated", CharString_splitLine(S(terminated[i]), t->alloc, &parts, &t->err));
+		Test_assert(t, "splitLine no phantom entry", parts.length == (i == 3 ? 0 : 1));
+
+		ListCharString_free(&parts, t->alloc);
+	}
 
 	//splitLine has to cope with both line ending conventions
 	const CharString lines = S("one\ntwo\r\nthree");

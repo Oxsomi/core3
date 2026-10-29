@@ -77,7 +77,7 @@ Bool AudioDeviceRef_create(
 	if (!info || !type)
 		retError(clean, Error_nullPointer(!info ? 1 : 4, "AudioDeviceRef_create()::info and type are required"));
 
-	if(
+	if (
 		type->typeId != (TypeId)EAudioTypeId_AudioDevice ||
 		RefPtrType_length(type) != sizeof(AudioDevice) + AudioDevice_sizeExt ||
 		type->free != AudioDevice_free ||

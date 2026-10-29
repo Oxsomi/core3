@@ -303,7 +303,7 @@ extern "C" void Test_graphicsPipelineCache(oxc::c::Test *t, oxc::c::GraphicsDevi
 		DescriptorLayout layout;
 		PipelineLayout pipelineLayout;
 
-		if(
+		if (
 			entryIds[0] != c::U32_MAX && entryIds[1] != c::U32_MAX && entryIds[2] != c::U32_MAX &&
 			TestPipelineCache_layout(t, dev, raysFile.list, entryIds, 3, layout, pipelineLayout)
 		)
@@ -385,7 +385,7 @@ extern "C" void Test_graphicsPipelineCache(oxc::c::Test *t, oxc::c::GraphicsDevi
 			const c::U64 *pairs = (const c::U64*) (blob.ptr + 24);
 			c::U64 key = c::U64_MAX;
 
-			while(
+			while (
 				TestPipelineCache_find(pairs, sizeCount, key) ||
 				TestPipelineCache_find(own->pipelineSizes.ptr, own->pipelineSizes.length / 2, key)
 			)
@@ -396,7 +396,7 @@ extern "C" void Test_graphicsPipelineCache(oxc::c::Test *t, oxc::c::GraphicsDevi
 
 			//The blob with that pair after its own: the size count plus one, the pairs, the new pair, then the driver's bytes
 
-			if(
+			if (
 				c::Test_assert(t, "blobLength", c::Buffer_length(blob) == head + driverBytes) &&
 				c::Test_assert(t, "syntheticBlob", c::Buffer_createUninitializedBytes(
 					head + sizeof(pair) + driverBytes, alloc, &synthetic, e_rr

@@ -62,13 +62,13 @@ static inline U32 Maj(U32 x, U32 y, U32 z) {
 //(W4) = bx
 //return (W0, W1, W2, W3) + (W1, W2, W3, W4)
 static inline I32x4 I32x4_sha256msg1(I32x4 a, I32x4 b) {
-	U32 W0 = (U32) I32x4_x(a), W1 = (U32)I32x4_y(a), W2 = (U32)I32x4_z(a), W3 = (U32)I32x4_w(a);
+	U32 W0 = (U32) I32x4_x(a), W1 = (U32) I32x4_y(a), W2 = (U32) I32x4_z(a), W3 = (U32) I32x4_w(a);
 	U32 W4 = (U32) I32x4_x(b);
 	return I32x4_create4(
-		(I32)(W0 + sigma0(W1)),
-		(I32)(W1 + sigma0(W2)),
-		(I32)(W2 + sigma0(W3)),
-		(I32)(W3 + sigma0(W4))
+		(I32) (W0 + sigma0(W1)),
+		(I32) (W1 + sigma0(W2)),
+		(I32) (W2 + sigma0(W3)),
+		(I32) (W3 + sigma0(W4))
 	);
 }
 
@@ -85,35 +85,35 @@ static inline I32x4 I32x4_sha256msg2(I32x4 i0, I32x4 i2, I32x4 i3) {
 	I32x4 a = msgTmp;
 	I32x4 b = i3;
 
-	U32 W14 = (U32)I32x4_z(b), W15 = (U32)I32x4_w(b);
+	U32 W14 = (U32) I32x4_z(b), W15 = (U32) I32x4_w(b);
 
-	U32 W16 = (U32)I32x4_x(a) + sigma1(W14);
-	U32 W17 = (U32)I32x4_y(a) + sigma1(W15);
+	U32 W16 = (U32) I32x4_x(a) + sigma1(W14);
+	U32 W17 = (U32) I32x4_y(a) + sigma1(W15);
 
 	return I32x4_create4(
-		(I32)W16,
-		(I32)W17,
-		(I32)((U32)I32x4_z(a) + sigma1(W16)),
-		(I32)((U32)I32x4_w(a) + sigma1(W17))
+		(I32) W16,
+		(I32) W17,
+		(I32) ((U32) I32x4_z(a) + sigma1(W16)),
+		(I32) ((U32) I32x4_w(a) + sigma1(W17))
 	);
 }
 
 //Literal port from https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=sha256rnds2
 static inline I32x4 I32x4_sha256rnds2(I32x4 a, I32x4 b, I32x4 k) {
 
-	U32 A = (U32)I32x4_w(b);
-	U32 B = (U32)I32x4_z(b);
-	U32 C = (U32)I32x4_w(a);
-	U32 D = (U32)I32x4_z(a);
+	U32 A = (U32) I32x4_w(b);
+	U32 B = (U32) I32x4_z(b);
+	U32 C = (U32) I32x4_w(a);
+	U32 D = (U32) I32x4_z(a);
 
-	U32 E = (U32)I32x4_y(b);
-	U32 F = (U32)I32x4_x(b);
-	U32 G = (U32)I32x4_y(a);
-	U32 H = (U32)I32x4_x(a);
+	U32 E = (U32) I32x4_y(b);
+	U32 F = (U32) I32x4_x(b);
+	U32 G = (U32) I32x4_y(a);
+	U32 H = (U32) I32x4_x(a);
 
 	for (U8 i = 0; i < 2; ++i) {
 
-		U32 Wki = (U32)I32x4_get(k, i);
+		U32 Wki = (U32) I32x4_get(k, i);
 
 		U32 T = Ch(E, F, G) + Sigma1(E) + Wki + H;
 		U32 A1 = T + Maj(A, B, C) + Sigma0(A);
@@ -165,11 +165,11 @@ U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 		return (U32) crc ^ U32_MAX;
 
 	U64 len = bufLen;
-	U64 it = (U64)(void*)buf.ptr;
+	U64 it = (U64) (void*) buf.ptr;
 	const U64 align8 = U64_min(it + len, (it + 7) & ~7);
 
 	while (it < align8) {
-		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+		crc = CRC32C_TABLE[0][(U8) (crc ^ *(const U8*) it)] ^ (crc >> 8);
 		++it;
 		--len;
 	}
@@ -182,10 +182,10 @@ U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 		U64 res = 0;
 
 		for(U64 i = 0; i < sizeof(U64); ++i)        //Compiler will unroll for us
-			res ^= CRC32C_TABLE[15 - i][(U8)(crc >> (i * 8))];
+			res ^= CRC32C_TABLE[15 - i][(U8) (crc >> (i * 8))];
 
 		for(U64 i = 0; i < sizeof(U64); ++i)        //Compiler will unroll for us
-			res ^= CRC32C_TABLE[7 - i][(U8)(next >> (i * 8))];
+			res ^= CRC32C_TABLE[7 - i][(U8) (next >> (i * 8))];
 
 		crc = res;
 
@@ -194,12 +194,12 @@ U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 	}
 
 	while (len > 0) {
-		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+		crc = CRC32C_TABLE[0][(U8) (crc ^ *(const U8*) it)] ^ (crc >> 8);
 		++it;
 		--len;
 	}
 
-	return (U32)crc ^ U32_MAX;
+	return (U32) crc ^ U32_MAX;
 }
 
 //Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9
@@ -325,14 +325,14 @@ MD5Hash Buffer_md5(const Buffer buf) {
 		Buffer_memcpy(Buffer_createRef(tmp, 64), bufTmp);
 	}
 
-	tmp[off] = (U8)'\x80';
+	tmp[off] = (U8) '\x80';
 
 	if (off >= 56) {
 		MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 		Buffer_unsetAllBits(Buffer_createRefConst(tmp, 64), NULL);
 	}
 
-	*(U64*)(tmp + 56) = bufLen << 3;
+	*(U64*) (tmp + 56) = bufLen << 3;
 	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 
 	//Finish

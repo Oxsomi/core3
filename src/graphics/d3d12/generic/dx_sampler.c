@@ -24,11 +24,11 @@
 
 typedef struct Sampler Sampler;
 
-void DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; }
+void DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void) sampler; }
 
 Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(
 	GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr
 ) {
-	(void)name; (void) dev; (void) sampler; (void) e_rr;
+	(void) name; (void) dev; (void) sampler; (void) e_rr;
 	return true;
 }

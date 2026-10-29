@@ -23,6 +23,8 @@
 #pragma once
 #include "types/test/test.h"
 
+void Test_BMPReadExtendedHeaders(Test *t);
+
 void Test_BMPRoundTripBGRA8(Test *t);
 void Test_BMPRoundTripBGR8(Test *t);
 void Test_BMPRoundTripFlipped(Test *t);
@@ -46,3 +48,7 @@ void Test_BMPReadZeroHeight(Test *t);
 void Test_BMPReadUnsupportedBitCount(Test *t);
 void Test_BMPReadUnsupportedCompression(Test *t);
 void Test_BMPReadUnsupportedCompressionRLE4(Test *t);
+
+void Test_BMPWriteFailedWrites(Test *t);
+void Test_BMPWriteLimits(Test *t);
+void Test_BMPReadBitfields(Test *t);

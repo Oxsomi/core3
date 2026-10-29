@@ -44,12 +44,8 @@ namespace oxc {
 		c::Thread *thread;
 		const c::Allocator *alloc;
 
-		void release() noexcept {
-
-			if (thread)
-				Thread_waitAndCleanup(alloc, &thread, nullptr);
-
-			thread = nullptr;
+		c::Bool release(c::Error *e_rr = nullptr) noexcept {
+			return !thread || Thread_waitAndCleanup(alloc, &thread, e_rr);
 		}
 
 	public:
@@ -66,14 +62,22 @@ namespace oxc {
 		}
 
 		Thread& operator=(Thread&& other) noexcept {
-			release();
+
+			if(this == &other)
+				return *this;
+
+			if(!release())
+				return *this;
+
 			thread = other.thread;
 			alloc = other.alloc;
 			other.thread = nullptr;
 			return *this;
 		}
 
-		c::Bool join(c::Error *e_rr = nullptr) noexcept { return !thread || Thread_wait(thread, e_rr); }
+		c::Bool join(c::Error *e_rr = nullptr) noexcept {
+			return !thread || Thread_waitAndCleanup(alloc, &thread, e_rr);
+		}
 
 		[[nodiscard]] static c::Bool init(
 			Thread &thread,
@@ -82,12 +86,22 @@ namespace oxc {
 			void *obj,
 			c::Error *e_rr = nullptr
 		) noexcept {
-			thread.release();
+
+			if(!thread.release(e_rr))
+				return false;
+
 			thread.alloc = alloc;
 			return Thread_create(alloc, callback, obj, &thread.thread, e_rr);
 		}
 
 		[[nodiscard]] static c::U64 getId() { return c::Thread_getId(); }
 		[[nodiscard]] static c::Bool sleep(c::Ns ns) { return c::Thread_sleep(ns); }
+		[[nodiscard]] static c::Bool setPriority(c::EThreadPriority priority, c::Error *e_rr = nullptr) noexcept {
+			return c::Thread_setPriority(priority, e_rr);
+		}
+
+		[[nodiscard]] static c::Bool setAffinity(const c::U32 *cpus, c::U64 count, c::Error *e_rr = nullptr) noexcept {
+			return c::Thread_setAffinity(cpus, count, e_rr);
+		}
 	};
 }

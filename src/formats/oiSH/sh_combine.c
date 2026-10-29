@@ -29,6 +29,47 @@
 #include "types/base/constants.h"
 #include "types/base/string_read_helper.h"
 
+//Whether two register types can describe the same register, and what the merged one is.
+//Samplers promote to a comparison sampler if either side is one, a CBV and push constants promote to push constants (in
+// either order) and the combined sampler flag is the union of both; any other difference is two different resources.
+
+static Bool SHFile_combineRegisterType(U8 a, U8 b, U8 *merged, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const U8 combined = (a | b) & EGfxRegisterType_IsCombinedSampler;
+
+	a &= (U8) ~EGfxRegisterType_IsCombinedSampler;
+	b &= (U8) ~EGfxRegisterType_IsCombinedSampler;
+
+	const U8 typeA = a & EGfxRegisterType_TypeMask, typeB = b & EGfxRegisterType_TypeMask;
+	const Bool isSamplerA = typeA == EGfxRegisterType_Sampler || typeA == EGfxRegisterType_SamplerComparisonState;
+	const Bool isSamplerB = typeB == EGfxRegisterType_Sampler || typeB == EGfxRegisterType_SamplerComparisonState;
+
+	if(isSamplerA && isSamplerB && a == typeA && b == typeB)
+		*merged = typeA == EGfxRegisterType_SamplerComparisonState || typeB == EGfxRegisterType_SamplerComparisonState ?
+			EGfxRegisterType_SamplerComparisonState : EGfxRegisterType_Sampler;
+
+	else if (
+		(a & ~EGfxRegisterType_TypeMask) == (b & ~EGfxRegisterType_TypeMask) &&
+		(
+			(typeA == EGfxRegisterType_ConstantBuffer && typeB == EGfxRegisterType_PushConstants) ||
+			(typeA == EGfxRegisterType_PushConstants && typeB == EGfxRegisterType_ConstantBuffer)
+		)
+	)
+		*merged = (U8) ((a & ~EGfxRegisterType_TypeMask) | EGfxRegisterType_PushConstants);
+
+	else if(a != b)
+		retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"));
+
+	else *merged = a;
+
+	*merged |= combined;
+
+clean:
+	return s_uccess;
+}
+
 Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SHFile *combined, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -170,6 +211,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				SHRegisterRuntime rega = c.registers.ptr[k];
 
 				U64 l = 0;
+
 				for(; l < bi.registers.length; ++l) {
 
 					//nameHash-equal is necessary (not sufficient) for name-equal, so this only skips guaranteed mismatches
@@ -215,14 +257,10 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 				if (arrayA.length == 1 || arrayB.length == 1) {
 
-					U64 dimsA = arrayA.length ? arrayA.ptr[0] : 0;
-					U64 dimsB = arrayB.length ? arrayB.ptr[0] : 0;
+					//Saturating, so a product that overflows can't wrap into an equal one.
 
-					for(U64 m = 1; m < arrayA.length; ++m)
-						dimsA *= arrayA.ptr[m];
-
-					for(U64 m = 1; m < arrayB.length; ++m)
-						dimsB *= arrayB.ptr[m];
+					U64 dimsA = arrayA.length ? SHRegister_arrayCount(&arrayA) : 0;
+					U64 dimsB = arrayB.length ? SHRegister_arrayCount(&arrayB) : 0;
 
 					if(dimsA != dimsB)
 						retError(clean, Error_invalidState(
@@ -262,40 +300,12 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				//SamplerComparisonState DXIL = Sampler SPIRV
 				//CombinedSampler SPIRV = (no flag) DXIL
 				//So we need to promote these two to eachother to unify them.
+				//CBV (DXIL) = push constants (SPIRV) is the third, which promotes to push constants.
+				//Every other pair has to be the same type: texture dimension, SRV vs UAV and buffer kind all matter.
 
-				Bool isCmpSamplerA = rega.reg.registerType == EGfxRegisterType_SamplerComparisonState;
-				Bool isSamplerA = rega.reg.registerType == EGfxRegisterType_Sampler || isCmpSamplerA;
-
-				Bool isCmpSamplerB = regb.reg.registerType == EGfxRegisterType_SamplerComparisonState;
-				Bool isSamplerB = regb.reg.registerType == EGfxRegisterType_Sampler || isCmpSamplerB;
-
-				if(
-					regb.reg.registerType == EGfxRegisterType_PushConstants &&
-					rega.reg.registerType == EGfxRegisterType_ConstantBuffer
-				)
-					merged.registerType = EGfxRegisterType_PushConstants;
-
-				if(merged.registerType == EGfxRegisterType_PushConstants && (
-					regb.reg.registerType != EGfxRegisterType_PushConstants &&
-					rega.reg.registerType != EGfxRegisterType_ConstantBuffer
-				))
-					retError(clean, Error_invalidState(
-						0, "SHFile_combine() has mismatching register types (expected push constants)"
-					));
-
-				if(
-					(isSamplerA != isSamplerB) &&
-					merged.registerType != EGfxRegisterType_PushConstants &&
-					(rega.reg.registerType &~ EGfxRegisterType_IsCombinedSampler) !=
-					(regb.reg.registerType &~ EGfxRegisterType_IsCombinedSampler)
-				)
-					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"));
-
-				if(isCmpSamplerB)
-					merged.registerType = EGfxRegisterType_SamplerComparisonState;
-
-				else merged.registerType =
-					rega.reg.registerType | (regb.reg.registerType & EGfxRegisterType_IsCombinedSampler);
+				gotoIfError3(clean, SHFile_combineRegisterType(
+					rega.reg.registerType, regb.reg.registerType, &merged.registerType, e_rr
+				));
 
 				//Merge bindings
 
@@ -320,7 +330,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 				//Merge input attachment
 
-				if(
+				if (
 					rega.reg.registerType == EGfxRegisterType_SubpassInput &&
 					rega.reg.inputAttachmentId != regb.reg.inputAttachmentId
 				)
@@ -398,6 +408,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 				SHRegisterRuntime regb = bi.registers.ptr[k];
 
 				U64 l = 0;
+
 				for(; l < ai.registers.length; ++l) {
 
 					//nameHash-equal is necessary (not sufficient) for name-equal, so this only skips guaranteed mismatches
@@ -489,6 +500,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 		if (j == b->entries.length) {
 			entry.binaryIds = ListU16_createRefFromList(a->entries.ptr[i].binaryIds);
+			entry.semanticNames = ListCharString_createRefFromList(entry.semanticNames);        //Owned by a, not the entry
 			gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr));
 			continue;
 		}
@@ -506,7 +518,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 		U8 waveSizeTypei = entryi.waveSize >> 4 ? 2 : (entryi.waveSize ? 1 : 0);
 		U8 waveSizeTypej = entryj.waveSize >> 4 ? 2 : (entryj.waveSize ? 1 : 0);
 
-		if(
+		if (
 			(entryi.waveSize && entryj.waveSize && entryi.waveSize != entryj.waveSize) ||
 			(waveSizeTypei && waveSizeTypej && waveSizeTypei != waveSizeTypej)
 		)
@@ -573,6 +585,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			tmpBins.ptrNonConst[k] = remappedBinaries.ptr[binaryIdsb.ptr[k]];
 
 		entry.binaryIds = tmpBins;
+		entry.semanticNames = ListCharString_createRefFromList(entry.semanticNames);        //Owned by b, not the entry
 		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr));
 		tmpBins = (ListU16) { 0 };
 	}

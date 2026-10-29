@@ -68,7 +68,7 @@ typedef struct SHHeader {
 
 	U32 compilerVersion;
 
-	U32 hash;                   //CRC32C of contents starting at SHHeader::version
+	U32 hash;                   //CRC32C of contents starting at SHHeader::uniqueDefines
 
 	U32 sourceHash;             //CRC32C of source(s), for determining if it's dirty
 

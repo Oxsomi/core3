@@ -48,11 +48,11 @@
 //Nothing to do for uthread, unlike wthread.
 void Thread_freeExt(Thread *thread) { (void) thread; }
 
-U64 Thread_getId() { return (U64)(uintptr_t)pthread_self(); }
+U64 Thread_getId() { return (U64) (uintptr_t) pthread_self(); }
 
 Bool Thread_sleep(Ns ns) {
 
-	struct timespec remaining, request = { (time_t)(ns / SECOND), (long)(ns % SECOND) };
+	struct timespec remaining, request = { (time_t)(ns / SECOND), (long) (ns % SECOND) };
 
 	while(true) {
 
@@ -62,8 +62,10 @@ Bool Thread_sleep(Ns ns) {
 		if(!ret)
 			return true;
 
-		if(errno == EINTR)
+		if(errno == EINTR) {
+			request = remaining;
 			continue;
+		}
 
 		return false;
 	}
@@ -102,10 +104,15 @@ Bool Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void
 
 	thr->callback = callback;
 	thr->objectHandle = objectHandle;
+	thr->nativeHandle = NULL;
 
-	if (pthread_create((pthread_t*)&thr->nativeHandle, NULL, ThreadFunc, thr)) {
-		Thread_free(alloc, thread);
-		retError(clean, Error_stderr(errno, "Thread_wait() couldn't create thread"));
+	const int result = pthread_create((pthread_t*) &thr->nativeHandle, NULL, ThreadFunc, thr);
+
+	if(result) {
+
+		alloc->free(alloc->ptr, buf);
+		*thread = NULL;
+		retError(clean, Error_platformError(0, (U64) result, "Thread_create() couldn't create thread"));
 	}
 
 clean:
@@ -119,8 +126,15 @@ Bool Thread_wait(Thread *thread, Error *e_rr) {
 	if(!thread)
 		retError(clean, Error_nullPointer(0, "Thread_wait()::thread is required"));
 
-	if(pthread_join((pthread_t)thread->nativeHandle, NULL))
-		retError(clean, Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread"));
+	if(!thread->nativeHandle)
+		goto clean;
+
+	const int result = pthread_join((pthread_t) thread->nativeHandle, NULL);
+
+	if(result)
+		retError(clean, Error_platformError(0, (U64) result, "Thread_wait() couldn't wait on thread"));
+
+	thread->nativeHandle = NULL;
 
 clean:
 	return s_uccess;
@@ -130,18 +144,17 @@ Bool Thread_setPriority(EThreadPriority priority, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(priority >= EThreadPriority_Count)
+	if((U32) priority >= EThreadPriority_Count)
 		retError(clean, Error_invalidEnum(0, (U64) priority, EThreadPriority_Count, "Thread_setPriority()::priority"));
 
 	#if _PLATFORM_TYPE == PLATFORM_LINUX || _PLATFORM_TYPE == PLATFORM_ANDROID
 
-		//Per thread through the thread's own id. Raising a priority needs CAP_SYS_NICE, so a refusal of that is left
-		// as it was rather than reported.
+		//Raising priority, including restoring Normal after Background, can require CAP_SYS_NICE.
 
 		const int nice = priority == EThreadPriority_Critical ? -5 : priority == EThreadPriority_Background ? 10 : 0;
 		const pid_t tid = (pid_t) syscall(SYS_gettid);
 
-		if(setpriority(PRIO_PROCESS, (id_t) tid, nice) && errno != EPERM && errno != EACCES)
+		if(setpriority(PRIO_PROCESS, (id_t) tid, nice))
 			retError(clean, Error_platformError(0, (U64) errno, "Thread_setPriority() setpriority failed"));
 
 	#elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
@@ -172,6 +185,9 @@ Bool Thread_setAffinity(const U32 *cpus, U64 count, Error *e_rr) {
 
 	#if _PLATFORM_TYPE == PLATFORM_LINUX || _PLATFORM_TYPE == PLATFORM_ANDROID
 
+		static _Thread_local cpu_set_t originalSet;
+		static _Thread_local Bool hasOriginalSet;
+
 		cpu_set_t set;
 		CPU_ZERO(&set);
 
@@ -183,13 +199,26 @@ Bool Thread_setAffinity(const U32 *cpus, U64 count, Error *e_rr) {
 			CPU_SET(cpus[i], &set);
 		}
 
-		//No cpus lifts the restriction: every cpu the process may use
+		//Keep the inherited restriction so clearing our selection restores it, including process CPU limits.
 
-		if(!count && sched_getaffinity(0, sizeof(set), &set))
+		if(!count && !hasOriginalSet)
+			goto clean;
+
+		cpu_set_t previousSet;
+
+		if(count && !hasOriginalSet && sched_getaffinity(0, sizeof(previousSet), &previousSet))
 			retError(clean, Error_platformError(0, (U64) errno, "Thread_setAffinity() sched_getaffinity failed"));
+
+		if(!count)
+			set = originalSet;
 
 		if(sched_setaffinity((pid_t) syscall(SYS_gettid), sizeof(set), &set))
 			retError(clean, Error_platformError(0, (U64) errno, "Thread_setAffinity() sched_setaffinity failed"));
+
+		if(count && !hasOriginalSet)
+			originalSet = previousSet;
+
+		hasOriginalSet = count != 0;
 
 	#endif
 

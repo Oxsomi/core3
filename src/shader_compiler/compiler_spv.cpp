@@ -70,7 +70,7 @@ Bool Compiler_spvToolsCallback(
 						
 				.lineId = (U16) position.line,
 
-				.typeLineId = (U8)(
+				.typeLineId = (U8) (
 					((level == SPV_MSG_WARNING ? ECompileErrorType_Warn : ECompileErrorType_Error) << 7) |
 					(position.line >> 16)
 				),
@@ -169,7 +169,7 @@ extern "C" Bool Compiler_processSPIRV(
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
 
-	if(
+	if (
 		binLen < 0x8 ||
 		(binLen & 3) ||
 		Buffer_readU32(*result, 0, NULL, NULL) != 0x07230203
@@ -184,7 +184,7 @@ extern "C" Bool Compiler_processSPIRV(
 	//Fix alignment up front: the caller's Buffer can be a ref at any address, and the optimizer below indexes
 	// it as U32s.
 
-	if ((U64)resultPtr & 3) {
+	if ((U64) resultPtr & 3) {
 		copied.resize(binLen >> 2);
 		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
 		resultPtr = copied.data();
@@ -359,7 +359,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 				//Get struct size
 
-				if(
+				if (
 					!var.type_description ||
 					var.type_description->op != SpvOpTypeStruct ||
 					var.type_description->type_flags != (SPV_REFLECT_TYPE_FLAG_STRUCT | SPV_REFLECT_TYPE_FLAG_EXTERNAL_BLOCK)
@@ -420,7 +420,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 		if (isGfx) {
 
-			for (U64 j = 0; j < (U64)entrypoint.input_variable_count + entrypoint.output_variable_count; ++j) {
+			for (U64 j = 0; j < (U64) entrypoint.input_variable_count + entrypoint.output_variable_count; ++j) {
 
 				Bool isOutput = j >= entrypoint.input_variable_count;
 
@@ -504,7 +504,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 				U64 semanticName = 0;
 
-				if(
+				if (
 					!CharString_equalsCStringInsensitive(&realSemanticName, "SV_TARGET") &&
 					!CharString_equalsCStringInsensitive(&realSemanticName, "TEXCOORD")
 				) {
@@ -539,7 +539,7 @@ extern "C" Bool Compiler_processSPIRV(
 				// both cases: (name << 4) | index for a named semantic, plain index for a default one.
 				//SV_TARGET0 still encodes as 0, so nothing single target changes.
 
-				semanticValue |= (U8)(semanticName << 4);
+				semanticValue |= (U8) (semanticName << 4);
 				inputSemantic[slot] = (U8) semanticValue;
 			}
 		}
@@ -601,7 +601,7 @@ extern "C" Bool Compiler_processSPIRV(
 				registers,
 				ESHBufferType_PushConstants,
 				false,
-				(U8)(1 << EGfxBinaryType_SPIRV),
+				(U8) (1 << EGfxBinaryType_SPIRV),
 				&bufferName,
 				NULL,
 				&sbFile,
@@ -681,7 +681,7 @@ extern "C" Bool Compiler_processSPIRV(
 		optimizerOptions.set_preserve_bindings(keepRegisters);
 		optimizerOptions.set_run_validator(!isUnsafe);
 
-		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp, optimizerOptions))
+		if(!optimizer.Run((const U32*) resultPtr, binLen >> 2, &tmp, optimizerOptions))
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
 	}
 
@@ -694,7 +694,7 @@ extern "C" Bool Compiler_processSPIRV(
 	spvMod = SpvReflectShaderModule{};
 
 	Buffer_free(result, alloc);
-	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result, e_rr));
+	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64) tmp.size() << 2), alloc, result, e_rr));
 
 clean:
 
@@ -727,20 +727,20 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, const Allocator *alloc, Ch
 
 	std::vector<U32> copied;
 
-	if(
+	if (
 		binLen < 0x8 ||
 		(binLen & 3) ||
 		Buffer_readU32(buf, 0, NULL, NULL) != 0x07230203
 	)
 		retError(clean, Error_invalidState(0, "Compiler_createDisassembly() SPIRV is invalid"));
 
-	if ((U64)resultPtr & 3) {        //Fix alignment
+	if ((U64) resultPtr & 3) {        //Fix alignment
 		copied.resize(binLen >> 2);
 		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
 		resultPtr = copied.data();
 	}
 
-	if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
+	if(!tool.Disassemble((const U32*) resultPtr, binLen >> 2, &str, opts))
 		retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"));
 
 	gotoIfError3(clean, CharString_createCopy(
@@ -796,7 +796,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 	SpvReflectShaderModule spvMod{};
 	Bool alreadyContainsLib = false;    //Avoid re-inserting uniqueEntrypoint of lib
 	
-	if(
+	if (
 		binLen < 0x8 ||
 		(binLen & 3) ||
 		Buffer_readU32(binary, 0, NULL, NULL) != 0x07230203
@@ -943,7 +943,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	//Fix alignment the same way Compiler_processSPIRV and Compiler_disassembleSPIRV do: the input is a caller
 	// Buffer that can be a ref at any address, and the optimizer below reads it as U32s.
 
-	if ((U64)(const void*)linkedBinPtr & 3) {
+	if ((U64) (const void*) linkedBinPtr & 3) {
 		alignedBin.resize(linkedBinSiz);
 		Buffer_memcpy(Buffer_createRef(alignedBin.data(), linkedBinSiz << 2), inputs->ptr[0]);
 		linkedBinPtr = alignedBin.data();

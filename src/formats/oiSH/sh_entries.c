@@ -82,6 +82,7 @@ Bool SHEntry_isValidWaveSize(U16 waveSize) {
 
 	for(U8 i = 0; i < ESHWaveSize_Count; ++i) {
 		const U8 code = (U8) ((waveSize >> (i << 2)) & 0xF);
+
 		if(code && (code < 3 || code > 8))
 			return false;
 	}
@@ -143,6 +144,18 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			0, entry->binaryIds.length, U8_MAX, "SHFile_addEntrypoint() binaryIds.length out of bounds"
 		));
 
+	//SHFile_read refuses an entry that references a binary of another entrypoint, so it can't be written either.
+
+	for(U64 i = 0; i < entry->binaryIds.length; ++i) {
+
+		const SHBinaryInfo *binary = &shFile->binaries.ptr[entry->binaryIds.ptr[i]];
+
+		if(!binary->hasShaderAnnotation && !CharString_equalsStringSensitive(&binary->identifier.entrypoint, &entry->name))
+			retError(clean, Error_invalidState(
+				0, "SHFile_addEntrypoint()::entry->binaryIds[i] is a binary of a different entrypoint"
+			));
+	}
+
 	if(!SHEntry_isValidWaveSize(entry->waveSize))
 		retError(clean, Error_invalidParameter(
 			1, 0, "SHFile_addEntrypoint() waveSize is neither a required size nor a range (SHEntry_isValidWaveSize)"
@@ -172,7 +185,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	hasGraphics |= !hasCompute && !hasRt;
 
 	U16 groupXYZ = entry->groupX | entry->groupY | entry->groupZ;
-	U64 totalGroup = (U64)entry->groupX * entry->groupY * entry->groupZ;
+	U64 totalGroup = (U64) entry->groupX * entry->groupY * entry->groupZ;
 
 	if(!hasCompute && groupXYZ)
 		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() can't have group size for non compute"));
@@ -192,7 +205,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 	//Intersection shaders are deliberately excluded: they carry only a hit attribute (the struct passed to ReportHit),
 	//never an incoming ray payload, so a non-zero payloadSize is invalid for them (checked by the else-if below).
 
-	if(
+	if (
 		entry->stage == EGfxPipelineStage_ClosestHitExt ||
 		entry->stage == EGfxPipelineStage_AnyHitExt ||
 		entry->stage == EGfxPipelineStage_MissExt ||
@@ -220,7 +233,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 
 	if(!entry->intersectionSize) {
 
-		if(
+		if (
 			entry->stage == EGfxPipelineStage_ClosestHitExt ||
 			entry->stage == EGfxPipelineStage_AnyHitExt
 		)
@@ -229,7 +242,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			));
 	}
 
-	else if(
+	else if (
 		entry->stage != EGfxPipelineStage_IntersectionExt &&
 		entry->stage != EGfxPipelineStage_ClosestHitExt &&
 		entry->stage != EGfxPipelineStage_AnyHitExt
@@ -268,7 +281,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			if(vin)
 				inputs = i + 1;
 
-			if(
+			if (
 				(vout && (
 					ESBType_getPrimitive(vout) == ESBPrimitive_Invalid ||
 					ESBType_getStride(vout) == ESBStride_X8 ||
@@ -331,6 +344,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 				0, "SHFile_addEntrypoint() semantic defined, but input at slot was empty"
 			));
 
+		if(!entry->inputs[i])
+			continue;
+
 		if((input >> 4) > entry->uniqueInputSemantics)
 			retError(clean, Error_outOfBounds(
 				0, input >> 4, entry->uniqueInputSemantics, "SHFile_addEntrypoint() semantic name out of bounds"
@@ -361,6 +377,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			retError(clean, Error_invalidState(
 				0, "SHFile_addEntrypoint() semantic defined, but output at slot was empty"
 			));
+
+		if(!entry->outputs[i])
+			continue;
 
 		if((output >> 4) > uniqueOutputSemantics)
 			retError(clean, Error_outOfBounds(
@@ -430,7 +449,7 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	//This depends only on stage + extensions, both of which are part of the SHBinaryIdentifier, so every
 	//entrypoint sharing a compile agrees on it - which is what makes it safe to skip a whole compile with.
 
-	U8 mask = (U8)((1 << EGfxBinaryType_Count) - 1);
+	U8 mask = (U8) ((1 << EGfxBinaryType_Count) - 1);
 
 	//Extension compile support: a feature restricts to one backend only when the other has no path at all,
 	// per the ESHExtension_NoDxilCompile / ESHExtension_NoSpirvCompile sets in sh_binaries.h.
@@ -444,10 +463,10 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 		used = (ESHExtension)(used | runtime->extensions.ptr[i].extensions);
 
 	if (used & ESHExtension_NoDxilCompile)
-		mask &= (U8)(1 << EGfxBinaryType_SPIRV);
+		mask &= (U8) (1 << EGfxBinaryType_SPIRV);
 
 	if (used & ESHExtension_NoSpirvCompile)
-		mask &= (U8)(1 << EGfxBinaryType_DXIL);
+		mask &= (U8) (1 << EGfxBinaryType_DXIL);
 
 	return mask;
 }
@@ -461,10 +480,10 @@ U8 SHEntryRuntime_getBinaryTypes(const SHEntryRuntime *runtime) {
 	// AND the backends the stage + extensions support.
 	//Applied per-entrypoint at link time.
 
-	U8 all = (U8)((1 << EGfxBinaryType_Count) - 1);
+	U8 all = (U8) ((1 << EGfxBinaryType_Count) - 1);
 	U8 annotated = runtime->binaryTypes ? runtime->binaryTypes : all;
 
-	return (U8)(annotated & SHEntryRuntime_getSupportedBinaryTypes(runtime));
+	return (U8) (annotated & SHEntryRuntime_getSupportedBinaryTypes(runtime));
 }
 
 U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime) {
@@ -472,7 +491,7 @@ U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime) {
 	if (!runtime)
 		return 0;
 
-	return (U32)(
+	return (U32) (
 		U64_max(runtime->shaderVersions.length, 1) *
 		U64_max(runtime->extensions.length, 1) *
 		U64_max(runtime->definesPerCompilation.length, 1) *
@@ -485,7 +504,7 @@ U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime) {
 	if (!runtime)
 		return 0;
 
-	return (U32)(
+	return (U32) (
 		U64_max(runtime->shaderVersions.length, 1) *
 		U64_max(runtime->extensions.length, 1) *
 		U64_max(runtime->definesPerCompilation.length, 1)
@@ -558,7 +577,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	};
 
 	//Only combine raytracing shaders, since they don't have different configs
-	if(
+	if (
 		runtime->entry.stage >= EGfxPipelineStage_RtStartExt &&
 		runtime->entry.stage <= EGfxPipelineStage_RtEndExt
 	)
@@ -574,7 +593,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 		if(runtime->definesPerCompilation.ptr[defineId])
 			gotoIfError3(clean, ListCharString_createRefConst(
 				runtime->defineNameValues.ptr + (defineOffset << 1),
-				(U64)runtime->definesPerCompilation.ptr[defineId] << 1,
+				(U64) runtime->definesPerCompilation.ptr[defineId] << 1,
 				&binaryIdentifier->defines,
 				e_rr
 			));
@@ -782,7 +801,7 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 
 	for(U64 i = 0; i < entry->shaderVersions.length; ++i) {
 		U16 shaderVersion = entry->shaderVersions.ptr[i];
-		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8) (shaderVersion >> 8), (U8) shaderVersion);
 	}
 
 	for (U64 i = 0; i < entry->extensions.length; ++i) {
@@ -813,8 +832,8 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 				alloc, ELogOptions_None,
 				CharString_length(value) ? "%s\"%.*s\" = \"%.*s\"" : "%s\"%.*s\"",
 				prev ? ", " : "",
-				(int)CharString_length(name), name.ptr,
-				(int)CharString_length(value), value.ptr
+				(int) CharString_length(name), name.ptr,
+				(int) CharString_length(value), value.ptr
 			);
 
 			prev = true;
@@ -851,10 +870,12 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 			);
 
 			CharString str = CharString_createNull();
+
 			if (!CharString_createFromETypeId(typeId, alloc, &str, NULL))
 				str = CharString_createRefCStrConst("unknown");
 
 			CharString val = CharString_createNull();
+
 			if (!SHValue_stringify(&value, typeId, alloc, &val, NULL))
 				val = CharString_createRefCStrConst("unknown");
 
@@ -863,8 +884,8 @@ void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc) {
 				"%s%s %.*s = %.*s",
 				prev ? ", " : "",
 				str.ptr,
-				(int)CharString_length(uniform.name), uniform.name.ptr,
-				(int)CharString_length(val), val.ptr
+				(int) CharString_length(uniform.name), uniform.name.ptr,
+				(int) CharString_length(val), val.ptr
 			);
 
 			prev = true;
@@ -893,6 +914,7 @@ void SHEntry_free(SHEntry *entry, const Allocator *alloc) {
 
 	CharString_free(&entry->name, alloc);
 	ListCharString_freeUnderlying(&entry->semanticNames, alloc);
+	ListU16_free(&entry->binaryIds, alloc);
 }
 
 void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, const Allocator *alloc) {

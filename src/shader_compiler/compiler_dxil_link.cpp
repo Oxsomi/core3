@@ -81,7 +81,7 @@ extern "C" Bool Compiler_disassembleDXIL(
 		.Encoding = 0
 	};
 
-	if(
+	if (
 		binLen <= 0x14 ||
 		Buffer_readU32(buf, 0, NULL, NULL) != C8x4('D', 'X', 'B', 'C')
 	)
@@ -211,10 +211,12 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 			retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain function"));
 
 		D3D12_FUNCTION_DESC funcDesc;
+
 		if(FAILED(hr = funcRefl->GetDesc(&funcDesc)))
 			retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain function desc"));
 
 		D3D12_FUNCTION_DESC1 funcDesc1;
+
 		if(FAILED(hr = funcRefl->GetDesc1(&funcDesc1)))
 			retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain function desc1"));
 
@@ -527,13 +529,13 @@ extern "C" Bool Compiler_linkDXIL(
 
 	if (isShaderAnnotation) {
 		gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "lib_%" PRIu8 "_%" PRIu8,
-			(U8)(shaderVersion >> 8), (U8)shaderVersion
+			(U8) (shaderVersion >> 8), (U8) shaderVersion
 		));
 	}
 
 	else gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "%s_%" PRIu8 "_%" PRIu8,
 		EGfxPipelineStage_getStagePrefix(stageType),
-		(U8)(shaderVersion >> 8), (U8)shaderVersion
+		(U8) (shaderVersion >> 8), (U8) shaderVersion
 	));
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -565,7 +567,7 @@ extern "C" Bool Compiler_linkDXIL(
 	}
 
 	if (SUCCEEDED(result->GetErrorBuffer(&errs)) && errs && errs->GetBufferSize()) {
-		CharString errStr = CharString_createRefSizedConst((const C8*)errs->GetBufferPointer(), errs->GetBufferSize(), false);
+		CharString errStr = CharString_createRefSizedConst((const C8*) errs->GetBufferPointer(), errs->GetBufferSize(), false);
 		gotoIfError3(clean, Compiler_parseErrors(errStr, alloc, errors, &hasErrors, e_rr));
 	}
 

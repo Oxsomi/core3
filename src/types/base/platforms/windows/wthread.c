@@ -42,13 +42,13 @@ U64 Thread_getId() { return GetCurrentThreadId(); }
 
 Bool Thread_sleep(Ns ns) {
 
-	const LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100) };
+	const LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64) ((U64_min(ns, I64_MAX) + 99) / 100) };
 	
 	const HANDLE timer = CreateWaitableTimerExW(
-			NULL,
-			NULL,
-			CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
-			TIMER_ALL_ACCESS
+		NULL,
+		NULL,
+		CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+		TIMER_ALL_ACCESS
 	);
 
 	if(!timer)
@@ -99,8 +99,12 @@ Bool Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void
 	thr->nativeHandle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadFunc, thr, 0, NULL);
 
 	if (!thr->nativeHandle) {
-		Thread_free(alloc, thread);
-		retError(clean, Error_platformError(0, GetLastError(), "Thread_wait() couldn't create thread"));
+
+		const DWORD result = GetLastError();
+
+		alloc->free(alloc->ptr, buf);
+		*thread = NULL;
+		retError(clean, Error_platformError(0, result, "Thread_create() couldn't create thread"));
 	}
 
 clean:
@@ -114,8 +118,19 @@ Bool Thread_wait(Thread *thread, Error *e_rr) {
 	if(!thread)
 		retError(clean, Error_nullPointer(0, "Thread_wait()::thread is required"));
 
-	if(WaitForSingleObject(thread->nativeHandle, U32_MAX) == WAIT_FAILED)
-		retError(clean, Error_timedOut(0, U32_MAX, "Thread_wait() couldn't wait on thread"));
+	if(!thread->nativeHandle)
+		goto clean;
+
+	if(GetThreadId(thread->nativeHandle) == GetCurrentThreadId())
+		retError(clean, Error_invalidOperation(0, "Thread_wait() cannot wait on the calling thread"));
+
+	if(WaitForSingleObject(thread->nativeHandle, INFINITE) != WAIT_OBJECT_0)
+		retError(clean, Error_platformError(0, GetLastError(), "Thread_wait() couldn't wait on thread"));
+
+	if(!CloseHandle(thread->nativeHandle))
+		retError(clean, Error_platformError(0, GetLastError(), "Thread_wait() couldn't close thread handle"));
+
+	thread->nativeHandle = NULL;
 
 clean:
 	return s_uccess;
@@ -125,7 +140,7 @@ Bool Thread_setPriority(EThreadPriority priority, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(priority >= EThreadPriority_Count)
+	if((U32) priority >= EThreadPriority_Count)
 		retError(clean, Error_invalidEnum(0, (U64) priority, EThreadPriority_Count, "Thread_setPriority()::priority"));
 
 	const int level =
@@ -135,11 +150,11 @@ Bool Thread_setPriority(EThreadPriority priority, Error *e_rr) {
 	if(!SetThreadPriority(GetCurrentThread(), level))
 		retError(clean, Error_platformError(0, GetLastError(), "Thread_setPriority() SetThreadPriority failed"));
 
-	//EcoQoS: a throttled thread is what the scheduler moves to efficiency cores, and slows on battery
+	//Normal inherits the process power policy; Background opts into EcoQoS and Critical opts out.
 
 	THREAD_POWER_THROTTLING_STATE state = (THREAD_POWER_THROTTLING_STATE) {
 		.Version = THREAD_POWER_THROTTLING_CURRENT_VERSION,
-		.ControlMask = THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+		.ControlMask = priority == EThreadPriority_Normal ? 0 : THREAD_POWER_THROTTLING_EXECUTION_SPEED,
 		.StateMask = priority == EThreadPriority_Background ? THREAD_POWER_THROTTLING_EXECUTION_SPEED : 0
 	};
 

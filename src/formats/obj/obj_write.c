@@ -62,23 +62,22 @@ Bool Obj_write(
 
 	for(U32 i = 0; i < info->vertexCount; ++i) {
 		gotoIfError3(clean, MeshInputReader_vertex(&reader, i, position, normal, uv, e_rr));
-		gotoIfError3(clean, MeshSink_writeFormatted(
-			&sink, e_rr, "v %.9g %.9g %.9g\n", (F64) position[0], (F64) position[1], (F64) position[2]
-		));
+		gotoIfError3(clean, MeshSink_writeFloats(&sink, e_rr, "v ", position, 3, 9));
+		gotoIfError3(clean, MeshSink_write(&sink, "\n", 1, e_rr));
 	}
 
 	if(writeUvs)
 		for(U32 i = 0; i < info->vertexCount; ++i) {
 			gotoIfError3(clean, MeshInputReader_vertex(&reader, i, position, normal, uv, e_rr));
-			gotoIfError3(clean, MeshSink_writeFormatted(&sink, e_rr, "vt %.9g %.9g\n", (F64) uv[0], (F64) uv[1]));
+			gotoIfError3(clean, MeshSink_writeFloats(&sink, e_rr, "vt ", uv, 2, 9));
+			gotoIfError3(clean, MeshSink_write(&sink, "\n", 1, e_rr));
 		}
 
 	if(writeNormals)
 		for(U32 i = 0; i < info->vertexCount; ++i) {
 			gotoIfError3(clean, MeshInputReader_vertex(&reader, i, position, normal, uv, e_rr));
-			gotoIfError3(clean, MeshSink_writeFormatted(
-				&sink, e_rr, "vn %.9g %.9g %.9g\n", (F64) normal[0], (F64) normal[1], (F64) normal[2]
-			));
+			gotoIfError3(clean, MeshSink_writeFloats(&sink, e_rr, "vn ", normal, 3, 9));
+			gotoIfError3(clean, MeshSink_write(&sink, "\n", 1, e_rr));
 		}
 
 	//OBJ corners are 1 based, and the three arrays are parallel, so a corner names one index in every slot it

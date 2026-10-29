@@ -52,9 +52,9 @@ static Bool makeFloatStream(Test *t, U32 w, U32 h, StreamRef **out, const RefPtr
 		for(U32 x = 0; x < w; ++x) {
 
 			const F32 px[4] = {
-				(F32)(x + 1) * 0.125f,
-				(F32)(y + 1) * 4.0f,
-				(F32)(x + y + 1) * 64.0f,
+				(F32) (x + 1) * 0.125f,
+				(F32) (y + 1) * 4.0f,
+				(F32) (x + y + 1) * 64.0f,
 				1
 			};
 
@@ -82,7 +82,8 @@ static Bool readWith(
 	if(!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, type, &sink, &t->err))
 		goto clean;
 
-	if(!(jobs ?
+	if (
+		!(jobs ?
 		HDR_readParallel(src, off, flags, info, (StreamRef*) sink, 0, jobs, t->alloc, &t->err) :
 		HDR_read(src, off, flags, info, (StreamRef*) sink, 0, t->alloc, &t->err)
 	))
@@ -229,7 +230,7 @@ void Test_HDRRoundTripBasic(Test *t) {
 		for(U32 y = 0; y < 8 && within; ++y)
 			for(U32 x = 0; x < 16 && within; ++x) {
 
-				const F32 want[3] = { (F32)(x + 1) * 0.125f, (F32)(y + 1) * 4.0f, (F32)(x + y + 1) * 64.0f };
+				const F32 want[3] = { (F32) (x + 1) * 0.125f, (F32) (y + 1) * 4.0f, (F32) (x + y + 1) * 64.0f };
 				const F32 brightest = F32_max(want[0], F32_max(want[1], want[2]));
 				const U64 at = ((U64) y * 16 + x) * 4;
 
@@ -286,7 +287,7 @@ void Test_HDRRoundTripKeepRGBEMatchesDecoded(Test *t) {
 		for(U64 i = 0; i < (U64) 16 * 8 && same; ++i) {
 
 			const U8 e = raw[i * 4 + 3];
-			const F32 scale = e ? F32_exp2((F32)((I32) e - (128 + 8))) : 0;
+			const F32 scale = e ? F32_exp2((F32) ((I32) e - (128 + 8))) : 0;
 
 			for(int c = 0; c < 3; ++c)
 				if(((F32) raw[i * 4 + c] + 0.5f) * scale != dec[i * 4 + c])
@@ -609,7 +610,7 @@ void Test_HDRRoundTripExposure(Test *t) {
 	HDRInfo info = { 0 };
 	U64 off = 0;
 
-	if(
+	if (
 		!makeFloatStream(t, 8, 4, &src, &type) || !makeSink(t, &exposed, &type) || !makeSink(t, &plain, &type) ||
 		!makeSink(t, &refused, &type)
 	) {

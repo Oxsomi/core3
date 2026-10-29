@@ -47,6 +47,7 @@ Bool buildDataFile(Test *t, DLFile *f, U64 count) {
 	for (U64 i = 0; i < count; ++i) {
 
 		Buffer buf = Buffer_createNull();
+
 		if (i && !Buffer_createEmptyBytes(i, t->alloc, &buf, &t->err)) {
 			DLFile_free(f, t->alloc);
 			return false;
@@ -361,7 +362,8 @@ void Test_DLRemoveEntryString(Test *t) {
 		DLEntryStream stream = { 0 };
 
 		Test_assert(t, "removeEntryString on Data file fails",
-			!DLFile_removeEntryString(&f, 0, &out, &stream, NULL));
+			!DLFile_removeEntryString(&f, 0, &out, &stream, NULL)
+		);
 
 	doneMismatch:
 		DLFile_free(&f, t->alloc);

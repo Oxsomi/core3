@@ -46,7 +46,7 @@ void Test_DLReserve(Test *t) {
 		//Fill all 8 reserved slots, none must fail due to allocation
 
 		for (U64 i = 0; i < 8; ++i) {
-			U8 val = (U8)i;
+			U8 val = (U8) i;
 			Buffer buf = Buffer_createNull();
 
 			if (!Buffer_createCopy(Buffer_createRefConst(&val, 1), t->alloc, &buf, &t->err)) {

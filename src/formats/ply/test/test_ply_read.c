@@ -367,37 +367,46 @@ void Test_plyValidation(Test *t) {
 	expectRefused(t, "noEnd", "ply\nformat ascii 1.0\nelement vertex 0\n");
 
 	expectRefused(t, "noVertex",
-		"ply\nformat ascii 1.0\nelement face 0\nproperty list uchar int vertex_indices\nend_header\n");
+		"ply\nformat ascii 1.0\nelement face 0\nproperty list uchar int vertex_indices\nend_header\n"
+	);
 
 	expectRefused(t, "noZ",
-		"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nend_header\n0 0\n");
+		"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nend_header\n0 0\n"
+	);
 
 	expectRefused(t, "faceBeforeVertex",
 		"ply\nformat ascii 1.0\nelement face 0\nproperty list uchar int vertex_indices\n"
-		"element vertex 0\nproperty float x\nproperty float y\nproperty float z\nend_header\n");
+		"element vertex 0\nproperty float x\nproperty float y\nproperty float z\nend_header\n"
+	);
 
 	expectRefused(t, "unknownType",
-		"ply\nformat ascii 1.0\nelement vertex 1\nproperty half x\nproperty float y\nproperty float z\nend_header\n0 0 0\n");
+		"ply\nformat ascii 1.0\nelement vertex 1\nproperty half x\nproperty float y\nproperty float z\nend_header\n0 0 0\n"
+	);
 
 	expectRefused(t, "floatListCount",
 		"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n"
-		"element face 1\nproperty list float int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n");
+		"element face 1\nproperty list float int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 2\n"
+	);
 
 	expectRefused(t, "indexPastEnd",
 		"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n"
-		"element face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 3\n");
+		"element face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n3 0 1 3\n"
+	);
 
 	expectRefused(t, "twoCorners",
 		"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n"
-		"element face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n2 0 1\n");
+		"element face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n1 0 0\n0 1 0\n2 0 1\n"
+	);
 
 	expectRefused(t, "truncatedBody",
 		"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n"
-		"end_header\n0 0 0\n1 0 0\n");
+		"end_header\n0 0 0\n1 0 0\n"
+	);
 
 	expectRefused(t, "shortLine",
 		"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\n"
-		"end_header\n0 0\n");
+		"end_header\n0 0\n"
+	);
 
 	//A binary body one byte short of what the header promises.
 
@@ -446,4 +455,126 @@ void Test_plyValidation(Test *t) {
 	);
 
 	MeshResult_free(t, &r);
+}
+
+//Counts and indices come out of a double, so a negative or malformed one must be refused by comparing the
+//double rather than by converting it. Properties that repeat a meaning, and elements with records but nothing
+// in them, are refused in the header before any body is read.
+
+void Test_plyHostile(Test *t) {
+
+	Test_setModule(t, "PLY/hostile");
+
+	#define PLY_CASE(name, rest, body) expectRefused( \
+		t, name, \
+		"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n" \
+		rest "end_header\n" body \
+	)
+
+	PLY_CASE(
+		"negativeCount",
+		"element face 1\nproperty list int int vertex_indices\n", "0 0 0\n1 0 0\n0 1 0\n-3 0 1 2\n"
+	);
+
+	PLY_CASE(
+		"negativeIndex",
+		"element face 1\nproperty list uchar int vertex_indices\n", "0 0 0\n1 0 0\n0 1 0\n3 0 1 -1\n"
+	);
+
+	PLY_CASE(
+		"negativeDroppedCount",
+		"element face 1\nproperty list uchar int vertex_indices\nproperty list int float uvs\n",
+		"0 0 0\n1 0 0\n0 1 0\n3 0 1 2 -2 0 0\n"
+	);
+
+	PLY_CASE("zeroPropertyElement", "element marker 100000\n", "0 0 0\n1 0 0\n0 1 0\n");
+
+	expectRefused(
+		t, "duplicateX",
+		"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\n"
+		"property float x\nend_header\n0 0 0 0\n"
+	);
+
+	expectRefused(
+		t, "duplicateNormal",
+		"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\n"
+		"property float nx\nproperty float nx\nend_header\n0 0 0 0 0\n"
+	);
+
+	//A ninth wanted property is past what the fast path plans for, so it is the one that used to differ
+
+	U8 bytes[512];
+	U64 len = 0;
+
+	{
+
+		const C8 *header =
+			"ply\nformat binary_little_endian 1.0\nelement vertex 1\n"
+			"property float x\nproperty float y\nproperty float z\n"
+			"property float nx\nproperty float ny\nproperty float nz\n"
+			"property float s\nproperty float t\nproperty float x\nend_header\n";
+
+		for(const C8 *c = header; *c; ++c)
+			bytes[len++] = (U8) *c;
+
+		for(U8 i = 0; i < 36; ++i)
+			bytes[len++] = 0;
+	}
+
+	MeshResult r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, NULL);
+
+	Test_assert(t, "ninthDuplicate", !r.ok);
+	MeshResult_free(t, &r);
+
+	//Records of no width carry no bytes, so a binary body cannot tell a count of them from a count of none; the
+	// element is refused rather than iterated
+
+	{
+
+		const C8 *header =
+			"ply\nformat binary_little_endian 1.0\nelement vertex 3\n"
+			"property float x\nproperty float y\nproperty float z\n"
+			"element marker 100000\nend_header\n";
+
+		len = 0;
+
+		for(const C8 *c = header; *c; ++c)
+			bytes[len++] = (U8) *c;
+
+		for(U8 i = 0; i < 36; ++i)
+			bytes[len++] = 0;
+	}
+
+	r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, NULL);
+	Test_assert(t, "zeroPropertyBinary", !r.ok);
+	MeshResult_free(t, &r);
+
+	//A binary count of 0xFF through a signed char is -1
+
+	{
+
+		const C8 *header =
+			"ply\nformat binary_little_endian 1.0\nelement vertex 3\n"
+			"property float x\nproperty float y\nproperty float z\n"
+			"element face 1\nproperty list char int vertex_indices\nend_header\n";
+
+		len = 0;
+
+		for(const C8 *c = header; *c; ++c)
+			bytes[len++] = (U8) *c;
+
+		for(U8 i = 0; i < 36; ++i)
+			bytes[len++] = 0;
+
+		bytes[len++] = 0xFF;
+
+		for(U8 i = 0; i < 12; ++i)
+			bytes[len++] = 0;
+	}
+
+	r = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, true, NULL);
+	Test_assert(t, "negativeBinaryCount", !r.ok);
+	MeshResult_free(t, &r);
+
+	#undef PLY_CASE
 }

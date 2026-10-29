@@ -88,12 +88,15 @@
 
 	void Error_captureStackTrace(void **stack, U8 stackSize, U8 skip) {
 
-		//Two entries minimum: the generation and a null terminator.
+		//Two entries minimum: the generation and one frame.
 
-		if(!stack || stackSize < 2)
+		if(!stack || !stackSize)
 			return;
 
 		stack[0] = NULL;
+
+		if(stackSize < 2)
+			return;
 
 		//Generation starts at 1 so it is never 0, which Error_webStackTraceIsLive treats as "no trace".
 		//Wraps on I64 overflow, which the mask handles because the cast is unsigned.
@@ -148,20 +151,23 @@
 			return;
 
 		void *tmpStack[128];
-		I32 count = backtrace(tmpStack, 128);
+		const I32 count = backtrace(tmpStack, 128);
 
-		if(count <= 0 || ((U64)stackSize + skipTmp + 1) > 128) {
+		const U64 first = (U64) skipTmp + 1;
+
+		if(count <= 0 || first >= (U32) count) {
 			stack[0] = NULL;
 			return;
 		}
 
-		U64 j = (U64)skipTmp + 1;
+		const U64 available = (U32) count - first;
+		const U64 written = available < stackSize ? available : stackSize;
 
-		for(U64 i = j; i < 128 && i < (U32) count && i < j + stackSize; ++i)
-			stack[i - j] = tmpStack[i];
+		for(U64 i = 0; i < written; ++i)
+			stack[i] = tmpStack[first + i];
 
-		if(count - j < stackSize)
-			stack[count - j] = NULL;
+		if(written < stackSize)
+			stack[written] = NULL;
 	}
 
 #endif

@@ -103,8 +103,8 @@ static inline ESBStride ESBType_getStride(ESBType type) {
 static inline U8 ESBType_getSize(ESBType type, Bool isPacked) {
 
 	U8 primitiveSize = 1 << ESBType_getStride(type);
-	U8 w = (U8)ESBType_getVector(type) + 1;
-	U8 h = (U8)ESBType_getMatrix(type) + 1;
+	U8 w = (U8) ESBType_getVector(type) + 1;
+	U8 h = (U8) ESBType_getMatrix(type) + 1;
 
 	if (isPacked)
 		return primitiveSize * w * h;

@@ -130,9 +130,9 @@ Bool I64_fromUInt(U64 v, I64 *res, Error *e_rr) {
 		retError(clean, Error_nullPointer(1, "I64_fromUInt()::res is required"));
 
 	if(v > (U64) I64_MAX)
-		retError(clean, Error_overflow(0, (U64)v, (U64) I64_MAX, "I64_fromUInt() overflow"));
+		retError(clean, Error_overflow(0, (U64) v, (U64) I64_MAX, "I64_fromUInt() overflow"));
 
-	*res = (I64)v;
+	*res = (I64) v;
 clean:
 	return s_uccess;
 }
@@ -160,7 +160,7 @@ Bool U64_fromInt(I64 v, U64 *res, Error *e_rr) {
 		retError(clean, Error_nullPointer(1, "U64_fromInt()::res is required"));
 
 	if(v < 0)
-		retError(clean, Error_underflow(0, (U64)v, 0, "U64_fromInt() underflow"));
+		retError(clean, Error_underflow(0, (U64) v, 0, "U64_fromInt() underflow"));
 
 	*res = (U64) v;
 clean:
@@ -169,7 +169,7 @@ clean:
 
 //Cast to floats
 
-#define CastToFloatType(T, PrevType)                                                        \
+#define CastToFloatType(T, PrevType, ...)                                                 \
 																							\
 	Bool s_uccess = true;                                                                   \
 																							\
@@ -181,6 +181,8 @@ clean:
 	if(!T##_isValid(r))                                                                     \
 		retError(clean, Error_NaN(0, "CastTo()::res truncated to NaN or Inf"));             \
 																							\
+	__VA_ARGS__                                                                           \
+																							\
 	if((PrevType)r != v)                                                                    \
 		retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));     \
 																							\
@@ -188,10 +190,18 @@ clean:
 clean:                                                                                      \
 	return s_uccess
 
-Bool F32_fromInt(I64 v, F32 *res, Error *e_rr) { CastToFloatType(F32, I64); }
-Bool F32_fromUInt(U64 v, F32 *res, Error *e_rr) { CastToFloatType(F32, U64); }
+//The integer maxima round up to 2^63 or 2^64 in both floating formats.
+//Reject that rounded result before converting back to an integer outside its representable range.
+
+#define CastIntegerToFloatType(T, PrevType) CastToFloatType(T, PrevType,                                                \
+	if(r >= (T) PrevType##_MAX)                                                                                         \
+		retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                               \
+)
+
+Bool F32_fromInt(I64 v, F32 *res, Error *e_rr) { CastIntegerToFloatType(F32, I64); }
+Bool F32_fromUInt(U64 v, F32 *res, Error *e_rr) { CastIntegerToFloatType(F32, U64); }
 Bool F32_fromDouble(F64 v, F32 *res, Error *e_rr) { CastToFloatType(F32, F64); }
 
-Bool F64_fromInt(I64 v, F64 *res, Error *e_rr) { CastToFloatType(F64, I64); }
-Bool F64_fromUInt(U64 v, F64 *res, Error *e_rr) { CastToFloatType(F64, U64); }
+Bool F64_fromInt(I64 v, F64 *res, Error *e_rr) { CastIntegerToFloatType(F64, I64); }
+Bool F64_fromUInt(U64 v, F64 *res, Error *e_rr) { CastIntegerToFloatType(F64, U64); }
 Bool F64_fromFloat(F32 v, F64 *res, Error *e_rr) { CastToFloatType(F64, F32); }

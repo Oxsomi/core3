@@ -249,7 +249,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 	Bool s_uccess = true;
 	const Allocator *alloc = instanceRef && *instanceRef ? GraphicsInstanceRef_ptr(*instanceRef)->alloc : NULL;
 
-	(void)info;
+	(void) info;
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
 	CharString locationD3D12 = CharString_createNull();
@@ -275,7 +275,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_create)(
 	if (instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 		if (SUCCEEDED(CreateDXGIFactory2(
-			DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory
+			DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**) &instanceExt->factory
 		)))
 			goto setup;
 
@@ -495,6 +495,7 @@ setup:
 		const AGSConfiguration config = (AGSConfiguration) { 0 };
 
 		AGSGPUInfo gpuInfo;
+
 		if(agsInitialize(AGS_CURRENT_VERSION, &config, &instanceExt->agsContext, &gpuInfo) == AGS_SUCCESS) {
 
 			instanceExt->flags |= EDxGraphicsInstanceFlags_HasAMDAgs;
@@ -872,7 +873,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			caps.waveSizeMax = (U8) opt1.WaveLaneCountMax;
 		}
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS3, &opt3, sizeof(opt3))) &&
 			(opt3.WriteBufferImmediateSupportFlags & D3D12_COMMAND_LIST_SUPPORT_FLAG_DIRECT)   //DRI records on the direct queue
 		)
@@ -896,13 +897,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(opt3.BarycentricsSupported)
 			caps.flags.features |= EGraphicsFeatures_Barycentrics;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS4, &opt4, sizeof(opt4))) &&
 			opt4.Native16BitShaderOpsSupported
 		)
 			caps.flags.dataTypes |= EGraphicsDataTypes_F16 | EGraphicsDataTypes_I16;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS5, &opt5, sizeof(opt5))) &&
 			opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0
 		) {
@@ -922,7 +923,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				// which is the bit apps care about when deciding to restructure a shader for SER.
 				D3D12_FEATURE_DATA_D3D12_OPTIONS22 opt22 = (D3D12_FEATURE_DATA_D3D12_OPTIONS22) { 0 };
 
-				if(
+				if (
 					SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 						device, D3D12_FEATURE_D3D12_OPTIONS22, &opt22, sizeof(opt22)
 					)) &&
@@ -932,13 +933,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			}
 		}
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS6, &opt6, sizeof(opt6))) &&
 			opt6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1
 		)
 			caps.flags.features |= EGraphicsFeatures_VariableRateShading;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS7, &opt7, sizeof(opt7))) &&
 			opt7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1
 		)
@@ -963,25 +964,25 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		else requireCap(opt12, EnhancedBarriersSupported);
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS14, &opt14, sizeof(opt14))) &&
 			opt14.WriteableMSAATexturesSupported
 		)
 			caps.flags.features |= EGraphicsFeatures_WriteMSTexture;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS16, &opt16, sizeof(opt16))) &&
 			opt16.GPUUploadHeapSupported
 		)
 			caps.flags.featuresExt |= EDxGraphicsFeatures_ReBAR;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS17, &opt17, sizeof(opt17))) &&
 			opt17.ManualWriteTrackingResourceSupported
 		)
 			caps.flags.featuresExt |= EDxGraphicsFeatures_ReportReBARWrites;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&
 			hwCopy.Supported
 		)
@@ -1074,7 +1075,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 				D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT linalg = (D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT) { 0 };
 
-				if(
+				if (
 					SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 						device, D3D12_FEATURE_LINEAR_ALGEBRA_SUPPORT, &linalg, sizeof(linalg)
 					)) &&
@@ -1095,7 +1096,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					Bool fp8Emulated = false;
 
-					if(
+					if (
 						DxGraphicsInstance_supportsCoopVecMatVec(
 							device, D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT8_E4M3FN, &fp8Emulated
 						) ||
@@ -1120,7 +1121,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					outer.ThreadOuterProductSupport.InputComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
 					outer.ThreadOuterProductSupport.ResultComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
 
-					if(
+					if (
 						SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 							device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
 							&outer, sizeof(outer)
@@ -1145,7 +1146,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					wave.WaveMatrixMultiply.Inputs.MatrixBComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
 					wave.WaveMatrixMultiply.Inputs.AccumulatorComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
 
-					if(
+					if (
 						SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 							device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
 							&wave, sizeof(wave)
@@ -1162,7 +1163,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			//Batched asynchronous command list submission (D3D12_FEATURE_ASYNC_COMMANDS, Agility 1.720-preview).
 			D3D12_FEATURE_DATA_ASYNC_COMMANDS asyncCmds = (D3D12_FEATURE_DATA_ASYNC_COMMANDS) { 0 };
 
-			if(
+			if (
 				SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 					device, D3D12_FEATURE_ASYNC_COMMANDS, &asyncCmds, sizeof(asyncCmds)
 				)) && asyncCmds.Supported
@@ -1209,7 +1210,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		BOOL allowTearing = FALSE;
 
-		if(
+		if (
 			SUCCEEDED(instanceExt->factory->lpVtbl->CheckFeatureSupport(
 				instanceExt->factory, DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing)
 			)) &&
@@ -1318,7 +1319,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		U32 mask1 = D3D12_FORMAT_SUPPORT1_RENDER_TARGET | D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE | D3D12_FORMAT_SUPPORT1_BLENDABLE;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			(format.Support1 & mask1) == mask1
 		)
@@ -1326,7 +1327,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		format.Format = DXGI_FORMAT_R32G32B32_SINT;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
@@ -1334,7 +1335,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		format.Format = DXGI_FORMAT_R32G32B32_UINT;
 
-		if(
+		if (
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
@@ -1349,7 +1350,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			.SampleCount = 8
 		};
 
-		if(
+		if (
 			FAILED(device->lpVtbl->CheckFeatureSupport(
 				device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa)
 			)) ||
@@ -1359,7 +1360,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT;
 
-		if(
+		if (
 			(caps.flags.dataTypes & EGraphicsDataTypes_RGB32f) && (
 				FAILED(device->lpVtbl->CheckFeatureSupport(
 					device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa)
@@ -1444,7 +1445,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAPS clusterCaps =
 						NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAP_NONE;
 
-					if(
+					if (
 						NvAPI_D3D12_GetRaytracingCaps(
 							(ID3D12Device*)device,
 							NVAPI_D3D12_RAYTRACING_CAPS_TYPE_CLUSTER_OPERATIONS,
@@ -1457,7 +1458,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAPS ptlasCaps =
 						NVAPI_D3D12_RAYTRACING_PARTITIONED_TLAS_CAP_NONE;
 
-					if(
+					if (
 						NvAPI_D3D12_GetRaytracingCaps(
 							(ID3D12Device*)device,
 							NVAPI_D3D12_RAYTRACING_CAPS_TYPE_PARTITIONED_TLAS,
@@ -1469,7 +1470,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					//Indirect AS builds are inherent to the mega geometry APIs, so either implies the bit
 
-					if(
+					if (
 						info->capabilities.flags.features2 &
 						(EGraphicsFeatures2_RayClusterAS | EGraphicsFeatures2_RayPartitionedTLAS)
 					)
@@ -1485,7 +1486,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			if(SUCCEEDED(adapters.ptr[i]->lpVtbl->CheckInterfaceSupport(adapters.ptr[i], &IID_IDXGIDevice, &version))) {
 
-				U16 maj = (U16)(version.QuadPart >> 16);
+				U16 maj = (U16) (version.QuadPart >> 16);
 
 				U64 k = 0;
 				U64 digits = maj < 10 ? 1 : (maj < 100 ? 2 : (maj < 1000 ? 3 : (maj < 10000 ? 4 : 5)));
@@ -1495,7 +1496,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 					maj /= 10;
 				}
 
-				U16 min = (U16)version.QuadPart;
+				U16 min = (U16) version.QuadPart;
 				info->driverInfo[digits] = '.';
 				k += digits + 1;
 				digits = min < 10 ? 1 : (min < 100 ? 2 : (min < 1000 ? 3 : (min < 10000 ? 4 : 5)));

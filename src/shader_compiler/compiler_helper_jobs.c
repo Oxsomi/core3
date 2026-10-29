@@ -536,7 +536,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		if(job->enableLogging)
 			Log_errorLn(
 				alloc, "Compile failed for file \"%.*s\"",
-				(int)CharString_length(inputPath), inputPath.ptr
+				(int) CharString_length(inputPath), inputPath.ptr
 			);
 
 		retError(clean, Error_invalidState(2, "Compiler_compileCombinationJob() compile failed"));
@@ -868,7 +868,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 		if(job->enableLogging)
 			Log_errorLn(
 				alloc, "Precompile failed for file \"%.*s\"",
-				(int)CharString_length(inputPath), inputPath.ptr
+				(int) CharString_length(inputPath), inputPath.ptr
 			);
 
 		retError(clean, Error_invalidState(0, "Compiler_compileShaderFile() precompile failed"));
@@ -883,7 +883,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 			if(job->enableLogging)
 				Log_errorLn(
 					alloc, "Precompile couldn't find entrypoints for file \"%.*s\"",
-					(int)CharString_length(inputPath), inputPath.ptr
+					(int) CharString_length(inputPath), inputPath.ptr
 				);
 
 			retError(clean, Error_invalidState(1, "Compiler_compileShaderFile() couldn't find entrypoints"));

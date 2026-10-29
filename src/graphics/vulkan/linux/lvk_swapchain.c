@@ -60,7 +60,8 @@ Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR
 
 	gotoIfError3(clean, checkVkError(
 		((PFN_vkCreateWaylandSurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
-	, e_rr));
+	, e_rr
+	));
 
 clean:
 	return s_uccess;

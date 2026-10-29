@@ -32,7 +32,7 @@ void PipelineLayout_free(void *layoutGeneric, const Allocator *alloc) {
 
 	PipelineLayout *layout = (PipelineLayout*) layoutGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	PipelineLayout_freeExt(layout, alloc);
 
@@ -102,7 +102,8 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 	//Validate push constants
 
-	if(info->pushConstants.count && (
+	if (
+		info->pushConstants.count && (
 		!info->pushConstants.constantBufferSize ||
 		info->pushConstants.constantBufferSize > 128 ||
 		(info->pushConstants.constantBufferSize & 3)
@@ -156,7 +157,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 				1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushDescriptors doesn't have the right flags"
 			));
 
-		dwords += (U32)(layout->info.bindings.length << 1);
+		dwords += (U32) (layout->info.bindings.length << 1);
 
 		//Check overlap with push constant and push descriptors
 
@@ -201,7 +202,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 				1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.bindings doesn't have the right flags"
 			));
 
-		dwords += (U32)layout->anySampler + layout->anyResource;
+		dwords += (U32) layout->anySampler + layout->anyResource;
 
 		//Check overlap with bindings, push constants and push descriptors
 

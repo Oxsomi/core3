@@ -92,18 +92,21 @@ F32x4x4 F32x4x4_view(F32x3 position, F32x3 rotation) {
 //Reverse Z: near lands on depth 1, far on 0, matching the engine's Gt compare and clear-to-0
 
 F32x4x4 F32x4x4_perspective(F32 fovYRad, F32 aspect, F32 near, F32 far) {
+
 	F32 scale = 1 / tan(fovYRad / 2);
+
 	return F32x4x4(
 		scale / aspect,		0,		0,								0,
 		0,					scale,	0,								0,
 		0,					0,		-near / (far - near),			1,
-		0,					0,		near * far / (far - near),		0
+		0,					0,		isinf(far) ? near : near * (far / (far - near)),		0
 	);
 }
 
 F32x4x4 F32x4x4_construct(F32x3 x, F32x3 y, F32x3 z, F32x3 eye) {
-	//The last row is the eye projected onto the basis. It used to read dot(x, eye.x), which is a dot
-	//against the scalar eye.x broadcast to a float3 - never what was meant. Matches types/math/mat.h.
+
+	//The last row is the eye projected onto the basis, matching types/math/mat.h.
+
 	return F32x4x4(
 		x.x,				y.x,				z.x,				0,
 		x.y,				y.y,				z.y,				0,
@@ -113,18 +116,28 @@ F32x4x4 F32x4x4_construct(F32x3 x, F32x3 y, F32x3 z, F32x3 eye) {
 }
 
 F32x4x4 F32x4x4_lookDir(F32x3 eye, F32x3 direction, F32x3 up) {
-	F32x3 z = normalize(direction);
-	//cross(up, z), not cross(z, up): the latter is the mirrored basis, and disagreed with lookAt below
-	F32x3 x = normalize(cross(normalize(up), z));
-	F32x3 y = cross(z, x);
+
+	const F32 directionLength = length(direction);
+	const F32x3 z = directionLength > 0 ? direction / directionLength : F32x3(0, 0, 1);
+	const F32 upLength = length(up);
+
+	if(upLength > 0)
+		up /= upLength;
+
+	F32x3 x = cross(up, z);
+
+	if(dot(x, x) < 1e-12)
+		x = cross(abs(z.y) < 0.9 ? F32x3(0, 1, 0) : F32x3(1, 0, 0), z);
+
+	x /= length(x);
+
+	const F32x3 y = cross(z, x);
+
 	return F32x4x4_construct(x, y, z, eye);
 }
 
 F32x4x4 F32x4x4_lookAt(F32x3 eye, F32x3 center, F32x3 up) {
-	F32x3 z = normalize(center - eye);
-	F32x3 x = normalize(cross(normalize(up), z));
-	F32x3 y = cross(z, x);
-	return F32x4x4_construct(x, y, z, eye);
+	return F32x4x4_lookDir(eye, center - eye, up);
 }
 
 //Included here rather than at the top: its constants' position decides the generated SPIR-V ids, which the compiler
@@ -134,6 +147,7 @@ F32x4x4 F32x4x4_lookAt(F32x3 eye, F32x3 center, F32x3 up) {
 
 //Inverting a 4x4 matrix
 //https://gist.github.com/mattatz/86fff4b32d198d0928d0fa4ff32cf6fa
+//Unchecked F32 cofactor inverse; requires nonsingular input and representable intermediate and inverse values.
 
 F32x4x4 inverseSlow(F32x4x4 m) {
 

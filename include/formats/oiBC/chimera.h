@@ -62,7 +62,7 @@ typedef struct Chimera {
 		U8 ub[8];
 	};
 
-	//Such as &3 = comparison 0: eq, 1: lt, 2: gt
+	//&3 = ECompareResult: 0: lt, 1: eq, 2: gt, 3: unordered
 	//constantOffset = (>>2) & 0xFF
 	//constantCursor (>>10) & 3
 	U64 effects;
@@ -70,6 +70,9 @@ typedef struct Chimera {
 	U64 padding;
 
 } Chimera;
+
+//Sets the compare register from the sign of v: Lt below 0, Gt above, Eq at 0 and Unordered for a NaN
+void Chimera_cmp(Chimera *chim, const F32 v);
 
 void Chimera_stepFidiA(Chimera *chim, const EFidiA op);
 ECompareResult Chimera_getLastCompare(const Chimera *chim);

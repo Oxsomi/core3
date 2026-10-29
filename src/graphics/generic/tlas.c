@@ -37,7 +37,7 @@ TListImpl(TLASInstance);
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result) {
 
-	if(
+	if (
 		!result ||
 		TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory) ||
 		tlas->base.asConstructionType != ETLASConstructionType_Instances ||
@@ -55,6 +55,7 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 		return false;
 
 	TLASInstanceData *data = NULL;
+
 	if(!TLAS_getInstanceDataCpuInternal(tlas, i, &data))
 		return false;
 
@@ -86,7 +87,7 @@ Bool TLASRef_setInstancesExt(TLASRef *tlasRef, const ListTLASInstance *instances
 			0, "TLASRef_setInstancesExt() requires a TLAS that was built with AllowUpdate"
 		));
 
-	if(
+	if (
 		tlas->base.asConstructionType != ETLASConstructionType_Instances ||
 		TLAS_hasFlag(tlas, ETLASFlag_UseDeviceMemory)
 	)
@@ -152,7 +153,7 @@ void TLAS_free(void *tlasGeneric, const Allocator *alloc) {
 
 	TLAS *tlas = (TLAS*) tlasGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	//Out of the device's registry BEFORE anything else: an entry left behind is a dangling pointer the
 	// next compaction would read. Under the device lock, and taken before this TLAS's own lock rather than
@@ -302,6 +303,7 @@ Bool GraphicsDeviceRef_createTLAS(
 			for (U64 i = 0; i < length; ++i) {
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };
+
 				if(!TLAS_getInstanceDataCpu(tlas, i, &dat))
 					retError(clean, Error_invalidOperation(
 						11, "GraphicsDeviceRef_createTLAS() can't get instance data cpu"

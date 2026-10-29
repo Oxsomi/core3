@@ -24,6 +24,7 @@
 #include "types/container/texture_format.h"
 #include "types/math/type_cast.h"
 #include "types/base/mathf.h"
+#include "types/base/constants.h"
 
 void Test_textureFormat(Test *t) {
 
@@ -79,6 +80,28 @@ void Test_textureFormat(Test *t) {
 	U64 expectedSize = (((8 + alignX - 1) / alignX) * ((8 + alignY - 1) / alignY) * ETextureFormat_getBits(fmt) + 7) >> 3;
 	Test_assert(t, "BC7 size 8x8x1",      ETextureFormat_getSize(fmt, 8, 8, 1) == expectedSize);
 
+	//Extents inside the bound ETextureFormat_getSize documents, up to its edge
+
+	Test_setModule(t, "ETextureFormat/getSize range");
+
+	{
+
+		const ETextureFormat rgba8 = ETextureFormat_RGBA8, rgba32f = ETextureFormat_RGBA32f;
+
+		//2^28 x 2^28 texels is just under the bound: 2^63 bits, 2^60 bytes
+		Test_assert(t, "2^60 fits",             ETextureFormat_getSize(rgba32f, 1U << 28, 1U << 28, 1) == (U64) 1 << 60);
+		Test_assert(t, "wide row fits",         ETextureFormat_getSize(rgba8, U32_MAX, 1, 1) == (U64) U32_MAX * 4);
+
+		//Block rounding happens in 64 bits, so a width near U32_MAX still rounds up to whole blocks
+		Test_assert(t, "BC7 width 2^32 - 1",    ETextureFormat_getSize(fmt, U32_MAX, 4, 1) == (U64) 1073741824 * 16);
+		Test_assert(t, "BC7 width 2^32 - 3",    ETextureFormat_getSize(fmt, U32_MAX - 2, 4, 1) == (U64) 1073741824 * 16);
+		Test_assert(t, "BC7 width 2^32 - 4",    ETextureFormat_getSize(fmt, U32_MAX - 3, 4, 1) == (U64) 1073741823 * 16);
+
+		Test_assert(t, "zero width",            ETextureFormat_getSize(rgba8, 0, 1U << 20, 1) == 0);
+		Test_assert(t, "zero height",           ETextureFormat_getSize(rgba8, 1U << 20, 0, 1) == 0);
+		Test_assert(t, "zero layers",           ETextureFormat_getSize(rgba8, 1U << 20, 1U << 20, 0) == 0);
+	}
+
 	//Compressed ASTC format
 
 	Test_setModule(t, "ETextureFormat/ASTC_8x8_sRGB");
@@ -111,7 +134,7 @@ void Test_textureFormat(Test *t) {
 		EDepthStencilFormat_D32S8X24Ext
 	};
 
-	for (U32 i = 0; i < (U32)(sizeof(depthFormats) / sizeof(depthFormats[0])); ++i) {
+	for (U32 i = 0; i < (U32) (sizeof(depthFormats) / sizeof(depthFormats[0])); ++i) {
 		const EDepthStencilFormat f  = depthFormats[i];
 		dx = EDepthStencilFormat_toDXFormat(f);
 		Test_assert(t, "Depth DXFormat mapping",         dx != 0);
@@ -332,4 +355,27 @@ void Test_textureCodec(Test *t) {
 	Test_textureCodecNormalized(t);
 	Test_textureCodecRange(t);
 	Test_textureCodecComponents(t);
+
+	const F32 rgba[] = { 1, 0.5f, 0.25f, 1 };
+	const ETextureFormatId formats[] = { ETextureFormatId_BGRA8, ETextureFormatId_BGR10A2, ETextureFormatId_RGB9E5 };
+	const U32 expected[] = { 0xFFFF8040, 0xD00803FF, 0x81010100 };
+
+	for(U8 i = 0; i < 3; ++i) {
+
+		U32 packed = 0;
+		F32 decoded[4] = { 0 };
+
+		ETextureFormatId_encode((U8*) &packed, formats[i], rgba, 4);
+
+		Test_assert(t, "special codec wire representation", packed == expected[i]);
+
+		ETextureFormatId_decode((const U8*) &expected[i], formats[i], decoded, 4);
+
+		Test_assert(
+			t, "special codec RGB", F32_abs(decoded[0] - 1) < 0.005f &&
+			F32_abs(decoded[1] - 0.5f) < 0.005f && F32_abs(decoded[2] - 0.25f) < 0.005f
+		);
+
+		Test_assert(t, "special codec alpha", decoded[3] == (i == 2 ? 0 : 1));
+	}
 }

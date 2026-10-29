@@ -82,14 +82,14 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const
 	if (CharString_length(*name) >= 128)
 		retError(clean, Error_invalidParameter(1, 0, "SBFile_addStruct()::*name must be leq 128 bytes"));
 
-	if (sbFile->structs.length >= (U16)(U16_MAX - 1))
+	if (sbFile->structs.length >= (U16) (U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->structs.length, U16_MAX, "SBFile_addStruct()::sbFile->structs.length limited to 65535"
 		));
 
 	U64 hash = sbFile->hash;
-	hash = Buffer_fnv1a64Single(sbStruct.stride | ((U64)CharString_length(*name) << 32), hash);
-	sbFile->hash = Buffer_fnv1a64(CharString_bufferConst(*name), hash);
+
+	SBStruct_applyHash(&hash, sbStruct, *name, sbFile->structs.length);
 
 	gotoIfError3(clean, ListSBStruct_pushBack(&sbFile->structs, sbStruct, alloc, e_rr));
 	pushedStruct = true;
@@ -105,6 +105,8 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const
 		e_rr
 	));
 
+	sbFile->hash = hash;        //Only once nothing can fail anymore
+
 clean:
 
 	CharString_free(&tmp, alloc);
@@ -115,28 +117,99 @@ clean:
 	return s_uccess;
 }
 
-void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name) {
+void SBStruct_applyHash(U64 *hashRes, SBStruct strct, CharString name, U64 index) {
+
+	U64 hash = Buffer_fnv1a64Single(index << 2, Buffer_fnv1a64Offset);
+
+	hash = Buffer_fnv1a64Single(strct.stride | ((U64) CharString_length(name) << 32), hash);
+	*hashRes ^= Buffer_fnv1a64(CharString_bufferConst(name), hash);
+}
+
+void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name, U64 index) {
 
 	const void *structId = &var.structId;                  //Interpreted as a U64 and U32
 	const U32 *structIdU32 = (const U32*) structId;        //[] = (structId, arrayIndex), offset, (type, flags, parentId)
 
-	U64 hash = *hashRes;
-	hash = Buffer_fnv1a64Single(structIdU32[0] | ((U64)structIdU32[1] << 32), hash);
-	hash = Buffer_fnv1a64Single(structIdU32[2] | ((U64)CharString_length(name) << 32), hash);
-	*hashRes = Buffer_fnv1a64(CharString_bufferConst(name), hash);
+	U64 hash = Buffer_fnv1a64Single((index << 2) | 1, Buffer_fnv1a64Offset);
+
+	hash = Buffer_fnv1a64Single(structIdU32[0] | ((U64) structIdU32[1] << 32), hash);
+	hash = Buffer_fnv1a64Single(structIdU32[2] | ((U64) CharString_length(name) << 32), hash);
+	*hashRes ^= Buffer_fnv1a64(CharString_bufferConst(name), hash);
 }
 
-void ListU32_applyHash(U64 *hashRes, ListU32 array) {
+void ListU32_applyHash(U64 *hashRes, ListU32 array, U64 index) {
 
-	U64 hash = Buffer_fnv1a64Single(array.length, *hashRes);
+	U64 hash = Buffer_fnv1a64Single((index << 2) | 2, Buffer_fnv1a64Offset);
+
+	hash = Buffer_fnv1a64Single(array.length, hash);
 
 	for(U64 i = 0; i + 1 < array.length; i += 2)
-		hash = Buffer_fnv1a64Single(array.ptr[i] | ((U64)array.ptr[i + 1] << 32), hash);
+		hash = Buffer_fnv1a64Single(array.ptr[i] | ((U64) array.ptr[i + 1] << 32), hash);
 
 	if(array.length & 1)
 		hash = Buffer_fnv1a64Single(array.ptr[array.length - 1], hash);
 
-	*hashRes = hash;
+	*hashRes ^= hash;
+}
+
+static Bool SBFile_validateVariableExtent(
+	const SBFile *sbFile, U32 offset, U64 size, U16 parentId, Bool checkAncestors, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	U64 end = (U64) offset + size;
+
+	while(parentId != U16_MAX) {
+
+		if(parentId >= sbFile->vars.length)
+			retError(clean, Error_outOfBounds(
+				0, parentId, sbFile->vars.length, "SBFile_validateVariableExtent()::parentId is out of bounds"
+			));
+
+		SBVar parent = sbFile->vars.ptr[parentId];
+
+		if(parent.type)
+			retError(clean, Error_invalidState(0, "SBFile_validateVariableExtent()::parent isn't a struct"));
+
+		U32 stride = sbFile->structs.ptr[parent.structId].stride;
+
+		if(offset < parent.offset || end - parent.offset > stride)
+			retError(clean, Error_outOfBounds(
+				0, end, (U64) parent.offset + stride, "SBFile_validateVariableExtent()::member exceeds its parent"
+			));
+
+		//Struct metadata can include padding. Its occupied extent becomes known when primitive children are added.
+
+		if(!checkAncestors)
+			goto clean;
+
+		//A child's occupied bytes must fit in the last instance of every enclosing struct array too.
+
+		U64 count = parent.arrayDimOrArrayId;
+
+		if(count >> 15) {
+
+			ListU32 dimensions = sbFile->arrays.ptr[count & (U16) I16_MAX];
+
+			count = 1;
+
+			for(U64 i = 0; i < dimensions.length; ++i)
+				count *= dimensions.ptr[i];
+		}
+
+		if(count)
+			end += (count - 1) * stride;
+
+		parentId = parent.parentId;
+	}
+
+	if(end > sbFile->bufferSize)
+		retError(clean, Error_outOfBounds(
+			0, end, sbFile->bufferSize, "SBFile_validateVariableExtent()::member exceeds the buffer"
+		));
+
+clean:
+	return s_uccess;
 }
 
 Bool SBFile_addVariableAsType(
@@ -169,17 +242,18 @@ Bool SBFile_addVariableAsType(
 	if (arrays && !arrays->length)
 		retError(clean, Error_invalidState(0, "SBFile_addVariableAsType()::arrays should be NULL if the array is empty"));
 
-	if(ESBType_getPrimitive(type) == ESBPrimitive_Invalid || (type >> 8) || (
+	if (
+		ESBType_getPrimitive(type) == ESBPrimitive_Invalid || (type >> 8) || (
 		ESBType_getPrimitive(type) == ESBPrimitive_Float && ESBType_getStride(type) == ESBStride_X8
 	))
 		retError(clean, Error_invalidParameter(4, 0, "SBFile_addVariableAsType()::type is invalid"));
 
-	if (sbFile->vars.length >= (U16)(U16_MAX - 1))
+	if (sbFile->vars.length >= (U16) (U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->vars.length, U16_MAX, "SBFile_addVariableAsType()::sbFile->vars.length limited to 65535"
 		));
 
-	if (arrays && sbFile->arrays.length >= (U16)(U16_MAX - 1))
+	if (arrays && sbFile->arrays.length >= (U16) (U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->arrays.length, U16_MAX, "SBFile_addVariableAsType()::sbFile->arrays.length limited to 65535"
 		));
@@ -188,16 +262,16 @@ Bool SBFile_addVariableAsType(
 		retError(clean, Error_invalidParameter(1, 0, "SBFile_addVariableAsType()::*name must be leq 128 bytes"));
 
 	//Padding happens each element of an array that isn't 16-byte aligned.
-	//The last element doesn't have padding
+	//The last element doesn't have padding.
+	//Offsets and sizes are U64 from here on: a U32 offset plus a U32 size can't wrap there.
 
 	Bool isTightlyPacked = sbFile->flags & ESBSettingsFlags_IsTightlyPacked;
 	U32 size = ESBType_getSize(type, isTightlyPacked);
 	U8 typeSize = 1 << ESBType_getStride(type);
 
-	if (isTightlyPacked && ((offset + size - 1) >> 4) != (offset >> 4) && (offset & 15))
-		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset spans 16 bytes, not tightly packed"));
+	//Every type is self aligned, in both packings
 
-	if (!isTightlyPacked && (offset & (typeSize - 1)))
+	if (offset & (typeSize - 1))
 		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset doesn't follow req type alignment"));
 
 	U64 totalSizeBytes = isTightlyPacked ? size : ((size + 15) & ~15);
@@ -210,7 +284,7 @@ Bool SBFile_addVariableAsType(
 			if(!arrayi)
 				retError(clean, Error_invalidParameter(0, 0, "SBFile_addVariableAsType()::arrays[i] is 0"));
 
-			totalSizeBytes *= arrayi;
+			totalSizeBytes *= arrayi;        //totalSizeBytes <= U32_MAX before this, so U64 can't wrap
 
 			if (totalSizeBytes > U32_MAX)
 				retError(clean, Error_outOfBounds(
@@ -222,34 +296,14 @@ Bool SBFile_addVariableAsType(
 	if(!isTightlyPacked && (size & 15))
 		totalSizeBytes -= 16 - (size & 15);
 
-	size = (U32) totalSizeBytes;
+	U64 sizeU64 = totalSizeBytes;
 
-	//Validate parent
+	//CBuffer packing: something that spans a 16-byte boundary starts on one (this makes arrays start aligned too)
 
-	if (parentId == U16_MAX) {
-		if (offset + size > sbFile->bufferSize)
-			retError(clean, Error_outOfBounds(
-				0, offset, sbFile->bufferSize, "SBFile_addVariableAsType()::offset + size is out of bounds"
-			));
-	}
+	if (!isTightlyPacked && ((((U64) offset + sizeU64 - 1) >> 4) != ((U64) offset >> 4)) && (offset & 15))
+		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset spans 16 bytes, needs alignment"));
 
-	else {
-
-		if (parentId >= sbFile->vars.length)
-			retError(clean, Error_outOfBounds(
-				0, parentId, sbFile->vars.length, "SBFile_addVariableAsType()::parentId is out of bounds"
-			));
-
-		SBVar var = sbFile->vars.ptr[parentId];
-
-		if (var.type)
-			retError(clean, Error_invalidState(0, "SBFile_addVariableAsType()::sbFile->vars.ptr[parentId] isn't a struct"));
-
-		SBStruct strc = sbFile->structs.ptr[var.structId];
-
-		if (isTightlyPacked && (var.offset & (typeSize - 1)) && ((var.offset + strc.stride) & (typeSize - 1)))
-			retError(clean, Error_invalidState(0, "SBFile_addVariableAsType() parent struct doesn't respect alignment"));
-	}
+	gotoIfError3(clean, SBFile_validateVariableExtent(sbFile, offset, sizeU64, parentId, true, e_rr));
 
 	for(U64 i = 0; i < sbFile->vars.length; ++i) {
 
@@ -267,11 +321,11 @@ Bool SBFile_addVariableAsType(
 
 	if (arrays) {
 
-		Bool useInlineArray = arrays->length == 1 && arrays->ptr[0] <= (U16)I16_MAX;
+		Bool useInlineArray = arrays->length == 1 && arrays->ptr[0] <= (U16) I16_MAX;
 
 		if (useInlineArray) {
 			reuseArray = true;
-			arrayDimOrArrayId = (U16)arrays->ptr[0];
+			arrayDimOrArrayId = (U16) arrays->ptr[0];
 			ListU32_free(arrays, alloc);
 		}
 
@@ -279,7 +333,7 @@ Bool SBFile_addVariableAsType(
 
 			for (U64 i = 0; i < sbFile->arrays.length; ++i)
 				if (ListU32_eq(*arrays, sbFile->arrays.ptr[i])) {
-					arrayDimOrArrayId = (U16)i | (U16)I16_MIN;
+					arrayDimOrArrayId = (U16) i | (U16) I16_MIN;
 					reuseArray = true;
 					ListU32_free(arrays, alloc);
 					break;
@@ -287,10 +341,10 @@ Bool SBFile_addVariableAsType(
 
 			if (!reuseArray) {
 
-				if(sbFile->arrays.length >= (U16)I16_MAX)
+				if(sbFile->arrays.length >= (U16) I16_MAX)
 					retError(clean, Error_invalidState(0, "SBFile_addVariableAsStruct() no arrays left"));
 
-				arrayDimOrArrayId = (U16)sbFile->arrays.length | (U16)I16_MIN;
+				arrayDimOrArrayId = (U16) sbFile->arrays.length | (U16) I16_MIN;
 			}
 		}
 	}
@@ -306,7 +360,9 @@ Bool SBFile_addVariableAsType(
 		.parentId = parentId
 	};
 
-	SBVar_applyHash(&sbFile->hash, var, *name);
+	U64 hash = sbFile->hash;        //Committed once nothing can fail anymore
+
+	SBVar_applyHash(&hash, var, *name, sbFile->vars.length);
 
 	gotoIfError3(clean, ListSBVar_pushBack(&sbFile->vars, var, alloc, e_rr));
 	pushedVar = true;
@@ -323,11 +379,14 @@ Bool SBFile_addVariableAsType(
 			gotoIfError3(clean, ListU32_createCopy(*arrays, alloc, &tmpArray, e_rr));
 
 		if (arrays) {
-			ListU32_applyHash(&sbFile->hash, tmpArray.ptr ? tmpArray : *arrays);
+
+			ListU32_applyHash(&hash, tmpArray.ptr ? tmpArray : *arrays, sbFile->arrays.length);
 			gotoIfError3(clean, ListListU32_pushBack(&sbFile->arrays, tmpArray.ptr ? tmpArray : *arrays, alloc, e_rr));
 			*arrays = tmpArray = (ListU32) { 0 };
 		}
 	}
+
+	sbFile->hash = hash;
 
 clean:
 
@@ -378,12 +437,12 @@ Bool SBFile_addVariableAsStruct(
 			0, structId, sbFile->structs.length, "SBFile_addVariableAsStruct()::structId out of bounds"
 		));
 
-	if(sbFile->vars.length >= (U16)(U16_MAX - 1))
+	if(sbFile->vars.length >= (U16) (U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->vars.length, U16_MAX, "SBFile_addVariableAsStruct()::vars.length limited to 65535"
 		));
 
-	if(arrays && sbFile->arrays.length >= (U16)(U16_MAX - 1))
+	if(arrays && sbFile->arrays.length >= (U16) (U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->arrays.length, U16_MAX, "SBFile_addVariableAsStruct()::arrays.length limited to 65535"
 		));
@@ -419,27 +478,13 @@ Bool SBFile_addVariableAsStruct(
 				));
 		}
 
-	//Validate parent
+	//Cbuffer array strides include row padding; the final instance may leave that padding unoccupied.
+	//Its exact occupied size is checked as children are appended, through every enclosing array instance.
 
-	if (parentId == U16_MAX) {
-		if(offset + size > sbFile->bufferSize)
-			retError(clean, Error_outOfBounds(
-				0, offset, sbFile->bufferSize, "SBFile_addVariableAsStruct()::offset + size is out of bounds"
-			));
-	}
+	if(arrays && !isTightlyPacked && !(strc.stride & 15))
+		size -= 15;
 
-	else {
-
-		if(parentId >= sbFile->vars.length)
-			retError(clean, Error_outOfBounds(
-				0, parentId, sbFile->vars.length, "SBFile_addVariableAsStruct()::parentId is out of bounds"
-			));
-
-		SBVar var = sbFile->vars.ptr[parentId];
-
-		if(var.type)
-			retError(clean, Error_invalidState(0, "SBFile_addVariableAsStruct()::sbFile->vars.ptr[parentId] isn't a struct"));
-	}
+	gotoIfError3(clean, SBFile_validateVariableExtent(sbFile, offset, size, parentId, false, e_rr));
 
 	for(U64 i = 0; i < sbFile->vars.length; ++i) {
 
@@ -457,11 +502,11 @@ Bool SBFile_addVariableAsStruct(
 
 	if (arrays) {
 
-		Bool useInlineArray = arrays->length == 1 && arrays->ptr[0] <= (U16)I16_MAX;
+		Bool useInlineArray = arrays->length == 1 && arrays->ptr[0] <= (U16) I16_MAX;
 
 		if (useInlineArray) {
 			reuseArray = true;
-			arrayDimOrArrayId = (U16)arrays->ptr[0];
+			arrayDimOrArrayId = (U16) arrays->ptr[0];
 			ListU32_free(arrays, alloc);
 		}
 
@@ -469,7 +514,7 @@ Bool SBFile_addVariableAsStruct(
 
 			for (U64 i = 0; i < sbFile->arrays.length; ++i)
 				if (ListU32_eq(*arrays, sbFile->arrays.ptr[i])) {
-					arrayDimOrArrayId = (U16)i | (U16)I16_MIN;
+					arrayDimOrArrayId = (U16) i | (U16) I16_MIN;
 					reuseArray = true;
 					ListU32_free(arrays, alloc);
 					break;
@@ -477,10 +522,10 @@ Bool SBFile_addVariableAsStruct(
 
 			if (!reuseArray) {
 
-				if(sbFile->arrays.length >= (U16)I16_MAX)
+				if(sbFile->arrays.length >= (U16) I16_MAX)
 					retError(clean, Error_invalidState(0, "SBFile_addVariableAsStruct() no arrays left"));
 
-				arrayDimOrArrayId = (U16)sbFile->arrays.length | (U16)I16_MIN;
+				arrayDimOrArrayId = (U16) sbFile->arrays.length | (U16) I16_MIN;
 			}
 		}
 	}
@@ -496,7 +541,9 @@ Bool SBFile_addVariableAsStruct(
 		.parentId = parentId
 	};
 
-	SBVar_applyHash(&sbFile->hash, var, *name);
+	U64 hash = sbFile->hash;        //Committed once nothing can fail anymore
+
+	SBVar_applyHash(&hash, var, *name, sbFile->vars.length);
 
 	gotoIfError3(clean, ListSBVar_pushBack(&sbFile->vars, var, alloc, e_rr));
 	pushedVar = true;
@@ -513,11 +560,14 @@ Bool SBFile_addVariableAsStruct(
 			gotoIfError3(clean, ListU32_createCopy(*arrays, alloc, &tmpArray, e_rr));
 
 		if (arrays) {
-			ListU32_applyHash(&sbFile->hash, tmpArray.ptr ? tmpArray : *arrays);
+
+			ListU32_applyHash(&hash, tmpArray.ptr ? tmpArray : *arrays, sbFile->arrays.length);
 			gotoIfError3(clean, ListListU32_pushBack(&sbFile->arrays, tmpArray.ptr ? tmpArray : *arrays, alloc, e_rr));
 			*arrays = tmpArray = (ListU32) { 0 };
 		}
 	}
+
+	sbFile->hash = hash;
 
 clean:
 

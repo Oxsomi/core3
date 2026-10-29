@@ -506,6 +506,13 @@ void Test_objValidation(Test *t) {
 	expectRefused(t, "shortPosition", "v 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
 	expectRefused(t, "badIndex", "v 0 0 0\nv 1 0 0\nv 0 1 0\nf a 2 3\n");
 
+	//No mantissa digit, or an exponent with none, is not a number
+
+	expectRefused(t, "exponentOnly", "v e5 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+	expectRefused(t, "bareDot", "v . 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+	expectRefused(t, "signedDot", "v -. 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+	expectRefused(t, "emptyExponent", "v 1e 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+
 	//The required sinks are required.
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);

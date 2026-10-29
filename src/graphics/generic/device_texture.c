@@ -87,7 +87,7 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 	//That upload always has staged data in cpuData, so require it here.
 	//Otherwise a not-backed texture with no data would be wrongly accepted.
 
-	if(
+	if (
 		!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked) &&
 		!(texture->isFirstFrame && !x && !y && !z && !w && !h && !l && Buffer_length(texture->cpuData))
 	)
@@ -213,7 +213,8 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 
 		if((texture->pendingChanges.length + 1) >> 32)
 			retError(clean, Error_outOfBounds(
-				0, U32_MAX, U32_MAX, "DeviceTextureRef_markDirty() texture pendingRanges is limited to U32_MAX"));
+				0, U32_MAX, U32_MAX, "DeviceTextureRef_markDirty() texture pendingRanges is limited to U32_MAX"
+			));
 
 		DevicePendingRange change = (DevicePendingRange) { .texture = {
 			.startRange = { x, y, z },
@@ -254,9 +255,9 @@ void DeviceTexture_free(void *textureGeneric, const Allocator *alloc) {
 
 	DeviceTexture *texture = (DeviceTexture*) textureGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
-	RefPtr *refPtr = (RefPtr*)((const U8*)texture - sizeof(RefPtr));
+	RefPtr *refPtr = (RefPtr*)((const U8*) texture - sizeof(RefPtr));
 
 	SpinLock_lock(&texture->lock, U64_MAX);
 
@@ -301,7 +302,7 @@ Bool GraphicsDeviceRef_createTexture(
 	const ETextureFormat format = ETextureFormatId_unpack[formatId];
 	const U64 texSize = ETextureFormat_getSize(format, width, height, length);
 
-	if(texSize == U64_MAX || !dat || Buffer_length(*dat) != texSize)
+	if(!dat || Buffer_length(*dat) != texSize)
 		retError(clean, Error_nullPointer(
 			3, "GraphicsDeviceRef_createTexture()::dat must match expected texture size and alignment"
 		));
@@ -453,7 +454,7 @@ static Bool DeviceTextureRef_queuePull(
 		.streamOffset = streamOffset,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
 			.startRange = { startX, startY, z },
-			.endRange = { endX, endY, (U16)(z + l) }
+			.endRange = { endX, endY, (U16) (z + l) }
 		} }
 	};
 

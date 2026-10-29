@@ -95,13 +95,16 @@ void Test_flpF16(Test *test) {
 		for (U64 j = 0; j < 2; ++j) {
 
 			F16 fh = halfs[i];
-			if (j) fh |= (U16)1 << 15;
+
+			if (j) fh |= (U16) 1 << 15;
 
 			U32 expF32 = expectedF32[i];
-			if (j) expF32 |= (U32)1 << 31;
+
+			if (j) expF32 |= (U32) 1 << 31;
 
 			U64 expF64 = expectedF64[i];
-			if (j) expF64 |= (U64)1 << 63;
+
+			if (j) expF64 |= (U64) 1 << 63;
 
 			Test_assert(test, "F16_castF32", U32_fromF32Bits(F16_castF32(fh)) == expF32);
 			Test_assert(test, "F16_castF64", U64_fromF64Bits(F16_castF64(fh)) == expF64);
@@ -208,9 +211,9 @@ void Test_flpF16(Test *test) {
 			F16 exp     = expectedF16[i];
 
 			if (j) {
-				f32bits |= (U32)1 << 31;
-				f64bits |= (U64)1 << 63;
-				exp     |= (U16)1 << 15;
+				f32bits |= (U32) 1 << 31;
+				f64bits |= (U64) 1 << 63;
+				exp     |= (U16) 1 << 15;
 			}
 
 			Test_assert(test, "F32_castF16", F32_castF16(F32_fromU32Bits(f32bits)) == exp);

@@ -46,7 +46,7 @@ static Bool buildDataFileWithCacheRefs(Test *t, DLFile *f, U64 count) {
 	for (U64 i = 0; i < count; ++i) {
 
 		for (U64 b = 0; b < i; ++b)
-			f->cache.ptrNonConst[offset + b] = (U8)i;
+			f->cache.ptrNonConst[offset + b] = (U8) i;
 
 		Buffer entry = i == 0
 			? Buffer_createNull()
@@ -78,11 +78,11 @@ static Bool buildStringFileWithCacheRefs(Test *t, DLFile *f, U64 count) {
 	for (U64 i = 0; i < count; ++i) {
 
 		for (U64 b = 0; b < i; ++b)
-			f->cache.ptrNonConst[offset + b] = (U8)('a' + (i % 26));
+			f->cache.ptrNonConst[offset + b] = (U8) ('a' + (i % 26));
 
 		CharString entry = i == 0
 			? CharString_createNull()
-			: CharString_createRefSizedConst((const C8*)f->cache.ptr + offset, i, false);
+			: CharString_createRefSizedConst((const C8*) f->cache.ptr + offset, i, false);
 
 		if (!DLFile_addEntryString(f, &entry, t->alloc, &t->err)) {
 			Test_assert(t, "DLFile_addEntryString cache ref", false);
@@ -171,8 +171,9 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 		for (U64 i = 1; i < 4; ++i) {
 			CharString str = copy.entryStrings.ptr[i];
 			Test_assert(t, "copy string ptr inside copy cache",
-				(const U8*)str.ptr >= copy.cache.ptr &&
-				(const U8*)str.ptr + CharString_length(str) <= copy.cache.ptr + Buffer_length(copy.cache));
+				(const U8*) str.ptr >= copy.cache.ptr &&
+				(const U8*) str.ptr + CharString_length(str) <= copy.cache.ptr + Buffer_length(copy.cache)
+			);
 		}
 
 	doneCacheStr:
@@ -255,7 +256,8 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 			Buffer buf = copy2.entryBuffers.ptr[i];
 			Test_assert(t, "copy2 ptr inside copy2 cache",
 				buf.ptr >= copy2.cache.ptr &&
-				buf.ptr + Buffer_length(buf) <= copy2.cache.ptr + Buffer_length(copy2.cache));
+				buf.ptr + Buffer_length(buf) <= copy2.cache.ptr + Buffer_length(copy2.cache)
+			);
 		}
 
 	doneCopyOfCopy:

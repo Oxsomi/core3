@@ -308,13 +308,13 @@ extern "C" void Test_graphicsBindfulPushRollover(oxc::c::Test *t, oxc::c::Graphi
 
 	CommandList commandList, emptyList;
 
-	if(
+	if (
 		!Test_assert(t, "listCreate", dev.createCommandList(64 * c::KIBI, 256, 16, commandList, true, e_rr)) ||
 		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
 	)
 		return;
 
-	if(
+	if (
 		!Test_assert(t, "beginEmpty", emptyList.begin(true, e_rr)) ||
 		!Test_assert(t, "endEmpty", emptyList.end(e_rr)) ||
 		!Test_assert(t, "begin", commandList.begin(true, e_rr))
@@ -326,7 +326,7 @@ extern "C" void Test_graphicsBindfulPushRollover(oxc::c::Test *t, oxc::c::Graphi
 	{
 		CommandScope scope = commandList.scope({}, 1, {}, e_rr);
 
-		if(
+		if (
 			!Test_assert(t, "scope", (c::Bool) scope) ||
 			!Test_assert(t, "bindPipeline", scope.setComputePipeline(pipeline, e_rr))
 		)
@@ -462,7 +462,7 @@ extern "C" void Test_graphicsBindfulPushTexture(oxc::c::Test *t, oxc::c::Graphic
 	CommandList commandList, emptyList;
 	DescriptorHeap pushHeap;
 
-	if(
+	if (
 		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
 		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
 	)

@@ -126,11 +126,9 @@ Bool SHFile_detectDuplicate(
 				GfxBinding dstBinding = reg.reg.bindings.arr[EGfxBinaryType_SPIRV];
 				GfxBinding srcBinding = bindings.arr[EGfxBinaryType_SPIRV];
 
-				if(
-					GfxBinding_overlaps(
-						dstBinding, reg.reg.registerType, regCount, srcBinding, type, count, EGfxBinaryType_SPIRV
-					)
-				)
+				if (GfxBinding_overlaps(
+					dstBinding, reg.reg.registerType, regCount, srcBinding, type, count, EGfxBinaryType_SPIRV
+				))
 					retError(clean, Error_invalidState(
 						0, "SHFile_detectDuplicate() SPIRV space & binding combo was already found in SHFile"
 					));
@@ -141,11 +139,9 @@ Bool SHFile_detectDuplicate(
 				GfxBinding dstBinding = reg.reg.bindings.arr[EGfxBinaryType_DXIL];
 				GfxBinding srcBinding = bindings.arr[EGfxBinaryType_DXIL];
 
-				if(
-					GfxBinding_overlaps(
-						dstBinding, reg.reg.registerType, regCount, srcBinding, type, count, EGfxBinaryType_DXIL
-					)
-				)
+				if (GfxBinding_overlaps(
+					dstBinding, reg.reg.registerType, regCount, srcBinding, type, count, EGfxBinaryType_DXIL
+				))
 					retError(clean, Error_invalidState(
 						0, "SHFile_detectDuplicate() DXIL register range overlaps one already in SHFile"
 					));
@@ -231,7 +227,7 @@ Bool SHRegisterRuntime_hash(
 	if (arrays) {
 
 		for (U64 i = 0; i + 1 < arrays->length; i += 2)
-			hash = Buffer_fnv1a64Single(arrays->ptr[i] | ((U64)arrays->ptr[i + 1] << 32), hash);
+			hash = Buffer_fnv1a64Single(arrays->ptr[i] | ((U64) arrays->ptr[i + 1] << 32), hash);
 
 		if (arrays->length & 1)
 			hash = Buffer_fnv1a64Single(arrays->ptr[arrays->length - 1], hash);
@@ -283,6 +279,7 @@ Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator 
 
 	res->reg = reg->reg;
 	res->nameHash = reg->nameHash;
+	res->hash = reg->hash;
 	gotoIfError3(clean, CharString_createCopy(reg->name, alloc, &res->name, e_rr));
 	gotoIfError3(clean, ListU32_createCopy(reg->arrays, alloc, &res->arrays, e_rr));
 	gotoIfError3(clean, SBFile_createCopy(&reg->shaderBuffer, alloc, &res->shaderBuffer, e_rr));
@@ -468,7 +465,7 @@ Bool ListSHRegisterRuntime_addSampler(
 		bindings,
 		(SHRegister) {
 			.bindings = bindings,
-			.registerType = (U8)(
+			.registerType = (U8) (
 				isSamplerComparisonState ? EGfxRegisterType_SamplerComparisonState : EGfxRegisterType_Sampler
 			),
 			.isUsedFlag = isUsedFlag
@@ -559,7 +556,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 		bindings,
 		(SHRegister) {
 			.bindings = bindings,
-			.registerType = (U8)(
+			.registerType = (U8) (
 				(EGfxRegisterType_BufferStart + registerType) |
 				(isWrite ? EGfxRegisterType_IsWrite : 0)
 			),
@@ -602,7 +599,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 			5, textureFormatId, ETextureFormatId_Count, "ListSHRegisterRuntime_addRWTexture()::textureFormatId out of bounds"
 		));
 
-	if(
+	if (
 		(textureFormatPrimitive & EGfxTexturePrimitive_TypeMask) > EGfxTexturePrimitive_Count ||
 		(textureFormatPrimitive & EGfxTexturePrimitive_Unused)
 	)
@@ -654,7 +651,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		// requiring agreement here catches a template/format mismatch that would read garbage at runtime
 		// (a plain float template makes DXC's SPIRV claim a 32-bit float image format).
 
-		if(
+		if (
 			textureFormatPrimitive != primitive &&
 			(textureFormatPrimitive & EGfxTexturePrimitive_TypeMask) != EGfxTexturePrimitive_Count
 		)
@@ -672,7 +669,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		bindings,
 		(SHRegister) {
 			.bindings = bindings,
-			.registerType = (U8)(
+			.registerType = (U8) (
 				(EGfxRegisterType_TextureStart + registerType) |
 				(isWrite ? EGfxRegisterType_IsWrite : 0) |
 				(isCombinedSampler ? EGfxRegisterType_IsCombinedSampler : 0) |
@@ -783,7 +780,7 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 		(SHRegister) {
 			.bindings = bindings,
 			.inputAttachmentId = inputAttachmentId,
-			.registerType = (U8)EGfxRegisterType_SubpassInput,
+			.registerType = (U8) EGfxRegisterType_SubpassInput,
 			.isUsedFlag = isUsedFlag
 		},
 		NULL,
@@ -1125,7 +1122,7 @@ void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool i
 		ELogOptions_None,
 		"%s%.*s",
 		indent,
-		(int)CharString_length(reg->name), reg->name.ptr
+		(int) CharString_length(reg->name), reg->name.ptr
 	);
 
 	for(U64 i = 0; i < reg->arrays.length; ++i)

@@ -171,7 +171,8 @@ static Bool VkCommandBufferState_bindDescriptors(
 	// globals), because on SPIR-V the space IS the set index; it used to be "the first slot past the
 	// bindings", which only agreed with the shader while the bindings happened to fill every lower set.
 
-	if (PipelineLayout_hasRuntimeGlobals(layout) && (
+	if (
+		PipelineLayout_hasRuntimeGlobals(layout) && (
 		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
 	)) {
 
@@ -216,7 +217,8 @@ static Bool VkCommandBufferState_bindDescriptors(
 	//Caller push descriptors go out here for the same reasons, with buffers, textures and acceleration
 	// structures each written using their native descriptor type.
 
-	if (temp->pushDescriptorCount && layout->info.pushDescriptors && (
+	if (
+		temp->pushDescriptorCount && layout->info.pushDescriptors && (
 		!temp->pushDescriptorsEmitted[bindPointId] || temp->lastPushDescLayout[bindPointId] != *layoutExt
 	)) {
 
@@ -397,7 +399,7 @@ static Bool VkCommandBufferState_bindDescriptors(
 
 	VkDescriptorTable *tableExt = DescriptorTable_ext((DescriptorTable*)table, Vk);
 
-	if(
+	if (
 		temp->lastBoundTable[bindPointId] == temp->boundDescriptorTable &&
 		temp->lastBoundLayout[bindPointId] == *layoutExt
 	)
@@ -441,24 +443,24 @@ static VkPipelineStageFlags2 VkPipelineStage_fromMask(U32 stageMask, const Graph
 		VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | geometry |
 		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Vertex))
+	if(stageMask & ((U32) 1 << EPipelineStage_Vertex))
 		stages |=
 			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
 			VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | tessEval;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Hull))
+	if(stageMask & ((U32) 1 << EPipelineStage_Hull))
 		stages |= VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | tessEval;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Domain))
+	if(stageMask & ((U32) 1 << EPipelineStage_Domain))
 		stages |= tessEval;
 
-	if(stageMask & ((U32)1 << EPipelineStage_GeometryExt))
+	if(stageMask & ((U32) 1 << EPipelineStage_GeometryExt))
 		stages |= geometry | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Pixel))
+	if(stageMask & ((U32) 1 << EPipelineStage_Pixel))
 		stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Compute))
+	if(stageMask & ((U32) 1 << EPipelineStage_Compute))
 		stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
 
 	if(stageMask & EPipelineStageMask_RtAny)
@@ -718,11 +720,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 							U32 src[2], dst[2], sizRot[2];
 						} cmd = {
 							.regionCount = 1,
-							.src = { image.srcX | ((U32)image.srcY << 16), image.srcZ },
-							.dst = { image.dstX | ((U32)image.dstY << 16), image.dstZ },
+							.src = { image.srcX | ((U32) image.srcY << 16), image.srcZ },
+							.dst = { image.dstX | ((U32) image.dstY << 16), image.dstZ },
 							.sizRot = {
-								image.width | ((U32)image.height << 16),
-								image.length | ((U32)image.outputRotation << 16)
+								image.width | ((U32) image.height << 16),
+								image.length | ((U32) image.outputRotation << 16)
 							}
 						};
 
@@ -1540,13 +1542,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			VkStridedDeviceAddressRegionKHR hit = (VkStridedDeviceAddressRegionKHR) {
 				.deviceAddress = getVkDeviceAddress((DeviceData) { .buffer = info.shaderBindingTable }),
-				.size = (U64)raytracingShaderAlignment * info.groups.length,
+				.size = (U64) raytracingShaderAlignment * info.groups.length,
 				.stride = raytracingShaderAlignment
 			};
 
 			VkStridedDeviceAddressRegionKHR miss = (VkStridedDeviceAddressRegionKHR) {
 				.deviceAddress = hit.deviceAddress + hit.size,
-				.size = (U64)raytracingShaderAlignment * info.missCount,
+				.size = (U64) raytracingShaderAlignment * info.missCount,
 				.stride = raytracingShaderAlignment
 			};
 
@@ -1558,7 +1560,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			VkStridedDeviceAddressRegionKHR callable = (VkStridedDeviceAddressRegionKHR) {
 				.deviceAddress = raygen.deviceAddress + raygen.size * info.raygenCount,
-				.size = (U64)raytracingShaderAlignment * info.callableCount,
+				.size = (U64) raytracingShaderAlignment * info.callableCount,
 				.stride = raytracingShaderAlignment
 			};
 
@@ -1687,7 +1689,8 @@ void VK_WRAP_FUNC(CommandList_process)(
 						graphicsQueueId,
 						0, 0,
 						&deviceExt->bufferTransitions,
-						&dependency, alloc, e_rr));
+						&dependency, alloc, e_rr
+					));
 
 					continue;
 				}
@@ -1899,7 +1902,8 @@ void VK_WRAP_FUNC(CommandList_process)(
 						&range,
 
 						&deviceExt->imageTransitions,
-						&dependency, alloc, e_rr));
+						&dependency, alloc, e_rr
+					));
 				}
 
 				else {
@@ -1915,7 +1919,8 @@ void VK_WRAP_FUNC(CommandList_process)(
 						0,                        //TODO: range
 						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
-						&dependency, alloc, e_rr));
+						&dependency, alloc, e_rr
+					));
 				}
 
 			nextTransition:

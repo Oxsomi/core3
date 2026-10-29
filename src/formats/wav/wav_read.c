@@ -42,29 +42,42 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 	if(!len)
 		len = stream->size - off;
 
-	if(off + len > stream->size)
+	if(len > stream->size - off)
 		retError(clean, Error_outOfBounds(1, off + len, stream->size, "WAV_read()::stream out of bounds"));
-		
+
+	//The file is [start, start + len); every offset below is absolute in the stream, so every bound is too
+
+	U64 end = off + len;
+
+	if(len < sizeof(RIFFHeader))
+		retError(clean, Error_outOfBounds(1, len, sizeof(RIFFHeader), "WAV_read()::stream is too small for a RIFF header"));
+
 	RIFFHeader header;
 	gotoIfError3(clean, StreamCursor_read(
 		&cursorRead, Buffer_createRef(&header, sizeof(header)), off, 0, 0, false, alloc, e_rr
 	));
 
-	off += sizeof(RIFFHeader);
-
 	if(header.section.magicNumber != RIFFHeader_magic)
 		retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid RIFF file"));
 
-	if(header.section.size + 8 > len)
-		retError(clean, Error_outOfBounds(1, header.section.size + 8, len, "WAV_read()::section out of bounds"));
+	if((U64) header.section.size + 8 > len)
+		retError(clean, Error_outOfBounds(1, (U64) header.section.size + 8, len, "WAV_read()::section out of bounds"));
 
 	if(header.magicNumberFile != RIFFWAVHeader_magic)
 		retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid wav file"));
 
+	//Bytes after the RIFF chunk aren't part of the file
+
+	end = off + (U64) header.section.size + 8;
+	off += sizeof(RIFFHeader);
+
 	Bool hasFmt = false;
 	Bool hasData = false;
 
-	while (off < len) {
+	while (off < end) {
+
+		if(end - off < sizeof(RIFFSection))
+			retError(clean, Error_outOfBounds(1, end - off, sizeof(RIFFSection), "WAV_read()::section header out of bounds"));
 
 		RIFFSection section;
 		gotoIfError3(clean, StreamCursor_read(
@@ -73,8 +86,8 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 
 		off += sizeof(section);
 
-		if(section.size > len - off)
-			retError(clean, Error_outOfBounds(1, section.size, len - off, "WAV_read()::section out of bounds"));
+		if(section.size > end - off)
+			retError(clean, Error_outOfBounds(1, section.size, end - off, "WAV_read()::section out of bounds"));
 
 		switch(section.magicNumber) {
 
@@ -83,38 +96,27 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 				if(hasFmt)
 					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one fmt section"));
 
+				//The chunk can be bigger than the header (cbSize, extensible); the rest is skipped by the chunk size
+
+				if(section.size < sizeof(RIFFFmtHeader) - sizeof(RIFFSection))
+					retError(clean, Error_invalidState(0, "WAV_read()::fmt section is too small"));
+
 				Buffer buf =  Buffer_createRef(&result->fmt, sizeof(result->fmt));
 				gotoIfError3(clean, StreamCursor_read(&cursorRead, buf, off - sizeof(section), 0, 0, false, alloc, e_rr));
 
-				switch (result->fmt.frequency) {
-
-					case   8000:
-					case  11025:
-					case  22050:
-					case  32000:
-					case  44100:
-					case  48000:
-					case  96000:
-					case 192000:
-						break;
-
-					default:
-						retError(clean, Error_invalidParameter(
-							0, 0, "WAV_read() wav file has invalid frequency; must be one of "
-							"8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz"
-						));
-				}
+				if(!result->fmt.frequency)
+					retError(clean, Error_invalidParameter(0, 0, "WAV_read() frequency must be positive"));
 
 				if(result->fmt.channels < 1 || result->fmt.channels > 2)
 					retError(clean, Error_invalidState(0, "WAV_read() channel count unsupported"));
 				
-				if((U64)result->fmt.frequency * result->fmt.bytesPerBlock != result->fmt.bytesPerSecond)
+				if((U64) result->fmt.frequency * result->fmt.bytesPerBlock != result->fmt.bytesPerSecond)
 					retError(clean, Error_invalidState(0, "WAV_read() bytesPerSecond is invalid"));
 				
-				if(((U64)result->fmt.channels * result->fmt.stride) >> 3 != result->fmt.bytesPerBlock)
+				if(((U64) result->fmt.channels * result->fmt.stride) >> 3 != result->fmt.bytesPerBlock)
 					retError(clean, Error_invalidState(0, "WAV_read() bytesPerBlock is invalid"));
 
-				if(
+				if (
 					result->fmt.stride != 8 && result->fmt.stride != 16 && result->fmt.stride != 24 &&        //Int
 					result->fmt.stride != 32 && result->fmt.stride != 64                                      //Float ext
 				)
@@ -122,7 +124,8 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 
 				if (result->fmt.format == 0xFFFE) {        //Extended
 					
-					if(result->fmt.section.size < sizeof(RIFFFmtHeader) + sizeof(RIFFFmtExtended))
+					//WAVEFORMATEX body (16) + cbSize and the 22 bytes it counts
+					if(section.size < sizeof(RIFFFmtHeader) - sizeof(RIFFSection) + 2 + 22)
 						retError(clean, Error_invalidState(0, "WAV_read() is of unexpected size"));
 
 					RIFFFmtExtended ext;
@@ -133,17 +136,11 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 					if (ext.cbSize != 22)
 						retError(clean, Error_invalidState(0, "WAV_read() ext is malformed"));
 
-					if (ext.bitsPerSample > result->fmt.stride)
-						retError(clean, Error_invalidState(0, "WAV_read() bitsPerSample is larger than stride"));
+					//The container (stride) decides how samples are read. Valid bits below the stride say the sample is
+					// MSB justified in it, which reads correctly as a full stride sample, so it is accepted as such.
 
-					if (
-						ext.bitsPerSample != 8 &&
-						ext.bitsPerSample != 16 &&
-						ext.bitsPerSample != 24 &&
-						ext.bitsPerSample != 32 &&
-						ext.bitsPerSample != 64
-					)
-						retError(clean, Error_invalidParameter(0, 0, "WAV_read() unsupported ext bits per sample"));
+					if (ext.bitsPerSample == 0 || ext.bitsPerSample > result->fmt.stride)
+						retError(clean, Error_invalidState(0, "WAV_read() bitsPerSample must be in [1, stride]"));
 
 					static const U8 expectedGuidSuffix[12] = {
 						0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71
@@ -177,6 +174,9 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 					}
 				}
 
+				if(result->fmt.format != ERIFFAudioFormat_PCM && result->fmt.format != ERIFFAudioFormat_IEEE754)
+					retError(clean, Error_invalidState(0, "WAV_read() format must be PCM or IEEE float"));
+
 				if(result->fmt.stride > 32 && result->fmt.format != ERIFFAudioFormat_IEEE754)
 					retError(clean, Error_invalidState(
 						0, "WAV_read() PCM format unsupported for 64 bit depth"
@@ -194,37 +194,17 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 			case RIFFDataHeader_magic:
 
 				if(hasData)
-					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one fmt section"));
+					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one data section"));
 
 				result->dataLength = section.size;
 				result->dataStart = off;
 				hasData = true;
 				break;
 
-			//Unsupported, but just handle it quietly
-
-			case RIFFInfoHeader_magic:
-			case RIFFCsetHeader_magic:
-			case RIFFPlstHeader_magic:
-			case RIFFCueHeader_magic:
-			case RIFFFactHeader_magic:
-			case RIFFCDifHeader_magic:
-			case RIFFListHeader_magic:
-			case RIFFId3Header_magic:
-			case RIFFBextHeader_magic:
-			case RIFFIxmlHeader_magic:
-			case RIFFXMPHeader_magic:
-			case RIFFCartHeader_magic:
-			case RIFFSmplHeader_magic:
-
-			case RIFFFllrHeader_magic:
-			case RIFFJunkHeader_magic:
-			case RIFFjunkHeader_magic:
-			case RIFFPadHeader_magic:
-				break;
+			//RIFF readers skip unknown chunks, including their alignment byte.
 
 			default:
-				retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid riff section"));
+				break;
 		}
 
 		off += (section.size + 1) & ~1;

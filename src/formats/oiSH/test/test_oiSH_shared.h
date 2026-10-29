@@ -151,6 +151,23 @@ void Test_SHFileRegisterBufferWriteFlagRejections(Test *t);
 void Test_SHFileRegisterConstantBufferSizeLimit(Test *t);
 void Test_SHFileRegisterHashCollisionKeepsBoth(Test *t);
 
+void Test_SHFileCombineSemanticsSingleSided(Test *t);
+void Test_SHFileWriteReportsFailingStream(Test *t);
+void Test_SHFileBoundedChecksum(Test *t);
+void Test_SHFileReadBinarySizeBoundedByStream(Test *t);
+void Test_SHFileStringTableLoadingLimits(Test *t);
+void Test_SHFileCombineRegisterTypeMismatch(Test *t);
+void Test_SHFileCombineRegisterTypePromotion(Test *t);
+void Test_SHFileCombineKeepsRegisterHash(Test *t);
+void Test_SHFileRoundTripIOGaps(Test *t);
+void Test_SHFileRoundTripUnboundArray(Test *t);
+void Test_SHFileWriteTooManyArrays(Test *t);
+void Test_SHFileAddBinaryArrayCountOverflow(Test *t);
+void Test_SHFileRoundTripUniformNamedLikeDefine(Test *t);
+void Test_SHFileAddEntryRejectsOtherEntrypointsBinary(Test *t);
+void Test_SHFileReadBadBinaryIdFreesEntry(Test *t);
+void Test_SHFileReadDefineValueBound(Test *t);
+
 static inline Bool Test_SHFileCreate(Test *t, SHFile *sh) {
 	return SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, 0xCAFE, t->alloc, sh, &t->err);
 }
@@ -182,7 +199,7 @@ static inline SHBinaryInfo makeBinaryInfo(
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = stage
 		},
-		.vendorMask          = (U16)((1u << ESHVendor_Count) - 1),
+		.vendorMask          = (U16) ((1u << ESHVendor_Count) - 1),
 		.hasShaderAnnotation = hasShaderAnnotation
 	};
 

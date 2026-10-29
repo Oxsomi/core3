@@ -148,10 +148,10 @@ static inline U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) 
 //Converting a pointer to an integer is implementation defined rather than undefined, which is what makes this
 // well defined where the plain pointer arithmetic it replaces was not.
 
-static inline U64 AllocationBuffer_addr(const U8 *ptr) { return (U64)(const void*) ptr; }
+static inline U64 AllocationBuffer_addr(const U8 *ptr) { return (U64) (const void*) ptr; }
 
 static inline const U8 *AllocationBuffer_at(const U8 *base, U64 offset) {
-	return (const U8*)(AllocationBuffer_addr(base) + offset);
+	return (const U8*) (AllocationBuffer_addr(base) + offset);
 }
 
 static inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
@@ -174,7 +174,7 @@ Bool AllocationBuffer_allocateAndFillBlock(
 ) {
 
 	Bool s_uccess = true;
-	const U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
+	const U8 *defaultPtr = (U8*) 1, *ptr = defaultPtr;
 
 	if(!allocate || !allocate->allocationBuffer || !allocate->allocationBuffer->buffer.ptr || !result)
 		retError(clean, Error_nullPointer(
@@ -184,8 +184,8 @@ Bool AllocationBuffer_allocateAndFillBlock(
 	
 	gotoIfError3(clean, AllocationBuffer_allocateBlock(allocate, Buffer_length(data), &ptr, e_rr));
 
-	Buffer_memcpy(Buffer_createRef((U8*)ptr, Buffer_length(data)), data);
-	*result = (U8*)ptr;
+	Buffer_memcpy(Buffer_createRef((U8*) ptr, Buffer_length(data)), data);
+	*result = (U8*) ptr;
 
 clean:
 
@@ -210,14 +210,14 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 	const Bool isNonLinearResource = allocate->isNonLinearResource;
 	const Allocator *alloc = allocate->alloc;
 
-	if(*result && *result != (const U8*)1)
+	if(*result && *result != (const U8*) 1)
 		retError(clean, Error_invalidParameter(
 			4, 0, "AllocationBuffer_allocateBlock()::*result is not NULL, might indicate memleak"
 		));
 
 	if(((size >> 48) || (alignment >> 48)) && allocationBuffer->buffer.ptr)
 		retError(clean, Error_outOfBounds(
-			size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64)1 << 48,
+			size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64) 1 << 48,
 			"AllocationBuffer_allocateBlock()::size or alignment is out of bounds (should be max 48-bit)"
 		));
 
@@ -237,7 +237,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
 		const AllocationBufferBlock v = (AllocationBufferBlock) {
-			.startAndNonLinearAndFree = (U64)isNonLinearResource << 62,
+			.startAndNonLinearAndFree = (U64) isNonLinearResource << 62,
 			.end = size,
 			.alignment = alignment
 		};
@@ -284,7 +284,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 		const AllocationBufferBlock v = (AllocationBufferBlock) {
 
 			.startAndNonLinearAndFree =
-				AllocationBufferBlock_alignToBackwards(firstOff - size, alignment) | ((U64)isNonLinearResource << 62),
+				AllocationBufferBlock_alignToBackwards(firstOff - size, alignment) | ((U64) isNonLinearResource << 62),
 
 			.end = firstOff,
 			.alignment = alignment
@@ -328,7 +328,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 				const AllocationBufferBlock *next = &allocationBuffer->allocations.ptrNonConst[i + 1];
 				
-				if(
+				if (
 					AllocationBufferBlock_isNonLinear(*next) != isNonLinearResource &&
 					(AllocationBufferBlock_getStart(*next) & (allocationBuffer->nonLinearAlignment - 1))
 				)
@@ -340,7 +340,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 			//This is to avoid tiny areas left over, causing the ring buffer portion to become slower.
 
 			if (size * 4 / 3 >= AllocationBufferBlock_size(v)) {
-				b->startAndNonLinearAndFree &= ~((U64)3 << 62);
+				b->startAndNonLinearAndFree &= ~((U64) 3 << 62);
 				b->startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
 				b->alignment = nextAlignment;
 				*result = AllocationBuffer_at(allocationBuffer->buffer.ptr, aligned);
@@ -356,7 +356,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 				if(aligned + size != v.end) {
 
 					const AllocationBufferBlock empty = (AllocationBufferBlock) {
-						.startAndNonLinearAndFree = (aligned + size) | ((U64)1 << 63),
+						.startAndNonLinearAndFree = (aligned + size) | ((U64) 1 << 63),
 						.end = v.end,
 						.alignment = 1
 					};
@@ -368,7 +368,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 				//Occupied
 
-				v.startAndNonLinearAndFree &= ~((U64)3 << 62);
+				v.startAndNonLinearAndFree &= ~((U64) 3 << 62);
 				v.startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
 				v.end = aligned + size;
 				v.alignment = nextAlignment;        //What aligned came from, so a free finds it again
@@ -395,7 +395,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 				//Try to split near the front
 
 				const AllocationBufferBlock empty = (AllocationBufferBlock) {
-					.startAndNonLinearAndFree = ((U64)1 << 63) | AllocationBufferBlock_getStart(v),
+					.startAndNonLinearAndFree = ((U64) 1 << 63) | AllocationBufferBlock_getStart(v),
 					.end = aligned,
 					.alignment = 1
 				};
@@ -410,7 +410,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 			if(aligned + size != v.end) {
 
 				const AllocationBufferBlock tail = (AllocationBufferBlock) {
-					.startAndNonLinearAndFree = ((U64)1 << 63) | (aligned + size),
+					.startAndNonLinearAndFree = ((U64) 1 << 63) | (aligned + size),
 					.end = v.end,
 					.alignment = 1
 				};
@@ -462,7 +462,7 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		if (!AllocationBufferBlock_isSame(*p, allocationBuffer->buffer.ptr, ptr))
 			continue;
 
-		p->startAndNonLinearAndFree |= (U64)1 << 63;        //Free up
+		p->startAndNonLinearAndFree |= (U64) 1 << 63;        //Free up
 		U64 self = i;
 
 		//Merge freed right blocks until they're gone

@@ -313,31 +313,37 @@ namespace oxc {
 
 			inline void onDraw(c::Window *w) noexcept {
 				Table *t = tableOf(w);
+
 				if(t && t->onDraw) t->onDraw(t->app, Window(w));
 			}
 
 			inline void onUpdate(c::Window *w, c::F64 dt) noexcept {
 				Table *t = tableOf(w);
+
 				if(t && t->onUpdate) t->onUpdate(t->app, Window(w), dt);
 			}
 
 			inline void onCursorMove(c::Window *w) noexcept {
 				Table *t = tableOf(w);
+
 				if(t && t->onCursorMove) t->onCursorMove(t->app, Window(w));
 			}
 
 			inline void onButton(c::Window *w, c::InputDevice *d, c::InputHandle h, c::Bool down) noexcept {
 				Table *t = tableOf(w);
+
 				if(t && t->onButton) t->onButton(t->app, Window(w), d, h, down);
 			}
 
 			inline void onAxis(c::Window *w, c::InputDevice *d, c::InputHandle h, c::F32 v) noexcept {
 				Table *t = tableOf(w);
+
 				if(t && t->onAxis) t->onAxis(t->app, Window(w), d, h, v);
 			}
 
 			inline void onTypeChar(c::Window *w, c::CharString str) noexcept {
 				Table *t = tableOf(w);
+
 				if(t && t->onTypeChar) t->onTypeChar(t->app, Window(w), str);
 			}
 

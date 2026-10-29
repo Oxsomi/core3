@@ -111,7 +111,7 @@ Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		//This makes it, so we don't free it, because we don't own the memory
 
 		w->cpuVisibleBuffer = Buffer_createRef(
-			w->cpuVisibleBuffer.ptrNonConst, (U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4
+			w->cpuVisibleBuffer.ptrNonConst, (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4
 		);
 
 		ReleaseDC(w->nativeHandle, screen);
@@ -232,7 +232,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			//First char
 
 			else if (wParam < 0xDC00) {                //Cache for final char
-				((U16*)buf.ptrNonConst)[0] = (U16)wParam;
+				((U16*) buf.ptrNonConst)[0] = (U16) wParam;
 				clearBuffer = false;
 			}
 
@@ -240,11 +240,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			else if(wParam < 0xE000 && buf.ptr[0]) {
 
-				((U16*)buf.ptrNonConst)[1] = (U16)wParam;
+				((U16*) buf.ptrNonConst)[1] = (U16) wParam;
 
 				//Now it's time to translate this from UTF16
 
 				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+
 				if (Buffer_readAsUTF16(buf, 0, &codepoint, NULL))
 					typed = codepoint.index;
 			}
@@ -255,14 +256,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				U8 bytes = 0;
 				Bool success = Buffer_writeAsUTF8(buf, 0, typed, &bytes, NULL);
-				((C8*)buf.ptr)[bytes] = '\0';
+				((C8*) buf.ptr)[bytes] = '\0';
 
 				if(success)
-					w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*)buf.ptr, bytes, true));
+					w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*) buf.ptr, bytes, true));
 			}
 
 			if(clearBuffer)
-				((C8*)buf.ptr)[0] = '\0';        //Clear buffer
+				((C8*) buf.ptr)[0] = '\0';        //Clear buffer
 
 			break;
 		}
@@ -271,6 +272,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			RAWINPUT raw;
 			U32 rawSiz = (U32) sizeof(raw);
+
 			if (!GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) &raw, &rawSiz, sizeof(RAWINPUTHEADER))) {
 				Error err = Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed");
 				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
@@ -591,7 +593,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
 
-					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
+					F32 delta = (F32) (I16) mouseDat.usButtonData / WHEEL_DELTA;
 					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, delta);
 
 					if (w->callbacks.onDeviceAxis)
@@ -600,7 +602,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
 
-					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
+					F32 delta = (F32) (I16) mouseDat.usButtonData / WHEEL_DELTA;
 					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, delta);
 
 					if (w->callbacks.onDeviceAxis)
@@ -663,7 +665,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 		case WM_MOUSEMOVE: {
 
 			I32x2 oldCursor = w->cursor;
-			w->cursor = I32x2_create2((I32)(I16)LOWORD(lParam), (I32)(I16)HIWORD(lParam));
+			w->cursor = I32x2_create2((I32) (I16) LOWORD(lParam), (I32) (I16) HIWORD(lParam));
 
 			if (w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
 				w->callbacks.onCursorMove(w);
@@ -714,7 +716,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				RAWINPUTDEVICE rawDevice = (RAWINPUTDEVICE) {
 					0x01,                                //Perhaps 0xD for touchscreen at some point            TODO:
-					(U16)(isKeyboard ? 0x06 : 0x02),     //0x4-0x05 for game controllers in the future        TODO:
+					(U16) (isKeyboard ? 0x06 : 0x02),     //0x4-0x05 for game controllers in the future        TODO:
 					0x0,
 					hwnd
 				};
@@ -803,7 +805,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				// because our list isn't contiguous (to not invalidate handles)
 
 				if(ours == end - 1)
-					while(
+					while (
 						w->devices.length &&
 						ListInputDevice_last(w->devices)->type == EInputDeviceType_Undefined
 					)
@@ -818,7 +820,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		case WM_PAINT: {
 
-			if(
+			if (
 				!(w->hint & EWindowHint_AllowBackgroundUpdates) &&
 				(w->flags & EWindowFlags_IsMinimized) &&
 				!(w->flags & EWindowFlags_IsMoving)
@@ -836,7 +838,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			const Ns now = Time_now();
 
 			if (w->callbacks.onUpdate) {
-				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64) SECOND : 0;
 				w->callbacks.onUpdate(w, dt);
 			}
 
@@ -950,7 +952,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
 
-	(void)manager;
+	(void) manager;
 
 	//TODO: HDR support; ColorSpace
 	//    https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
@@ -1229,7 +1231,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinKeyboard, Platform_instance->alloc, e_rr));
 	builtinKeyboard = (Keyboard) { 0 };
 
-	w->defaultMouseId = (U32)w->devices.length;
+	w->defaultMouseId = (U32) w->devices.length;
 	gotoIfError3(clean, Mouse_create(&builtinMouse, Platform_instance->alloc, e_rr));
 	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinMouse, Platform_instance->alloc, e_rr));
 	builtinMouse = (Mouse) { 0 };

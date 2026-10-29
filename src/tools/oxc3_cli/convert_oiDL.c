@@ -136,7 +136,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 
 		if (convert->args->flags & EOperationFlags_Ascii) {
 
-			CharString str = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
+			CharString str = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false);
 
 			//Grab split string
 
@@ -205,6 +205,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 				basePath = tmp;
 
 			U64 dec = 0;
+
 			if (!CharString_parseU64(basePath, &dec) || dec >> 32) {
 				allLinear = false;
 				break;
@@ -341,7 +342,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 	EFileType type = EFileType_Folder;
 	CharString txt = CharString_createRefCStrConst(".txt");
 
-	if(
+	if (
 		(
 			CharString_endsWithStringInsensitive(convert->output, &txt, 0) ||
 			(convert->args->parameters & EOperationHasParameter_SplitBy)

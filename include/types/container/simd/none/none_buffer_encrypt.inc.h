@@ -92,7 +92,7 @@ static inline I32x4 AES_shiftRows(I32x4 a) {
 static inline I32x4 AES_subBytes(I32x4 a) {
 
 	I32x4 res = a;
-	U8 *ptr = (U8*)&res;
+	U8 *ptr = (U8*) &res;
 
 	for(U8 i = 0; i < 16; ++i)
 		ptr[i] = AES_sbox(ptr[i]);

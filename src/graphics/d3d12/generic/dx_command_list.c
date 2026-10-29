@@ -564,12 +564,12 @@ static D3D12_BARRIER_SYNC DxBarrierSyncRtas_fromMask(U32 stageMask) {
 
 	//ALL_SHADING already subsumes compute and raytracing, so those only matter on their own
 
-	if(stageMask & (EPipelineStageMask_PrePixel | ((U32)1 << EPipelineStage_Pixel)))
+	if(stageMask & (EPipelineStageMask_PrePixel | ((U32) 1 << EPipelineStage_Pixel)))
 		sync |= D3D12_BARRIER_SYNC_ALL_SHADING;
 
 	else {
 
-		if(stageMask & ((U32)1 << EPipelineStage_Compute))
+		if(stageMask & ((U32) 1 << EPipelineStage_Compute))
 			sync |= D3D12_BARRIER_SYNC_COMPUTE_SHADING;
 
 		if(stageMask & EPipelineStageMask_RtAny)
@@ -594,10 +594,10 @@ static D3D12_BARRIER_SYNC DxBarrierSync_fromMask(U32 stageMask) {
 	if(stageMask & EPipelineStageMask_PrePixel)
 		sync |= D3D12_BARRIER_SYNC_VERTEX_SHADING | D3D12_BARRIER_SYNC_PIXEL_SHADING;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Pixel))
+	if(stageMask & ((U32) 1 << EPipelineStage_Pixel))
 		sync |= D3D12_BARRIER_SYNC_PIXEL_SHADING;
 
-	if(stageMask & ((U32)1 << EPipelineStage_Compute))
+	if(stageMask & ((U32) 1 << EPipelineStage_Compute))
 		sync |= D3D12_BARRIER_SYNC_COMPUTE_SHADING;
 
 	if(stageMask & EPipelineStageMask_RtAny)
@@ -900,10 +900,10 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 						const U32 cmd[8] = {
 							1, 0,
-							image.srcX | ((U32)image.srcY << 16), image.srcZ,
-							image.dstX | ((U32)image.dstY << 16), image.dstZ,
-							image.width | ((U32)image.height << 16),
-							image.length | ((U32)image.outputRotation << 16)
+							image.srcX | ((U32) image.srcY << 16), image.srcZ,
+							image.dstX | ((U32) image.dstY << 16), image.dstZ,
+							image.width | ((U32) image.height << 16),
+							image.length | ((U32) image.outputRotation << 16)
 						};
 
 						buffer->lpVtbl->SetComputeRoot32BitConstants(
@@ -1532,7 +1532,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					buffer->lpVtbl->DrawIndexedInstanced(
 						buffer,
 						draw.count, draw.instanceCount,
-						draw.indexOffset, (I32)draw.vertexOffset,
+						draw.indexOffset, (I32) draw.vertexOffset,
 						draw.instanceOffset
 					);
 
@@ -1757,13 +1757,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
 				.StartAddress = getDxDeviceAddress((DeviceData) { .buffer = info.shaderBindingTable }),
-				.SizeInBytes = (U64)raytracingShaderAlignment * info.groups.length,
+				.SizeInBytes = (U64) raytracingShaderAlignment * info.groups.length,
 				.StrideInBytes = raytracingShaderAlignment
 			};
 
 			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE miss = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
 				.StartAddress = hit.StartAddress + hit.SizeInBytes,
-				.SizeInBytes = (U64)raytracingShaderAlignment * info.missCount,
+				.SizeInBytes = (U64) raytracingShaderAlignment * info.missCount,
 				.StrideInBytes = raytracingShaderAlignment
 			};
 
@@ -1774,7 +1774,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE callable = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
 				.StartAddress = raygen.StartAddress + raygen.SizeInBytes * info.raygenCount,
-				.SizeInBytes = (U64)raytracingShaderAlignment * info.callableCount,
+				.SizeInBytes = (U64) raytracingShaderAlignment * info.callableCount,
 				.StrideInBytes = raytracingShaderAlignment
 			};
 
@@ -1847,7 +1847,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 					D3D12_BARRIER_GROUP depA = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
-					if(
+					if (
 						!DxDeviceBuffer_transition(
 							callerBuf, D3D12_BARRIER_SYNC_COPY, D3D12_BARRIER_ACCESS_COPY_SOURCE,
 							&deviceExt->bufferTransitions, &depA, alloc, e_rr
@@ -1868,8 +1868,9 @@ void DX_WRAP_FUNC(CommandList_process)(
 					// straight into the slot (no staging buffer); otherwise they are written into the mapped UPLOAD staging
 					// slot at record time and copied in. The three thread counts always arrive by copy from the caller.
 
-					const U32 sbtBytes =
-						(U32)(sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE) + 3 * sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE));
+					const U32 sbtBytes = (U32) (
+						sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE) + 3 * sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE)
+					);
 
 					if(wbi) {
 
@@ -2030,7 +2031,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 
 						&deviceExt->bufferTransitions,
-						&dep[1], alloc, e_rr));
+						&dep[1], alloc, e_rr
+					));
 
 					continue;
 				}
@@ -2176,7 +2178,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 						&range,
 
 						&deviceExt->imageTransitions,
-						&dep[0], alloc, e_rr));
+						&dep[0], alloc, e_rr
+					));
 				}
 
 				else {
@@ -2188,7 +2191,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 						pipelineStage,
 						access,
 						&deviceExt->bufferTransitions,
-						&dep[1], alloc, e_rr));
+						&dep[1], alloc, e_rr
+					));
 				}
 
 			nextTransition:
@@ -2234,7 +2238,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_AddMarkerDebugExt:
 		case ECommandOp_StartRegionDebugExt: {
 
-			const F32x4 colf = F32x4_round(F32x4_mul(F32x4_saturate(F32x4_load4((F32*)data)), F32x4_xxxx4(255)));
+			const F32x4 colf = F32x4_round(F32x4_mul(F32x4_saturate(F32x4_load4((F32*) data)), F32x4_xxxx4(255)));
 			const I32x4 v = I32x4_mul(I32x4_fromF32x4(colf), I32x4_create4(1 << 16, 1 << 8, 1 << 0, 0));
 
 			const I32x2 reduc2 = I32x2_or(I32x4_xy(v), I32x4_zw(v));
@@ -2242,11 +2246,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			U64 encoded[62] = { 0 };
 			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x008 : 0x002) << 10;
-			encoded[1] = 0xFF000000 | (*(const U32*)&reduc);
-			encoded[2] = ((U64)8 << 55) | ((U64)1 << 54);        //Address alignment = 8 and indicate "ansi"
+			encoded[1] = 0xFF000000 | (*(const U32*) &reduc);
+			encoded[2] = ((U64) 8 << 55) | ((U64) 1 << 54);        //Address alignment = 8 and indicate "ansi"
 
 			const U32 strLen = (U32) CharString_calcStrLen(
-				(const C8*)data + sizeof(F32x4),
+				(const C8*) data + sizeof(F32x4),
 				sizeof(encoded) - sizeof(U64) * 3 - 1
 			);
 
@@ -2254,7 +2258,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			Buffer_memcpy(
 				Buffer_createRef(&encoded[3], sizeof(encoded) - sizeof(U64) * 3),
-				Buffer_createRefConst((const C8*)data + sizeof(F32x4), strLen)
+				Buffer_createRefConst((const C8*) data + sizeof(F32x4), strLen)
 			);
 
 			if(op == ECommandOp_AddMarkerDebugExt)

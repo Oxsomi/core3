@@ -97,7 +97,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 
 	VkPipelineCreateFlags createFlags = 0;
 
-	if(
+	if (
 		(pipeline->flags & EPipelineFlags_CaptureISA) &&
 		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
 	)

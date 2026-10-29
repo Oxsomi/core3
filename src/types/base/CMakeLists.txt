@@ -35,7 +35,23 @@ add_library(
 	CMakeLists.txt
 )
 
-target_compile_definitions(OxC3_types_base PUBLIC -D_ENABLE_SIMD=${SIMD})
+target_compile_definitions(OxC3_types_base PUBLIC
+	_ENABLE_SIMD=${SIMD}
+	"_OXC3_ERROR_STACKTRACE=$<IF:$<CONFIG:Release,RelWithDebInfo,MinSizeRel>,1,32>"
+)
+
+# C headers use C11; C++ wrappers use C++20 library facilities and conforming macro expansion.
+
+target_compile_features(OxC3_types_base PUBLIC c_std_11 cxx_std_20)
+target_compile_options(OxC3_types_base PUBLIC
+	"$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>"
+	"$<$<COMPILE_LANG_AND_ID:C,Clang,AppleClang,GNU>:-fms-extensions>"
+	"$<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang,GNU>:-fms-extensions>"
+)
+
+if(isClangCl)
+	target_compile_options(OxC3_types_base PUBLIC "$<$<COMPILE_LANGUAGE:C,CXX>:-fno-ms-compatibility>")
+endif()
 
 if(ANDROID)
 	file(GLOB_RECURSE typesBaseAndroidSources CONFIGURE_DEPENDS "platforms/android/*.c")
@@ -79,6 +95,7 @@ if(EnableTests)
 
 	set_target_properties(OxC3_types_test PROPERTIES FOLDER Oxsomi/test/types)
 	target_include_directories(OxC3_types_test PUBLIC "../../../include")
+	target_link_libraries(OxC3_types_test PUBLIC OxC3_types_base)
 
 	# The per-suite executables can't link on android: Platform_defineEntrypoint gives android_main
 	# rather than main, and an APK can't run an exec anyway. src/CMakeLists.txt builds the suites into

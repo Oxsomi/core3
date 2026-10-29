@@ -75,7 +75,7 @@ static Bool VkTLAS_fillInstances(GraphicsDeviceRef *deviceRef, TLAS *tlas, Error
 		// iteration wrote the same slot and instances past the first never received an address at all.
 
 		const U64 *blasAddress = &dat->blasDeviceAddress;
-		U64 offset = (const U8*)blasAddress - (const U8*)tlas->cpuInstances.ptr;
+		U64 offset = (const U8*) blasAddress - (const U8*) tlas->cpuInstances.ptr;
 
 		//The reference has to come from vkGetAccelerationStructureDeviceAddressKHR;
 		// the backing buffer's address is not necessarily the same thing.
@@ -86,7 +86,7 @@ static Bool VkTLAS_fillInstances(GraphicsDeviceRef *deviceRef, TLAS *tlas, Error
 				.accelerationStructure = BLAS_ext(BLASRef_ptr(dat->blasCpu), Vk)->as
 			};
 
-		*(U64*)((U8*)mem + offset) = deviceExt->getAccelerationStructureDeviceAddress(
+		*(U64*) ((U8*) mem + offset) = deviceExt->getAccelerationStructureDeviceAddress(
 			deviceExt->device, &addressInfo
 		);
 
@@ -156,7 +156,8 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 	if(instancesU64 >> 24)
 		retError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "VkTLAS_init() only instance count of <U24_MAX is supported"));
+			0, instancesU64, 1 << 24, "VkTLAS_init() only instance count of <U24_MAX is supported"
+		));
 
 	//Convert to Vulkan dependent version
 

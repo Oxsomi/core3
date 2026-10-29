@@ -306,6 +306,7 @@ Bool Platform_detectCPUInfo(PlatformCPUInfo *out, const Allocator *alloc, Error 
 
 					case RelationCache: {
 						const CACHE_RELATIONSHIP *c = &info->Cache;
+
 						if(c->Level == 1 && (c->Type == CacheData || c->Type == CacheUnified))
 							out->l1DataCacheBytes = c->CacheSize;
 						else if(c->Level == 2)
@@ -349,8 +350,8 @@ Bool Platform_setKeyboardVisibleForced(Bool isVisible, Bool force) {
 	return true;
 }
 
-void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
-void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
+void *Platform_allocate(void *allocator, U64 length) { (void) allocator; return malloc(length); }
+void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void) length; free(ptr); }
 
 void Platform_cleanupExt() { }
 
@@ -371,7 +372,7 @@ BOOL enumerateFiles(HMODULE mod, LPCWSTR unused, LPWSTR name, LONG_PTR param) {
 
 	CharString str = CharString_createNull();
 	Bool s_uccess = true;
-	gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, MAX_OXC_PATH, Platform_instance->alloc, &str, NULL));
+	gotoIfError3(clean, CharString_createFromUTF16((const U16*) name, MAX_OXC_PATH, Platform_instance->alloc, &str, NULL));
 
 	if(CharString_countAllSensitive(&str, '/', 0) != 1) {
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
@@ -433,7 +434,7 @@ Bool Platform_initExt(Error *e_rr) {
 
 	buff[lastSlash + 1] = '\0';
 	gotoIfError3(clean, CharString_createFromUTF16(
-		(const U16*)buff, lastSlash + 1, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr
+		(const U16*) buff, lastSlash + 1, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr
 	));
 
 	SetDllDirectoryW(buff);
@@ -448,7 +449,7 @@ Bool Platform_initExt(Error *e_rr) {
 	buff[chars] = 0;
 
 	gotoIfError3(clean, CharString_createFromUTF16(
-		(const U16*)buff, chars, Platform_instance->alloc, &Platform_instance->workDirectory, e_rr
+		(const U16*) buff, chars, Platform_instance->alloc, &Platform_instance->workDirectory, e_rr
 	));
 
 	CharString_replaceAllSensitive(&Platform_instance->workDirectory, '\\', '/', 0, 0);
@@ -671,7 +672,7 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 	I32 res = GetKeyNameTextW(scanCode << 16, name, sizeof(name));
 
 	if(res > 0) {
-		gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, res, alloc, result, e_rr));
+		gotoIfError3(clean, CharString_createFromUTF16((const U16*) name, res, alloc, result, e_rr));
 		goto clean;
 	}
 

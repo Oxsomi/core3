@@ -22,6 +22,8 @@
 
 #include "test_types_math_shared.h"
 #include "types/math/flp.h"
+#include "types/math/type_cast.h"
+#include "types/base/constants.h"
 
 void Test_floatType(Test *test) {
 
@@ -147,8 +149,8 @@ void Test_floatType(Test *test) {
 
 	//Classification still works without a sign bit
 
-	Test_assert(test, "UF21 isInf",         EFloatType_isInf(EFloatType_UF21, (U64)63 << 15));
-	Test_assert(test, "UF21 isNaN",         EFloatType_isNaN(EFloatType_UF21, ((U64)63 << 15) | 1));
+	Test_assert(test, "UF21 isInf",         EFloatType_isInf(EFloatType_UF21, (U64) 63 << 15));
+	Test_assert(test, "UF21 isNaN",         EFloatType_isNaN(EFloatType_UF21, ((U64) 63 << 15) | 1));
 	Test_assert(test, "UF21 isDeN",         EFloatType_isDeN(EFloatType_UF21, 1));
 
 	//DOWNCAST across the sign boundary:
@@ -170,4 +172,20 @@ void Test_floatType(Test *test) {
 
 	Test_assert(test, "UF21 holds 1e-9",      UF21_castF32(F32_castUF21(1e-9f)) > 0);
 	Test_assert(test, "F16 flushes 1e-9",     F16_castF32(F32_castF16(1e-9f)) == 0);
+
+	Bool bf16ToF16 = true;
+
+	for(U32 bits = 0; bits <= U16_MAX; ++bits) {
+
+		if(EFloatType_isNaN(EFloatType_BF16, bits))
+			continue;
+
+		const F16 expected = F32_castF16(F32_fromU32Bits(bits << 16));
+
+		bf16ToF16 &= BF16_castF16((BF16) bits) == expected;
+	}
+
+	Test_assert(test, "all BF16 patterns convert to F16", bf16ToF16);
+	Test_assert(test, "F64 to F16 rounds once", F64_castF16(1.0 + 0x1p-11 + 0x1p-40) == 0x3C01);
+	Test_assert(test, "mantissa ties round to even", F32_castBF16(1.01171875f) == 0x3F82);
 }

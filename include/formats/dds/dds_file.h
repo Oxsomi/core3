@@ -46,7 +46,7 @@ typedef struct SubResourceData {
 typedef struct DDSInfo {
 
 	U32 w, h, l;                        //Dimensions; these decrease by ~2 for each mip
-	U32 mips, layers;
+	U32 mips, layers;                  //For cubes, layers counts faces (a multiple of 6).
 
 	TextureFormatId textureFormatId;
 	TextureType type;
@@ -66,6 +66,9 @@ Bool DDS_write(
 	Error *e_rr
 );
 
+//*streamOff is where the DDS starts and is only advanced when the read succeeds (to the end of the last subresource).
+//Sizes in the header are checked against the bytes in the stream before anything is allocated from them.
+//A zero mip count denotes a single mip. Legacy RGBA8 and BGRA8 channel masks are accepted.
 Bool DDS_read(
 	StreamRef *stream,
 	U64 *streamOff,

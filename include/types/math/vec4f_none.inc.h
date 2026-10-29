@@ -24,6 +24,8 @@
 	#error Vec4f NONE guard was undefined, this likely indicates include of vec4f_none.h was attempted instead of vec4f.h
 #endif
 
+#include <math.h>
+
 //Swizzles
 
 static inline F32 F32x4_x(F32x4 a) { return a.v[0]; }
@@ -59,7 +61,7 @@ static inline void F32x4_setRef(F32x4 *a, U8 i, F32 v) {
 	}
 }
 
-static inline F32x4 F32x4_fromI32x4(I32x4 a) { NONE_OP4F((F32)a.v[i]); }
+static inline F32x4 F32x4_fromI32x4(I32x4 a) { NONE_OP4F((F32) a.v[i]); }
 
 //Arithmetic
 	
@@ -67,16 +69,26 @@ static inline F32x4 F32x4_add(F32x4 a, F32x4 b) { NONE_OP4F(a.v[i] + b.v[i]); }
 static inline F32x4 F32x4_sub(F32x4 a, F32x4 b) { NONE_OP4F(a.v[i] - b.v[i]); }
 static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { NONE_OP4F(a.v[i] * b.v[i]); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { NONE_OP4F(a.v[i] / b.v[i]); }
-static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { NONE_OP4F(a.v[i] * b.v[i] + c.v[i]); }        //a * b + c
+static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { NONE_OP4F(fmaf(a.v[i], b.v[i], c.v[i])); }        //a * b + c
 
-static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_x(a) * F32x4_x(b) + F32x4_y(a) * F32x4_y(b); }
-static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_dot2(a, b) + F32x4_z(a) * F32x4_z(b); }
-static inline F32 F32x4_dot4(F32x4 a, F32x4 b) { return F32x4_dot3(a, b) + F32x4_w(a) * F32x4_w(b); }
+//The unused lanes are summed as +0, as the SIMD backends do, so a zero result has the same sign everywhere.
+
+static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return (F32x4_x(a) * F32x4_x(b) + F32x4_y(a) * F32x4_y(b)) + 0.f; }
+
+static inline F32 F32x4_dot3(F32x4 a, F32x4 b) {
+	return (F32x4_x(a) * F32x4_x(b) + F32x4_y(a) * F32x4_y(b)) + (F32x4_z(a) * F32x4_z(b) + 0.f);
+}
+
+static inline F32 F32x4_dot4(F32x4 a, F32x4 b) {
+	return F32x4_dot2(a, b) + (F32x4_z(a) * F32x4_z(b) + F32x4_w(a) * F32x4_w(b));
+}
+
+static inline F32x4 F32x4_negate(F32x4 a) { NONE_OP4F(-a.v[i]); }
 
 //Clamps
 	
-static inline F32x4 F32x4_min(F32x4 a, F32x4 b) { NONE_OP4F(F32_min(a.v[i], b.v[i])); }
-static inline F32x4 F32x4_max(F32x4 a, F32x4 b) { NONE_OP4F(F32_max(a.v[i], b.v[i])); }
+static inline F32x4 F32x4_min(F32x4 a, F32x4 b) { NONE_OP4F(a.v[i] < b.v[i] ? a.v[i] : b.v[i]); }
+static inline F32x4 F32x4_max(F32x4 a, F32x4 b) { NONE_OP4F(a.v[i] > b.v[i] ? a.v[i] : b.v[i]); }
 
 //Rounding
 	
@@ -93,12 +105,12 @@ static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return F32x4_rsqrt(a); }
 
 //Boolean
 
-static inline F32x4 F32x4_eqExact(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] == b.v[i])); }
-static inline F32x4 F32x4_neqExact(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] != b.v[i])); }
-static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] >= b.v[i])); }
-static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] > b.v[i])); }
-static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] <= b.v[i])); }
-static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] < b.v[i])); }
+static inline F32x4 F32x4_eqExact(F32x4 a, F32x4 b) { NONE_OP4F((F32) (a.v[i] == b.v[i])); }
+static inline F32x4 F32x4_neqExact(F32x4 a, F32x4 b) { NONE_OP4F((F32) (a.v[i] != b.v[i])); }
+static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { NONE_OP4F((F32) (a.v[i] >= b.v[i])); }
+static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { NONE_OP4F((F32) (a.v[i] > b.v[i])); }
+static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { NONE_OP4F((F32) (a.v[i] <= b.v[i])); }
+static inline F32x4 F32x4_lt(F32x4 a, F32x4 b) { NONE_OP4F((F32) (a.v[i] < b.v[i])); }
 static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) { NONE_OP4F(cond.v[i] ? a.v[i] : b.v[i]); }
 
 //Trunc & reduce
@@ -106,7 +118,7 @@ static inline F32x4 F32x4_select(F32x4 cond, F32x4 a, F32x4 b) { NONE_OP4F(cond.
 static inline F32x4 F32x4_trunc2(F32x4 a) { return F32x4_create2(F32x4_x(a), F32x4_y(a)); }
 static inline F32x4 F32x4_trunc3(F32x4 a) { return F32x4_create3(F32x4_x(a), F32x4_y(a), F32x4_z(a)); }
 
-static inline F32 F32x4_reduce(F32x4 a) { return F32x4_x(a) + F32x4_y(a) + F32x4_z(a) + F32x4_w(a); }
+static inline F32 F32x4_reduce(F32x4 a) { return (F32x4_x(a) + F32x4_y(a)) + (F32x4_z(a) + F32x4_w(a)); }
 
 //4x4 transpose; the scalar fallback of the SSE/NEON versions in the sibling headers.
 //Safe when in == out.

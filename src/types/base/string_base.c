@@ -31,7 +31,7 @@ CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
 	const U64 strl = CharString_calcStrLen(ptr, maxSize);
 
 	return (CharString) {
-		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
+		.lenAndNullTerminated = strl | ((U64) (strl != maxSize) << 63),
 		.ptr = ptr,
 		.capacityAndRefInfo = U64_MAX        //Flag as const
 	};
@@ -54,7 +54,7 @@ CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTe
 	}
 
 	return (CharString) {
-		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
+		.lenAndNullTerminated = size | ((U64) isNullTerminated << 63),
 		.ptr = ptr,
 		.capacityAndRefInfo = U64_MAX        //Flag as const
 	};

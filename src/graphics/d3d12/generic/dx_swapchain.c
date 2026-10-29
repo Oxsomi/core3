@@ -93,11 +93,13 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 	if(mode == ESwapchainPresentMode_Count)
 		retError(clean, Error_unsupportedOperation(
-			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"));
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"
+		));
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		retError(clean, Error_unsupportedOperation(
-			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"));
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"
+		));
 
 	//A resize keeps the mode the swapchain was CREATED with, since ResizeBuffers must get the creation flags back
 
@@ -195,7 +197,7 @@ clean:
 
 void DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	SwapchainRef *swapchainRef = (RefPtr*) swapchain - 1;
 	DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchainRef);

@@ -111,7 +111,7 @@ static Bool TextureRef_queuePull(
 
 	const EGraphicsTypeId typeId = (EGraphicsTypeId) (tex ? tex->refPtrType->typeId : ETypeId_Undefined);
 
-	if(
+	if (
 		typeId != EGraphicsTypeId_RenderTexture && typeId != EGraphicsTypeId_DepthStencil &&
 		typeId != EGraphicsTypeId_Swapchain
 	)
@@ -202,7 +202,7 @@ static Bool TextureRef_queuePull(
 		.streamOffset = streamOffset,
 		.range = (DevicePendingRange) { .texture = (TextureRange) {
 			.startRange = { x, y, z },
-			.endRange = { (U16)(x + w), (U16)(y + h), (U16)(z + l) },
+			.endRange = { (U16) (x + w), (U16) (y + h), (U16) (z + l) },
 			.planeId = plane
 		} },
 		.textureData = data
@@ -277,7 +277,7 @@ UnifiedTextureImage *TextureRef_getImageIntern(TextureRef *ref, U32 subResource,
 	if(subResource)                //TODO: subResource
 		return NULL;
 
-	return (UnifiedTextureImage*)((U8*)tex + sizeof(*tex) + sizeof(UnifiedTextureImage) * imageId);
+	return (UnifiedTextureImage*)((U8*) tex + sizeof(*tex) + sizeof(UnifiedTextureImage) * imageId);
 }
 
 void *TextureRef_getImplExt(TextureRef *ref) {
@@ -598,7 +598,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 			2, "UnifiedTexture_create()::texturePtr->sampleCount MSAA8x is unsupported"
 		));
 
-	if(
+	if (
 		texture.sampleCount && (texture.resource.flags & EGraphicsResourceFlag_ShaderWrite) &&
 		!(device->info.capabilities.flags.features & EGraphicsFeatures_WriteMSTexture)
 	)
@@ -631,7 +631,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 			UnifiedTextureImage *img = TextureRef_getImageIntern(ref, 0 /* TODO: subResource */, i);
 			Descriptor textureDesc = Descriptor_texture(ref, 0, 0, 0, i, 0, 0);
 
-			if(
+			if (
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
 				!GraphicsDeviceRef_allocateDescriptorBindless(
 					deviceRef,
@@ -646,7 +646,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 			)
 				retError(clean, Error_invalidState(0, "UnifiedTexture_create() readHandle couldn't be allocated"));
 
-			if(
+			if (
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
 				!GraphicsDeviceRef_allocateDescriptorBindless(
 					deviceRef,

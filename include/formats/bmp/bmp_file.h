@@ -57,7 +57,12 @@ Bool BMP_write(
 	Error *e_rr
 );
 
-//Read advances *off to dataOffset + dataLength, the data remains flipped in memory if isFlipped is true.
+//Write refuses a BMP over 2 GiB (the file size is a signed 32 bit value), the length query (stream NULL) included.
+//Only BI_RGB is written. Read accepts INFO, V4 and V5 headers with BI_RGB or BI_BITFIELDS using BGRA8 masks.
+//Other masks, RLE and BITFIELDS on 24 bit are refused. dataOffset includes header extensions and pixel alignment gaps.
+//A zero fileSize is inferred from the pixel array's end; otherwise *off advances by the declared fileSize.
+//
+//The data remains flipped in memory if isFlipped is true.
 //This requires the texture copy to copy each row individually to still allow streaming.
 //NOTE: If discardAlpha is true, the real format is BGR8, but that format doesn't exist.
 Bool BMP_read(StreamRef *stream, U64 *off, U64 *dataOffset, BMPInfo *info, const Allocator *alloc, Error *e_rr);

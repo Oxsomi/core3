@@ -86,7 +86,7 @@ T##x4 Quat##T##_toEuler(Quat##T q) {                                            
 	T roll, pitch, yaw;                                                                                                 \
 																														\
 	/* Check for gimbal lock */                                                                                         \
-	if (T##_abs(r02) >= (T)0.996) {                                                                                     \
+	if (T##_abs(r02) >= (T) (1 - 1e-6)) {                                                                               \
 		/* Gimbal lock: pitch = +-90deg */                                                                              \
 		pitch = T##_signInc(r02) * T##_PI * (T)0.5;                                                                     \
 		yaw = 0;  /* Set yaw to 0 by convention */                                                                      \
@@ -144,8 +144,11 @@ Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target, T##x4 up) {       
 		T##x4 tempUp = T##x4_create3(0, 1, 0);                                                                          \
 		right = T##x4_cross3(tempUp, forward);                                                                          \
 		rightLen = T##x4_len3(right);                                                                                   \
-		if (rightLen < 1e-6##suffix)                                                                                    \
+																														\
+		if (rightLen < 1e-6##suffix) {                                                                                  \
 			right = T##x4_create3(1, 0, 0);                                                                             \
+			rightLen = 1;                                                                                               \
+		}                                                                                                            \
 	}                                                                                                                   \
 	T invRight = 1.0##suffix / rightLen;                                                                                \
 	right = T##x4_mul(right, T##x4_xxxx4(invRight));                                                                    \
@@ -190,7 +193,7 @@ Quat##T Quat##T##_fromOrientation(T##x4 right, T##x4 trueUp, T##x4 forward) {   
 																														\
 		x = (T##x4_y(right) + T##x4_x(trueUp)) * invS;                                                                  \
 		y = 0.25##suffix * s;                                                                                           \
-		z = (T##x4_z(forward) + T##x4_y(trueUp)) * invS;                                                                \
+		z = (T##x4_y(forward) + T##x4_z(trueUp)) * invS;                                                                \
 		w = (T##x4_z(right) - T##x4_x(forward)) * invS;                                                                 \
 	}                                                                                                                   \
 	/* Case 4: largest diagonal is m22 (forward.z) */                                                                   \
@@ -201,7 +204,7 @@ Quat##T Quat##T##_fromOrientation(T##x4 right, T##x4 trueUp, T##x4 forward) {   
 		x = (T##x4_x(forward) + T##x4_z(right)) * invS;                                                                 \
 		y = (T##x4_y(forward) + T##x4_z(trueUp)) * invS;                                                                \
 		z = 0.25##suffix * s;                                                                                           \
-		w = (T##x4_y(right) - T##x4_x(trueUp)) * invS;                                                                  \
+		w = (T##x4_x(trueUp) - T##x4_y(right)) * invS;                                                                  \
 	}                                                                                                                   \
 																														\
 	/* Normalize the quaternion and return */                                                                           \
@@ -228,7 +231,7 @@ Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {                         
 	T theta = T##_acos(cosTheta);                                                                                       \
 	T sinTheta2 = T##_sqrt(1 - cosTheta * cosTheta);                                                                    \
 																														\
-	if(T##_abs(sinTheta2) > 1 - 5e-4)                                                                                   \
+	if(cosTheta > 1 - 5e-4)                                                                                             \
 		return Quat##T##_normalize(T##x4_lerp(a, b, perc));                                                             \
 																														\
 	T invSinTheta2 = 1 / sinTheta2;                                                                                     \

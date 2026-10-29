@@ -48,6 +48,9 @@ Bool CAFile_dataEqual(
 			"CAFile_dataEqual()::aFile and bFile must be file handles"
 		));
 
+	if (!CAFile_getFileInfoPtr(a, aFile) || !CAFile_getFileInfoPtr(b, bFile))
+		retError(clean, Error_invalidParameter(1, 0, "CAFile_dataEqual()::file handle is out of bounds"));
+
 	*result = ECompareResult_Eq;
 
 	U64 aSize = CAFile_fileSize(a, aFile);
@@ -57,6 +60,11 @@ Bool CAFile_dataEqual(
 		*result = aSize < bSize ? ECompareResult_Lt : ECompareResult_Gt;
 		goto clean;
 	}
+
+	//Stream_compare interprets zero as the remaining stream, while empty archive entries contain no bytes.
+
+	if (!aSize)
+		goto clean;
 
 	Bool aLoaded = CAFile_isLoaded(a, aFile);
 	Bool bLoaded = CAFile_isLoaded(b, bFile);

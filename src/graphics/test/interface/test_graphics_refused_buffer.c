@@ -270,7 +270,7 @@ static void TestGraphics_refusedReadback(Test *t, GraphicsDeviceRef *deviceRef) 
 
 	const EGraphicsResourceFlag flags = EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_CPUBacked;
 
-	if(
+	if (
 		!Test_assert(t, "readbackList", GraphicsDeviceRef_createCommandList(deviceRef, KIBI, 16, 8, true, &list, &err)) ||
 		!Test_assert(t, "readbackListBegin", CommandListRef_begin(list, true, U64_MAX, &err)) ||
 		!Test_assert(t, "readbackListEnd", CommandListRef_end(list, &err)) ||

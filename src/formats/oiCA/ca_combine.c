@@ -275,9 +275,9 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, const All
 
 				gotoIfError3(clean, CharString_format(
 					alloc, &renamed, e_rr, "%.*s-%"PRIu64"%.*s",
-					(int)CharString_length(baseName), baseName.ptr,
+					(int) CharString_length(baseName), baseName.ptr,
 					counter,
-					(int)CharString_length(extension), extension.ptr
+					(int) CharString_length(extension), extension.ptr
 				));
 
 			} while (CAFile_hasSubObject(ctx->combined, parent, renamed));
@@ -331,10 +331,13 @@ Bool CAFile_combine(
 	))
 		retError(clean, Error_invalidParameter(1, 0, "CAFile_combine()::a is incompatible with b"));
 
-	//Merge settings: combine date flags, a leads for everything else
+	//A file only has a date the archive can store if it was written with date flags, so merging archives that disagree
+	// on them would leave files without a storable date in an archive that stores dates, which can't be written.
+
+	if ((a->settings.flags ^ b->settings.flags) & ECASettingsFlags_DateFlags)
+		retError(clean, Error_invalidParameter(1, 1, "CAFile_combine()::a and b must have the same date flags"));
 
 	CASettings settings = a->settings;
-	settings.flags |= b->settings.flags & ECASettingsFlags_DateFlags;
 
 	gotoIfError3(clean, CAFile_createCopy(a, alloc, combined, e_rr));
 	allocate = true;

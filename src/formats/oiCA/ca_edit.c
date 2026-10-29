@@ -22,6 +22,7 @@
 
 #include "types/container/ref_ptr.h"
 #include "types/base/string_read_helper.h"
+#include "types/base/mathi.h"
 #include "formats/oiCA/ca_edit.h"
 #include "formats/oiCA/ca_lookup.h"
 #include "formats/oiDL/dl_file.h"
@@ -59,11 +60,245 @@ static inline U64 CAFile_computePathLen(const CAFile *caFile, CAHandle parent, U
 	return total;
 }
 
+//Whether everything below a folder keeps a legal path and depth once the folder sits at depth 'depth' with a path of
+// 'pathLen' chars (its own path after a move or rename).
+
+static Bool CAFile_checkSubtreeFits(const CAFile *caFile, U64 srcId, U64 pathLen, U64 depth, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	for (U64 i = 1; i < caFile->folders.length; ++i) {
+
+		if (i == srcId)
+			continue;
+
+		U64 len = 0, levels = 0, cur = i;
+
+		while (cur && cur != srcId) {
+
+			len += CharString_length(CAFile_getName(caFile, CAHandle_makeFolder(cur))) + 1;
+			++levels;
+			cur = caFile->folders.ptr[cur].parent;
+		}
+
+		if (cur != srcId)
+			continue;
+
+		if (pathLen + len > CAFile_maxFilePathSize)
+			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's path would exceed 192 chars"));
+
+		if (depth + levels >= CAFile_maxRecursionSize)
+			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's depth out of recursion"));
+	}
+
+	for (U64 i = 0; i < caFile->files.length; ++i) {
+
+		U64 len = CharString_length(CAFile_getName(caFile, CAHandle_makeFile(i))) + 1, levels = 0;
+		U64 cur = CAFileInfo_getParent(caFile->files.ptr[i]);
+
+		while (cur && cur != srcId) {
+
+			len += CharString_length(CAFile_getName(caFile, CAHandle_makeFolder(cur))) + 1;
+			++levels;
+			cur = caFile->folders.ptr[cur].parent;
+		}
+
+		if (cur != srcId)
+			continue;
+
+		if (pathLen + len > CAFile_maxFilePathSize)
+			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's path would exceed 192 chars"));
+
+		if (depth + 1 + levels >= CAFile_maxRecursionSize)
+			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's depth out of recursion"));
+	}
+
+clean:
+	return s_uccess;
+}
+
+//Reorders the entries of a DLFile in place; entry 'base + i' becomes the entry that was at 'base + src[i]'.
+//scratch has to hold count entries of both lists.
+
+static void CAFile_permuteEntries(DLFile *dlFile, U64 base, const U64 *src, U64 count, U8 *scratch) {
+
+	const Bool isString = dlFile->settings.dataType == EDLDataType_String;
+	const U64 elemSize = isString ? sizeof(CharString) : sizeof(Buffer);
+
+	U8 *list = isString ? (U8*) dlFile->entryStrings.ptrNonConst : (U8*) dlFile->entryBuffers.ptrNonConst;
+	U8 *streams = (U8*) dlFile->entryStreams.ptrNonConst;
+
+	U8 *listTmp = scratch;
+	U8 *streamTmp = scratch + count * elemSize;
+
+	for (U64 i = 0; i < count; ++i) {
+
+		Buffer_memcpy(
+			Buffer_createRef(listTmp + i * elemSize, elemSize),
+			Buffer_createRefConst(list + (base + src[i]) * elemSize, elemSize)
+		);
+
+		Buffer_memcpy(
+			Buffer_createRef(streamTmp + i * sizeof(DLEntryStream), sizeof(DLEntryStream)),
+			Buffer_createRefConst(streams + (base + src[i]) * sizeof(DLEntryStream), sizeof(DLEntryStream))
+		);
+	}
+
+	Buffer_memcpy(
+		Buffer_createRef(list + base * elemSize, count * elemSize), Buffer_createRefConst(listTmp, count * elemSize)
+	);
+
+	Buffer_memcpy(
+		Buffer_createRef(streams + base * sizeof(DLEntryStream), count * sizeof(DLEntryStream)),
+		Buffer_createRefConst(streamTmp, count * sizeof(DLEntryStream))
+	);
+}
+
+//Rebuilds the order of folders and files from the parent links alone.
+//Folders are ordered breadth first: the root, then its folders, then theirs; so a folder always precedes its children
+// and the folders of one parent are contiguous. Files are grouped by folder in that same order.
+//Within a parent the previous relative order is kept. Handles are invalidated.
+//Nothing is changed unless the whole rebuild can be done.
+
+static Bool CAFile_relayout(CAFile *caFile, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Buffer work = Buffer_createNull();
+	Buffer scratch = Buffer_createNull();
+
+	const U64 folderCount = caFile->folders.length;
+	const U64 fileCount = caFile->files.length;
+
+	//Index arrays: order (new -> old folder), newOf (old -> new folder), kidStart (+1 entry), kids, next,
+	// fileStart (per new folder), fileOrder (new -> old file); then the rebuilt folder and file infos.
+
+	const U64 words =
+		6 * folderCount + 1 + fileCount + (sizeof(CAFolderInfo) / sizeof(U64)) * folderCount + fileCount;
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(words * sizeof(U64), alloc, &work, e_rr));
+	Buffer_unsetAllBits(work, NULL);
+
+	const U64 scratchEntries = U64_max(folderCount, fileCount);
+	const U64 scratchBytes = scratchEntries * (sizeof(Buffer) + sizeof(CharString) + sizeof(DLEntryStream));
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(scratchBytes, alloc, &scratch, e_rr));
+
+	U64 *order     = (U64*) work.ptrNonConst;
+	U64 *newOf     = order + folderCount;
+	U64 *kidStart  = newOf + folderCount;
+	U64 *kids      = kidStart + folderCount + 1;
+	U64 *next      = kids + folderCount;
+	U64 *fileStart = next + folderCount;
+	U64 *fileOrder = fileStart + folderCount;
+
+	CAFolderInfo *newFolders = (CAFolderInfo*) (fileOrder + fileCount);
+	CAFileInfo *newFiles = (CAFileInfo*) (newFolders + folderCount);
+
+	//Folders sorted by parent (a counting sort keeps the old order within a parent)
+
+	for (U64 i = 1; i < folderCount; ++i) {
+
+		U64 parent = caFile->folders.ptr[i].parent;
+
+		if (parent >= folderCount || parent == i)
+			retError(clean, Error_invalidState(0, "CAFile_relayout() folder has an invalid parent"));
+
+		++kidStart[parent + 1];
+	}
+
+	for (U64 i = 0; i < folderCount; ++i)
+		kidStart[i + 1] += kidStart[i];
+
+	for (U64 i = 0; i < folderCount; ++i)
+		next[i] = kidStart[i];
+
+	for (U64 i = 1; i < folderCount; ++i)
+		kids[next[caFile->folders.ptr[i].parent]++] = i;
+
+	//Breadth first, the queue is the order itself
+
+	U64 queued = 1;
+
+	for (U64 q = 0; q < queued; ++q) {
+
+		const U64 old = order[q];
+		const U64 count = kidStart[old + 1] - kidStart[old];
+
+		newFolders[q].dirCount = (U16) count;
+		newFolders[q].dirOffset = count ? (U16) queued : 0;
+
+		for (U64 k = kidStart[old]; k < kidStart[old + 1]; ++k)
+			order[queued++] = kids[k];
+	}
+
+	if (queued != folderCount)
+		retError(clean, Error_invalidState(0, "CAFile_relayout() folders aren't all reachable from the root"));
+
+	for (U64 q = 0; q < folderCount; ++q)
+		newOf[order[q]] = q;
+
+	//Files grouped by their folder's new index
+
+	for (U64 i = 0; i < fileCount; ++i) {
+
+		U64 parent = CAFileInfo_getParent(caFile->files.ptr[i]);
+
+		if (parent >= folderCount)
+			retError(clean, Error_invalidState(0, "CAFile_relayout() file has an invalid parent"));
+
+		++fileStart[newOf[parent]];
+	}
+
+	for (U64 q = 0, offset = 0; q < folderCount; ++q) {
+
+		U64 count = fileStart[q];
+
+		newFolders[q].fileCount = (U16) count;
+		newFolders[q].fileOffset = count ? offset : 0;
+		newFolders[q].parent = q ? (U16) newOf[caFile->folders.ptr[order[q]].parent] : 0;
+
+		fileStart[q] = offset;
+		offset += count;
+	}
+
+	for (U64 i = 0; i < fileCount; ++i) {
+
+		CAFileInfo info = caFile->files.ptr[i];
+		U64 parent = newOf[CAFileInfo_getParent(info)];
+		U64 dst = fileStart[parent]++;
+
+		fileOrder[dst] = i;
+		newFiles[dst].parentTimestamp = (info.parentTimestamp & (((U64) 1 << 48) - 1)) | (parent << 48);
+	}
+
+	//Nothing below can fail
+
+	CAFile_permuteEntries(&caFile->names, 0, order, folderCount, scratch.ptrNonConst);
+	CAFile_permuteEntries(&caFile->names, folderCount, fileOrder, fileCount, scratch.ptrNonConst);
+	CAFile_permuteEntries(&caFile->content, 0, fileOrder, fileCount, scratch.ptrNonConst);
+
+	Buffer_memcpy(
+		Buffer_createRef(caFile->folders.ptrNonConst, folderCount * sizeof(CAFolderInfo)),
+		Buffer_createRefConst(newFolders, folderCount * sizeof(CAFolderInfo))
+	);
+
+	Buffer_memcpy(
+		Buffer_createRef(caFile->files.ptrNonConst, fileCount * sizeof(CAFileInfo)),
+		Buffer_createRefConst(newFiles, fileCount * sizeof(CAFileInfo))
+	);
+
+clean:
+	Buffer_free(&work, alloc);
+	Buffer_free(&scratch, alloc);
+	return s_uccess;
+}
+
 //Rename / move
 
 Bool CAFile_rename(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, CharString *name, Error *e_rr) {
 
 	Bool s_uccess = true;
+	CharString copy = CharString_createNull();
 
 	if (!caFile || !name)
 		retError(clean, Error_nullPointer(!caFile ? 0 : 3, "CAFile_rename()::caFile and name are required"));
@@ -95,8 +330,14 @@ Bool CAFile_rename(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, 
 		parent = CAHandle_makeFolder(fi->parent);
 	}
 
-	if (CAFile_computePathLen(caFile, parent, CharString_length(*name), NULL) > CAFile_maxFilePathSize)
+	U64 depth = 0;
+	U64 pathLen = CAFile_computePathLen(caFile, parent, CharString_length(*name), &depth);
+
+	if (pathLen > CAFile_maxFilePathSize)
 		retError(clean, Error_invalidParameter(3, 0, "CAFile_rename()::full path would exceed 192 chars"));
+
+	if (CAHandle_isFolder(fileHandle))
+		gotoIfError3(clean, CAFile_checkSubtreeFits(caFile, CAHandle_getId(fileHandle), pathLen, depth, e_rr));
 
 	if (CAFile_hasSubObject(caFile, parent, *name))
 		retError(clean, Error_alreadyDefined(0, "CAFile_rename()::name already exists in parent"));
@@ -105,19 +346,25 @@ Bool CAFile_rename(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, 
 		CAHandle_isFolder(fileHandle) ? CAHandle_getId(fileHandle) :
 		caFile->folders.length + CAHandle_getId(fileHandle);
 
-	gotoIfError3(clean, DLFile_setEntryString(&caFile->names, nameIdx, name, alloc, e_rr));
+	//A ref doesn't own its characters, so the archive takes a copy and leaves the caller's string alone.
+
+	CharString *entry = name;
+
+	if (CharString_isRef(*name)) {
+		gotoIfError3(clean, CharString_createCopy(*name, alloc, &copy, e_rr));
+		entry = &copy;
+	}
+
+	gotoIfError3(clean, DLFile_setEntryString(&caFile->names, nameIdx, entry, alloc, e_rr));
 
 clean:
+	CharString_free(&copy, alloc);
 	return s_uccess;
 }
 
 Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
-	Buffer tmpBuf = Buffer_createNull();
-	DLEntryStream tmpStream = (DLEntryStream) { 0 };
-	DLEntryStream tmpStreamStr = (DLEntryStream) { 0 };
 
 	if (!caFile)
 		retError(clean, Error_nullPointer(0, "CAFile_move()::caFile is required"));
@@ -129,220 +376,80 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 		retError(clean, Error_invalidParameter(2, 0, "CAFile_move()::newParent must be a folder"));
 
 	U64 pid = CAHandle_getId(newParent);
+
 	if (pid >= caFile->folders.length)
 		retError(clean, Error_outOfBounds(2, pid, caFile->folders.length, "CAFile_move()::newParent out of bounds"));
 
-	//No-op, move to self:
-
+	const Bool isFile = CAHandle_isFile(fileHandle);
 	U64 srcId = CAHandle_getId(fileHandle);
-	U64 oldParentId =
-		CAHandle_isFile(fileHandle) ? (U64)CAFileInfo_getParent(caFile->files.ptr[srcId]) :
-		(U64)caFile->folders.ptr[srcId].parent;
+
+	if (srcId >= (isFile ? caFile->files.length : caFile->folders.length))
+		retError(clean, Error_outOfBounds(
+			1, srcId, isFile ? caFile->files.length : caFile->folders.length,
+			"CAFile_move()::fileHandle out of bounds"
+		));
+
+	//No-op, move to the folder it's already in
+
+	U64 oldParentId = isFile ? (U64) CAFileInfo_getParent(caFile->files.ptr[srcId]) : (U64) caFile->folders.ptr[srcId].parent;
 
 	if (oldParentId == pid)
 		goto clean;
 
 	//Can't move a folder into itself or a descendant
 
-	if (CAHandle_isFolder(fileHandle)) {
-
-		U64 cur = pid;
-
-		while (cur) {
-
+	if (!isFile)
+		for (U64 cur = pid; cur; cur = caFile->folders.ptr[cur].parent)
 			if (cur == srcId)
-				retError(clean, Error_invalidParameter(2, 0, "CAFile_move() tried to move into sibling, illegal!"));
-
-			cur = caFile->folders.ptr[cur].parent;
-		}
-
-		if (cur == srcId)
-			retError(clean, Error_invalidParameter(2, 0, "CAFile_move() tried to move into sibling, illegal!"));
-	}
+				retError(clean, Error_invalidParameter(2, 0, "CAFile_move()::cannot move into itself or its children"));
 
 	CharString name = CAFile_getName(caFile, fileHandle);
 
 	U64 depth = 0;
-	if (CAFile_computePathLen(caFile, newParent, CharString_length(name), NULL) > CAFile_maxFilePathSize)
+	U64 pathLen = CAFile_computePathLen(caFile, newParent, CharString_length(name), &depth);
+
+	if (pathLen > CAFile_maxFilePathSize)
 		retError(clean, Error_invalidParameter(3, 0, "CAFile_move()::full path would exceed 192 chars"));
 
 	if(depth >= CAFile_maxRecursionSize)
 		retError(clean, Error_invalidParameter(3, 0, "CAFile_move()::depth out of recursion"));
 
+	if (!isFile)
+		gotoIfError3(clean, CAFile_checkSubtreeFits(caFile, srcId, pathLen, depth, e_rr));
+
 	if (CAFile_hasSubObject(caFile, newParent, name))
 		retError(clean, Error_alreadyDefined(0, "CAFile_move()::name already exists in destination"));
 
-	U16 newParentId = (U16)CAHandle_getId(newParent);    //0 = root
+	if (isFile && caFile->folders.ptr[pid].fileCount == U16_MAX)
+		retError(clean, Error_overflow(0, U16_MAX, U16_MAX, "CAFile_move()::too many files in the destination folder"));
 
-	if (CAHandle_isFile(fileHandle)) {
+	//Only the parent link changes, the order of folders and files is rebuilt from the links afterwards.
+	//The rebuild fails before it changes anything, so the link can be put back.
 
-		CAFolderInfo *oldPar = &caFile->folders.ptrNonConst[oldParentId];
-		CAFolderInfo *newPar = &caFile->folders.ptrNonConst[newParentId];
+	if (isFile) {
+		CAFileInfo *info = &caFile->files.ptrNonConst[srcId];
+		info->parentTimestamp = (info->parentTimestamp & (((U64) 1 << 48) - 1)) | (pid << 48);
+	}
 
-		//Determine insert position in new parent's file block
+	else caFile->folders.ptrNonConst[srcId].parent = (U16) pid;
 
-		U64 dstId =
-			newPar->fileCount ? newPar->fileOffset + newPar->fileCount :
-			caFile->files.length - 1;
+	if (!CAFile_relayout(caFile, alloc, e_rr)) {
 
-		if (dstId > srcId)        //If moving forward in the array, account for the removal shifting dst
-			--dstId;
-
-		//Physically move the entry
-
-		CAFileInfo entry = caFile->files.ptr[srcId];
-		entry = CAFileInfo_create(newParentId, CAFileInfo_getTimestamp(entry));
-
-		gotoIfError3(clean, ListCAFileInfo_erase(&caFile->files, srcId, e_rr));
-		gotoIfError3(clean, DLFile_removeEntry(&caFile->content, srcId, &tmpBuf, &tmpStream, e_rr));
-
-		U64 nameId = caFile->folders.length + srcId;
-		gotoIfError3(clean, DLFile_removeEntryString(&caFile->names, nameId, &tmp, &tmpStreamStr, e_rr));
-
-		gotoIfError3(clean, ListCAFileInfo_insert(&caFile->files, dstId, entry, alloc, e_rr));
-
-		if (tmpStream.stream) {
-			gotoIfError3(clean, DLFile_insertStream(&caFile->content, dstId, &tmpStream, alloc, e_rr));
-		}
-		
-		else gotoIfError3(clean, DLFile_insertEntry(&caFile->content, dstId, &tmpBuf, alloc, e_rr));
-
-		if (tmpStreamStr.stream) {
-			gotoIfError3(clean, DLFile_insertStream(
-				&caFile->names, caFile->folders.length + dstId, &tmpStreamStr, alloc, e_rr
-			));
+		if (isFile) {
+			CAFileInfo *info = &caFile->files.ptrNonConst[srcId];
+			info->parentTimestamp = (info->parentTimestamp & (((U64) 1 << 48) - 1)) | (oldParentId << 48);
 		}
 
-		else gotoIfError3(clean, DLFile_insertEntryString(&caFile->names, caFile->folders.length + dstId, &tmp, alloc, e_rr));
+		else caFile->folders.ptrNonConst[srcId].parent = (U16) oldParentId;
 
-		//Update old parent
-
-		--oldPar->fileCount;
-		if (!oldPar->fileCount)
-			oldPar->fileOffset = 0;
-
-		//Update new parent
-
-		if (!newPar->fileCount)
-			newPar->fileOffset = dstId;
-
-		++newPar->fileCount;
-
-		//Fix up all fileOffsets shifted by the remove then insert
-
-		for (U64 i = 0; i < caFile->folders.length; ++i) {
-
-			CAFolderInfo *f = &caFile->folders.ptrNonConst[i];
-
-			if (f->fileOffset > srcId)
-				--f->fileOffset;
-
-			if (i != newParentId && (U64)f->fileOffset >= dstId && i != newParentId)
-				++f->fileOffset;
-		}
-
-	} else {
-
-		CAFolderInfo *oldPar = &caFile->folders.ptrNonConst[oldParentId];
-		CAFolderInfo *newPar = &caFile->folders.ptrNonConst[newParentId];
-
-		//Determine insert position in new parent's dir block
-
-		U16 dstId =
-			newPar->dirCount ? newPar->dirOffset + newPar->dirCount :
-			(U16)caFile->folders.length - 1;
-
-		if (dstId > srcId)
-			--dstId;
-
-		//Snapshot the entry, update parent
-
-		CAFolderInfo entry = caFile->folders.ptr[srcId];
-		entry.parent = newParentId;
-
-		//Grab name before removal shifts indices
-
-		U64 nameId = srcId;
-		gotoIfError3(clean, DLFile_removeEntryString(&caFile->names, nameId, &tmp, &tmpStreamStr, e_rr));
-
-		gotoIfError3(clean, ListCAFolderInfo_erase(&caFile->folders, srcId, e_rr));
-
-		if (newParentId > srcId)
-			--newParentId;
-
-		if (oldParentId > srcId)
-			--oldParentId;
-
-		gotoIfError3(clean, ListCAFolderInfo_insert(&caFile->folders, dstId, entry, alloc, e_rr));
-
-		oldPar = &caFile->folders.ptrNonConst[oldParentId];
-		newPar = &caFile->folders.ptrNonConst[newParentId];
-
-		if (tmpStreamStr.stream) {
-			gotoIfError3(clean, DLFile_insertStream(&caFile->names, dstId, &tmpStreamStr, alloc, e_rr));
-		}
-
-		else gotoIfError3(clean, DLFile_insertEntryString(&caFile->names, dstId, &tmp, alloc, e_rr));
-
-		//Update old parent
-
-		--oldPar->dirCount;
-
-		if (!oldPar->dirCount)
-			oldPar->dirOffset = 0;
-
-		//Update new parent
-
-		if (!newPar->dirCount)
-			newPar->dirOffset = dstId;
-
-		++newPar->dirCount;
-
-		//Fix up all parent/dirOffset references shifted by remove then insert
-
-		for (U64 i = 0; i < caFile->folders.length; ++i) {
-
-			if (i == dstId || i == newParentId)
-				continue;
-
-			CAFolderInfo *f = &caFile->folders.ptrNonConst[i];
-
-			if (f->parent > srcId)
-				--f->parent;
-
-			if (f->parent >= dstId)
-				++f->parent;
-
-			if (f->dirOffset > srcId)
-				--f->dirOffset;
-
-			if (f->dirOffset >= dstId)
-				++f->dirOffset;
-		}
-
-		for (U64 i = 0; i < caFile->files.length; ++i) {
-
-			CAFileInfo *fileInfo = &caFile->files.ptrNonConst[i];
-			U16 par2 = CAFileInfo_getParent(*fileInfo);
-
-			if (par2 > srcId)
-				--par2;
-
-			if (par2 >= dstId)
-				++par2;
-
-			*fileInfo = CAFileInfo_create(par2, CAFileInfo_getTimestamp(*fileInfo));
-		}
+		s_uccess = false;
+		goto clean;
 	}
 
 	//A completed move shifts list indices, so bump the debug generation counter to mark prior CAHandles stale.
 	++caFile->version;
 
 clean:
-	RefPtr_dec(&tmpStream.stream);
-	RefPtr_dec(&tmpStreamStr.stream);
-	Buffer_free(&tmpBuf, alloc);
-	CharString_free(&tmp, alloc);
 	return s_uccess;
 }
 
@@ -367,6 +474,7 @@ CAHandle CAFile_add(
 		retError(clean, Error_invalidParameter(1, 0, "CAFile_add()::parent must be a folder handle"));
 
 	U64 pid2 = CAHandle_getId(parent);
+
 	if (pid2 >= caFile->folders.length)
 		retError(clean, Error_outOfBounds(1, pid2, caFile->folders.length, "CAFile_add()::parent out of bounds"));
 
@@ -374,6 +482,7 @@ CAHandle CAFile_add(
 		retError(clean, Error_invalidParameter(2, 0, "CAFile_add()::invalid name (bad chars or exceeds 96 chars)"));
 
 	U64 depth = 0;
+
 	if (CAFile_computePathLen(caFile, parent, CharString_length(*name), &depth) > CAFile_maxFilePathSize)
 		retError(clean, Error_invalidParameter(2, 0, "CAFile_add()::full path would exceed 192 chars"));
 
@@ -383,14 +492,19 @@ CAHandle CAFile_add(
 	if (CAFile_hasSubObject(caFile, parent, *name))
 		retError(clean, Error_alreadyDefined(0, "CAFile_add()::name already exists in parent"));
 
-	U16 parentId = (U16)CAHandle_getId(parent);        //0 = root
+	U16 parentId = (U16) CAHandle_getId(parent);        //0 = root
 
 	if (isFile) {
 
-		if (caFile->files.length >= ((U64)1 << 48))
-			retError(clean, Error_overflow(0, caFile->files.length, (U64)1 << 48, "CAFile_add()::too many files"));
+		if (caFile->files.length >= ((U64) 1 << 48))
+			retError(clean, Error_overflow(0, caFile->files.length, (U64) 1 << 48, "CAFile_add()::too many files"));
 
 		CAFolderInfo *par = &caFile->folders.ptrNonConst[parentId];
+
+		//The per folder count is a U16 in memory and on disk.
+
+		if (par->fileCount == U16_MAX)
+			retError(clean, Error_overflow(0, U16_MAX, U16_MAX, "CAFile_add()::too many files in one folder"));
 
 		//Insert position: end of parent's contiguous file block.
 		//If parent has no files yet, initialize fileOffset to the insert point.
@@ -434,7 +548,7 @@ CAHandle CAFile_add(
 
 		U16 insertAt =
 			par->dirCount ? par->dirOffset + par->dirCount :
-			(U16)caFile->folders.length;
+			(U16) caFile->folders.length;
 
 		if (!par->dirCount)
 			par->dirOffset = insertAt;

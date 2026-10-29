@@ -985,9 +985,8 @@ def buildHostToolPackage(mode=HOST_TOOL_MODE, forceDeps=False, compiler=None):
 	"""Build and export oxc3 for the host with the shader compiler + CLI enabled, so that a build which
 	can't run its own packager (android, or any cross build) can tool_requires it.
 
-	Deliberately built from this working tree via `conan build` + `conan export-pkg` rather than
-	`conan create`: the recipe's source() clones core3 from github, which would package whatever is on
-	main instead of what's checked out here.
+	Uses `conan build` + `conan export-pkg` to reuse this working tree's build folder.
+	`conan create` instead fetches the source checkout specified in conandata.yml.
 	"""
 
 	if forceDeps and os.path.isfile(HASH_CACHE_FILE):

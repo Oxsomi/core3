@@ -86,7 +86,7 @@ static inline I32 I32x4_get(I32x4 a, U8 i) {
 	}
 }
 
-static inline I32x4 I32x4_fromF32x4(F32x4 a) { NONE_OP4I((I32)a.v[i]); }
+static inline I32x4 I32x4_fromF32x4(F32x4 a) { NONE_OP4I(I32_truncateF32(a.v[i])); }
 
 //Trunc & reduce
 
@@ -97,9 +97,9 @@ static inline I32 I32x4_reduce(I32x4 a) { return I32x4_x(a) + I32x4_y(a) + I32x4
 
 //Arithmetic
 
-static inline I32x4 I32x4_add(I32x4 a, I32x4 b) { NONE_OP4I((I32)((U32)a.v[i] + (U32)b.v[i])); }
-static inline I32x4 I32x4_sub(I32x4 a, I32x4 b) { NONE_OP4I((I32)((U32)a.v[i] - (U32)b.v[i])); }
-static inline I32x4 I32x4_mul(I32x4 a, I32x4 b) { NONE_OP4I((I32)((I64)a.v[i] * (I64)b.v[i])); }
+static inline I32x4 I32x4_add(I32x4 a, I32x4 b) { NONE_OP4I((I32) ((U32) a.v[i] + (U32) b.v[i])); }
+static inline I32x4 I32x4_sub(I32x4 a, I32x4 b) { NONE_OP4I((I32) ((U32) a.v[i] - (U32) b.v[i])); }
+static inline I32x4 I32x4_mul(I32x4 a, I32x4 b) { NONE_OP4I((I32) ((I64) a.v[i] * (I64) b.v[i])); }
 
 //Used for big ints
 //64-bit add but stored in 32-bit int
@@ -110,21 +110,21 @@ static inline I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) {
 	I32x4 res = a;
 
 	for (U64 i = 0; i < 2; ++i)
-		((I64 *)&res)[i] += ((const I64*)&b)[i];
+		((I64 *) &res)[i] += ((const I64*) &b)[i];
 
 	return res;
 }
 
 static inline I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) {
 	NONE_OP4I(
-		(I32)(U32)(((U64)(U32)a.v[i & ~1] * (U32)b.v[i & ~1]) >> ((i & 1) << 5))
+		(I32) (U32) (((U64) (U32) a.v[i & ~1] * (U32) b.v[i & ~1]) >> ((i & 1) << 5))
 	);
 }
 
 //Clamps
 
-static inline I32x4 I32x4_min(I32x4 a, I32x4 b) { NONE_OP4I((I32)I64_min(a.v[i], b.v[i])); }
-static inline I32x4 I32x4_max(I32x4 a, I32x4 b) { NONE_OP4I((I32)I64_max(a.v[i], b.v[i])); }
+static inline I32x4 I32x4_min(I32x4 a, I32x4 b) { NONE_OP4I((I32) I64_min(a.v[i], b.v[i])); }
+static inline I32x4 I32x4_max(I32x4 a, I32x4 b) { NONE_OP4I((I32) I64_max(a.v[i], b.v[i])); }
 
 //Comparison
 
@@ -154,7 +154,7 @@ static inline I32x4 I32x4_lshElements(I32x4 a, U8 elements) {
 	const U8 bytes = elements * 4;
 
 	I32x4 result = I32x4_zero();
-	Buffer_memcpy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
+	Buffer_memcpy(Buffer_createRef((U8*) &result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
 
 	return result;
 }
@@ -170,13 +170,13 @@ static inline I32x4 I32x4_rshElements(I32x4 a, U8 elements) {
 	const U8 bytes = elements * 4;
 
 	I32x4 result = I32x4_zero();
-	Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*)&a + bytes, sizeof(a) - bytes));
+	Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*) &a + bytes, sizeof(a) - bytes));
 
 	return result;
 }
 
-static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) { NONE_OP4I((I32)(bits >= 32 ? 0 : (U32)a.v[i] << bits)); }
-static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) { NONE_OP4I((I32)(bits >= 32 ? 0 : (U32)a.v[i] >> bits)); }
+static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) { NONE_OP4I((I32) (bits >= 32 ? 0 : (U32) a.v[i] << bits)); }
+static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) { NONE_OP4I((I32) (bits >= 32 ? 0 : (U32) a.v[i] >> bits)); }
 
 static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 
@@ -189,7 +189,7 @@ static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 	I32x4 res = a;
 
 	for (U64 i = 0; i < 2; ++i)
-		((U64 *)&res)[i] <<= bits;
+		((U64 *) &res)[i] <<= bits;
 
 	return res;
 }
@@ -205,7 +205,7 @@ static inline I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
 	I32x4 res = a;
 
 	for (U64 i = 0; i < 2; ++i)
-		((U64 *)&res)[i] >>= bits;
+		((U64 *) &res)[i] >>= bits;
 
 	return res;
 }
@@ -219,8 +219,8 @@ typedef union I32x4_U8x8 {
 
 static inline I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
 
-	const U8 *ua = (U8 *)&a;
-	const U8 *ub = (U8 *)&b;
+	const U8 *ua = (U8 *) &a;
+	const U8 *ub = (U8 *) &b;
 
 	//Zeroed through the union's vector member rather than `= { 0 }`: the first member is itself an
 	//aggregate here, which C++ flags under -Wmissing-braces (this header is pulled into oxc::c by vec.hpp).

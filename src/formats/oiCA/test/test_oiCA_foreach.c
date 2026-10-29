@@ -37,7 +37,7 @@ typedef struct ForeachCollector {
 
 static Bool foreachCb(const FileInfo *info, void *obj, const Allocator *alloc, Error *e_rr) {
 
-	(void)e_rr;
+	(void) e_rr;
 
 	ForeachCollector *c = (ForeachCollector *)obj;
 
@@ -143,6 +143,7 @@ void Test_CAForeach(Test *t) {
 		//Degenerate case: single-file tree with no subdirs
 
 		CAFile ca2 = { 0 };
+
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca2, &t->err)) {
 			Test_assert(t, "Create ca2 for degenerate foreach", false);
 			goto doneForeach;
@@ -163,9 +164,12 @@ void Test_CAForeach(Test *t) {
 		//Null guards
 
 		Test_assert(t, "foreach null caFile",
-			!CAFile_foreach(NULL, root, foreachCb, NULL, false, t->alloc, NULL));
+			!CAFile_foreach(NULL, root, foreachCb, NULL, false, t->alloc, NULL)
+		);
+
 		Test_assert(t, "foreach null cb",
-			!CAFile_foreach(&ca, root, NULL, NULL, false, t->alloc, NULL));
+			!CAFile_foreach(&ca, root, NULL, NULL, false, t->alloc, NULL)
+		);
 
 	doneForeach:
 

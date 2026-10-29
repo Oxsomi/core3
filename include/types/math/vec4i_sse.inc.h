@@ -95,7 +95,7 @@ static inline I32x4 I32x4_or(I32x4 a, I32x4 b) { return _mm_or_si128(a, b); }
 static inline I32x4 I32x4_and(I32x4 a, I32x4 b) { return _mm_and_si128(a, b); }
 static inline I32x4 I32x4_andnot(I32x4 a, I32x4 b) { return _mm_andnot_si128(a, b); }
 static inline I32x4 I32x4_xor(I32x4 a, I32x4 b) { return _mm_xor_si128(a, b); }
-static inline I32x4 I32x4_not(I32x4 a) { return _mm_xor_si128(a, I32x4_xxxx4((I32)U32_MAX)); }
+static inline I32x4 I32x4_not(I32x4 a) { return _mm_xor_si128(a, I32x4_xxxx4((I32) U32_MAX)); }
 	
 static inline I32x4 I32x4_lshElements(I32x4 a, U8 elementCount) {
 	switch (elementCount) {

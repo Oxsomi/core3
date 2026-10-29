@@ -46,7 +46,7 @@ static inline I32x4 AES_subWord4(I32x4 input) {
 
 static inline I32x4 AES_keyGenAssistInternal(I32x4 a, U8 rcon) {
 
-	const U64 rcon64 = (U64)rcon << 32;
+	const U64 rcon64 = (U64) rcon << 32;
 
 	I32x4 sx1_3 = I32x4_yyww(AES_subWord4(a));
 

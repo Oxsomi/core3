@@ -245,7 +245,7 @@ Bool GraphicsInstance_getPreferredDevice(
 			if((available.featuresExt & required.featuresExt) != required.featuresExt)
 				continue;
 
-			if(
+			if (
 				info.capabilities.sharedMemory < requiredCapabilities->sharedMemory ||
 				info.capabilities.dedicatedMemory < requiredCapabilities->dedicatedMemory ||
 				info.capabilities.maxBufferSize < requiredCapabilities->maxBufferSize ||
@@ -576,11 +576,11 @@ Bool GraphicsInstance_create(
 	//Both modules then end up with their own GraphicsInstance_freeExt, which Mach-O keeps separate.
 	//typeId, the exact length for this api and alloc still pin the type down to a GraphicsInstance_makeType() result.
 
-	if(
+	if (
 		!type ||
 		!sizes ||
 		type->typeId != (TypeId) EGraphicsTypeId_GraphicsInstance ||
-		RefPtrType_length(type) != (U32)(sizeof(GraphicsInstance) + GraphicsObjectSize_stride(sizes->instance)) ||
+		RefPtrType_length(type) != (U32) (sizeof(GraphicsInstance) + GraphicsObjectSize_stride(sizes->instance)) ||
 		!type->free ||
 		type->alloc != alloc
 	)

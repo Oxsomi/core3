@@ -263,6 +263,26 @@ void Test_mat(Test *test) {
 		Test_assert(test, "mat inverse of identity is identity", (
 			F32x4x4_inverse(id, &inv) && F32x4x4_eqApprox(inv, id)
 		));
+
+		const F32 scales[] = { 1e-20f, 1e20f };
+
+		for(U8 i = 0; i < sizeof(scales) / sizeof(scales[0]); ++i) {
+
+			const F32x4x4 scaled = F32x4x4_scale(F32x4_xxxx4(scales[i]));
+
+			if(Test_assert(test, "mat inverse accepts extreme uniform scale", F32x4x4_inverse(scaled, &inv)))
+				Test_assert(test, "mat inverse extreme scale product", F32x4x4_eqApproxAdv(
+					F32x4x4_mul(scaled, inv), id, 1e-5f, 1e-5f
+				));
+		}
+
+		inv = id;
+
+		Test_assert(test, "mat inverse refuses an unrepresentable result", !F32x4x4_inverse(
+			F32x4x4_scale(F32x4_xxxx4(F32_fromU32Bits(1))), &inv
+		));
+
+		Test_assert(test, "mat inverse overflow preserves result", F32x4x4_eq(inv, id));
 	}
 
 	//========================= projections =========================
@@ -290,6 +310,20 @@ void Test_mat(Test *test) {
 
 		//An aspect > 1 must squash x relative to y
 		Test_assert(test, "mat perspective applies aspect", F32x4x4_get(proj, 0, 0) < F32x4x4_get(proj, 1, 1));
+
+		const F32x4x4 infinite = F32x4x4_perspective(F32_PI / 2, 1, nearPlane, F32_fromU32Bits(0x7F800000));
+		const F32x4 infiniteNear = F32x4x4_transformPoint(infinite, F32x4_create4(0, 0, nearPlane, 1));
+		const F32x4 distant = F32x4x4_transformPoint(infinite, F32x4_create4(0, 0, 1e10f, 1));
+
+		Test_assert(
+			test, "mat infinite perspective near maps to one",
+			F32_abs(F32x4_z(infiniteNear) / F32x4_w(infiniteNear) - 1) < 1e-5f
+		);
+
+		Test_assert(
+			test, "mat infinite perspective distant depth",
+			F32_abs(F32x4_z(distant) / F32x4_w(distant) - nearPlane / 1e10f) < 1e-15f
+		);
 	}
 
 	{
@@ -355,6 +389,32 @@ void Test_mat(Test *test) {
 		Test_assert(test, "mat lookDir agrees with lookAt", F32x4x4_eqApproxAdv(
 			F32x4x4_lookDir(eye, F32x4_sub(center, eye), up), view, 1e-4f, 1e-5f
 		));
+
+		const F32x4 directions[] = { F32x4_create3(0, 1, 0), F32x4_create3(0, -1, 0), F32x4_create3(1, 2, 3) };
+
+		for(U8 i = 0; i < sizeof(directions) / sizeof(directions[0]); ++i) {
+
+			const F32x4 direction = directions[i];
+			const F32x4x4 parallel = F32x4x4_lookDir(eye, direction, direction);
+			const F32x4 local = F32x4x4_transformDirection(parallel, direction);
+
+			Test_assert(
+				test, "mat parallel up preserves forward", F32_abs(F32x4_x(local)) < 1e-5f &&
+				F32_abs(F32x4_y(local)) < 1e-5f && F32_abs(F32x4_z(local) - F32x4_len3(direction)) < 1e-5f
+			);
+
+			Test_assert(
+				test, "mat parallel up preserves lengths",
+				F32_abs(
+					F32x4_len3(F32x4x4_transformDirection(parallel, F32x4_create3(1, 2, 3))) -
+					F32x4_len3(F32x4_create3(1, 2, 3))
+				) < 1e-5f
+			);
+		}
+
+		Test_assert(test, "mat zero direction and up use the default basis", F32x4x4_eqApprox(
+			F32x4x4_lookDir(F32x4_zero(), F32x4_zero(), F32x4_zero()), id
+		));
 	}
 
 	//========================= view / transformSRT =========================
@@ -391,6 +451,12 @@ void Test_mat(Test *test) {
 			F32x4_setWCopy(QuatF32_applyToNormal(q, d), 0),
 			1e-3f, 1e-4f
 		));
+
+		Test_assert(test, "quaternion angle has the documented opposite matrix sense", F32x4_eqApproxAdv4(
+			F32x4x4_transformDirection(F32x4x4_rotateQuat(q), d),
+			F32x4x4_transformDirection(F32x4x4_rotateZ(-F32_PI / 2), d),
+			1e-3f, 1e-4f
+		));
 	}
 
 	//========================= format =========================
@@ -403,7 +469,7 @@ void Test_mat(Test *test) {
 		Test_assert(test, "mat format is null terminated", buf[n] == '\0');
 		Test_assert(test, "mat format has 4 lines", (
 			buf[n - 1] == '\n' &&
-			(U64)(strchr(buf, '\n') - buf) < n
+			(U64) (strchr(buf, '\n') - buf) < n
 		));
 
 		//Too small a buffer must report failure rather than write a partial matrix
@@ -411,4 +477,28 @@ void Test_mat(Test *test) {
 		Test_assert(test, "mat format rejects a small buffer", !F32x4x4_format(id, tiny, sizeof(tiny)));
 		Test_assert(test, "mat format handles null", !F32x4x4_format(id, NULL, 16));
 	}
+
+	const F32 scales[] = { 1e-30f, 1e-15f, 1e15f, 1e30f };
+
+	for(U8 i = 0; i < sizeof(scales) / sizeof(scales[0]); ++i) {
+
+		const F32x4x4 scaled = F32x4x4_scale3(scales[i], scales[i], scales[i]);
+		F32x4x4 inverse = F32x4x4_zero();
+
+		if(Test_assert(test, "extreme scale is invertible", F32x4x4_inverse(scaled, &inverse)))
+			Test_assert(
+				test, "extreme scale inverse is finite and accurate",
+				F32x4x4_eqApproxAdv(F32x4x4_mul(scaled, inverse), id, 1e-4f, 1e-5f)
+			);
+	}
+
+	const F32x4x4 parallel = F32x4x4_lookDir(F32x4_zero(), F32x4_create3(0, 1, 0), F32x4_create3(0, 1, 0));
+
+	Test_assert(test, "parallel camera up has a finite basis", F32_isValid(F32x4x4_determinant(parallel)));
+
+	const F32x4x4 infinite = F32x4x4_perspective(F32_PI / 2, 1, 0.1f, F32_fromU32Bits(0x7F800000));
+	const F32x4 clip = F32x4x4_transformPoint(infinite, F32x4_create3(0, 0, 0.1f));
+
+	Test_assert(test, "infinite far plane has finite near depth", F32_abs(F32x4_z(clip) / F32x4_w(clip) - 1) < 1e-5f);
+
 }

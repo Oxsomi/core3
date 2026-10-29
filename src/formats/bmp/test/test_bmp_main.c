@@ -55,6 +55,11 @@ OXC3_TEST_MAIN(formats_bmp) {
 	Test_BMPReadUnsupportedCompression(&t);
 	Test_BMPReadUnsupportedCompressionRLE4(&t);
 
+	Test_BMPWriteFailedWrites(&t);
+	Test_BMPWriteLimits(&t);
+	Test_BMPReadBitfields(&t);
+	Test_BMPReadExtendedHeaders(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);
 }

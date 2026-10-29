@@ -23,6 +23,7 @@
 #include "test_types_math_shared.h"
 #include "types/math/vec4i.h"
 #include "types/math/u128_base.h"
+#include "types/math/type_cast.h"
 
 void Test_vec4i(Test *test) {
 
@@ -71,6 +72,18 @@ void Test_vec4i(Test *test) {
 
 	I32x4 mod = I32x4_mod(I32x4_create4(5, -5, 9, -9), I32x4_xxxx4(4));
 	Test_assert(test, "I32x4_mod", !I32x4_neq4(mod, I32x4_create4(1, 3, 1, 3)));
+	Test_assert(test, "I32x4_mod negative divisors", I32x4_eq4(
+		I32x4_mod(I32x4_create4(5, -5, 9, -9), I32x4_xxxx4(-4)), I32x4_create4(-3, -1, -3, -1)
+	));
+
+	Test_assert(test, "I32x4_mod integer limits", I32x4_eq4(
+		I32x4_mod(I32x4_create4(I32_MIN, -1, I32_MAX, I32_MIN), I32x4_create4(-1, I32_MIN, I32_MIN, 3)),
+		I32x4_create4(0, -1, -1, 1)
+	));
+
+	Test_assert(test, "I32x4_mod exact multiples", I32x4_eq4(
+		I32x4_mod(I32x4_create4(8, -8, 0, I32_MIN), I32x4_create4(-4, 4, -3, I32_MIN)), I32x4_zero()
+	));
 
 	a = I32x4_create4(1, 2, 3, 4);
 	b = I32x4_create4(5, 6, 7, 8);
@@ -112,11 +125,11 @@ void Test_vec4i(Test *test) {
 	Test_assert(test, "I32x4_lsh32", !I32x4_neq4(I32x4_lsh32(v4, 1),                        I32x4_create4(2, 4, 8, 16)));
 	Test_assert(test, "I32x4_rsh32", !I32x4_neq4(I32x4_rsh32(I32x4_create4(8, 4, 2, 1), 1), I32x4_create4(4, 2, 1, 0)));
 
-	I32x4 rol = I32x4_rol(I32x4_create4((I32)0x80000001, 0, 0, 0), 1);
+	I32x4 rol = I32x4_rol(I32x4_create4((I32) 0x80000001, 0, 0, 0), 1);
 	Test_assert(test, "I32x4_rol",   I32x4_x(rol) == 0x00000003);
 
 	I32x4 ror = I32x4_ror(I32x4_create4(0x00000003, 0, 0, 0), 1);
-	Test_assert(test, "I32x4_ror",   I32x4_x(ror) == (I32)0x80000001);
+	Test_assert(test, "I32x4_ror",   I32x4_x(ror) == (I32) 0x80000001);
 
 	Test_assert(test, "I32x4_lshElements", I32x4_eq4(I32x4_lshElements(v4, 1), I32x4_create4(0, 1, 2, 4)));
 	Test_assert(test, "I32x4_rshElements", I32x4_eq4(I32x4_rshElements(v4, 1), I32x4_create4(2, 4, 8, 0)));
@@ -212,4 +225,20 @@ void Test_vec4i(Test *test) {
 
 	for (U32 i = 0; i < sizeof(clmulA) / sizeof(clmulA[0]); ++i)
 		Test_assert(test, "I32x4_clmul64", I32x4_eq4(I32x4_clmul64(clmulA[i], clmulB[i], clmulImm[i]), clmulExpect[i]));
+
+	Test_assert(test, "modulo follows divisor sign", I32x4_eq4(
+		I32x4_mod(I32x4_create4(13, -13, 13, -13), I32x4_create4(5, 5, -5, -5)), I32x4_create4(3, 2, -2, -3)
+	));
+
+	const F32 inf = F32_fromU32Bits(0x7F800000), nan = F32_fromU32Bits(0x7FC00000);
+
+	Test_assert(test, "invalid float conversion returns INT_MIN", I32x4_eq4(
+		I32x4_fromF32x4(F32x4_create4(inf, -inf, nan, 2147483648.0f)), I32x4_xxxx4(I32_MIN)
+	));
+
+	Test_assert(test, "unsigned multiplication uses lanes zero and two", I32x4_eq4(
+		I32x4_mulU32x2AsU64x2(I32x4_create4(3, 100, 7, 200), I32x4_create4(5, 100, 11, 200)),
+		I32x4_create4(15, 0, 77, 0)
+	));
+
 }

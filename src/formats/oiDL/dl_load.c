@@ -134,6 +134,11 @@ Bool DLFile_loadStream(
 		goto clean;
 	}
 
+	//A zero length copy would mean the rest of the stream, so there's nothing to do instead.
+
+	if (!stream.len)
+		goto clean;
+
 	if (Buffer_length(cache)) {
 		gotoIfError3(clean, StreamCursor_createWithCache(stream.stream, &cache, false, &readCursor, e_rr));
 		keepCache = true;
@@ -182,6 +187,20 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 	if (DLFile_isFullyLoaded(dlFile, i))
 		goto clean;
 
+	//An empty entry has nothing to read, and no allocation to hold it.
+
+	if (!DLFile_entrySize(dlFile, i)) {
+
+		if (dlFile->settings.dataType == EDLDataType_Data)
+			dlFile->entryBuffers.ptrNonConst[i] = Buffer_createNull();
+
+		else dlFile->entryStrings.ptrNonConst[i] = CharString_createNull();
+
+		RefPtr_dec(&dlFile->entryStreams.ptrNonConst[i].stream);
+		dlFile->entryStreams.ptrNonConst[i] = (DLEntryStream) { 0 };
+		goto clean;
+	}
+
 	gotoIfError3(clean, MemoryStream_create(
 		DLFile_entrySize(dlFile, i), EMemoryStreamFlags_IsWritable, &type, &memStreamRef, e_rr
 	));
@@ -207,7 +226,18 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 		dlFile->entryBuffers.ptrNonConst[i] = buf;
 		buf = Buffer_createNull();
 	} else {
-		CharString str = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
+
+		if (!Buffer_isUTF8(buf, 1))
+			retError(clean, Error_invalidParameter(0, 0, "DLFile_loadEntry()::entry isn't a valid string"));
+
+		//The string takes over the allocation, so freeing the DLFile frees it.
+
+		CharString str = (CharString) {
+			.ptrNonConst = (C8*) buf.ptrNonConst,
+			.lenAndNullTerminated = Buffer_length(buf),
+			.capacityAndRefInfo = Buffer_length(buf)
+		};
+
 		dlFile->entryStrings.ptrNonConst[i] = str;
 		buf = Buffer_createNull();
 	}

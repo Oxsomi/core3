@@ -270,7 +270,7 @@ static Bool CommandList_validateBindState(CommandList *commandList, PipelineRef 
 	// CONTENTS are not validated here), so a matching triple was already proven valid and long runs of work
 	// ops between binds skip everything below.
 
-	if(
+	if (
 		commandList->validatedPipeline == pipelineRef &&
 		commandList->validatedTable == commandList->boundDescriptorTable &&
 		commandList->validatedHeap == commandList->boundDescriptorHeap
@@ -677,7 +677,7 @@ Bool CommandListRef_draw(CommandListRef *commandListRef, const DrawCmd *draw, Er
 
 	if(draw->vertexOffset >> 31)
 		retError(clean, Error_outOfBounds(
-			1, draw->vertexOffset, (U32)I32_MAX, "CommandListRef_draw() vertexOffset out of bounds"
+			1, draw->vertexOffset, (U32) I32_MAX, "CommandListRef_draw() vertexOffset out of bounds"
 		));
 
 	gotoIfError3(clean, CommandListRef_drawBase(
@@ -998,7 +998,7 @@ Bool CommandList_drawIndirectBase(
 
 	Bool s_uccess = true;
 
-	const U32 bufferStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
+	const U32 bufferStride = (U32) (indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
 	const DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if(!buf)
@@ -1015,7 +1015,7 @@ Bool CommandList_drawIndirectBase(
 		));
 
 	gotoIfError3(clean, CommandListRef_checkDispatchBuffer(
-		commandList->device, buffer, bufferOffset, (U64)bufferStride * drawCalls, e_rr
+		commandList->device, buffer, bufferOffset, (U64) bufferStride * drawCalls, e_rr
 	));
 
 	const BufferRange range = (BufferRange) {

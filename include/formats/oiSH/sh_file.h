@@ -144,7 +144,9 @@ Bool SHFile_addBinary(
 	Error *e_rr
 );
 
-//Moves entry->name and binaryIds
+//Moves entry->name and binaryIds.
+//Refuses an entry that references a binary of another entrypoint (one that isn't [[oxc::stage()]] annotated),
+// since SHFile_read refuses such a file too.
 Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc, Error *e_rr);
 
 //Moves include->name

@@ -26,7 +26,8 @@
 typedef enum ECompareResult {
 	ECompareResult_Lt,
 	ECompareResult_Eq,
-	ECompareResult_Gt
+	ECompareResult_Gt,
+	ECompareResult_Unordered    //Neither less, equal nor greater, such as a comparison with NaN
 } ECompareResult;
 
 //context is whatever was handed to the sort and is passed through untouched, so a comparator can carry state

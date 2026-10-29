@@ -23,6 +23,7 @@
 #include "types/container/texture_format.h"
 #include "types/container/buffer.h"
 #include "types/math/flp.h"
+#include "types/math/pack.h"
 #include "types/base/mathf.h"
 
 const C8 *ETextureFormatId_name[ETextureFormatId_Count] = {
@@ -81,6 +82,20 @@ const C8 *ETextureFormatId_name[ETextureFormatId_Count] = {
 
 void ETextureFormatId_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 srcCount) {
 
+	if(id == ETextureFormatId_BGR10A2 || id == ETextureFormatId_RGB9E5) {
+
+		F32 channels[4] = { 0 };
+
+		for(U8 i = 0; i < 4 && i < srcCount; ++i)
+			channels[i] = F32_isNaN(src[i]) ? 0 : src[i];
+
+		const F32x4 value = F32x4_load4(channels);
+		const U32 packed = id == ETextureFormatId_RGB9E5 ? U32_packRGB9E5(value) : U32_packRGB10A2(value);
+
+		Buffer_memcpy(Buffer_createRef(dst, 4), Buffer_createRefConst(&packed, 4));
+		return;
+	}
+
 	const ETextureFormat f = ETextureFormatId_unpack[id];
 	const ETexturePrimitive prim = ETextureFormat_getPrimitive(f);
 	const U8 channels = ETextureFormat_getChannels(f);
@@ -88,7 +103,8 @@ void ETextureFormatId_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 sr
 
 	for(U8 i = 0; i < channels; ++i) {
 
-		const F32 v = i < srcCount ? src[i] : 0;
+		const U8 channel = id == ETextureFormatId_BGRA8 && i < 3 ? 2 - i : i;
+		const F32 v = channel < srcCount ? src[channel] : 0;
 		U8 *at = dst + (U64) i * (bits >> 3);
 
 		//Every arm but the float one converts to an integer, and converting a NaN is undefined rather than
@@ -125,6 +141,7 @@ void ETextureFormatId_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 sr
 				break;
 			}
 
+			case ETexturePrimitive_UNormBGR:
 			case ETexturePrimitive_UNorm: {
 
 				const F32 lim = (F32) ((1u << bits) - 1);
@@ -173,6 +190,20 @@ void ETextureFormatId_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 sr
 
 void ETextureFormatId_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 dstCount) {
 
+	if(id == ETextureFormatId_BGR10A2 || id == ETextureFormatId_RGB9E5) {
+
+		U32 packed = 0;
+		F32 channels[4];
+
+		Buffer_memcpy(Buffer_createRef(&packed, 4), Buffer_createRefConst(src, 4));
+		F32x4_store4(channels, id == ETextureFormatId_RGB9E5 ? F32x4_unpackRGB9E5(packed) : F32x4_unpackRGB10A2(packed));
+
+		for(U8 i = 0; i < dstCount; ++i)
+			dst[i] = i < 4 ? channels[i] : 0;
+
+		return;
+	}
+
 	const ETextureFormat f = ETextureFormatId_unpack[id];
 	const ETexturePrimitive prim = ETextureFormat_getPrimitive(f);
 	const U8 channels = ETextureFormat_getChannels(f);
@@ -185,7 +216,8 @@ void ETextureFormatId_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 ds
 		if(i >= channels)
 			continue;
 
-		const U8 *at = src + (U64) i * (bits >> 3);
+		const U8 channel = id == ETextureFormatId_BGRA8 && i < 3 ? 2 - i : i;
+		const U8 *at = src + (U64) channel * (bits >> 3);
 
 		switch(prim) {
 
@@ -217,6 +249,7 @@ void ETextureFormatId_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 ds
 				break;
 			}
 
+			case ETexturePrimitive_UNormBGR:
 			case ETexturePrimitive_UNorm: {
 
 				const F32 lim = (F32) ((1u << bits) - 1);

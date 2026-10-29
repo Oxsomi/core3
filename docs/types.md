@@ -6,6 +6,17 @@ cryptography and the math everything else is written in.
 This page is a map, not a reference: the API is the headers under `include/types/`, with C++ wrappers (`*.hpp`)
 beside the C headers they wrap.
 
+In a C++ translation unit using the wrappers, include the `.hpp` headers and access the underlying C API
+through `oxc::c`.
+Do not also include OxC3 `.h` headers at global scope in that translation unit, including through another header.
+The wrappers include those declarations inside `oxc::c`; header guards preserve the scope of their first inclusion.
+System headers are included outside that namespace by the wrappers.
+C translation units and C++ translation units that use only the raw C API may include `.h` headers normally.
+
+The C headers require C11 and the C++ wrappers require C++20. CMake targets publish these requirements together
+with the header compiler options, ABI definitions and SIMD instruction requirements. Link the appropriate target
+instead of copying flags into the consumer; project warnings and optimization policy remain private to OxC3.
+
 ## Conventions
 
 - **Types are PascalCase and sized by name.** `U8` to `U64` and `I8` to `I64`, `F32` and `F64`, `C8` for a char,
@@ -39,6 +50,10 @@ interface, characters and read only string operations, atomics, spin locks, thre
 formatting), endianness, integer and float math that does not need vectors, sorting, fixed point positions (a
 37.4 format for world scale coordinates), and type ids.
 
+Timed spin-lock waits use a monotonic clock, so wall-clock adjustments do not change their timeout.
+`Time_format` and `Time_parseFormat` use a `Z` suffix for UTC and no suffix for local timestamps.
+Local parsing uses the system timezone and daylight saving rules; a repeated local time remains ambiguous.
+
 ## types/container
 
 - **Buffer** and **CharString**: a byte range and a string, each either owned, a mutable reference or a const
@@ -52,6 +67,9 @@ formatting), endianness, integer and float math that does not need vectors, sort
 - **Streams**: a readable or writable source with a block size and a relative read cost, so a consumer can decide
   whether splitting a read pays. Memory streams, file streams, encrypting streams, and read only windows onto
   another stream all share the interface; the codecs in formats read and write through it.
+  Resizable owned memory streams grow capacity geometrically for writes and reservations. Their readable length
+  remains the logical stream size; reserving capacity does not extend it, and moving the buffer out returns exactly
+  those logical bytes. Streams over caller-owned reference buffers retain their fixed capacity.
 - **RefPtr**: a reference counted handle with a type, which the graphics and file objects are.
 - **JobQueue**: a pool running jobs over a fixed set of threads, each with a stable id for per thread resources.
   Jobs go into a lane (Critical, Normal, Background), and the workers can be placed by core class: reserved
@@ -73,6 +91,24 @@ and a scalar one for targets without; matrices and quaternions; conversions betw
 and `pack.h`, the CPU twins of the packing functions shaders use (RGB9E5, RGB10A2, oct normals, F21 triples), kept
 bit identical to `@pack.hlsli` so data packed on either side reads back the same on the other. `tonemap.h` holds the
 display transforms (Reinhard, ACES, AgX, PBR Neutral) and the sRGB transfer function, with twins in `@tonemap.hlsli`.
+
+`F32x4_saturate` clamps lanes to [0, 1], mapping NaN and negative zero to positive zero.
+The RGB8 and sRGB8 packers use it before conversion. `F32x4_dot4` sums adjacent pairs on every backend,
+so its rounding follows `(x + y) + (z + w)`. Integer vector modulo follows the divisor's sign;
+exact multiples produce zero, including `I32_MIN` modulo -1. A zero divisor is undefined.
+
+The CPU `F32x4x4_inverse` uses F64 intermediates and reports failure for singular matrices or unrepresentable results.
+HLSL `inverseSlow` uses unchecked F32 cofactor arithmetic; its inputs, intermediate values, and inverse must be representable.
+These functions share matrix conventions, with different numerical precision and failure handling.
+
+Quaternion application uses this angle convention: for unit `q`, `applyToNormal(q, p)`
+computes `conjugate(q) * p * q`. A positive 90-degree quaternion rotation around +Z maps +X to -Y, while
+`F32x4x4_rotateZ(pi/2)` maps +X to +Y. `F32x4x4_rotateQuat(q)` preserves the quaternion's rotation exactly;
+conjugating a unit quaternion reverses its rotation. `angleAxis` takes radians, quaternion Euler helpers use
+degrees, and matrix Euler helpers use radians. The matrix conventions also apply to the F64 variants.
+
+`QuatS16` stores three 20-bit components and reconstructs the largest quaternion component, retaining precision
+near half turns. Bits 60..61 identify the omitted component, bit 62 stores its sign, and bit 63 is reserved as zero.
 
 ## types/mesh
 

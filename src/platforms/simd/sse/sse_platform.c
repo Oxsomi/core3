@@ -27,7 +27,7 @@ Bool Platform_checkCPUSupport() {
 
 	U16 v = 1;
 
-	if(!*(const U8*)&v)        //Little endian only
+	if(!*(const U8*) &v)        //Little endian only
 		return false;
 
 	//This has to cover everything X64_SIMD_FLAGS in CMakeLists.txt compiles for, because the compiler emits those

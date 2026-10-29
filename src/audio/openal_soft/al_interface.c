@@ -51,7 +51,7 @@ Bool AudioInterface_createExt(AudioInterface *interf, Error *e_rr) {
 
 	*interf = (AudioInterface) {
 		.api = EAudioApi_OpenAL,
-		.apiVersion = OXC3_MAKE_VERSION((U32)maj, (U32)min, 0)
+		.apiVersion = OXC3_MAKE_VERSION((U32) maj, (U32) min, 0)
 	};
 
 clean:

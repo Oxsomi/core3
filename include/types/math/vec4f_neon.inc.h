@@ -44,11 +44,8 @@ static inline F32x4 F32x4_trunc3(F32x4 a) { return F32x4_setWCopy(a, 0); }
 static inline F32x4 F32x4_trunc2(F32x4 a) { return F32x4_setZCopy(F32x4_trunc3(a), 0); }
 
 static inline F32 F32x4_reduce(F32x4 a) {
-	float32x2_t low = vget_low_f32(a);
-	float32x2_t high = vget_high_f32(a);
-	float32x2_t sum = vadd_f32(low, high);
-	sum = vpadd_f32(sum, sum);
-	return vget_lane_f32(sum, 0);
+	const float32x4_t pairs = vpaddq_f32(a, a);
+	return vgetq_lane_f32(vpaddq_f32(pairs, pairs), 0);
 }
 
 //Arithmetic
@@ -59,14 +56,16 @@ static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { return vmulq_f32(a, b); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { return vdivq_f32(a, b); }
 static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return vfmaq_f32(c, a, b); }        //a * b + c (baseline on ARMv8)
 
-static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, F32x4_trunc2(b))); }
-static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, F32x4_trunc3(b))); }
+static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_trunc2(F32x4_mul(a, b))); }
+static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_trunc3(F32x4_mul(a, b))); }
 static inline F32 F32x4_dot4(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, b)); }
+
+static inline F32x4 F32x4_negate(F32x4 a) { return vnegq_f32(a); }
 
 //Clamps
 
-static inline F32x4 F32x4_min(F32x4 a, F32x4 b) { return vminq_f32(a, b); }
-static inline F32x4 F32x4_max(F32x4 a, F32x4 b) { return vmaxq_f32(a, b); }
+static inline F32x4 F32x4_min(F32x4 a, F32x4 b) { return vbslq_f32(vcltq_f32(a, b), a, b); }
+static inline F32x4 F32x4_max(F32x4 a, F32x4 b) { return vbslq_f32(vcgtq_f32(a, b), a, b); }
 
 //Rounding
 

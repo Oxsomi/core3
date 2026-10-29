@@ -175,10 +175,10 @@ Bool PLDescriptorBinding_validate(
 
 	const U32 classType = b->registerType & EGfxRegisterType_TypeMask;
 
-	if(b->registerType & ~(U32)(EGfxRegisterType_TypeMask | EGfxRegisterType_Masks))
+	if(b->registerType & ~(U32) (EGfxRegisterType_TypeMask | EGfxRegisterType_Masks))
 		retError(clean, Error_invalidState(0, "PLDescriptorBinding_validate() register type carries unknown bits"));
 
-	if(
+	if (
 		classType < EGfxRegisterType_TextureStart &&
 		(b->registerType & (EGfxRegisterType_IsArray | EGfxRegisterType_IsCombinedSampler))
 	)
@@ -188,6 +188,9 @@ Bool PLDescriptorBinding_validate(
 
 	if(PLDescriptorBinding_source(*b) >= EPLSource_Count)
 		retError(clean, Error_invalidState(0, "PLDescriptorBinding_validate() source is unknown"));
+
+	if(b->padding)
+		retError(clean, Error_invalidState(0, "PLDescriptorBinding_validate() padding has to be zero"));
 
 	const U32 name = PLDescriptorBinding_name(*b);
 
@@ -224,7 +227,7 @@ Bool PLDescriptorBinding_validate(
 	const Bool isSampler =
 		classType == EGfxRegisterType_Sampler || classType == EGfxRegisterType_SamplerComparisonState;
 
-	if(
+	if (
 		(b->registerType & EGfxRegisterType_IsWrite) && (
 			isSampler || classType == EGfxRegisterType_AccelerationStructure ||
 			classType == EGfxRegisterType_ConstantBuffer || classType == EGfxRegisterType_PushConstants
@@ -234,7 +237,7 @@ Bool PLDescriptorBinding_validate(
 			0, "PLDescriptorBinding_validate() the register class can't carry the write flag"
 		));
 
-	if(
+	if (
 		(classType == EGfxRegisterType_ConstantBuffer || classType == EGfxRegisterType_PushConstants) &&
 		(!b->strideOrLength || b->strideOrLength > 64 * KIBI)
 	)
@@ -242,7 +245,7 @@ Bool PLDescriptorBinding_validate(
 			0, "PLDescriptorBinding_validate() a constant buffer's size has to be 0 < size <= 64KiB"
 		));
 
-	if(
+	if (
 		(
 			classType == EGfxRegisterType_StructuredBuffer || classType == EGfxRegisterType_StructuredBufferAtomic ||
 			classType == EGfxRegisterType_StorageBuffer || classType == EGfxRegisterType_StorageBufferAtomic
@@ -272,11 +275,14 @@ Bool PLSamplerInfo_validate(const PLSamplerInfo *s, Error *e_rr) {
 	if(s->filter > ESamplerFilterMode_All)
 		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() filter carries unknown bits"));
 
-	if(
+	if (
 		s->addressU >= ESamplerAddressMode_Count || s->addressV >= ESamplerAddressMode_Count ||
 		s->addressW >= ESamplerAddressMode_Count
 	)
 		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() address mode is unknown"));
+
+	if(s->padding)
+		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() padding has to be zero"));
 
 	if(s->aniso > 16)
 		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() aniso has to be 0-16"));
@@ -289,8 +295,46 @@ Bool PLSamplerInfo_validate(const PLSamplerInfo *s, Error *e_rr) {
 
 	//Read as a raw byte, since a Bool that never held 0 or 1 is already the trap this refuses
 
-	if(((const U8*)s)[offsetof(PLSamplerInfo, enableComparison)] > 1)
+	if(((const U8*) s)[offsetof(PLSamplerInfo, enableComparison)] > 1)
 		retError(clean, Error_invalidState(0, "PLSamplerInfo_validate() enableComparison has to be 0 or 1"));
+
+clean:
+	return s_uccess;
+}
+
+//Whether two rows would bind the same register on either binary type
+
+static Bool PLDescriptorBinding_clash(const PLDescriptorBinding *b, const PLDescriptorBinding *o) {
+
+	return
+		GfxBinding_overlaps(
+			b->bindings.arr[EGfxBinaryType_SPIRV], b->registerType, b->count,
+			o->bindings.arr[EGfxBinaryType_SPIRV], o->registerType, o->count, EGfxBinaryType_SPIRV
+		) || GfxBinding_overlaps(
+			b->bindings.arr[EGfxBinaryType_DXIL], b->registerType, b->count,
+			o->bindings.arr[EGfxBinaryType_DXIL], o->registerType, o->count, EGfxBinaryType_DXIL
+		);
+}
+
+Bool PLFile_validateStructure(const PLFile *plFile, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!plFile)
+		retError(clean, Error_nullPointer(0, "PLFile_validateStructure()::plFile is required"));
+
+	for(U64 i = 0; i < plFile->bindings.length; ++i)
+		for(U64 j = 0; j < i; ++j)
+			if(PLDescriptorBinding_clash(&plFile->bindings.ptr[i], &plFile->bindings.ptr[j]))
+				retError(clean, Error_invalidState(
+					0, "PLFile_validateStructure() a binding overlaps an earlier row's register range"
+				));
+
+	if (
+		plFile->hasPushConstant &&
+		(plFile->pushConstant.registerType & EGfxRegisterType_TypeMask) != EGfxRegisterType_PushConstants
+	)
+		retError(clean, Error_invalidState(0, "PLFile_validateStructure() the push constant isn't a push constant register"));
 
 clean:
 	return s_uccess;
@@ -344,17 +388,7 @@ Bool PLFile_validate(const PLFile *plFile, const Allocator *alloc, ListCharStrin
 
 			const PLDescriptorBinding o = plFile->bindings.ptr[j];
 
-			const Bool spirvClash = GfxBinding_overlaps(
-				b.bindings.arr[EGfxBinaryType_SPIRV], b.registerType, b.count,
-				o.bindings.arr[EGfxBinaryType_SPIRV], o.registerType, o.count, EGfxBinaryType_SPIRV
-			);
-
-			const Bool dxilClash = GfxBinding_overlaps(
-				b.bindings.arr[EGfxBinaryType_DXIL], b.registerType, b.count,
-				o.bindings.arr[EGfxBinaryType_DXIL], o.registerType, o.count, EGfxBinaryType_DXIL
-			);
-
-			if (spirvClash || dxilClash) {
+			if (PLDescriptorBinding_clash(&b, &o)) {
 
 				gotoIfError3(clean, PLFile_pushIssue(
 					issues, alloc, "layout.binding", i, "overlaps an earlier row's register range", e_rr

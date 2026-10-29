@@ -223,7 +223,7 @@ Bool GraphicsDeviceRef_setPipelineCache(GraphicsDeviceRef *deviceRef, Buffer dat
 
 	const U64 sizesBytes = (U64) header.sizeCount * 2 * sizeof(U64);
 
-	if(
+	if (
 		length < sizeof(header) ||
 		header.magic != PipelineCacheHeader_MAGIC ||
 		header.version != PipelineCacheHeader_VERSION ||

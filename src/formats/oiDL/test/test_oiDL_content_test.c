@@ -85,8 +85,8 @@ void Test_DLRoundtripPlain(Test *t) {
 			Test_assert(t, "Single buffer: setup", false);
 
 		else if (Test_assert(
-			t, "Single buffer: write+read", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2))
-		) {
+			t, "Single buffer: write+read", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2)
+		)) {
 
 			Test_assert(t, "Single buffer: entryCount 1", DLFile_entryCount(&f2) == 1);
 			Test_assert(t, "Single buffer: size correct", DLFile_entrySize(&f2, 0) == sizeof(bytes));
@@ -118,7 +118,7 @@ void Test_DLRoundtripPlain(Test *t) {
 
 			if (sz) {
 				Buffer_createUninitializedBytes(sz, t->alloc, &buf, &t->err);
-				Buffer_setAllToU8(buf, (U8)i, NULL);
+				Buffer_setAllToU8(buf, (U8) i, NULL);
 			}
 
 			addOk = DLFile_addEntry(&f, &buf, t->alloc, &t->err);
@@ -140,7 +140,7 @@ void Test_DLRoundtripPlain(Test *t) {
 
 			for (U64 i = 0; i < 200 && sizesOk && contentOk; ++i) {
 
-				Buffer_setAllToU8(buf, (U8)i, NULL);
+				Buffer_setAllToU8(buf, (U8) i, NULL);
 
 				U64 siz = DLFile_entrySize(&f2, i);
 
@@ -188,15 +188,15 @@ void Test_DLRoundtripPlain(Test *t) {
 		Test_assert(t, "Strings: add all", addOk);
 
 		if (addOk && Test_assert(
-			t, "Strings: roundtrip", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2))
-		) {
+			t, "Strings: roundtrip", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2)
+		)) {
 			Bool readOk = true;
 
 			for (int i = 0; i < 20 && readOk; ++i) {
 				CharString out      = CharString_createNull();
 				CharString expected = CharString_createRefCStrConst(messages[i]);
 
-				if (!DLFile_loadedStringAtConst(&f2, (U64)i, &out, &t->err)) {
+				if (!DLFile_loadedStringAtConst(&f2, (U64) i, &out, &t->err)) {
 					readOk = false; break;
 				}
 
@@ -228,7 +228,7 @@ void Test_DLRoundtripPlain(Test *t) {
 			Bool zeroOk = true;
 
 			for (U8 i = 0; i < 10 && zeroOk; ++i)
-				if (DLFile_entrySize(&f2, (U64)i) != 0)
+				if (DLFile_entrySize(&f2, (U64) i) != 0)
 					zeroOk = false;
 
 			Test_assert(t, "Empty entries: all sizes 0", zeroOk);
@@ -339,7 +339,57 @@ void Test_DLRoundtripPlain(Test *t) {
 	}
 }
 
+//Computed independently with Python HMAC-SHA256 and Windows BCrypt AES-GCM.
+//Raw key bytes are 00..1F, root identity 00..0B, nonce 10..1B, and the only entry is "hello".
+static void Test_DLEncryptedFixture(Test *t) {
+
+	Test_setModule(t, "DLFile encrypted fixture");
+
+	static const U8 ENCODED[] = {
+		0x6F, 0x69, 0x44, 0x4C, 0x00, 0x00, 0x01, 0x00, 0x01, 0x05, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+		0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x4A, 0xE6, 0x62, 0x6D, 0x08, 0x70, 0x21, 0x90, 0xDE, 0x5F,
+		0x34, 0x29, 0xC7, 0xDB, 0x9A, 0x3D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x00, 0x00, 0x00, 0x00,
+		0xEB, 0xF4, 0x8B, 0x91, 0x5C, 0xCF, 0x2D, 0x4C, 0x19, 0xAB, 0x1E, 0xBD, 0x87, 0x3A, 0x90, 0x92,
+		0xCD, 0xAC, 0xBB, 0xEB, 0x28
+	};
+
+	U32 key[8] = { 0 };
+	StreamRef *stream = NULL;
+	DLFile file = { 0 };
+	const RefPtrType memoryType = MemoryStream_makeType(t->alloc);
+	const RefPtrType encryptionType = EncryptionStream_makeType(t->alloc);
+	Buffer fixture = Buffer_createRefConst(ENCODED, sizeof(ENCODED));
+
+	for (U8 i = 0; i < sizeof(key); ++i)
+		((U8*) key)[i] = i;
+
+	if (!Test_assert(t, "fixture stream", MemoryStream_createFromBuffer(
+		&fixture, EMemoryStreamFlags_None, &memoryType, &stream, &t->err
+	)))
+		goto clean;
+
+	U64 offset = 0;
+
+	if (Test_assert(t, "fixture decrypts", DLFile_read(
+		stream, &offset, key, I32x4_zero(), false, false, t->alloc, &encryptionType, &file, &t->err
+	))) {
+
+		Buffer data = Buffer_createNull();
+
+		Test_assert(t, "fixture end offset", offset == sizeof(ENCODED));
+		Test_assert(t, "fixture entry", DLFile_loadedBufferAtConst(&file, 0, &data, &t->err));
+		Test_assert(t, "fixture plaintext", Buffer_eq(data, Buffer_createRefConst("hello", 5)));
+	}
+
+clean:
+	DLFile_free(&file, t->alloc);
+	RefPtr_dec(&stream);
+}
+
 void Test_DLRoundtripEncrypted(Test *t) {
+
+	Test_DLEncryptedFixture(t);
 
 	Test_setModule(t, "DLFile_roundtripEncrypted");
 
@@ -378,7 +428,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		for (U8 i = 0; i < 5 && addOk; ++i) {
 			Buffer buf = Buffer_createNull();
 			Buffer_createUninitializedBytes(32, t->alloc, &buf, &t->err);
-			Buffer_setAllToU8(buf, (U8)(0xA0 + i), NULL);
+			Buffer_setAllToU8(buf, (U8) (0xA0 + i), NULL);
 			addOk = DLFile_addEntry(&f, &buf, t->alloc, &t->err);
 			Buffer_free(&buf, t->alloc);
 		}
@@ -416,12 +466,12 @@ void Test_DLRoundtripEncrypted(Test *t) {
 
 		for (U8 i = 0; i < 5 && contentOk; ++i) {
 
-			if (!DLFile_isFullyLoaded(&f2, (U64)i))
-				DLFile_loadEntry(&f2, (U64)i, t->alloc, &t->err);
+			if (!DLFile_isFullyLoaded(&f2, (U64) i))
+				DLFile_loadEntry(&f2, (U64) i, t->alloc, &t->err);
 
 			Buffer out = Buffer_createNull();
 
-			if (!DLFile_loadedBufferAtConst(&f2, (U64)i, &out, &t->err)) {
+			if (!DLFile_loadedBufferAtConst(&f2, (U64) i, &out, &t->err)) {
 				contentOk = false;
 				break;
 			}
@@ -432,7 +482,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 			}
 
 			for (U64 j = 0; j < 32 && contentOk; ++j)
-				if (((const U8*)out.ptr)[j] != (U8)(0xA0 + i))
+				if (((const U8*) out.ptr)[j] != (U8) (0xA0 + i))
 					contentOk = false;
 		}
 
@@ -551,7 +601,7 @@ void Test_DLStress(Test *t) {
 		Bool addOk = true;
 
 		for (int i = 0; i < 10000 && addOk; ++i) {
-			U8 b = (U8)(i & 0xFF);
+			U8 b = (U8) (i & 0xFF);
 			Buffer buf = Buffer_createNull();
 			addOk =
 				Buffer_createCopy(Buffer_createRefConst(&b, 1), t->alloc, &buf, &t->err) &&
@@ -597,7 +647,7 @@ void Test_DLStress(Test *t) {
 		}
 
 		for (U64 i = 0; i < sz; ++i)
-			buf.ptrNonConst[i] = (U8)(i % 251);
+			buf.ptrNonConst[i] = (U8) (i % 251);
 
 		Buffer_createCopy(buf, t->alloc, &original, NULL);
 
@@ -647,7 +697,7 @@ void Test_DLStress(Test *t) {
 
 			if (sz) {
 				Buffer_createUninitializedBytes(sz, t->alloc, &buf, &t->err);
-				Buffer_setAllToU8(buf, (U8)i, NULL);
+				Buffer_setAllToU8(buf, (U8) i, NULL);
 			}
 
 			addOk = DLFile_addEntry(&f, &buf, t->alloc, &t->err);
@@ -664,7 +714,7 @@ void Test_DLStress(Test *t) {
 			Bool sizeOk = true;
 
 			for (U16 i = 0; i < 300 && sizeOk; ++i)
-				if (DLFile_entrySize(&f2, (U64)i) != sizes[i % 4])
+				if (DLFile_entrySize(&f2, (U64) i) != sizes[i % 4])
 					sizeOk = false;
 
 			Test_assert(t, "Stress mixed: all sizes correct", sizeOk);

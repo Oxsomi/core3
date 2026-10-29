@@ -348,7 +348,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 			U64 start = range.buffer.startRange;
 			U64 len = range.buffer.endRange - range.buffer.startRange;
 
-			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
+			Buffer dst = Buffer_createRef((U8*) buffer->resource.mappedMemoryExt + start, len);
 			gotoIfError3(clean, DeviceBuffer_readUploadSource(buffer, start, len, dst, alloc, e_rr));
 
 			if(incoherent)
@@ -578,7 +578,7 @@ Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
 
 				deviceExt->bufferCopies.ptrNonConst[j] = (VkBufferCopy) {
 					//Relative to the staging resource rather than the frame region, since the copy offset is resource based
-					.srcOffset = allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),
+					.srcOffset = allocRange + (location - (const U8*) staging->resource.mappedMemoryExt),
 					.dstOffset = bufferj.startRange,
 					.size = len
 				};

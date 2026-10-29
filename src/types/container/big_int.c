@@ -38,8 +38,14 @@ Bool BigInt_create(U16 bitCount, const Allocator *alloc, BigInt *big, Error *e_r
 	Bool s_uccess = true;
 	const U64 u64s = (bitCount + 63) >> 6;
 
+	if(!big)
+		retError(clean, Error_nullPointer(2, "BigInt_create()::big is required"));
+
+	if(big->data)
+		retError(clean, Error_invalidParameter(2, 0, "BigInt_create()::big must be empty"));
+
 	if(u64s >> 8)
-		retError(clean, Error_outOfBounds(0, bitCount, (U64)U8_MAX << 6, "BigInt_create()::bitCount out of bounds"));
+		retError(clean, Error_outOfBounds(0, bitCount, (U64) U8_MAX << 6, "BigInt_create()::bitCount out of bounds"));
 
 	Buffer buffer = Buffer_createNull();
 	gotoIfError3(clean, Buffer_createEmptyBytes(u64s * sizeof(U64), alloc, &buffer, e_rr));
@@ -57,7 +63,7 @@ Bool BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr) {
 	if(!big)
 		retError(clean, Error_nullPointer(2, "BigInt_createRef()::big is required"));
 
-	if(((U64)(void*)ptr) & 7)
+	if(((U64) (void*) ptr) & 7)
 		retError(clean, Error_invalidParameter(2, 0, "BigInt_createRef()::ptr is misaligned, requiring proper alignment!"));
 
 	if(big->data)
@@ -81,7 +87,7 @@ Bool BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big, Error *e_r
 	if(!big)
 		retError(clean, Error_nullPointer(2, "BigInt_createRefConst()::big is required"));
 
-	if(((U64)(void*)ptr) & 7)
+	if(((U64) (void*) ptr) & 7)
 		retError(clean, Error_invalidParameter(
 			2, 0, "BigInt_createRefConst()::ptr is misaligned, requiring proper alignment!"
 		));
@@ -110,9 +116,9 @@ Bool BigInt_createCopy(BigInt *a, const Allocator *alloc, BigInt *b, Error *e_rr
 	if (b->data)
 		retError(clean, Error_invalidParameter(2, 0, "BigInt_createCopy()::b->data should be NULL to avoid memory leaks"));
 
-	gotoIfError3(clean, BigInt_create((U16)a->length << 6, alloc, b, e_rr));
+	gotoIfError3(clean, BigInt_create((U16) a->length << 6, alloc, b, e_rr));
 
-	if (!BigInt_set(a, *b, false, NULL, e_rr))
+	if (!BigInt_set(b, *a, false, NULL, e_rr))
 		retError(clean, Error_invalidState(0, "BigInt_createCopy() set failed"));
 
 clean:
@@ -138,251 +144,140 @@ static const U8 base2Count[] = { 4, 1, 3, 6 };
 Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding type, Error *e_rr) {
 
 	Bool s_uccess = true;
-	Bool allocated = false;
-
-	BigInt *big = NULL;
+	U64 limbs[0xFF] = { 0 };
 
 	if(!bigIntCreate || !bigIntCreate->text || !bigIntCreate->big)
-		retError(clean, Error_nullPointer(0, "BigInt_createFromBase2Type()::bigIntCreate, ->text and ->big are required"));
+		retError(clean, Error_nullPointer(0, "BigInt_createFromBase2Type()::bigIntCreate, text and big are required"));
 
-	if((U64)type >= EIntEncoding_Count)
-		retError(clean, Error_invalidEnum(3, (U64)type, EIntEncoding_Count, "BigInt_createFromBase2Type()::type is invalid"));
+	if((U64) type >= EIntEncoding_Base2End)
+		retError(clean, Error_invalidEnum(1, (U64) type, EIntEncoding_Base2End, "BigInt_createFromBase2Type()::type"));
 
 	const CharString prefix = CharString_createRefCStrConst(base2Types[type]);
 	const U8 prefixChars = CharString_startsWithStringInsensitive(bigIntCreate->text, &prefix, 0) ? 2 : 0;
-	const U8 countPerChar = base2Count[type];
+	const U8 bitsPerChar = base2Count[type];
+	const U64 textLength = CharString_length(*bigIntCreate->text), chars = textLength - prefixChars;
 
-	const U64 textl = CharString_length(*bigIntCreate->text);
-	const U64 chars = textl - prefixChars;
-	const C8 *const textPtr = bigIntCreate->text->ptr;
+	if(!chars || chars > U8_MAX * 64)
+		retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromBase2Type()::text has an invalid length"));
 
-	big = bigIntCreate->big;
+	BigInt *big = bigIntCreate->big;
 	U16 bitCount = bigIntCreate->bitCount;
 
-	if(!chars)
-		retError(clean, Error_invalidParameter(
-			0, 0, "BigInt_createFromBase2Type()::text starts with 0[xbon] but doesn't have content"
-		));
+	if(bitCount == U16_MAX) {
 
-	if (bitCount == U16_MAX) {
-
-		if(!big->data)
-			retError(clean, Error_nullPointer(
-				3, "BigInt_createFromBase2Type()::big->data is required if bitCount is auto (U16_MAX)"
-			));
+		if(!big->data || !big->length || big->isConst)
+			retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromBase2Type()::big must be writable"));
 
 		bitCount = BigInt_bitCount(*big);
 	}
-
-	else if(!bitCount)
-		bitCount = (U16) U64_min(chars * countPerChar, 0xFF * 64);
-
 	else {
-
 		if(big->data)
-			retError(clean, Error_invalidParameter(
-				3, 0, "BigInt_createFromBase2Type()::big->data should be NULL if bitCount isn't auto (U16_MAX)"
-			));
+			retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromBase2Type()::big must be empty"));
 
-		if(bitCount > 0xFF * 64)
-			retError(clean, Error_invalidParameter(1, 0, "BigInt_createFromBase2Type()::bitCount is out of bounds (>16320)"));
+		if(!bitCount)
+			bitCount = (U16) U64_min(chars * bitsPerChar, U8_MAX * 64);
+
+		if(bitCount > U8_MAX * 64)
+			retError(clean, Error_outOfBounds(0, bitCount, U8_MAX * 64, "BigInt_createFromBase2Type()::bitCount"));
 	}
 
-	if(chars * countPerChar > (((U32)bitCount + countPerChar - 1) / countPerChar * countPerChar))
-		retError(clean, Error_outOfBounds(
-			0, chars * countPerChar, bitCount, "BigInt_createFromBase2Type()::text would overflow BigInt bitCount"
-		));
+	for(U64 j = 0; j < chars; ++j) {
 
-	if (!big->data) {
-		gotoIfError3(clean, BigInt_create(bitCount, bigIntCreate->alloc, big, e_rr));
-		allocated = true;
-	}
-
-	for (
-		U64 i = textl - 1, j = 0, k = 0;
-		i >= prefixChars && i != U64_MAX;
-		--i, ++j
-	) {
-		U8 v = 0;
-
-		switch (type) {
-			default:                   v = C8_hex(textPtr[i]);       break;
-			case EIntEncoding_Bin:     v = C8_bin(textPtr[i]);       break;
-			case EIntEncoding_Oct:     v = C8_oct(textPtr[i]);       break;
-			case EIntEncoding_Nyto:    v = C8_nyto(textPtr[i]);      break;
-		}
+		const C8 c = bigIntCreate->text->ptr[textLength - 1 - j];
+		const U8 v = type == EIntEncoding_Hex ? C8_hex(c) : (
+			type == EIntEncoding_Bin ? C8_bin(c) : (type == EIntEncoding_Oct ? C8_oct(c) : C8_nyto(c))
+		);
 
 		if(v == U8_MAX)
-			retError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains invalid char"));
+			retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromBase2Type()::text contains an invalid digit"));
 
-		switch (type) {
+		const U64 bit = j * bitsPerChar;
 
-			default:                  ((U8*)big->data)[j >> 1] |= v << (countPerChar * (j & 1));    break;
-			case EIntEncoding_Bin:    ((U8*)big->data)[j >> 3] |= v << (countPerChar * (j & 7));    break;
+		if(v && (bit >= bitCount || (bitCount - bit < bitsPerChar && (v >> (bitCount - bit)))))
+			retError(clean, Error_outOfBounds(0, bit, bitCount, "BigInt_createFromBase2Type()::text overflows bitCount"));
 
-			case EIntEncoding_Nyto:
-			case EIntEncoding_Oct: {
+		if(!v)
+			continue;
 
-				const U64 lo = (U64)v << ((countPerChar * j) & 63);
+		limbs[bit >> 6] |= (U64) v << (bit & 63);
 
-				big->dataNonConst[k] |= lo;
-
-				if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
-
-					if(k + 1 >= big->length) {
-
-						if (i != prefixChars) {
-							retError(clean, Error_invalidParameter(
-								0, 1, "BigInt_createFromBase2Type()::text contains more data than BigInt can hold"
-							));
-						}
-
-						else if((U64)v >> (64 - ((countPerChar * j) & 63)))
-							retError(clean, Error_invalidParameter(
-								0, 1, "BigInt_createFromBase2Type()::text contains more data than BigInt can hold (overflow)"
-							));
-
-						goto clean;
-					}
-
-					const U64 hi = (U64)v >> (64 - ((countPerChar * j) & 63));
-					big->dataNonConst[++k] |= hi;
-				}
-
-				break;
-			}
-		}
+		if((bit & 63) + bitsPerChar > 64 && (bit >> 6) + 1 < U8_MAX)
+			limbs[(bit >> 6) + 1] |= (U64) v >> (64 - (bit & 63));
 	}
 
-	if(bitCount & 63) {        //Fix last U64 to handle out of bounds
+	if(!big->data)
+		gotoIfError3(clean, BigInt_create(bitCount, bigIntCreate->alloc, big, e_rr));
 
-		if (big->data[big->length - 1] >> (bitCount & 63))
-			retError(clean, Error_outOfBounds(
-				0, bitCount, bitCount, "BigInt_createFromBase2Type()::text contains too much data"
-			));
-	}
+	for(U16 i = 0; i < big->length; ++i)
+		big->dataNonConst[i] = limbs[i];
 
 clean:
-
-	if(!s_uccess && allocated)
-		BigInt_free(big, bigIntCreate->alloc);
-
 	return s_uccess;
 }
 
 Bool BigInt_createFromDec(const BigIntCreate *bigIntCreate, Error *e_rr) {
 
 	Bool s_uccess = true;
-	BigInt *big = NULL;
-	const Allocator *alloc = NULL;
-	Bool allocated = false;
-
-	BigInt temp = { 0 }, multiplier = { 0 };
+	U64 limbs[0xFF] = { 0 };
 
 	if (!bigIntCreate || !bigIntCreate->text || !bigIntCreate->big)
-		retError(clean, Error_nullPointer(0, "BigInt_createFromBase2Type()::bigIntCreate, ->text and ->big are required"));
+		retError(clean, Error_nullPointer(0, "BigInt_createFromDec()::bigIntCreate, text and big are required"));
 
-	const U64 textl = CharString_length(*bigIntCreate->text);
+	const U64 textLength = CharString_length(*bigIntCreate->text);
 
-	if(!textl)
-		retError(clean, Error_nullPointer(0, "BigInt_createFromDec()::text is required"));
+	if(!textLength || textLength > 4913)
+		retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromDec()::text must contain 1 to 4913 digits"));
 
-	if(textl > 4913)
-		retError(clean, Error_invalidParameter(
-			0, 0, "BigInt_createFromDec()::text should be below 4913 characters (16320 bits)"
-		));
-
-	big = bigIntCreate->big;
+	BigInt *big = bigIntCreate->big;
 	U16 bitCount = bigIntCreate->bitCount;
-	const C8 *const textPtr = bigIntCreate->text->ptr;
 
-	U64 estBitCount = (U64) F64_ceil(F64_log2((F64) textl));
+	if(bitCount == U16_MAX) {
 
-	if (bitCount == U16_MAX) {
-
-		if(!big->data)
-			retError(clean, Error_nullPointer(
-				3, "BigInt_createFromDec()::big->data is required when bitCount is auto (U16_MAX)"
-			));
-
-		if(!BigInt_and(big, BigInt_createNull()))
-			retError(clean, Error_invalidState(0, "BigInt_createFromDec()::big clear failed"));
+		if(!big->data || !big->length || big->isConst)
+			retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromDec()::big must be writable"));
 
 		bitCount = BigInt_bitCount(*big);
 	}
-
-	else if(!bitCount)
-		bitCount = (U16) U64_min(estBitCount, 0xFF * 64);
-
 	else {
-
 		if(big->data)
-			retError(clean, Error_invalidParameter(
-				3, 0, "BigInt_createFromDec()::big->data should be NULL when bitCount isn't auto (U16_MAX)"
-			));
+			retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromDec()::big must be empty"));
 
-		if(bitCount > 0xFF * 64)
-			retError(clean, Error_invalidParameter(1, 0, "BigInt_createFromBase2Type()::bitCount is out of bounds (>16320)"));
+		if(!bitCount)
+			bitCount = (U16) U64_min((textLength * 3322 + 999) / 1000, U8_MAX * 64);
+
+		if(bitCount > U8_MAX * 64)
+			retError(clean, Error_outOfBounds(0, bitCount, U8_MAX * 64, "BigInt_createFromDec()::bitCount"));
 	}
 
-	if(estBitCount > 0xFF * 64 + 1)            //+1 to align to base10
-		retError(clean, Error_outOfMemory(0, "BigInt_createFromBase2Type() estBitCount is out of bounds (>16321)"));
+	const U16 count = (bitCount + 63) >> 6;
 
-	alloc = bigIntCreate->alloc;
+	for(U64 i = 0; i < textLength; ++i) {
 
-	if (!big->data) {
-		gotoIfError3(clean, BigInt_create(bitCount, alloc, big, e_rr));
-		allocated = true;
+		U64 carry = C8_dec(bigIntCreate->text->ptr[i]);
+
+		if(carry == U8_MAX)
+			retError(clean, Error_invalidParameter(0, 0, "BigInt_createFromDec()::text contains a nondecimal digit"));
+
+		for(U16 j = 0; j < count; ++j) {
+
+			const U64 lo = (limbs[j] & U32_MAX) * 10 + carry;
+			const U64 hi = (limbs[j] >> 32) * 10 + (lo >> 32);
+
+			limbs[j] = (hi << 32) | (lo & U32_MAX);
+			carry = hi >> 32;
+		}
+
+		if(carry || ((bitCount & 63) && (limbs[count - 1] >> (bitCount & 63))))
+			retError(clean, Error_outOfBounds(0, bitCount, bitCount, "BigInt_createFromDec()::text overflows bitCount"));
 	}
 
-	gotoIfError3(clean, BigInt_create(bitCount, alloc, &multiplier, e_rr));
-	gotoIfError3(clean, BigInt_create(bitCount, alloc, &temp, e_rr));
+	if(!big->data)
+		gotoIfError3(clean, BigInt_create(bitCount, bigIntCreate->alloc, big, e_rr));
 
-	((U64*)multiplier.data)[0] = 1;        //Multiplier
-
-	for (U64 i = textl - 1; i != U64_MAX; --i) {
-
-		U8 v = C8_dec(textPtr[i]);
-
-		if (v == U8_MAX)
-			retError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains non alpha char"));
-
-		((U8*)temp.data)[0] = v;
-
-		gotoIfError3(clean, BigInt_mul(&temp, multiplier, alloc, e_rr));
-
-		if (!BigInt_add(big, temp))
-			retError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() add failed"));
-
-		//Multiply multiplier by 10
-
-		if (!BigInt_and(&temp, BigInt_createNull()))
-			retError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() clear failed"));
-
-		((U8*)temp.data)[0] = 10;
-
-		gotoIfError3(clean, BigInt_mul(&multiplier, temp, alloc, e_rr));
-	}
-
-	if(bitCount & 63) {        //Fix last U64 to handle out of bounds
-
-		if (big->data[big->length - 1] >> (bitCount & 63))
-			retError(clean, Error_outOfBounds(
-				0, bitCount, bitCount, "BigInt_createFromBase2Type()::text contains too much data"
-			));
-	}
+	for(U16 i = 0; i < count; ++i)
+		big->dataNonConst[i] = limbs[i];
 
 clean:
-
-	if (alloc) {
-
-		BigInt_free(&multiplier, alloc);
-		BigInt_free(&temp, alloc);
-
-		if (!s_uccess && allocated)
-			BigInt_free(big, alloc);
-	}
-
 	return s_uccess;
 }
 
@@ -423,8 +318,8 @@ Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr) {
 	BigInt temp = { 0 };
 	gotoIfError3(clean, BigInt_create(BigInt_bitCount(*a), allocator, &temp, e_rr));
 
-	const U32 digitsA = (U32)a->length * 2;
-	const U32 digitsB = (U32)b.length * 2;
+	const U32 digitsA = (U32) a->length * 2;
+	const U32 digitsB = (U32) b.length * 2;
 
 	U32 *dst = (U32*) temp.data;
 	const U32 *aptr = (const U32*) a->data;
@@ -525,11 +420,12 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 		overflow = nextOverflow;
 	}
 
-	const U64 next = b.length;
+	U64 next = b.length;
 
 	while(overflow && next < a->length) {
 		const U64 prev = a->data[next];
 		overflow = (++a->dataNonConst[next]) < prev;
+		++next;
 	}
 
 	return true;
@@ -559,11 +455,12 @@ Bool BigInt_sub(BigInt *a, BigInt b) {
 		underflow = nextUnderflow;
 	}
 
-	const U64 next = b.length;
+	U64 next = b.length;
 
 	while(underflow && next < a->length) {
 		const U64 prev = a->data[next];
 		underflow = (--a->dataNonConst[next]) > prev;
+		++next;
 	}
 
 	return true;
@@ -614,7 +511,7 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 
 	for(U64 i = 0; i < a->length; ++i) {
 
-		U64 left = i + (bits >> 6) > (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6)];
+		U64 left = i + (bits >> 6) > (U64) (a->length - 1) ? 0 : a->data[i + (bits >> 6)];
 		const U64 shift = bits & 63;
 
 		if(!shift) {
@@ -622,7 +519,7 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 			continue;
 		}
 
-		U64 right = i + (bits >> 6) >= (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6) + 1];
+		U64 right = i + (bits >> 6) >= (U64) (a->length - 1) ? 0 : a->data[i + (bits >> 6) + 1];
 
 		right <<= 64 - shift;
 		left >>= shift;
@@ -652,7 +549,7 @@ Bool BigInt_resize(BigInt *a, U8 newSize, const Allocator *alloc, Error *e_rr) {
 	}
 
 	BigInt temp = { 0 };
-	gotoIfError3(clean, BigInt_create((U16)newSize << 6, alloc, &temp, e_rr));
+	gotoIfError3(clean, BigInt_create((U16) newSize << 6, alloc, &temp, e_rr));
 
 	if(!BigInt_set(&temp, *a, false, NULL, e_rr))
 		retError(clean, Error_invalidState(0, "BigInt_resize() set failed"));
@@ -692,49 +589,48 @@ Bool BigInt_base2(const BigIntStringify *stringify, EIntEncoding type, BigInt b,
 
 	Bool s_uccess = true;
 	Bool allocated = false;
-	const U8 countPerChar = base2Count[type];
-	const U64 len = U64_max(3, (((U64)b.length * 64 + countPerChar - 1) / countPerChar) + 2);
 
-	if (!stringify)
-		retError(clean, Error_nullPointer(0, "BigInt_base2()::stringify is required"));
+	if (!stringify || !stringify->result)
+		retError(clean, Error_nullPointer(0, "BigInt_base2()::stringify and result are required"));
 
-	if (type >= EIntEncoding_Base2End)
+	if ((U64) type >= EIntEncoding_Base2End)
 		retError(clean, Error_outOfBounds(0, type, EIntEncoding_Base2End, "BigInt_base2()::type is out of bounds"));
+
+	const U8 countPerChar = base2Count[type];
+	const U64 len = U64_max(3, (((U64) b.length * 64 + countPerChar - 1) / countPerChar) + 2);
 
 	gotoIfError3(clean, CharString_resize(stringify->result, len, '0', stringify->alloc, e_rr));
 	allocated = true;
 
 	C8 *resultPtr = stringify->result->ptrNonConst;
 
+	for(U64 j = 0; j < len; ++j)
+		resultPtr[j] = '0';
+
 	resultPtr[1] = base2Types[type][1];
 
-	U64 firstLoc = len - 1;
+	U64 firstLoc = 1;
 	const U8 mask = (1 << countPerChar) - 1;
 	const U64 i = len - 1;
 
-	for (U64 j = 0, k = 0; j < len - 2 && k < b.length; ++j) {
+	for (U64 j = 0; j < len - 2 && b.length; ++j) {
 
-		U64 v = b.data[k];
-		v = ((U64)v >> ((countPerChar * j) & 63)) & mask;
+		const U64 bit = countPerChar * j, k = bit >> 6, shift = bit & 63;
+		U64 v = b.data[k] >> shift;
 
-		if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
+		if(shift + countPerChar > 64 && k + 1 < b.length)
+			v |= b.data[k + 1] << (64 - shift);
 
-			const U64 mask2 = ((U64)U64_MAX << (64 - ((countPerChar * j) & 63))) & mask;
-
-			if(k + 1 < b.length)
-				v |= b.data[k + 1] & mask2;
-
-			++k;
-		}
+		v &= mask;
 
 		if(!v)
 			continue;
 
 		switch(type) {
-			default:                   resultPtr[i - j] = C8_createHex((U8)v);       break;
-			case EIntEncoding_Bin:     resultPtr[i - j] = C8_createBin((U8)v);       break;
-			case EIntEncoding_Oct:     resultPtr[i - j] = C8_createOct((U8)v);       break;
-			case EIntEncoding_Nyto:    resultPtr[i - j] = C8_createNyto((U8)v);      break;
+			default:                   resultPtr[i - j] = C8_createHex((U8) v);       break;
+			case EIntEncoding_Bin:     resultPtr[i - j] = C8_createBin((U8) v);       break;
+			case EIntEncoding_Oct:     resultPtr[i - j] = C8_createOct((U8) v);       break;
+			case EIntEncoding_Nyto:    resultPtr[i - j] = C8_createNyto((U8) v);      break;
 		}
 
 		firstLoc = j + 1;

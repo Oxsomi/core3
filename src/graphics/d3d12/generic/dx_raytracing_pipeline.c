@@ -94,7 +94,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	gotoIfError3(clean, ListU32_resize(&binaryOffset, libraries.length, alloc, e_rr));
 
 	U64 groupNameStart = stageCount * 2;        //Only if group size > stageCount, otherwise reuses strings
-	U64 strings = groupNameStart + (I64)stageCount;
+	U64 strings = groupNameStart + (I64) stageCount;
 
 	gotoIfError3(clean, ListListU16_resize(&nameArr, strings, alloc, e_rr));
 
@@ -104,7 +104,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	D3D12_RAYTRACING_PIPELINE_CONFIG1 config1 = (D3D12_RAYTRACING_PIPELINE_CONFIG1) {
 		.MaxTraceRecursionDepth = pipelineRt->maxRecursionDepth,
-		.Flags = ((U16)(pipelineRt->flags & 3)) << 8
+		.Flags = ((U16) (pipelineRt->flags & 3)) << 8
 	};
 
 	//Not foldable into the shift above: that trick only lines up because SkipTriangles/SkipAABBs are bits 0 and
@@ -142,7 +142,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	for(U32 j = 0; j < binaryCount; ++j) {
 
 		U32 identifier = binaryIndices->ptr[j];
-		U16 globalId = (U16)(identifier >> 16);
+		U16 globalId = (U16) (identifier >> 16);
 		U16 localId = (U16) identifier;
 
 		const SHBinaryInfo *info = &binaries->ptr[globalId].binaries.ptr[localId];

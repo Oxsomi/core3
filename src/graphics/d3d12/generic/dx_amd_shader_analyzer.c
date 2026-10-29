@@ -415,7 +415,7 @@ Bool DxAmdShaderAnalyzer_selectVirtualGpu(U32 gpuId) {
 	U8 digits = 0;
 
 	do {
-		value[digits++] = (C8)('0' + (gpuId % 10));
+		value[digits++] = (C8) ('0' + (gpuId % 10));
 		gpuId /= 10;
 	} while(gpuId && digits < sizeof(value) - 1);
 
@@ -564,7 +564,7 @@ static Bool DxAmdShaderAnalyzer_addExecutable(
 ) {
 
 	Bool s_uccess = true;
-	PipelineExecutable exec = (PipelineExecutable) { .stages = (U32)(1 << stage) };
+	PipelineExecutable exec = (PipelineExecutable) { .stages = (U32) (1 << stage) };
 
 	//A stage the pipeline doesn't have has neither disassembly nor any register usage to report
 

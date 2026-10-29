@@ -125,6 +125,7 @@ static void Test_platformsWindowVirtual(Test *t) {
 	WindowRef *wRef = NULL;
 
 	WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
+
 	if (!Test_assert(t, "WindowManager_create", WindowManager_create(cbs, 0, &mgr, &t->err)))
 		goto clean;
 
@@ -181,7 +182,7 @@ static void Test_platformsKeyboard(Test *t) {
 	Test_assert(t, "axisCount",   kb.axes == 0);
 
 	//Build a handle for EKey_A
-	InputHandle hA = InputDevice_createHandle(&kb, (U16)EKey_A, EInputType_Button);
+	InputHandle hA = InputDevice_createHandle(&kb, (U16) EKey_A, EInputType_Button);
 	Test_assert(t, "validHandle",  InputDevice_isValidHandle(&kb, hA));
 	Test_assert(t, "isButton",     InputDevice_isButton(&kb, hA));
 	Test_assert(t, "notAxis",      !InputDevice_isAxis(&kb, hA));
@@ -284,9 +285,9 @@ static void Test_keySerialization(Test *t) {
 
 	//Build handles for a few well-known keys
 
-	InputHandle hA     = InputDevice_createHandle(&kb, (U16)EKey_A,      EInputType_Button);
-	InputHandle hSpace = InputDevice_createHandle(&kb, (U16)EKey_Space,  EInputType_Button);
-	InputHandle hF1    = InputDevice_createHandle(&kb, (U16)EKey_F1,     EInputType_Button);
+	InputHandle hA     = InputDevice_createHandle(&kb, (U16) EKey_A,      EInputType_Button);
+	InputHandle hSpace = InputDevice_createHandle(&kb, (U16) EKey_Space,  EInputType_Button);
+	InputHandle hF1    = InputDevice_createHandle(&kb, (U16) EKey_F1,     EInputType_Button);
 
 	CharString nameA     = InputDevice_getName(&kb, hA);
 	CharString nameSpace = InputDevice_getName(&kb, hSpace);
@@ -333,7 +334,7 @@ static void Test_mouseExtras(Test *t) {
 		goto clean;
 
 	//Dead zone is stored per-axis and retrieved through the public helper
-	InputHandle hRX = InputDevice_createHandle(&ms, (U16)(EMouseAxis_RX - EMouseAxis_Begin), EInputType_Axis);
+	InputHandle hRX = InputDevice_createHandle(&ms, (U16) (EMouseAxis_RX - EMouseAxis_Begin), EInputType_Axis);
 
 	//The mouse axis was registered with some dead zone (may be 0.0); just
 	//verify the call doesn't crash and returns a finite value.
@@ -341,7 +342,7 @@ static void Test_mouseExtras(Test *t) {
 	Test_assert(t, "deadZoneFinite", dz >= 0.f && dz <= 1.f);
 
 	//getDeadZone on a button handle must return 0
-	InputHandle hLeft = InputDevice_createHandle(&ms, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+	InputHandle hLeft = InputDevice_createHandle(&ms, (U16) (EMouseButton_Left - EMouseAxis_End), EInputType_Button);
 	Test_assert(t, "buttonDeadZeroFalse", InputDevice_getDeadZone(&ms, hLeft) == 0.f);
 
 	//getDeadZone on invalid handle must return 0
@@ -399,13 +400,13 @@ static void Test_platformsFilePhysical(Test *t) {
 	//Write
 	const C8 *msg = "OxC3 platform test data";
 	U64 msgLen = 23;
-	writeBuf = Buffer_createRefConst((const U8*)msg, msgLen);
+	writeBuf = Buffer_createRefConst((const U8*) msg, msgLen);
 	Test_assert(t, "write",          File_write(&writeBuf, &filePath, 0, 0, 50 * MS, false, &fhType, &t->err));
 
 	//Read back
 	Test_assert(t, "read",        File_read(&filePath, 50 * MS, 0, 0, &fhType, &readBuf, &t->err));
 	Test_assert(t, "readLength",  Buffer_length(readBuf) == msgLen);
-	Test_assert(t, "readContent", Buffer_eq(writeBuf, Buffer_createRefConst((const U8*)msg, msgLen)));
+	Test_assert(t, "readContent", Buffer_eq(writeBuf, Buffer_createRefConst((const U8*) msg, msgLen)));
 	Buffer_free(&readBuf, t->alloc);
 
 	//getInfo after write
@@ -483,7 +484,7 @@ static void Test_fileHandle(Test* t) {
 
 	const C8 *payload = "DirectHandleTest";
 	U64 payloadLen = 16;
-	writeBuf = Buffer_createRefConst((const U8*)payload, payloadLen);
+	writeBuf = Buffer_createRefConst((const U8*) payload, payloadLen);
 
 	Test_assert(t, "write", FileHandleRef_write(handle, 0, payloadLen, &writeBuf, &t->err));
 	RefPtr_dec(&handle);
@@ -516,7 +517,7 @@ static void Test_fileHandle(Test* t) {
 
 	Test_assert(t, "read", FileHandleRef_read(handle, 0, fileSize, &readBuf, &t->err));
 
-	Test_assert(t, "contentMatch", Buffer_eq(readBuf, Buffer_createRefConst((const U8*)payload, payloadLen)));
+	Test_assert(t, "contentMatch", Buffer_eq(readBuf, Buffer_createRefConst((const U8*) payload, payloadLen)));
 
 	//Read past EOF must fail
 	Buffer extra = Buffer_createNull();
@@ -528,6 +529,7 @@ static void Test_fileHandle(Test* t) {
 
 	//ReadWrite handle
 	FileHandleRef* rwHandle = NULL;
+
 	if (!Test_assert(t, "open_rw", File_open(
 		&filePath, 5 * SECOND, EFileOpenType_ReadWrite, false, &fhType, &rwHandle, &t->err
 	)))
@@ -539,7 +541,8 @@ static void Test_fileHandle(Test* t) {
 
 	//Final leak check
 	Test_assert(t, "noLeakAfterAll",
-		Platform_getActiveAllocations(0) <= allocsBefore + 1);
+		Platform_getActiveAllocations(0) <= allocsBefore + 1
+	);
 
 clean:
 	if (handle)   RefPtr_dec(&handle);
@@ -614,7 +617,7 @@ static void Test_fileLongPath(Test *t) {
 	{
 		const C8 *msg = "long-name payload";
 		U64 msgLen    = 17;
-		Buffer writeBuf = Buffer_createRefConst((const U8*)msg, msgLen);
+		Buffer writeBuf = Buffer_createRefConst((const U8*) msg, msgLen);
 		Test_assert(t, "writeLong", File_write(&writeBuf, &longFile, 0, 0, 50 * MS, false, &fhType, &t->err));
 		Test_assert(t, "readLong", File_read(&longFile, 50 * MS, 0, 0, &fhType, &readBuf, &t->err));
 		Test_assert(t, "longContentMatch", Buffer_eq(readBuf, writeBuf));
@@ -677,7 +680,7 @@ static void Test_fileLongPath(Test *t) {
  
 		const C8 *deepMsg = "deep path payload";
 		U64 deepLen       = 17;
-		Buffer deepWrite  = Buffer_createRefConst((const U8*)deepMsg, deepLen);
+		Buffer deepWrite  = Buffer_createRefConst((const U8*) deepMsg, deepLen);
  
 		Test_assert(t, "writeDeep", File_write(&deepWrite, &deepFile, 0, 0, 50 * MS, false, &fhType, &t->err));
  
@@ -835,7 +838,8 @@ static void Test_fileRepeatedOpenClose(Test *t) {
 			//Verify content matches last write
 
 			Test_assert(t, "contentMatch",
-				fileSize == 14 && Buffer_eq(buf, Buffer_createRefConst("WRITE_CYCLE_42", 14)));
+				fileSize == 14 && Buffer_eq(buf, Buffer_createRefConst("WRITE_CYCLE_42", 14))
+			);
 		}
 
 		//Close & cleanup
@@ -1110,7 +1114,7 @@ static void Test_platformsFileVirtual(Test *t) {
 	Test_assert(t, "readHello", File_read(&helloPath, 50 * MS, 0, 0, &fhType, &readBuf, &err));
 	Test_assert(t, "readNonEmpty", Buffer_length(readBuf) > 0);
 	//Content must contain "Hello"
-	CharString content = CharString_createRefSizedConst((const C8*)readBuf.ptr, Buffer_length(readBuf), false);
+	CharString content = CharString_createRefSizedConst((const C8*) readBuf.ptr, Buffer_length(readBuf), false);
 
 	const CharString hello = CharString_createRefCStrConst("Hello");
 	Test_assert(t, "helloContent", CharString_containsStringSensitive(&content, &hello, 0, 0));
@@ -1815,7 +1819,7 @@ static void Test_allocatorAlignment(Test *t) {
 			continue;
 		}
 
-		if((U64)(void*) buf.ptr & 15)
+		if((U64) (void*) buf.ptr & 15)
 			allAligned = false;
 
 		Buffer_free(&buf, t->alloc);
@@ -1907,6 +1911,7 @@ void Test_platformsEnvHpp(Test *t);
 OXC3_TEST_ENTRY(platforms_interface) {
 
 	Error err = Error_none();
+
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
 		Test_printPlatformCreateFail(&err);        //Can't even set up the platform, hard fail (but say why first)
 		Platform_return(1);

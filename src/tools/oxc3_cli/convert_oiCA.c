@@ -125,7 +125,7 @@ Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr) {
 
 	StreamRef *stream = NULL;
 
-	(void)convert->inputInfo;
+	(void) convert->inputInfo;
 
 	//TODO: Compression type
 

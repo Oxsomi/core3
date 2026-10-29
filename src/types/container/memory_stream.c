@@ -27,6 +27,14 @@
 
 //Implement OxStream's functions
 
+static U64 MemoryStream_grownCapacity(U64 capacity, U64 required) {
+
+	const U64 maxSize = U64_MAX >> 16;
+	const U64 doubled = capacity > maxSize / 2 ? maxSize : capacity * 2;
+
+	return U64_max(required, U64_max(doubled, 256));
+}
+
 static Bool MemoryStream_readInternal(
 	OxStream *stream,
 	U64 offset,
@@ -35,19 +43,22 @@ static Bool MemoryStream_readInternal(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
 
 	MemoryStream *memStream = (MemoryStream*)stream;
 
-	if (offset + length > memStream->parent.size)
+	if (Buffer_isConstRef(buf))
+		retError(clean, Error_constData(3, 0, "MemoryStream_readInternal()::buf must be writable"));
+
+	if (offset > stream->size || length > stream->size - offset)
 		retError(clean, Error_outOfBounds(
-			1, offset + length, memStream->parent.size,
+			1, offset, stream->size,
 			"MemoryStream_readInternal() out of bounds"
 		));
 
 	if (!length)
-		length = Buffer_length(memStream->data) - offset;
+		length = stream->size - offset;
 
 	if (length > Buffer_length(buf))
 		retError(clean, Error_outOfBounds(
@@ -55,7 +66,8 @@ static Bool MemoryStream_readInternal(
 			"MemoryStream_readInternal() buffer too small"
 		));
 
-	Buffer_memcpy(buf, Buffer_createRefConst(memStream->data.ptr + offset, length));
+	if (length)
+		Buffer_memcpy(buf, Buffer_createRefConst(memStream->data.ptr + offset, length));
 
 clean:
 	return s_uccess;
@@ -85,6 +97,11 @@ static Bool MemoryStream_writeInternal(
 	if (!length)
 		length = Buffer_length(buf);
 
+	const U64 maxSize = U64_MAX >> 16;
+
+	if (offset > maxSize || length > maxSize - offset)
+		retError(clean, Error_outOfBounds(1, offset, maxSize, "MemoryStream_writeInternal()::range exceeds 48 bits"));
+
 	//Expand buffer if needed
 
 	U64 requiredSize = offset + length;
@@ -99,7 +116,10 @@ static Bool MemoryStream_writeInternal(
 			));
 
 		Buffer newBuf = Buffer_createNull();
-		gotoIfError3(clean, Buffer_createUninitializedBytes(requiredSize, alloc, &newBuf, e_rr));
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(
+			MemoryStream_grownCapacity(currentSize, requiredSize), alloc, &newBuf, e_rr
+		));
 
 		if (currentSize)
 			Buffer_memcpy(
@@ -124,10 +144,11 @@ static Bool MemoryStream_writeInternal(
 
 	//Copy
 
-	Buffer_memcpy(
-		Buffer_createRef(memStream->data.ptrNonConst + offset, length),
-		Buffer_createRefConst(buf.ptr, length)
-	);
+	if (length)
+		Buffer_memcpy(
+			Buffer_createRef(memStream->data.ptrNonConst + offset, length),
+			Buffer_createRefConst(buf.ptr, length)
+		);
 
 clean:
 	return s_uccess;
@@ -151,7 +172,10 @@ static Bool MemoryStream_reserveInternal(OxStream *stream, U64 size, const Alloc
 		goto clean;
 
 	Buffer newBuf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(size, alloc, &newBuf, e_rr));
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(
+		MemoryStream_grownCapacity(currentSize, size), alloc, &newBuf, e_rr
+	));
 
 	if (currentSize)
 		Buffer_memcpy(

@@ -91,7 +91,7 @@ static inline U32 EPipelineStage_toMask(EPipelineStage stage) {
 	if(stage == EPipelineStage_RTASBuild)
 		return EPipelineStageMask_RTASBuild;
 
-	return stage < EPipelineStage_Count ? ((U32)1 << (U32) stage) : 0;
+	return stage < EPipelineStage_Count ? ((U32) 1 << (U32) stage) : 0;
 }
 
 extern const C8 *EPipelineStage_names[];

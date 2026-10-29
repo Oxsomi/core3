@@ -257,10 +257,12 @@ void Test_meshPositions(Test *t) {
 	Test_assert(t, "flush", MeshSink_flush(&sink, &t->err));
 
 	Test_assert(t, "aabbMin", Test_near(F32x4_x(info.aabbMin), -2) && Test_near(F32x4_y(info.aabbMin), 0) &&
-		Test_near(F32x4_z(info.aabbMin), 5));
+		Test_near(F32x4_z(info.aabbMin), 5)
+	);
 
 	Test_assert(t, "aabbMax", Test_near(F32x4_x(info.aabbMax), 6) && Test_near(F32x4_y(info.aabbMax), 4) &&
-		Test_near(F32x4_z(info.aabbMax), 5));
+		Test_near(F32x4_z(info.aabbMax), 5)
+	);
 
 	MeshPositions_free(&positions, t->alloc);
 	MeshSink_free(&sink);

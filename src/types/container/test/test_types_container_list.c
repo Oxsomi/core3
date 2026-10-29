@@ -96,11 +96,87 @@ void Test_list(Test *t) {
 
 	Test_setModule(t, "List");
 
+	{
+
+		U8 large[2][2049] = { { 1 }, { 2 } };
+
+		large[0][2048] = 3;
+		large[1][2048] = 4;
+
+		GenericList largeRef = { 0 };
+
+		Test_assert(t, "large stride list reference", GenericList_createRef(large, 2, sizeof(large[0]), &largeRef, e_rr));
+
+		GenericList_reverse(largeRef);
+
+		Test_assert(
+			t, "large stride reverse",
+			large[0][0] == 2 && large[1][0] == 1 && large[0][2048] == 4 && large[1][2048] == 3
+		);
+
+		ListU32 alias = { 0 }, source = { 0 };
+
+		Test_assert(t, "aliased list create", ListU32_create(3, alloc, &alias, e_rr));
+
+		alias.ptrNonConst[0] = 10;
+		alias.ptrNonConst[1] = 20;
+		alias.ptrNonConst[2] = 30;
+
+		Test_assert(t, "aliased list append", ListU32_pushAll(&alias, alias, alloc, e_rr));
+		Test_assert(t, "aliased list append contents", alias.length == 6 && alias.ptr[3] == 10 && alias.ptr[5] == 30);
+		Test_assert(t, "aliased list reserve", ListU32_reserve(&alias, 20, alloc, e_rr));
+		Test_assert(t, "aliased subset reference", ListU32_createRefConst(alias.ptr + 2, 3, &source, e_rr));
+		Test_assert(t, "aliased list insertion", ListU32_insertAll(&alias, source, 1, alloc, e_rr));
+		Test_assert(
+			t, "aliased insertion contents",
+			alias.length == 9 && alias.ptr[1] == 30 && alias.ptr[2] == 10 && alias.ptr[3] == 20
+		);
+
+		ListU32_free(&alias, alloc);
+	}
+
+	{
+
+		const U32 values[] = { 10, 20, 30, 40 };
+		const U64 prefix[] = { 0, 1 };
+
+		ListU32 valuesRef = { 0 }, erased = { 0 };
+		ListU64 prefixRef = { 0 }, indices = { 0 };
+
+		Test_assert(
+			t, "erase prefix setup",
+			ListU32_createRefConst(values, 4, &valuesRef, e_rr) && ListU32_createCopy(valuesRef, alloc, &erased, e_rr) &&
+			ListU64_createRefConst(prefix, 2, &prefixRef, e_rr) && ListU64_createCopy(prefixRef, alloc, &indices, e_rr)
+		);
+
+		if(erased.ptr && indices.ptr) {
+
+			Test_assert(t, "erase adjacent indices starting at zero", ListU32_eraseAllIndices(&erased, &indices, e_rr));
+			Test_assert(t, "erased prefix contents", erased.length == 2 && erased.ptr[0] == 30 && erased.ptr[1] == 40);
+			Test_assert(t, "erase remaining indices", ListU32_eraseAllIndices(&erased, &indices, e_rr) && !erased.length);
+		}
+
+		ListU64_free(&indices, alloc);
+		ListU32_free(&erased, alloc);
+
+		U32 borrowed[2] = { 41, 42 };
+		ListU32 ref = { 0 };
+
+		Test_assert(t, "empty const list setup", ListU32_createRefConst(borrowed, 2, &ref, e_rr));
+		Test_assert(t, "clear borrowed list", ListU32_clear(&ref, e_rr));
+		Test_assert(t, "grow cleared const list", ListU32_resize(&ref, 2, alloc, e_rr));
+		Test_assert(t, "cleared const list gets storage", ref.ptr != borrowed && !ListU32_isRef(ref));
+		Test_assert(t, "borrowed list unchanged", borrowed[0] == 41 && borrowed[1] == 42);
+
+		ListU32_free(&ref, alloc);
+	}
+
 	ListU32 list = (ListU32) { 0 };
 
 	//pushBack + indexing + length
 
 	Bool ok = true;
+
 	for (U32 i = 0; i < 16; ++i)
 		ok &= ListU32_pushBack(&list, i * 3, alloc, e_rr);
 
@@ -108,6 +184,7 @@ void Test_list(Test *t) {
 	Test_assert(t, "length after 16 pushBack", list.length == 16);
 
 	Bool values = true;
+
 	for (U32 i = 0; i < 16; ++i)
 		values &= list.ptr[i] == i * 3;
 	Test_assert(t, "values stored in insertion order", values);
@@ -206,6 +283,7 @@ void Test_list(Test *t) {
 
 	ok = true;
 	const U32 unsorted[5] = { 5, 1, 4, 2, 3 };
+
 	for (U32 i = 0; i < 5; ++i)
 		ok &= ListU32_pushBack(&list, unsorted[i], alloc, e_rr);
 	Test_assert(t, "pushBack for sort", ok);
@@ -234,7 +312,7 @@ void Test_list(Test *t) {
 
 		Test_assert(t, "pushBack for sortCustom context", keyedOk);
 
-		Test_assert(t, "sortCustom (context table)", ListU32_sortCustom(keyed, cmpU32ByKey, (void*)(const void*)keys));
+		Test_assert(t, "sortCustom (context table)", ListU32_sortCustom(keyed, cmpU32ByKey, (void*) (const void*) keys));
 
 		Test_assert(
 			t, "sortCustom followed the context table",

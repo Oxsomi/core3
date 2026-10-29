@@ -32,7 +32,7 @@ U64 CAFile_fileSize(const CAFile *caFile, CAHandle fileHandle) {
 
 Ns CAFile_fileTime(const CAFile *caFile, CAHandle fileHandle) {
 	const CAFileInfo *info = CAFile_getFileInfoPtr(caFile, fileHandle);
-	return !info ? (Ns)0 : CAFileInfo_getTimestamp(*info);
+	return !info ? (Ns) 0 : CAFileInfo_getTimestamp(*info);
 }
 
 U64 CAFile_fileParent(const CAFile *caFile, CAHandle fileHandle) {
@@ -172,6 +172,7 @@ clean:
 Bool CAFile_setData(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, Buffer *buf, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Buffer copy = Buffer_createNull();
 
 	if (!caFile || !buf)
 		retError(clean, Error_nullPointer(!caFile ? 0 : 3, "CAFile_setData()::caFile and buf are required"));
@@ -184,9 +185,19 @@ Bool CAFile_setData(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc,
 	if (id >= caFile->files.length)
 		retError(clean, Error_outOfBounds(1, id, caFile->files.length, "CAFile_setData()::file id out of bounds"));
 
-	gotoIfError3(clean, DLFile_setEntry(&caFile->content, id, buf, alloc, e_rr));
+	//A ref doesn't own its bytes, so the archive takes a copy and leaves the caller's buffer alone.
+
+	Buffer *entry = buf;
+
+	if (Buffer_isRef(*buf)) {
+		gotoIfError3(clean, Buffer_createCopy(*buf, alloc, &copy, e_rr));
+		entry = &copy;
+	}
+
+	gotoIfError3(clean, DLFile_setEntry(&caFile->content, id, entry, alloc, e_rr));
 
 clean:
+	Buffer_free(&copy, alloc);
 	return s_uccess;
 }
 

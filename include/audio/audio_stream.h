@@ -77,7 +77,7 @@ typedef enum EAudioStreamFormat {        //1b channels, 2b (1 << x = strideBytes
 typedef U8 AudioStreamFormat;
 
 static inline U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format) {
-	return (U8)(format & 1) + 1;
+	return (U8) (format & 1) + 1;
 }
 
 static inline U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format) {
@@ -88,7 +88,7 @@ static inline U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format) {
 	if ((format >> 1) == 4)    //U24
 		return 3;
 
-	return 1 << (U8)(format >> 1);
+	return 1 << (U8) (format >> 1);
 }
 
 static inline U8 EAudioStreamFormat_getSize(EAudioStreamFormat format) {
@@ -143,7 +143,7 @@ static inline Bool AudioStreamInfo_flattenSound(const AudioStreamInfo *info) {
 }
 
 static inline U64 AudioStreamInfo_dataLength(const AudioStreamInfo *info) {
-	return info ? (info->dataLengthLo32 | ((U64)info->dataLengthHi8 << 32)) : 0;
+	return info ? (info->dataLengthLo32 | ((U64) info->dataLengthHi8 << 32)) : 0;
 }
 
 typedef RefPtr AudioDeviceRef;
@@ -183,6 +183,7 @@ Bool AudioDeviceRef_createStream(
 	Error *e_rr
 );
 
+//Borrows inputStream: the audio stream takes a reference of its own, so the caller releases its reference either way.
 Bool AudioDeviceRef_createFromFile(       //Detect stream by stream file header (currently only wav supported)
 	AudioDeviceRef *device,
 	StreamRef *inputStream,

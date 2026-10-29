@@ -44,6 +44,7 @@ void LWindow_updateMonitors(Window *w) {
 	U32        count = lwin->activeOutputCount  ? lwin->activeOutputCount : 0;
 
 	Error err = Error_none();
+
 	if(!WindowManager_updateMonitorsExt(manager, &w->monitors, ids, count, &err)) {
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 		return;

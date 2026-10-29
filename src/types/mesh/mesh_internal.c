@@ -162,7 +162,9 @@ Bool MeshSource_readLine(MeshSource *src, C8 *line, U64 cap, U64 *len, Bool *got
 			++i;
 
 		if(n + i >= cap)
-			retError(clean, Error_outOfBounds(0, n + i, cap, "MeshSource_readLine() line is too long"));
+			retError(clean, Error_outOfBounds(
+				0, n + i, cap, "MeshSource_readLine() line is longer than the 64 KiB (MESH_LINE_CAP) a text line may take"
+			));
 
 		Buffer_memcpy(Buffer_createRef(line + n, i), Buffer_createRefConst(p, i));
 		n += i;
@@ -324,6 +326,45 @@ Bool MeshSink_writeFormatted(MeshSink *sink, Error *e_rr, const C8 *format, ...)
 
 clean:
 	CharString_free(&line, alloc);
+	return s_uccess;
+}
+
+Bool MeshSink_writeFloats(MeshSink *sink, Error *e_rr, const C8 *lead, const F32 *values, U8 count, U8 precision) {
+
+	Bool s_uccess = true;
+	C8 text[3][CharString_decimalLen];
+
+	if(!MeshSink_active(sink))
+		goto clean;
+
+	if(count > 3)
+		retError(clean, Error_outOfBounds(3, count, 3, "MeshSink_writeFloats()::count is at most 3"));
+
+	for(U8 i = 0; i < count; ++i) {
+
+		if(values[i] - values[i] != 0)
+			retError(clean, Error_invalidParameter(3, i, "MeshSink_writeFloats()::values must be finite"));
+
+		if(!CharString_formatDecimal((F64) values[i], precision, text[i]))
+			retError(clean, Error_invalidState(0, "MeshSink_writeFloats() couldn't format"));
+	}
+
+	switch(count) {
+
+		case 1:
+			gotoIfError3(clean, MeshSink_writeFormatted(sink, e_rr, "%s%s", lead, text[0]));
+			break;
+
+		case 2:
+			gotoIfError3(clean, MeshSink_writeFormatted(sink, e_rr, "%s%s %s", lead, text[0], text[1]));
+			break;
+
+		default:
+			gotoIfError3(clean, MeshSink_writeFormatted(sink, e_rr, "%s%s %s %s", lead, text[0], text[1], text[2]));
+			break;
+	}
+
+clean:
 	return s_uccess;
 }
 

@@ -35,6 +35,8 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 	CharString tmpStr = CharString_createNull();
 	Buffer tmp = Buffer_createNull();
 	U64 cacheIt = 0;
+	Bool allocated = false;
+	StreamRef *pendingRef = NULL;
 
 	if(!a || !b)
 		retError(clean, Error_nullPointer(!a ? 0 : 1, "DLFile_combine()::a and b are required"));
@@ -53,52 +55,39 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 	U64 cacheSize = U64_min(Buffer_length(a->cache) + Buffer_length(b->cache), 4 * MIBI);
 	gotoIfError3(clean, DLFile_create(&a->settings, cacheSize, alloc, combined, e_rr));
 
-	//Merge stream ids and stream refs
+	allocated = true;
 
-	U64 streamCounta = a->entryStreams.length;
-	U64 streamCount = streamCounta + b->entryStreams.length;
-	gotoIfError3(clean, ListDLEntryStream_reserve(&combined->entryStreams, streamCount, alloc, e_rr));
+	//Every entry of a, then every entry of b, in order.
+	//Entries that are still in a stream stay in a stream, and the combined file holds its own reference to them.
 
-	for (U64 i = 0; i < a->entryStreams.length; ++i) {
+	const U64 alen = a->entryStreams.length;
+	const U64 total = alen + b->entryStreams.length;
+	const Bool isString = a->settings.dataType == EDLDataType_String;
 
-		DLEntryStream entryStream = a->entryStreams.ptr[i];
-		combined->entryStreams.ptrNonConst[i] = entryStream;
+	gotoIfError3(clean, DLFile_reserve(combined, total, alloc, e_rr));
 
-		if (entryStream.stream)
-			RefPtr_inc(entryStream.stream);
-	}
+	for (U64 i = 0; i < total; ++i) {
 
-	for (U64 i = 0; i < b->entryStreams.length; ++i) {
+		const DLFile *src = i < alen ? a : b;
+		const U64 k = i < alen ? i : i - alen;
 
-		DLEntryStream entryStream = b->entryStreams.ptr[i];
-		combined->entryStreams.ptrNonConst[i + streamCounta] = entryStream;
+		if (!DLFile_isFullyLoaded(src, k)) {
 
-		if(entryStream.stream)
-			RefPtr_inc(entryStream.stream);
-	}
+			const DLEntryStream entryStream = src->entryStreams.ptr[k];
 
-	//Combine
+			pendingRef = entryStream.stream;
+			RefPtr_inc(pendingRef);
 
-	EDLDataType dataType = a->settings.dataType;
+			gotoIfError3(clean, DLFile_addEntryStream(
+				combined, &pendingRef, entryStream.dataOff, entryStream.len, alloc, e_rr
+			));
 
-	if(dataType == EDLDataType_String) {
+			continue;
+		}
 
-		ListCharString entryStringsa = a->entryStrings;
-		ListCharString entryStringsb = b->entryStrings;
+		if (isString) {
 
-		gotoIfError3(clean, ListCharString_reserve(
-			&combined->entryStrings, entryStringsa.length + entryStringsb.length, alloc, e_rr
-		));
-
-		U64 alen = entryStringsa.length;
-		U64 j = alen + entryStringsb.length;
-
-		for (U64 i = 0; i < j; ++i) {
-
-			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))    //Not in memory
-				continue;
-
-			CharString str = i < alen ? entryStringsa.ptr[i] : entryStringsb.ptr[i - alen];
+			CharString str = src->entryStrings.ptr[k];
 			U64 strl = CharString_length(str);
 
 			//Put into cache
@@ -115,7 +104,7 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 					Buffer_createRefConst(str.ptr, strl)
 				);
 
-				tmpStr = CharString_createRefSized((C8*)combined->cache.ptrNonConst + cacheIt, strl, false);
+				tmpStr = CharString_createRefSized((C8*) combined->cache.ptrNonConst + cacheIt, strl, false);
 				cacheIt += strl;
 			}
 
@@ -123,26 +112,10 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 
 			gotoIfError3(clean, DLFile_addEntryString(combined, &tmpStr, alloc, e_rr));
 		}
-	}
 
-	else {
+		else {
 
-		ListBuffer entryBuffersa = a->entryBuffers;
-		ListBuffer entryBuffersb = b->entryBuffers;
-
-		gotoIfError3(clean, ListBuffer_reserve(
-			&combined->entryBuffers, entryBuffersa.length + entryBuffersb.length, alloc, e_rr
-		));
-
-		U64 alen = entryBuffersa.length;
-		U64 j = alen + entryBuffersb.length;
-
-		for (U64 i = 0; i < j; ++i) {
-
-			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))    //Not in memory
-				continue;
-
-			Buffer buf = i < alen ? entryBuffersa.ptr[i] : entryBuffersb.ptr[i - alen];
+			Buffer buf = src->entryBuffers.ptr[k];
 			U64 bufl = Buffer_length(buf);
 
 			//Put into cache
@@ -167,7 +140,12 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 	}
 
 clean:
+	RefPtr_dec(&pendingRef);
 	CharString_free(&tmpStr, alloc);
+
+	if (!s_uccess && allocated)
+		DLFile_free(combined, alloc);
+
 	Buffer_free(&tmp, alloc);
 	return s_uccess;
 }

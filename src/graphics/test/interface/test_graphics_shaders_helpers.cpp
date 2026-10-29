@@ -85,7 +85,8 @@ namespace oxc { namespace gfxtest {
 		if(c::Test_assert(t, "createShaderStream", c::MemoryStream_createFromBufferRegion(
 			c::Buffer_createRefFromBuffer(data, true), 0, c::Buffer_length(data), c::EMemoryStreamFlags_None,
 			&memStreamType, &stream, &t->err
-		)) && stream)
+		)) && stream
+		)
 			loaded = c::Test_assert(t, "parseShaderFile", c::SHFile_read(
 				(c::StreamRef*) stream, &streamOffset, false, alloc, &file, &t->err
 			));

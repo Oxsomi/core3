@@ -40,3 +40,4 @@ void Test_DLStreams(Test *t);
 void Test_DLStress(Test *t);
 void Test_DLWriteSizeConsistency(Test *t);
 void Test_DLWriteSizeConsistencyEncrypted(Test *t);
+void Test_DLReview(Test *t);

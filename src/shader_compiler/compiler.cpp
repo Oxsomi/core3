@@ -175,9 +175,9 @@ public:
 		U64 lastAt = U64_MAX;
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError3(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName, e_rr));
+			gotoIfError3(clean, CharString_createFromUTF16((const U16*) fileNameStr, U64_MAX, alloc, &fileName, e_rr));
 		#else
-			gotoIfError3(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName, e_rr));
+			gotoIfError3(clean, CharString_createFromUTF32((const U32*) fileNameStr, U64_MAX, alloc, &fileName, e_rr));
 		#endif
 
 		//DXC's own builtin headers (dx/linalg.h and the <enable_if> / <type_traits> it pulls in) are served by
@@ -275,7 +275,7 @@ public:
 						gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, NULL, &tempBuffer, e_rr));
 
 						gotoIfError3(clean, CharString_createCopy(
-							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
+							CharString_createRefSizedConst((const C8*) tempBuffer.ptr, Buffer_length(tempBuffer), false),
 							alloc,
 							&tempFile,
 							e_rr
@@ -324,7 +324,7 @@ public:
 					includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
 				);
 
-				isPresent.ptrNonConst[i >> 6] |= (U64)1 << (i & 63);
+				isPresent.ptrNonConst[i >> 6] |= (U64) 1 << (i & 63);
 				++counter;
 			}
 
@@ -355,7 +355,7 @@ public:
 					));
 
 				gotoIfError3(clean, CharString_createCopy(
-					CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
+					CharString_createRefSizedConst((const C8*) tempBuffer.ptr, Buffer_length(tempBuffer), false),
 					alloc,
 					&tempFile,
 					e_rr
@@ -432,7 +432,7 @@ public:
 				includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
 			);
 
-			isPresent.ptrNonConst[i >> 6] |= (U64)1 << (i & 63);
+			isPresent.ptrNonConst[i >> 6] |= (U64) 1 << (i & 63);
 			++counter;
 		}
 
@@ -568,7 +568,7 @@ clean:
 
 void Compiler_free(Compiler *comp, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	if(!comp)
 		return;
@@ -620,7 +620,7 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, const Allocator *alloc, ListInclu
 		//This means we might have duplicate entries by file name, but is required to accurately represent the state.
 
 		for(; j < infos->length; ++j)
-			if(
+			if (
 				CharString_equalsStringSensitive(&infos->ptr[j].file, &info.includeInfo.file) &&
 				infos->ptr[j].crc32c == info.includeInfo.crc32c && infos->ptr[j].fileSize == info.includeInfo.fileSize
 			)

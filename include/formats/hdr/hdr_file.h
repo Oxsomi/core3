@@ -195,7 +195,9 @@ typedef enum EHDRWriteFlags {
 // against the 134 MiB the decoded image would occupy.
 //
 //The output is 32-bit_rle_rgbe with the -Y +X orientation, which is what HDR_read accepts,
-// so anything written here round trips. Scanlines are adaptively RLE'd where the width allows and flat otherwise,
+// so anything written here reads back, to within half a quantization step of the brightest channel (RGBE keeps eight
+// mantissa bits: 1.0 returns as 1.0039), and writing what was read produces the same bytes again.
+//Scanlines are adaptively RLE'd where the width allows and flat otherwise,
 // since the adaptive marker is only distinguishable from pixel data inside that range.
 //
 //Alpha is DROPPED: Radiance carries three channels over a shared exponent and has nowhere to put it.

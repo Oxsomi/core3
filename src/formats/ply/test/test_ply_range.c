@@ -311,7 +311,7 @@ void Test_plyRange(Test *t) {
 
 	Buffer spanPositions = Buffer_createNull(), spanAttributes = Buffer_createNull();
 
-	if(
+	if (
 		!Test_assert(t, "movePositions", MemoryStream_move(&positions, &spanPositions, &t->err)) ||
 		!Test_assert(t, "moveAttributes", MemoryStream_move(&attributes, &spanAttributes, &t->err))
 	)
@@ -331,4 +331,134 @@ clean:
 	RefPtr_dec((RefPtr**) &positions);
 	RefPtr_dec((RefPtr**) &src);
 	MeshResult_free(t, &whole);
+}
+
+//A vertex element that another element precedes: bodyOffset has to be where the FIRST VERTEX sits, not where
+//the body starts, since every consumer seeks to it. Ply_readRange over the whole element then has to equal the
+// serial read. A list element before it makes that offset unknowable, so the stride has to say so.
+
+static U64 putBE32(U8 *out, U32 v) {
+	out[0] = (U8) (v >> 24);
+	out[1] = (U8) (v >> 16);
+	out[2] = (U8) (v >> 8);
+	out[3] = (U8) v;
+	return 4;
+}
+
+static U64 buildPrefixedPly(U8 *out, Bool big, Bool listElement) {
+
+	const C8 *head = big ? "ply\nformat binary_big_endian 1.0\n" : "ply\nformat binary_little_endian 1.0\n";
+
+	const C8 *before = listElement
+		? "element junk 1\nproperty list uchar int l\n"
+		: "element meta 1\nproperty float a\nproperty float b\n";
+
+	const C8 *rest =
+		"element vertex 3\nproperty float x\nproperty float y\nproperty float z\n"
+		"element face 1\nproperty list uchar int vertex_indices\nend_header\n";
+
+	U64 n = 0;
+
+	for(U8 part = 0; part < 3; ++part)
+		for(const C8 *c = part == 0 ? head : (part == 1 ? before : rest); *c; ++c)
+			out[n++] = (U8) *c;
+
+	if(listElement) {
+		out[n++] = 2;
+		n += big ? putBE32(out + n, 10) : putLE32(out + n, 10);
+		n += big ? putBE32(out + n, 11) : putLE32(out + n, 11);
+	}
+
+	else for(U8 i = 0; i < 2; ++i)
+		n += big ? putBE32(out + n, U32_fromF32Bits(7)) : putLEF32(out + n, 7);
+
+	for(U8 v = 0; v < 9; ++v) {
+		const F32 f = (F32) (v + 1);
+		n += big ? putBE32(out + n, U32_fromF32Bits(f)) : putLEF32(out + n, f);
+	}
+
+	out[n++] = 3;
+
+	for(U8 i = 0; i < 3; ++i)
+		n += big ? putBE32(out + n, i) : putLE32(out + n, i);
+
+	return n;
+}
+
+static void Test_plyBodyOffsetCase(Test *t, const C8 *name, Bool big, Bool listElement) {
+
+	U8 bytes[512];
+	const U64 len = buildPrefixedPly(bytes, big, listElement);
+
+	MeshResult whole = Test_meshRead(t, Ply_read, bytes, len, EMeshFlags_None, false, false, &t->err);
+
+	if(!Test_assert(t, name, whole.ok))
+		return;
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+	MemoryStreamRef *src = NULL, *positions = NULL;
+
+	Bool built =
+		MemoryStream_createFromBufferRegion(
+			Buffer_createRefConst(bytes, len), 0, len, EMemoryStreamFlags_None, &type, &src, &t->err
+		) &&
+		MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &positions, &t->err);
+
+	if(!Test_assert(t, name, built))
+		goto clean;
+
+	MeshInfo info = (MeshInfo) { 0 };
+	MeshHeader header = (MeshHeader) { 0 };
+	U64 off = 0;
+
+	if(!Test_assert(t, name, Ply_readHeader((StreamRef*) src, &off, &info, &header, t->alloc, &t->err)))
+		goto clean;
+
+	//The stream is left at the body start whatever the vertex offset is
+
+	Test_assert(t, name, off < len && (listElement ? !header.vertexStride : header.bodyOffset == off + 8));
+
+	if(listElement) {
+
+		//Unknowable offset: no stride, so the range read is refused rather than reading the junk element
+
+		MeshOutput refused = (MeshOutput) { .positions = (StreamRef*) positions };
+		Error err = Error_none();
+
+		Test_assert(t, name, !Ply_readRange((StreamRef*) src, &header, EMeshFlags_None, 0, 3, &info, &refused, t->alloc, &err));
+		goto clean;
+	}
+
+	Test_assert(t, name, header.vertexStride == 12);
+	Test_assert(t, name, header.faceOffset == header.bodyOffset + 3 * 12);
+
+	info = (MeshInfo) { 0 };
+
+	const MeshOutput out = (MeshOutput) { .positions = (StreamRef*) positions };
+
+	if(!Test_assert(t, name, Ply_readRange((StreamRef*) src, &header, EMeshFlags_None, 0, 3, &info, &out, t->alloc, &t->err)))
+		goto clean;
+
+	Buffer spanPositions = Buffer_createNull();
+
+	if(Test_assert(t, name, MemoryStream_move(&positions, &spanPositions, &t->err))) {
+		Test_assert(t, name, Buffer_eq(spanPositions, whole.positions));
+		Test_assert(t, name, MeshResult_position(&whole, 0)[0] == 1.0f);
+	}
+
+	Buffer_free(&spanPositions, t->alloc);
+
+clean:
+	RefPtr_dec((RefPtr**) &positions);
+	RefPtr_dec((RefPtr**) &src);
+	MeshResult_free(t, &whole);
+}
+
+void Test_plyBodyOffset(Test *t) {
+
+	Test_setModule(t, "PLY/bodyOffset");
+
+	Test_plyBodyOffsetCase(t, "littleEndianAfterElement", false, false);
+	Test_plyBodyOffsetCase(t, "bigEndianAfterElement", true, false);
+	Test_plyBodyOffsetCase(t, "afterListElement", false, true);
 }

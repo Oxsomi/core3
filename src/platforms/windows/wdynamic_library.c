@@ -69,7 +69,7 @@ Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicL
 
 	gotoIfError3(clean, CharString_toLongPath(path, &loc, e_rr));
 
-	*dynamicLib = (void*)LoadLibraryW(path);
+	*dynamicLib = (void*) LoadLibraryW(path);
 	if(!*dynamicLib)
 		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() LoadLibrary failed"));
 
@@ -102,7 +102,7 @@ Bool DynamicLibrary_loadSystem(CharString str, DynamicLibrary *dynamicLib, Error
 			));
 
 	//A bare name lets Windows resolve the DLL via its standard search path (System32, PATH, ...).
-	*dynamicLib = (void*)LoadLibraryA(str.ptr);
+	*dynamicLib = (void*) LoadLibraryA(str.ptr);
 
 	if(!*dynamicLib)
 		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_loadSystem() LoadLibrary failed"));
@@ -122,7 +122,7 @@ Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void *
 	if(!CharString_isNullTerminated(str))
 		gotoIfError3(clean, CharString_createCopy(str, Platform_instance->alloc, &tmp, e_rr));
 
-	*ptr = (void*)GetProcAddress(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr);
+	*ptr = (void*) GetProcAddress(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr);
 
 	if(!*ptr)
 		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() GetProcAddress failed"));

@@ -16,6 +16,8 @@ the [Formats table in STATUS.md](../STATUS.md#formats).
 - **Refused, not repaired.** A file outside what a reader supports fails with an error naming why, rather than
   loading as something close to it.
 - **Limits are checked before allocating.** Headers claiming sizes no real file has are rejected up front.
+- **Offsets move only on success.** A writer that takes its offset by pointer advances it only when the whole write
+  succeeds, the size-only call without a stream included, so a caller can retry or report from where it started.
 
 ## Third party formats
 

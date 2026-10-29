@@ -22,310 +22,43 @@
 
 #include "types/base/platform_types.h"
 #include "types/math/flp.h"
+#include "types/math/type_cast.h"
+#include "types/base/mathi.h"
 
 #if !_FORCE_FLOAT_FALLBACK && _SIMD == SIMD_SSE
 	#include "types/math/vec4i.h"
 	#include "types/math/vec4f.h"
 	#include <immintrin.h>
+#elif !_FORCE_FLOAT_FALLBACK && _SIMD == SIMD_NEON
+	#include <arm_neon.h>
 #endif
 
-static inline U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
+//The generic path stays out of line on purpose:
+// it is too big to copy into every cast helper, and only the dispatcher in EFloatType_convert needs to inline.
+//That way LTCG folds the constant types of each X_castY into a single instruction or a direct call to this.
 
-	const U8 mbit1 = EFloatType_mantissaBits(type1);
-	const U8 mbit2 = EFloatType_mantissaBits(type2);
-	const U64 mantissa = EFloatType_mantissa(type1, v);
+#if _MSC_VER
+	#define EFloatType_noinline __declspec(noinline)
+#else
+	#define EFloatType_noinline __attribute__((noinline))
+#endif
 
-	if (mbit1 == mbit2)
-		return mantissa;
+static U64 EFloatType_roundRight(U64 value, I32 shift) {
 
-	if (mbit2 > mbit1)
-		return mantissa << (mbit2 - mbit1);
+	if(shift <= 0)
+		return value << -shift;
 
-	const U64 shiftedMantissa = mantissa >> (mbit1 - mbit2);
-	const U64 discardedMantissa = mantissa & (((U64)1 << (mbit1 - mbit2)) - 1);
-	const U64 halfMantissa = (U64)1 << (mbit1 - mbit2 - 1);
-
-	//Ties (discarded == half) truncate here instead of rounding up, so this is round-half-toward-zero,
-	// not IEEE-754 round-to-nearest-even.
-	//The F16C / NEON hardware fast paths below use RNE,
-	// so an exact tie can differ by 1 ULP between this scalar fallback and the hardware path (noted in STATUS.md).
-	U8 round = discardedMantissa > halfMantissa;
-
-	if (!EFloatType_isFinite(type1, v))                //Rounding is only for real numbers
-		round = 0;
-
-	const U64 res = (shiftedMantissa + round) & EFloatType_mantissaMask(type2);
-
-	if (!res && round)
-		*carry = true;        //Increments exponent
-
-	return res;
-}
-
-static inline U64 EFloatType_convertExponent(
-	EFloatType type1,
-	U64 v,
-	EFloatType type2,
-	U64 *convertedMantissa,
-	Bool carry
-) {
-
-	const U8 ebit1 = EFloatType_exponentBits(type1);
-	const U8 ebit2 = EFloatType_exponentBits(type2);
-
-	const U8 mbit1 = EFloatType_mantissaBits(type1);
-	const U8 mbit2 = EFloatType_mantissaBits(type2);
-
-	U64 exponent = EFloatType_exponent(type1, v);
-
-	//Handle NaN/Inf
-
-	if (!EFloatType_isFinite(type1, v)) {
-
-		//NaN sets first mantissa bit to avoid accidental Inf
-
-		if (EFloatType_isNaN(type1, v))
-			*convertedMantissa |= (U64)1 << (EFloatType_mantissaBits(type2) - 1);
-
-		//Inf or NaN always have all exp bits set to 1
-
-		return EFloatType_exponentMask(type2);
-	}
-
-	//Simple conversion if mantissa is different but exponent isn't
-
-	if (ebit1 == ebit2) {
-
-		if(carry) {
-
-			//Collapse to inf
-
-			if (exponent >= EFloatType_exponentMask(type1) - 1) {
-				*convertedMantissa = 0;
-				return EFloatType_exponentMask(type1);
-			}
-
-			//Otherwise we have to increment exponent
-
-			++exponent;
-		}
-
-		return exponent;
-	}
-
-	//Expand
-
-	if (ebit2 > ebit1) {
-
-		//In expansion, the first on bit in the mantissa will be the new exponent.
-		//The remainder of the mantissa is then shifted back to match the exponent.
-		//I call this "renormalization"
-
-		if (EFloatType_isDeN(type1, v)) {
-
-			//To find the first on bit, we do a binary bit search.
-			//This allows us to traverse up to 64 bits in 6 steps.
-
-			U8 left = 0, right = EFloatType_mantissaBits(type1);
-
-			U64 m = EFloatType_mantissa(type1, v);
-
-			for (U8 i = 0; i < 6; ++i) {
-
-				const U8 bits = right - left;
-				const U8 center = left + (bits >> 1);
-				const U64 mask = (((U64)1 << (bits - (bits >> 1))) - 1) << center;
-
-				//Left side
-
-				if (m & mask)
-					left = center;
-
-				//Right side
-
-				else right = center;
-
-				if (bits == 2)
-					break;
-			}
-
-			//Now we can shift mantissa by the first place to shift the first 1 out.
-			//But keep the rest of the mantissa in.
-			//The exponent then needs to be compensated.
-
-			m = m << (mbit1 - left);
-			m &= EFloatType_mantissaMask(type1);
-
-			//Correct mantissa
-
-			if (mbit2 >= mbit1)
-				*convertedMantissa = m << (mbit2 - mbit1);
-
-			else *convertedMantissa = m >> (mbit1 - mbit2);
-
-			//Make exponent.
-			//Difference between the two exponents but adding the shift.
-
-			U64 exp = (EFloatType_exponentMask(type2) >> 1) - (EFloatType_exponentMask(type1) >> 1);
-			exp -= mbit1 - left - 1;
-			return exp;
-		}
-
-		//Normal conversion of exponent
-
-		I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
-		cvt += EFloatType_exponentMask(type2) >> 1;
-
-		//The carry has to land here too, exactly as it does for equal exponents above and for truncation below.
-		//Widening the exponent while NARROWING the mantissa can still round up and overflow it,
-		// and dropping that increment halves the value:
-		// 7.997 F16 -> BF16 came out as 4, 31.999 FP24 -> TF19 as 16. It cannot overflow into Inf here,
-		// the destination has more exponent bits than the source, so a finite source is nowhere near its top.
-
-		cvt += carry;
-		return (U64)cvt;
-	}
-
-	//Truncate
-
-	//Normal values can collapse to Inf or DeN,
-	//Needs to be handled too.
-
-	I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
-	cvt += EFloatType_exponentMask(type2) >> 1;
-
-	//Convert to DeN
-
-	if (cvt <= 0) {
-
-		//We can only get the lowest possible number by taking exponent 0 (2^-(b/2)).
-		//However, this requires us to reconfigure the mantissa to approximate the original value.
-		//This can mean sometimes a small number is collapsed to 0 (not enough mantissa bits).
-		//We do this by simply moving around the prev exponent by our new exponent bits.
-		//The remaining bits is simply how much our mantissa has to be shifted to get the same value.
-
-		const U64 missingBits = (U64)-cvt;
-
-		if (missingBits > mbit2) {        //Collapse to zero
-			*convertedMantissa = 0;
-			return 0;
-		}
-
-		U64 m = EFloatType_mantissa(type1, v);
-
-		if(missingBits == mbit2) {
-			*convertedMantissa = m != 0;
-			return 0;
-		}
-
-		const U64 mantissaDiscardShift = missingBits + (mbit1 - mbit2) + 1;
-		const U64 mantissaDiscardMask = ((U64)1 << mantissaDiscardShift) - 1;
-		const U64 mantissaDiscarded = m & mantissaDiscardMask;
-		const U64 mantissaDiscardHalf = (U64)1 << (mantissaDiscardShift - 1);
-
-		const U64 round = mantissaDiscarded > mantissaDiscardHalf;
-
-		m >>= mantissaDiscardShift;                    //Correct to correct exponent
-		m |= (U64)1 << (mbit2 - missingBits - 1);      //Shift the 1.x into the DeN
-		m += round;                                    //Ensure correct rounding
-
-		//Special case; round causes exponent to increment
-
-		if (!m && round) {
-			*convertedMantissa = 0;
-			return 1;
-		}
-
-		*convertedMantissa = m;
+	if(shift >= 64)
 		return 0;
-	}
 
-	cvt += carry;
+	const U64 half = (U64) 1 << (shift - 1);
+	const U64 discarded = value & ((half << 1) - 1);
+	const U64 rounded = value >> shift;
 
-	//Generates Inf (exponent is too high)
-
-	if((U64)cvt >= EFloatType_exponentMask(type2)) {
-		*convertedMantissa = 0;
-		cvt = EFloatType_exponentMask(type2);
-	}
-
-	//Otherwise our exponent is in the correct bounds.
-
-	return (U64)cvt;
+	return rounded + (discarded > half || (discarded == half && (rounded & 1)));
 }
 
-U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
-
-	#if !_FORCE_FLOAT_FALLBACK
-
-		//Hardware support
-
-		const void *vptr = &v;
-
-		if (type == EFloatType_F32 && conversionType == EFloatType_F64) {
-
-			const F32 f32 = *(const F32*)vptr;
-			const F64 f64 = (F64) f32;
-
-			const void *f64v = &f64;
-			return *(const U64*)f64v;
-		}
-
-		if (type == EFloatType_F64 && conversionType == EFloatType_F32) {
-			const F64 f64 = *(const F64*)vptr;
-			const F32 f32 = (F32) f64;
-			const void *f32v = &f32;
-			return *(const U32*)f32v;
-		}
-
-		#if _SIMD == SIMD_SSE
-
-			//Hardware extension for float conversions
-
-			if (type == EFloatType_F16 || conversionType == EFloatType_F16) {
-
-				//No runtime F16C check: the SSE build compiles with -mf16c and Platform_checkCPUSupport requires
-				// the bit, which costs nothing because every CPU carrying the AVX and FMA we also require has it.
-				//Detecting it per call only bought a branch on the hot path.
-
-				const EFloatType targ = type == EFloatType_F16 ? conversionType : type;
-
-				const Bool anyFloat = targ == EFloatType_F32;
-				const Bool anyDouble = targ == EFloatType_F64;
-
-				if(anyFloat || anyDouble) {
-
-					//Expanding from F16
-
-					if (type == EFloatType_F16) {
-
-						const I32x4 expandedi = I32x4_create1((I32)v);
-						const F32 expanded = F32x4_x(_mm_cvtph_ps(expandedi));
-
-						if(anyDouble) {
-							const F64 converted = (F64) expanded;
-							const void *convertedv = &converted;
-							return *(const U64*)convertedv;
-						}
-
-						const void *expandedv = &expanded;
-						return *(const U32*)expandedv;
-					}
-
-					//Truncation to F16
-
-					else {
-						const void *vv = &v;
-						const F32 truncated = anyDouble ? (F32)*(const F64*)vv : *(const F32*)vv;
-						const I32x4 converted = _mm_cvtps_ph(F32x4_create1(truncated), _MM_FROUND_CUR_DIRECTION);
-						return (F16) I32x4_x(converted);
-					}
-				}
-			}
-
-		#endif
-
-	#endif
+static EFloatType_noinline U64 EFloatType_convertSoftware(EFloatType type, U64 v, EFloatType conversionType) {
 
 	//A negative going to an unsigned type has to CLAMP:
 	// signMask is 0 there, so without this the magnitude would convert cleanly and -3.5 would arrive as +3.5.
@@ -338,12 +71,126 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 	if (EFloatType_isZero(type, v))
 		return sign;
 
-	Bool carry = false;
-	U64 mantissa = EFloatType_convertMantissa(type, v, conversionType, &carry);
-	const U64 exponent = EFloatType_convertExponent(type, v, conversionType, &mantissa, carry);
+	const U8 srcMantissaBits = EFloatType_mantissaBits(type);
+	const U8 dstMantissaBits = EFloatType_mantissaBits(conversionType);
+	const U64 dstExponentMask = EFloatType_exponentMask(conversionType);
+	const U64 mantissa = EFloatType_mantissa(type, v);
+	const U64 inf = sign | (dstExponentMask << dstMantissaBits);     //+-infinity in the destination format
 
-	return
-		sign |
-		(exponent << EFloatType_exponentShift(conversionType)) |
-		(mantissa << EFloatType_mantissaShift(conversionType));
+	if(!EFloatType_isFinite(type, v)) {
+
+		U64 payload = srcMantissaBits > dstMantissaBits ? mantissa >> (srcMantissaBits - dstMantissaBits) :
+			mantissa << (dstMantissaBits - srcMantissaBits);
+
+		//Set the quiet bit: keeps a NaN from collapsing into inf if narrowing shifted out its whole payload,
+		//and turns signaling NaNs into quiet ones as IEEE 754 requires for conversions.
+
+		if(mantissa)
+			payload |= (U64) 1 << (dstMantissaBits - 1);
+
+		return inf | payload;
+	}
+
+	const U64 srcExponent = EFloatType_exponent(type, v);
+	const U64 significand = mantissa | (srcExponent ? (U64) 1 << srcMantissaBits : 0);
+	const I32 srcPower = (I32) (srcExponent ? srcExponent : 1) -
+		(I32) (EFloatType_exponentMask(type) >> 1) - srcMantissaBits;
+
+	const I32 dstBias = (I32) (dstExponentMask >> 1);
+	const I32 unbiased = srcPower + U64_bitScan(significand);
+	const I32 exponent = unbiased + dstBias;
+
+	if(exponent >= (I32) dstExponentMask)
+		return inf;
+
+	//Round the full significand once at the destination's spacing, including its subnormal range.
+	const I32 dstPower = (exponent > 0 ? unbiased : 1 - dstBias) - dstMantissaBits;
+	const U64 rounded = EFloatType_roundRight(significand, dstPower - srcPower);
+
+	if(exponent <= 0)
+		return sign | rounded;
+
+	//rounded still carries the implicit bit at dstMantissaBits, which adds the missing 1 back to exponent - 1.
+	//A rounding carry into bit dstMantissaBits + 1 bumps the exponent once more, and a carry out of the largest
+	// finite value lands on all-ones exponent with zero mantissa, which is exactly inf.
+
+	return sign | (((U64) (exponent - 1) << dstMantissaBits) + rounded);
+}
+
+U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
+
+	#if !_FORCE_FLOAT_FALLBACK
+
+		//Hardware support.
+		//These follow the FP environment (MXCSR on x86, FPCR on ARM):
+		// with flush-to-zero, denormals-are-zero or default-NaN mode enabled they stop matching the software path.
+
+		if (type == EFloatType_F32 && conversionType == EFloatType_F64) {
+
+			const F32 f32 = F32_fromU32Bits((U32) v);
+			const F64 f64 = (F64) f32;
+
+			return U64_fromF64Bits(f64);
+		}
+
+		if (type == EFloatType_F64 && conversionType == EFloatType_F32) {
+
+			const F64 f64 = F64_fromU64Bits(v);
+			const F32 f32 = (F32) f64;
+
+			return U32_fromF32Bits(f32);
+		}
+
+		//F16 <-> F32 in hardware, and F16 -> F64 through F32 (exact, F32 holds every F16).
+		//F64 -> F16 is NOT routed through F32: that rounds twice and can be 1 ULP off on ties,
+		// so it goes to the software path, which rounds once.
+
+		#if _SIMD == SIMD_SSE
+
+			//SSE builds require F16C at startup, so conversion needs no per-call dispatch.
+
+			if (type == EFloatType_F16 && (conversionType == EFloatType_F32 || conversionType == EFloatType_F64)) {
+
+				const I32x4 expandedi = I32x4_create1((I32) v);
+				const F32 expanded = F32x4_x(_mm_cvtph_ps(expandedi));
+
+				if(conversionType == EFloatType_F64)
+					return U64_fromF64Bits((F64) expanded);
+
+				return U32_fromF32Bits(expanded);
+			}
+
+			if (type == EFloatType_F32 && conversionType == EFloatType_F16) {
+
+				const F32 truncated = F32_fromU32Bits((U32) v);
+				const I32x4 converted = _mm_cvtps_ph(F32x4_create1(truncated), _MM_FROUND_TO_NEAREST_INT);
+
+				return (F16) I32x4_x(converted);        //Low 16 bits of lane 0 hold element 0
+			}
+
+		#elif _SIMD == SIMD_NEON
+
+			//FCVTL / FCVTN are base AArch64, no extension check needed.
+
+			if (type == EFloatType_F16 && (conversionType == EFloatType_F32 || conversionType == EFloatType_F64)) {
+
+				const float16x4_t half = vreinterpret_f16_u16(vdup_n_u16((U16) v));
+				const F32 expanded = vgetq_lane_f32(vcvt_f32_f16(half), 0);
+
+				if(conversionType == EFloatType_F64)
+					return U64_fromF64Bits((F64) expanded);
+
+				return U32_fromF32Bits(expanded);
+			}
+
+			if (type == EFloatType_F32 && conversionType == EFloatType_F16) {
+				const float16x4_t half = vcvt_f16_f32(vdupq_n_f32(F32_fromU32Bits((U32) v)));
+				return vget_lane_u16(vreinterpret_u16_f16(half), 0);
+			}
+
+		#endif
+
+	#endif
+
+	return EFloatType_convertSoftware(type, v, conversionType);
 }

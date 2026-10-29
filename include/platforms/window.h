@@ -235,7 +235,7 @@ impl Bool Window_toggleFullScreen(Window *w, Error *e_rr);
 impl Bool Window_presentPhysical(Window *w, Error *e_rr);
 
 static inline void *Window_ext(Window *w) {
-	return w && w->type == EWindowType_Physical ? (void*)(w + 1) : NULL;
+	return w && w->type == EWindowType_Physical ? (void*) (w + 1) : NULL;
 }
 
 static inline void *WindowRef_ext(WindowRef *ref) {

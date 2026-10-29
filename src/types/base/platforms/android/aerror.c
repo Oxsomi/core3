@@ -43,7 +43,7 @@ _Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *s
 	if(state->skip)
 		--state->skip;
 
-	else *state->current++ = (void*)pc;
+	else *state->current++ = (void*) pc;
 
 	if(!pc)
 		return _URC_END_OF_STACK;

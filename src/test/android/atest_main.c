@@ -139,7 +139,7 @@ static Bool ATest_logThreadStarted = false;
 
 static void *ATest_logPump(void *arg) {
 
-	const int readFd = (int)(U64) arg;
+	const int readFd = (int) (U64) arg;
 	C8 line[512];
 	U64 len = 0;
 
@@ -209,7 +209,7 @@ static Bool ATest_redirectStdio() {
 
 	close(fds[1]);
 
-	if(pthread_create(&ATest_logThread, NULL, ATest_logPump, (void*)(U64) fds[0]))
+	if(pthread_create(&ATest_logThread, NULL, ATest_logPump, (void*) (U64) fds[0]))
 		return false;
 
 	//Joinable, not detached: the run ends by finishing the activity, which would otherwise kill the pump

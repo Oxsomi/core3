@@ -67,13 +67,13 @@
 
 	static inline U128 U128_add64(U64 a, U64 b) {
 		const U64 c = a + b;
-		return I32x4_create4((U32)c, (U32)(c >> 32), c < a, 0);
+		return I32x4_create4((U32) c, (U32) (c >> 32), c < a, 0);
 	}
 
 	static inline U128 U128_add(U128 av, U128 bv) {
 
-		const U64 *a = (const U64*)&av;
-		const U64 *b = (const U64*)&bv;
+		const U64 *a = (const U64*) &av;
+		const U64 *b = (const U64*) &bv;
 
 		const U64 lo = a[0] + b[0];
 		U64 hi = lo < a[0];
@@ -113,8 +113,8 @@
 		if (U128_eq(a, b))
 			return ECompareResult_Eq;
 
-		const U64 *a64 = (const U64 *)&a;
-		const U64 *b64 = (const U64 *)&b;
+		const U64 *a64 = (const U64 *) &a;
+		const U64 *b64 = (const U64 *) &b;
 
 		if (a64[1] > b64[1] || (a64[1] == b64[1] && a64[0] > b64[0]))
 			return ECompareResult_Gt;
@@ -122,8 +122,8 @@
 		return ECompareResult_Lt;
 	}
 
-	static inline U64 U128_lo(U128 a) { return ((U64)(U32)I32x4_y(a) << 32) | (U32)I32x4_x(a); }
-	static inline U64 U128_hi(U128 a) { return ((U64)(U32)I32x4_w(a) << 32) | (U32)I32x4_z(a); }
+	static inline U64 U128_lo(U128 a) { return ((U64) (U32) I32x4_y(a) << 32) | (U32) I32x4_x(a); }
+	static inline U64 U128_hi(U128 a) { return ((U64) (U32) I32x4_w(a) << 32) | (U32) I32x4_z(a); }
 
 #else
 
@@ -182,8 +182,8 @@
 		return a < b ? ECompareResult_Lt : (a == b ? ECompareResult_Eq : ECompareResult_Gt);
 	}
 
-	static inline U64 U128_lo(U128 a) { return (U64)a; }
-	static inline U64 U128_hi(U128 a) { return (U64)(a >> 64); }
+	static inline U64 U128_lo(U128 a) { return (U64) a; }
+	static inline U64 U128_hi(U128 a) { return (U64) (a >> 64); }
 
 #endif
 
@@ -216,9 +216,13 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 
 	U128 r = U128_zero();
 
-	for (U8 i = 0; i < 64; ++i)
-		if ((B >> i) & 1)
-			r = U128_xor(r, U128_lsh(U128_createU64x2(A, 0), i));
+	//GHASH multiplies by its secret key H here, so B's bits select through a mask rather than a branch,
+	// which would leak H to timing and the branch predictor.
+
+	for (U8 i = 0; i < 64; ++i) {
+		const U64 select = (U64) 0 - ((B >> i) & 1);
+		r = U128_xor(r, U128_lsh(U128_createU64x2(A & select, 0), i));
+	}
 
 	return I32x4_fromU128(r);
 }

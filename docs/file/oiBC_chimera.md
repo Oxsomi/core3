@@ -31,7 +31,8 @@ For the following types there exist these registers:
 - 128-bit int vector register
   - vi0 - vi7 = float vector registers. v4f is 4 element aligned (vec4) and v2f is 2 element aligned (vec2).
 - Effects register:
-  - Comparison result: Eq, Lt, Gt. Last result of comparison. Also used as bool function type.
+  - Comparison result: Lt, Eq, Gt or Unordered. Last result of comparison. Also used as bool function type.
+    - A comparison with NaN returns `ECompareResult_Unordered`, so `bze` does not take the equal path.
   - Constant offset (temporary): The offset that can be consumed by loadVar, jump/call, branch, swizzle.
     - sel offReg, x: selects the xth 2 bit pair with the cursor (e.g. 1 indexes bit 2 and 3).
     - set offReg[i], x: sets the 2 bits pointed to by the cursor.
@@ -64,7 +65,7 @@ union {
   I8 b[8];
   U8 ub[8];
 };
-U64 effects;		//Such as &3 = comparison 0: lt, 1: eq, 2: gt, constantOffset = (>>2) & 0xFF, constantCursor (>>10) & 3
+U64 effects;		//Such as &3 = comparison 0: lt, 1: eq, 2: gt, 3: unordered (NaN), constantOffset = (>>2) & 0xFF, constantCursor (>>10) & 3
 ```
 
 ## Architectures

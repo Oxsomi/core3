@@ -78,8 +78,8 @@ static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
 		lwin->barPointer,
 		lwin->lastPointerSerial,
 		manager->cursorSurface,
-		(I32)image->hotspot_x,
-		(I32)image->hotspot_y
+		(I32) image->hotspot_x,
+		(I32) image->hotspot_y
 	);
 
 	wl_surface_attach(manager->cursorSurface, buffer, 0, 0);
@@ -146,10 +146,10 @@ static void LWindow_pointerEnterBar(
 
 			InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
-			InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
-			InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
-			InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
-			InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+			InputHandle hAbsX = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp0, EInputType_Axis);
+			InputHandle hAbsY = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp1, EInputType_Axis);
+			InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX,    EInputType_Axis);
+			InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY,    EInputType_Axis);
 
 			w->cursor = I32x2_create2(wl_fixed_to_int(sx), wl_fixed_to_int(sy));
 			
@@ -186,8 +186,8 @@ static void LWindow_pointerLeaveBar(
 
 			InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
-			InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
-			InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
+			InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX, EInputType_Axis);
+			InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY, EInputType_Axis);
 
 			F32 prevRelX = InputDevice_getCurrentAxis(mouse, hRelX);
 			F32 prevRelY = InputDevice_getCurrentAxis(mouse, hRelY);
@@ -228,7 +228,7 @@ static void LWindow_pointerMotionBar(
 		if(nx == lwin->pointerX && ny == lwin->pointerY)
 			return;
 
-		I32 closeX = (I32)lwin->barWidth - LWINDOW_DECOR_BTN_W;
+		I32 closeX = (I32) lwin->barWidth - LWINDOW_DECOR_BTN_W;
 		I32 maxX   = closeX              - LWINDOW_DECOR_BTN_W;
 		I32 minX   = maxX                - LWINDOW_DECOR_BTN_W;
 
@@ -283,19 +283,19 @@ static void LWindow_pointerMotionBar(
 
 	//Absolute position -> X, Y
 
-	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0,    EInputType_Axis);
-	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1,    EInputType_Axis);
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp0,    EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp1,    EInputType_Axis);
 
 	//Relative direction -> RX, RY
 
-	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,       EInputType_Axis);
-	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,       EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX,       EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY,       EInputType_Axis);
 
 	F32 prevAbsX = InputDevice_getCurrentAxis(mouse, hAbsX);
 	F32 prevAbsY = InputDevice_getCurrentAxis(mouse, hAbsY);
 
-	F32 newAbsX = (F32)nx;
-	F32 newAbsY = (F32)ny;
+	F32 newAbsX = (F32) nx;
+	F32 newAbsY = (F32) ny;
 
 	F32 relX = newAbsX - prevAbsX;
 	F32 relY = newAbsY - prevAbsY;
@@ -338,7 +338,7 @@ static void LWindow_pointerButtonBar(
 
 		LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 		I32 x      = lwin->pointerX;
-		I32 closeX = (I32)lwin->barWidth - LWINDOW_DECOR_BTN_W;
+		I32 closeX = (I32) lwin->barWidth - LWINDOW_DECOR_BTN_W;
 		I32 maxX   = closeX              - LWINDOW_DECOR_BTN_W;
 		I32 minX   = maxX                - LWINDOW_DECOR_BTN_W;
 
@@ -368,7 +368,7 @@ static void LWindow_pointerButtonBar(
 	if(lwin->pointerCurrentSurface && lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
 
-	if(
+	if (
 		pressed && button == BTN_LEFT &&
 		lwin->pointerCurrentSurface == (struct wl_surface*)w->nativeHandle &&
 		!(w->hint & EWindowHint_DisableResize) &&
@@ -401,7 +401,7 @@ static void LWindow_pointerButtonBar(
 		default:          return;
 	}
 
-	InputHandle handle = InputDevice_createHandle(mouse, (U16)(mb - EMouseAxis_End), EInputType_Button);
+	InputHandle handle = InputDevice_createHandle(mouse, (U16) (mb - EMouseAxis_End), EInputType_Button);
 
 	EInputState prev = InputDevice_getState(mouse, handle);
 	InputDevice_setCurrentState(mouse, handle, pressed);
@@ -430,9 +430,9 @@ static void LWindow_pointerAxisBar(
 
 	EMouseActions scrollAxis = axis == WL_POINTER_AXIS_VERTICAL_SCROLL ? EMouseAxis_ScrollWheel_Y : EMouseAxis_ScrollWheel_X;
 
-	InputHandle handle = InputDevice_createHandle(mouse, (U16)scrollAxis, EInputType_Axis);
+	InputHandle handle = InputDevice_createHandle(mouse, (U16) scrollAxis, EInputType_Axis);
 
-	F32 delta = (F32)wl_fixed_to_double(value);
+	F32 delta = (F32) wl_fixed_to_double(value);
 	InputDevice_setCurrentAxis(mouse, handle, delta);
 
 	if(w->callbacks.onDeviceAxis)
@@ -442,19 +442,19 @@ static void LWindow_pointerAxisBar(
 //Required stubs for wl_seat version 5, missing entries might cause NULL-dispatch crashes
 // on compositors that send these events.
 static void LWindow_pointerFrameBar(void *d, struct wl_pointer *p) {
-	(void)d; (void)p;
+	(void) d; (void) p;
 }
 
 static void LWindow_pointerAxisSourceBar(void *d, struct wl_pointer *p, U32 s) {
-	(void)d; (void)p; (void)s;
+	(void) d; (void) p; (void) s;
 }
 
 static void LWindow_pointerAxisStopBar(void *d, struct wl_pointer *p, U32 t, U32 a) {
-	(void)d; (void)p; (void)t; (void)a;
+	(void) d; (void) p; (void) t; (void) a;
 }
 
 static void LWindow_pointerAxisDiscreteBar(void *d, struct wl_pointer *p, U32 a, I32 v) {
-	(void)d; (void)p; (void)a; (void)v;
+	(void) d; (void) p; (void) a; (void) v;
 }
 
 static void LWindow_touchDown(
@@ -486,20 +486,20 @@ static void LWindow_touchDown(
 	//There is no "previous position" yet,
 	// so RX/RY must not carry over a stale delta from mouse motion or a different finger's last move
 
-	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
-	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
-	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
-	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp0, EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp1, EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX,    EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY,    EInputType_Axis);
 
-	InputDevice_setCurrentAxis(mouse, hAbsX, (F32)nx);
-	InputDevice_setCurrentAxis(mouse, hAbsY, (F32)ny);
+	InputDevice_setCurrentAxis(mouse, hAbsX, (F32) nx);
+	InputDevice_setCurrentAxis(mouse, hAbsY, (F32) ny);
 	InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
 	InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
 
 	//Note: no onDeviceAxis callbacks here, deliberately, same as pointerEnterBar.
 	//Where the finger first lands isn't reportable motion, just the tracking baseline.
 
-	InputHandle hBtn = InputDevice_createHandle(mouse, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+	InputHandle hBtn = InputDevice_createHandle(mouse, (U16) (EMouseButton_Left - EMouseAxis_End), EInputType_Button);
 
 	InputDevice_setCurrentState(mouse, hBtn, true);
 
@@ -529,8 +529,8 @@ static void LWindow_touchUp(void *data, struct wl_touch *touch, U32 serial, U32 
 	// and report the change, same as any other axis update.
 	//Abs (Temp0/Temp1) is left untouched: "last known position" stays meaningful after lift-off
 
-	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
-	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX, EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY, EInputType_Axis);
 
 	F32 prevRelX = InputDevice_getCurrentAxis(mouse, hRelX);
 	F32 prevRelY = InputDevice_getCurrentAxis(mouse, hRelY);
@@ -551,7 +551,7 @@ static void LWindow_touchUp(void *data, struct wl_touch *touch, U32 serial, U32 
 			w->callbacks.onDeviceAxis(w, mouse, hRelY, 0.f);
 	}
 
-	InputHandle hBtn = InputDevice_createHandle(mouse, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+	InputHandle hBtn = InputDevice_createHandle(mouse, (U16) (EMouseButton_Left - EMouseAxis_End), EInputType_Button);
 
 	InputDevice_setCurrentState(mouse, hBtn, false);
 
@@ -590,35 +590,35 @@ static void LWindow_touchMotion(void *data, struct wl_touch *touch, U32 time, I3
 
 	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
-	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
-	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
-	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
-	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp0, EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16) EMouseAxis_Temp1, EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX,    EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY,    EInputType_Axis);
 
 	F32 prevAbsX = InputDevice_getCurrentAxis(mouse, hAbsX);
 	F32 prevAbsY = InputDevice_getCurrentAxis(mouse, hAbsY);
-	F32 relX = (F32)nx - prevAbsX, relY = (F32)ny - prevAbsY;
+	F32 relX = (F32) nx - prevAbsX, relY = (F32) ny - prevAbsY;
 
-	InputDevice_setCurrentAxis(mouse, hAbsX, (F32)nx);
-	InputDevice_setCurrentAxis(mouse, hAbsY, (F32)ny);
+	InputDevice_setCurrentAxis(mouse, hAbsX, (F32) nx);
+	InputDevice_setCurrentAxis(mouse, hAbsY, (F32) ny);
 	InputDevice_setCurrentAxis(mouse, hRelX, relX);
 	InputDevice_setCurrentAxis(mouse, hRelY, relY);
 
 	if(w->callbacks.onDeviceAxis) {
 
 		if(relX != 0.f) {
-			w->callbacks.onDeviceAxis(w, mouse, hAbsX, (F32)nx);
+			w->callbacks.onDeviceAxis(w, mouse, hAbsX, (F32) nx);
 			w->callbacks.onDeviceAxis(w, mouse, hRelX, relX);
 		}
 
 		if(relY != 0.f) {
-			w->callbacks.onDeviceAxis(w, mouse, hAbsY, (F32)ny);
+			w->callbacks.onDeviceAxis(w, mouse, hAbsY, (F32) ny);
 			w->callbacks.onDeviceAxis(w, mouse, hRelY, relY);
 		}
 	}
 }
 
-static void LWindow_touchFrame(void *d, struct wl_touch *t) { (void)d; (void)t; }
+static void LWindow_touchFrame(void *d, struct wl_touch *t) { (void) d; (void) t; }
 
 static void LWindow_touchCancel(void *data, struct wl_touch *touch) {
 
@@ -641,8 +641,8 @@ static void LWindow_touchCancel(void *data, struct wl_touch *touch) {
 	// different trigger for the same semantics (e.g. compositor took the touch
 	// sequence away mid-gesture, such as for a gesture or focus change).
 
-	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
-	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16) EMouseAxis_RX, EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16) EMouseAxis_RY, EInputType_Axis);
 
 	F32 prevRelX = InputDevice_getCurrentAxis(mouse, hRelX);
 	F32 prevRelY = InputDevice_getCurrentAxis(mouse, hRelY);
@@ -663,7 +663,7 @@ static void LWindow_touchCancel(void *data, struct wl_touch *touch) {
 			w->callbacks.onDeviceAxis(w, mouse, hRelY, 0.f);
 	}
 
-	InputHandle hBtn = InputDevice_createHandle(mouse, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+	InputHandle hBtn = InputDevice_createHandle(mouse, (U16) (EMouseButton_Left - EMouseAxis_End), EInputType_Button);
 
 	InputDevice_setCurrentState(mouse, hBtn, false);
 
@@ -711,7 +711,7 @@ static void LWindow_kbKeymap(
 		return;
 
 	struct xkb_keymap *keymap = xkb_keymap_new_from_string(
-		lwin->xkbContext, (const C8*)map,
+		lwin->xkbContext, (const C8*) map,
 		XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS
 	);
 
@@ -993,8 +993,8 @@ static void LWindow_kbKey(
 		I32 len = xkb_state_key_get_utf8(lwin->xkbState, keycode, utf8, sizeof(utf8) - 1);
 
 		//Filter out control characters (< 0x20) and DEL, matching WM_CHAR behaviour.
-		if(len > 0 && (U8)utf8[0] >= 0x20 && utf8[0] != 0x7F)
-			w->callbacks.onTypeChar(w, CharString_createRefSizedConst(utf8, (U64)len, true));
+		if(len > 0 && (U8) utf8[0] >= 0x20 && utf8[0] != 0x7F)
+			w->callbacks.onTypeChar(w, CharString_createRefSizedConst(utf8, (U64) len, true));
 	}
 }
 
@@ -1012,7 +1012,7 @@ static void LWindow_kbModifiers(
 }
 
 static void LWindow_kbRepeatInfo(void *d, struct wl_keyboard *kb, I32 rate, I32 delay) {
-	(void)d; (void)kb; (void)rate; (void)delay;
+	(void) d; (void) kb; (void) rate; (void) delay;
 	//TODO: Key repeat is handled at a higher level if needed
 }
 

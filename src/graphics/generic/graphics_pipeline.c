@@ -37,7 +37,7 @@ static inline Bool validateBlend(EBlend blend, Bool hasDualSrcBlend, Error *e_rr
 	Bool s_uccess = true;
 
 	if(blend >= EBlend_Count)
-		retError(clean, Error_invalidEnum(0, (U64)blend, EBlend_Count, "validateBlend()::blend is out of bounds"));
+		retError(clean, Error_invalidEnum(0, (U64) blend, EBlend_Count, "validateBlend()::blend is out of bounds"));
 
 	if(!hasDualSrcBlend && blend >= EBlend_Src1ColorExt && blend <= EBlend_InvSrc1AlphaExt)
 		retError(clean, Error_unsupportedOperation(0, "validateBlend()::blend is unsupported since hasDualSrcBlend is false"));
@@ -198,8 +198,8 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));
 
-		pipelineExtensions |= (U32)(bin->identifier.extensions &~ bin->dormantExtensions);
-		stageFlags |= (U64)1 << entry->stage;
+		pipelineExtensions |= (U32) (bin->identifier.extensions &~ bin->dormantExtensions);
+		stageFlags |= (U64) 1 << entry->stage;
 	}
 
 	//Invalidate compute or raytracing stages
@@ -214,7 +214,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	//Validate if stages are allowed due to GeometryShader
 
-	if(
+	if (
 		((stageFlags >> EPipelineStage_GeometryExt) & 1) &&
 		!(device->info.capabilities.flags.features & EGraphicsFeatures_GeometryShader)
 	)
@@ -282,7 +282,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 			));
 	}
 
-	if(
+	if (
 		!(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias) && (
 			info->rasterizer.depthBiasConstantFactor ||
 			info->rasterizer.depthBiasClamp ||
@@ -295,7 +295,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 			"but depthBias is disabled"
 		));
 
-	if(
+	if (
 		(info->rasterizer.flags & ERasterizerFlags_IsWireframeExt) &&
 		!(device->info.capabilities.flags.features & EGraphicsFeatures_Wireframe)
 	)

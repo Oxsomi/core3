@@ -24,6 +24,7 @@
 #include "formats/json/json_writer.h"
 #include "types/container/string.h"
 #include "types/base/string_read_helper.h"
+#include <locale.h>
 
 //The bytes are pinned exactly: a document is consumed by parsers and by the recording the web frontend
 //commits, so a stray space or a moved comma is a change, not a style choice.
@@ -122,11 +123,14 @@ void Test_jsonWriter(Test *t) {
 		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
 
 		Test_assert(t, "a value without a key inside an object is refused",
-			JsonWriter_beginObject(&w, &t->err) && !JsonWriter_u64(&w, 1, NULL));
+			JsonWriter_beginObject(&w, &t->err) && !JsonWriter_u64(&w, 1, NULL)
+		);
 
 		Test_assert(t, "closing it as an array is refused", !JsonWriter_endArray(&w, NULL));
 		Test_assert(t, "a key whose value is still due refuses a second key",
-			JsonWriter_key(&w, "k", &t->err) && !JsonWriter_key(&w, "again", NULL));
+			JsonWriter_key(&w, "k", &t->err) && !JsonWriter_key(&w, "again", NULL)
+		);
+
 		Test_assert(t, "and refuses to close", !JsonWriter_endObject(&w, NULL));
 		Test_assert(t, "the value closes it", JsonWriter_null(&w, &t->err) && JsonWriter_endObject(&w, &t->err));
 		Test_assert(t, "closing with nothing open is refused", !JsonWriter_endObject(&w, NULL));
@@ -138,7 +142,8 @@ void Test_jsonWriter(Test *t) {
 		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
 
 		Test_assert(t, "a key inside an array is refused",
-			JsonWriter_beginArray(&w, &t->err) && !JsonWriter_key(&w, "k", NULL));
+			JsonWriter_beginArray(&w, &t->err) && !JsonWriter_key(&w, "k", NULL)
+		);
 
 		Bool opened = true;
 
@@ -148,6 +153,86 @@ void Test_jsonWriter(Test *t) {
 		Test_assert(t, "sixty four levels open", opened);
 		Test_assert(t, "the sixty fifth is refused", !JsonWriter_beginArray(&w, NULL));
 	}
+
+	CharString_free(&out, t->alloc);
+	Test_setModule(t, NULL);
+}
+
+//A document is exactly one root value: a second one parses as trailing garbage, and nothing written at all is
+// not a document.
+
+void Test_jsonSingleRoot(Test *t) {
+
+	Test_setModule(t, "JsonWriter/singleRoot");
+
+	CharString out = CharString_createNull();
+
+	{
+
+		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
+
+		Test_assert(t, "an empty document is not complete", !JsonWriter_isComplete(&w));
+
+		Test_assert(t, "one root completes", (
+			JsonWriter_beginObject(&w, &t->err) && !JsonWriter_isComplete(&w) &&
+			JsonWriter_endObject(&w, &t->err) && JsonWriter_isComplete(&w)
+		));
+
+		Test_assert(t, "a second object is refused", !JsonWriter_beginObject(&w, NULL));
+		Test_assert(t, "a second scalar is refused", !JsonWriter_u64(&w, 1, NULL));
+		Test_assert(t, "a second array is refused", !JsonWriter_beginArray(&w, NULL));
+		Test_assert(t, "the first root is all there is", jsonEquals(&out, "{}"));
+	}
+
+	CharString_free(&out, t->alloc);
+
+	{
+
+		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
+
+		Test_assert(t, "a scalar is a root", JsonWriter_f64(&w, 2.5, &t->err) && JsonWriter_isComplete(&w));
+		Test_assert(t, "and refuses a second", !JsonWriter_null(&w, NULL));
+		Test_assert(t, "which reads 2.5", jsonEquals(&out, "2.5"));
+	}
+
+	CharString_free(&out, t->alloc);
+	Test_setModule(t, NULL);
+}
+
+//A number is written with a '.' whatever the locale says, since JSON has no other spelling.
+
+void Test_jsonLocale(Test *t) {
+
+	Test_setModule(t, "JsonWriter/locale");
+
+	static const C8 *locales[] = { "de-DE", "de_DE.UTF-8", "de_DE" };
+	CharString out = CharString_createNull();
+
+	Bool commaLocale = false;
+
+	for(U64 l = 0; l < sizeof(locales) / sizeof(locales[0]); ++l) {
+
+		if(!setlocale(LC_NUMERIC, locales[l]))
+			continue;
+
+		commaLocale = true;
+
+		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
+
+		const Bool ok =
+			JsonWriter_beginArray(&w, &t->err) && JsonWriter_f64(&w, 1.5, &t->err) &&
+			JsonWriter_f64(&w, -0.25, &t->err) && JsonWriter_endArray(&w, &t->err);
+
+		setlocale(LC_NUMERIC, "C");
+
+		Test_assert(t, "dot not comma", ok && jsonEquals(&out, "[1.5,-0.25]"));
+		break;
+	}
+
+	setlocale(LC_NUMERIC, "C");
+
+	if(!commaLocale)
+		Test_print(t, "JsonWriter locale test ran in the C locale only (no decimal comma locale installed)");
 
 	CharString_free(&out, t->alloc);
 	Test_setModule(t, NULL);

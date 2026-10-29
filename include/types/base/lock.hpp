@@ -91,14 +91,21 @@ namespace oxc {
 			release();
 		}
 
+		//Replacing a different lock releases it before waiting; failure leaves the guard empty.
 		[[nodiscard]] static inline c::Bool acquire(
 			c::SpinLock &lock, AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX
 		) noexcept {
+
+			if(acqLock.lock != &lock)
+				acqLock.release();
 
 			c::ELockAcquire acq = SpinLock_lock(&lock, maxWait);
 
 			if (acq < c::ELockAcquire_Success)
 				return false;
+
+			if(acqLock.lock == &lock && acq == c::ELockAcquire_AlreadyLocked)
+				return true;
 
 			acqLock = AcquiredLock(&lock, acq);
 			return true;
@@ -117,7 +124,15 @@ namespace oxc {
 		}
 
 		inline AcquiredLock &operator=(AcquiredLock &&other) noexcept {
-			release();
+
+			if(this == &other)
+				return *this;
+
+			//A nested guard must retain the destination's ownership when both refer to the same lock.
+			if(lock == other.lock && acq == c::ELockAcquire_Acquired)
+				other.acq = c::ELockAcquire_Acquired;
+			else release();
+
 			lock = other.lock;
 			acq = other.acq;
 			other.lock = nullptr;

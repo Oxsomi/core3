@@ -834,7 +834,7 @@ extern "C" void Test_graphicsBindlessSampler(oxc::c::Test *t, oxc::c::GraphicsDe
 
 	CommandList commandList, emptyList;
 
-	if(
+	if (
 		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
 		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
 	)
@@ -938,7 +938,7 @@ extern "C" void Test_graphicsStaticSamplerDevice(oxc::c::Test *t, oxc::c::Graphi
 
 	CommandList commandList, emptyList;
 
-	if(
+	if (
 		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
 		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
 	)

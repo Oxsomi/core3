@@ -20,13 +20,14 @@
 
 //types/base/lock.c
 
+#ifndef _POSIX_C_SOURCE
+	#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "types/base/platform_types.h"
 #include "types/base/lock.h"
 #include "types/base/constants.h"
 #include "types/base/thread.h"
-#include "types/base/error.h"
-#include "types/base/time.h"
-#include "types/base/mathi.h"
 
 #if _ARCH == ARCH_ARM64
 	#define SHORT_SPIN 16
@@ -42,6 +43,7 @@
 	#define THREAD_YIELD() SwitchToThread()
 #else
 	#include <sched.h>
+	#include <time.h>
 	#define THREAD_YIELD() sched_yield()
 	#if _ARCH == ARCH_ARM64
 		#if _COMPILER == COMPILER_CLANG
@@ -69,54 +71,96 @@
 	#endif
 #endif
 
+static Ns SpinLock_monotonicTime(U64 frequency) {
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		LARGE_INTEGER counter;
+
+		if(!QueryPerformanceCounter(&counter))
+			return U64_MAX;
+
+		const U64 ticks = (U64) counter.QuadPart;
+
+		return ticks / frequency * SECOND + (Ns) ((F64) (ticks % frequency) * SECOND / frequency);
+
+	#else
+
+		(void) frequency;
+
+		struct timespec now;
+
+		if(clock_gettime(CLOCK_MONOTONIC, &now))
+			return U64_MAX;
+
+		return (Ns) now.tv_sec * SECOND + (Ns) now.tv_nsec;
+
+	#endif
+}
+
 ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime) {
 
-	if (l) {
+	if(!l)
+		return ELockAcquire_Invalid;
 
-		const Ns startTime = maxTime == U64_MAX ? 0 : Time_now();
+	const I64 tid = (I64) Thread_getId();
+	const I64 prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
-		const I64 tid = (I64) Thread_getId();
-		I64 prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
+	if(prevValue == tid)
+		return ELockAcquire_AlreadyLocked;
 
-		if(prevValue == tid)        //Already locked
-			return ELockAcquire_AlreadyLocked;
+	if(prevValue == 0)
+		return ELockAcquire_Acquired;
 
-		if(prevValue == 0)
-			return ELockAcquire_Acquired;
-
-		if(maxTime == 0)
-			return ELockAcquire_TimedOut;
-
-		//If the previous result was not 0 then it means someone already locked this.
-		//We have to wait for it and attempt to lock it again.
-		//It's possible that within this time someone else is waiting for it and locked it before us.
-		//So we have to wait in a loop.
-
-		//Short spin, useful for super short waits
-
-		for (U8 i = 0; i < SHORT_SPIN; ++i) {
-
-			if (AtomicI64_cmpStore(&l->lockedThreadId, 0, tid) == 0)
-				return ELockAcquire_Acquired;
-
-			CPU_PAUSE();
-
-			if(Time_now() - startTime >= maxTime)
-				return ELockAcquire_TimedOut;
-		}
-
-		//Longer wait
-
-		while(Time_now() - startTime < maxTime) {
-
-			if (AtomicI64_cmpStore(&l->lockedThreadId, 0, tid) == 0)
-				return ELockAcquire_Acquired;
-
-			THREAD_YIELD();
-		}
-
+	if(!maxTime)
 		return ELockAcquire_TimedOut;
+
+	const Bool bounded = maxTime != U64_MAX;
+	U64 frequency = 0;
+	Ns startTime = 0;
+
+	if(bounded) {
+
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			LARGE_INTEGER nativeFrequency;
+
+			if(!QueryPerformanceFrequency(&nativeFrequency) || nativeFrequency.QuadPart <= 0)
+				return ELockAcquire_Invalid;
+
+			frequency = (U64) nativeFrequency.QuadPart;
+		#endif
+
+		startTime = SpinLock_monotonicTime(frequency);
+
+		if(startTime == U64_MAX)
+			return ELockAcquire_Invalid;
 	}
 
-	return ELockAcquire_Invalid;
+	U8 spins = 0;
+
+	while(true) {
+
+		//Read the cache line without requesting exclusive ownership until the lock is available.
+
+		if(!AtomicI64_load(&l->lockedThreadId) && !AtomicI64_cmpStore(&l->lockedThreadId, 0, tid))
+			return ELockAcquire_Acquired;
+
+		if(spins < SHORT_SPIN) {
+			++spins;
+			CPU_PAUSE();
+		}
+
+		else THREAD_YIELD();
+
+		if(bounded) {
+
+			const Ns now = SpinLock_monotonicTime(frequency);
+
+			if(now == U64_MAX)
+				return ELockAcquire_Invalid;
+
+			if(now - startTime >= maxTime)
+				return ELockAcquire_TimedOut;
+		}
+	}
 }

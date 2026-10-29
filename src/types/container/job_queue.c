@@ -80,18 +80,28 @@ static Bool JobQueue_pop(JobQueue *queue, U64 threadId, Bool filtered, const Job
 
 	for(U64 k = 0; !popped && k < EJobLane_Count && order[k] != EJobLane_Count; ++k) {
 
-		ListJob *jobs = &queue->jobs[order[k]];
+		const EJobLane lane = order[k];
+		ListJob *jobs = &queue->jobs[lane];
+		U64 *head = &queue->jobsHead[lane];
 
-		if(!filtered) {
-			if(jobs->length)
-				popped = ListJob_popFront(jobs, job, NULL);
-		}
-
-		else for(U64 i = 0; i < jobs->length; ++i)
-			if (jobs->ptr[i].group == group) {
-				popped = ListJob_popLocation(jobs, i, job, NULL);
+		for(U64 i = *head; i < jobs->length; ++i)
+			if(jobs->ptr[i].callback && (!filtered || jobs->ptr[i].group == group)) {
+				*job = jobs->ptr[i];
+				jobs->ptrNonConst[i].callback = NULL;
+				++queue->jobsRemoved[lane];
+				popped = true;
 				break;
 			}
+
+		while(*head < jobs->length && !jobs->ptr[*head].callback) {
+			++*head;
+			--queue->jobsRemoved[lane];
+		}
+
+		if(*head == jobs->length) {
+			jobs->length = 0;
+			*head = 0;
+		}
 	}
 
 	if(acq == ELockAcquire_Acquired)
@@ -253,7 +263,7 @@ Bool JobQueue_pushLane(
 	if(!queue)
 		retError(clean, Error_nullPointer(0, "JobQueue_push()::queue is required"));
 
-	if(lane >= EJobLane_Count)
+	if((U64) lane >= EJobLane_Count)
 		retError(clean, Error_invalidEnum(1, (U64) lane, EJobLane_Count, "JobQueue_pushLane()::lane"));
 
 	if(!callback)
@@ -267,11 +277,34 @@ Bool JobQueue_pushLane(
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "JobQueue_push() couldn't acquire lock"));
 
+	if(AtomicI64_load(&queue->shutdown))
+		retError(clean, Error_invalidState(0, "JobQueue_push() queue is shutting down"));
+
 	const Job job = (Job) {
 		.callback = callback, .data = data, .destructor = destructor, .group = group, .lane = lane
 	};
 
-	gotoIfError3(clean, ListJob_pushBack(&queue->jobs[lane], job, queue->alloc, e_rr));
+	ListJob *jobs = &queue->jobs[lane];
+
+	//Reclaim consumed slots only when at least half the allocation can be recovered.
+	//Ordinary FIFO pops never shift jobs, and compaction is amortized across the consumed slots.
+
+	if (
+		jobs->length == GenericList_capacity(ListJob_toList(*jobs)) &&
+		queue->jobsHead[lane] + queue->jobsRemoved[lane] >= jobs->length / 2
+	) {
+
+		U64 length = 0;
+
+		for(U64 i = queue->jobsHead[lane]; i < jobs->length; ++i)
+			if(jobs->ptr[i].callback)
+				jobs->ptrNonConst[length++] = jobs->ptr[i];
+
+		jobs->length = length;
+		queue->jobsHead[lane] = queue->jobsRemoved[lane] = 0;
+	}
+
+	gotoIfError3(clean, ListJob_pushBack(jobs, job, queue->alloc, e_rr));
 
 	AtomicI64_inc(&queue->pending);
 
@@ -355,26 +388,30 @@ void JobQueue_free(JobQueue *queue) {
 
 	const ELockAcquire acq = SpinLock_lock(&queue->lock, U64_MAX);
 
+	AtomicI64_store(&queue->shutdown, 1);
+
 	//Destroy jobs that never ran so allocator-backed job data (e.g. C++ callables) isn't leaked.
 
 	for(U64 lane = 0; lane < EJobLane_Count; ++lane) {
 
 		ListJob *jobs = &queue->jobs[lane];
-		AtomicI64_sub(&queue->pending, (I64) jobs->length);
 
-		for(U64 i = 0; i < jobs->length; ++i) {
+		AtomicI64_sub(&queue->pending, (I64) (jobs->length - queue->jobsHead[lane] - queue->jobsRemoved[lane]));
+
+		for(U64 i = queue->jobsHead[lane]; i < jobs->length; ++i) {
+
 			const Job discarded = jobs->ptr[i];
-			if(discarded.destructor)
+
+			if(discarded.callback && discarded.destructor)
 				discarded.destructor(discarded.data);
 		}
 
 		ListJob_clear(jobs, NULL);
+		queue->jobsHead[lane] = queue->jobsRemoved[lane] = 0;
 	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&queue->lock);
-
-	AtomicI64_store(&queue->shutdown, 1);
 
 	for(U64 i = 0; i < queue->threads.length; ++i)
 		if(queue->threads.ptr[i])       //Might be partially created if JobQueue_create failed midway
@@ -422,8 +459,26 @@ Bool JobGroup_enter(JobGroup *group, U64 count, Error *e_rr) {
 	if(!group)
 		retError(clean, Error_nullPointer(0, "JobGroup_enter()::group is required"));
 
-	if(count)
-		AtomicI64_add(&group->outstanding, (I64) count);
+	I64 outstanding = AtomicI64_load(&group->outstanding);
+
+	while(count) {
+
+		if(outstanding < 0) {
+			Thread_sleep(JobQueue_idleSleep);
+			outstanding = AtomicI64_load(&group->outstanding);
+			continue;
+		}
+
+		if(count > (U64) I64_MAX - (U64) outstanding)
+			retError(clean, Error_overflow(1, count, I64_MAX, "JobGroup_enter()::count overflows tokens"));
+
+		const I64 previous = AtomicI64_cmpStore(&group->outstanding, outstanding, outstanding + (I64) count);
+
+		if(previous == outstanding)
+			break;
+
+		outstanding = previous;
+	}
 
 clean:
 	return s_uccess;
@@ -452,7 +507,7 @@ Bool JobGroup_wait(JobGroup *group, Error *e_rr) {
 	if(!group->queue)
 		retError(clean, Error_nullPointer(0, "JobGroup_wait()::group->queue is required"));
 
-	while (AtomicI64_load(&group->outstanding)) {
+	while(AtomicI64_load(&group->outstanding)) {
 
 		if(JobQueue_runOne(group->queue, 0, true, group))
 			continue;
@@ -477,25 +532,53 @@ Bool JobGroup_leave(JobGroup *group, Error *e_rr) {
 	if(!group)
 		retError(clean, Error_nullPointer(0, "JobGroup_leave()::group is required"));
 
-	const I64 remaining = AtomicI64_dec(&group->outstanding);
+	I64 outstanding = AtomicI64_load(&group->outstanding);
 
-	if(remaining > 0)                   //Not the last token; nothing to do yet
-		goto clean;
+	while(true) {
 
-	if(remaining < 0)                   //Underflow: more leaves than enters (usage bug)
-		retError(clean, Error_invalidState(0, "JobGroup_leave() released more tokens than were entered"));
+		if(outstanding <= 0)
+			retError(clean, Error_invalidState(0, "JobGroup_leave() released more tokens than were entered"));
 
-	//Last token: fire finalize on success, otherwise free the accumulator.
-	//The finalize job carries dataDestructor so data is still freed if it is discarded on shutdown.
+		const I64 remaining = outstanding == 1 ? -1 : outstanding - 1;
+		const I64 previous = AtomicI64_cmpStore(&group->outstanding, outstanding, remaining);
 
-	if(!AtomicI64_load(&group->failed) && group->finalize) {
-		gotoIfError3(clean, JobQueue_pushDestructor(
-			group->queue, group->finalize, group->data, group->dataDestructor, e_rr
-		));
+		if(previous == outstanding)
+			break;
+
+		outstanding = previous;
 	}
 
-	else if(group->dataDestructor)
-		group->dataDestructor(group->data);
+	if(outstanding > 1)
+		goto clean;
+
+	//Neither a waiter nor a callback may destroy the group until all accesses to it are complete.
+	//The queue lock prevents a newly queued finalize from running before completion is published.
+	//Callbacks can free the allocation containing the group, so only local copies survive publication.
+
+	JobQueue *queue = group->queue;
+	const JobCallback finalize = group->finalize;
+	const JobDestructor destructor = group->dataDestructor;
+	void *data = group->data;
+	Bool destroy = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+
+	if(!AtomicI64_load(&group->failed) && finalize) {
+
+		acq = SpinLock_lock(&queue->lock, U64_MAX);
+		s_uccess = JobQueue_pushDestructor(queue, finalize, data, destructor, e_rr);
+		destroy = !s_uccess;
+
+		if(!s_uccess)
+			AtomicI64_store(&group->failed, 1);
+	}
+
+	AtomicI64_store(&group->outstanding, 0);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&queue->lock);
+
+	if(destroy && destructor)
+		destructor(data);
 
 clean:
 	return s_uccess;

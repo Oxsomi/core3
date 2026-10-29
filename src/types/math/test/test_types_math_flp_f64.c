@@ -115,10 +115,11 @@ void Test_flpF64(Test *test) {
 		for (U64 j = 0; j < 2; ++j) {
 
 			U64 bits = truncTests[i];
-			if (j) bits |= (U64)1 << 63;
+
+			if (j) bits |= (U64) 1 << 63;
 
 			const F64 fd       = F64_fromU64Bits(bits);
-			const U32 expected = U32_fromF32Bits((F32)fd);
+			const U32 expected = U32_fromF32Bits((F32) fd);
 			const U32 got      = U32_fromF32Bits(F64_castF32(fd));
 
 			Test_assert(test, "F64_castF32", got == expected);

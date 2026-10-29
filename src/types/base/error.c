@@ -184,7 +184,7 @@ Error Error_constData(U32 paramId, U32 subId, const C8 *errorStr) {
 
 Error Error_stderr(U32 subId, const C8 *errorStr) {
 	Error_base(
-		.genericError = EGenericError_Stderr, .errorSubId = subId, .paramValue0 = (U64)(U32)errno, .errorStr = errorStr
+		.genericError = EGenericError_Stderr, .errorSubId = subId, .paramValue0 = (U64) (U32) errno, .errorStr = errorStr
 	);
 }
 

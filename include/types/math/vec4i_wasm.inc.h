@@ -29,7 +29,14 @@
 
 //Loads
 
-static inline I32x4 I32x4_fromF32x4(F32x4 a) { return wasm_i32x4_trunc_sat_f32x4(a); }
+static inline I32x4 I32x4_fromF32x4(F32x4 a) {
+
+	const v128_t valid = wasm_v128_and(
+		wasm_f32x4_ge(a, wasm_f32x4_splat(-2147483648.0f)), wasm_f32x4_lt(a, wasm_f32x4_splat(2147483648.0f))
+	);
+
+	return wasm_v128_bitselect(wasm_i32x4_trunc_sat_f32x4(a), wasm_i32x4_splat(-2147483647 - 1), valid);
+}
 
 static inline I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) { return wasm_u64x2_make(i0, i1); }
 

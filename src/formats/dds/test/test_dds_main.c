@@ -47,6 +47,15 @@ OXC3_TEST_MAIN(formats_dds) {
 	Test_DDSWriteSizeConsistencyMipChain(&t);
 	Test_DDSWriteSizeConsistencyRGBA8(&t);
 
+	Test_DDSReadHugeSizes(&t);
+	Test_DDSCubeArray(&t);
+	Test_DDSReadAtOffset(&t);
+	Test_DDSLegacyMasks(&t);
+	Test_DDSLegacyVariants(&t);
+	Test_DDSDepthOnNonVolume(&t);
+	Test_DDSSortComparator(&t);
+	Test_DDSWriteFailedWrites(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 
 	return Test_end(&t);

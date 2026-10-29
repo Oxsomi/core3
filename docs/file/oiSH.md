@@ -314,6 +314,8 @@ typedef struct SHRegister {
 
     //Used at serialization time only, can't be used on subpass inputs
     //0 if no array, <=32767 if 1D array, >=32768 for ND arrays or 32Ki+ 1D arrays
+    //An unbound array ([0], count 0) is not a 1D array of 0 elements here, since 0 means 'no array': it is always an id.
+    //The id is 15 bits, so a file holds at most 32768 distinct array tables (the writer refuses more).
 	U16 arrayDimOrId;
     
 	U16 nameId;
@@ -393,18 +395,19 @@ SHFile {		//Must be 16-byte aligned
     		U8 outputsAvail;
 
 		    //Each element: [ ESBStride as U2, ESBPrimitive as U2, ESBVector as U2 ]
+    		//inputsAvail / outputsAvail run up to the last used slot; an unused slot in between is stored as 0.
     		U8 inputs[inputsAvail];
     		U8 outputs[outputsAvail];
 
     		//If shader source supports it, stores the index of the semantic in strings[].
-    		//But only for valid inputs/outputs (gaps not stored).
+    		//One byte per available slot, 0 for an unused (gap) slot.
     		//U4 semanticId, U4 semanticName.
     		//semanticName of 0 is reserved as TEXCOORD or SV_TARGET (pixel shader output only).
     		//This leaves up to 15 unique semantics (input has a unique one and output too).
     		if(hasSemantics)
                 U8 semanticCounts;						//U4 input, output: Unique semantic counts
-     			U8 inputSemantics[validInputs];			//Starting at: semantics[0]
-     			U8 outputSemantics[validOutputs];		//Starting at: semantics[uniqueInputSemantics]
+     			U8 inputSemantics[inputsAvail];			//Starting at: semantics[0]
+     			U8 outputSemantics[outputsAvail];		//Starting at: semantics[uniqueInputSemantics]
 
 	    if compute, mesh or task:
 		    U16x4 groups;
@@ -587,12 +590,29 @@ Tier 1 (with bindless) has the following limits:
 - maximum UAV+SRV+CBV of 1M.
 - Acceleration structures: 16 per binary if RT is supported. Due to Intel not supporting more.
 
+## Rules the writer enforces
+
+The writer refuses what the reader refuses, so a file it produces always reads back:
+
+- An entrypoint can only reference binaries that belong to it: a binary compiled for a named entrypoint (not `[[oxc::stage()]]` annotated) can only be referenced by the entry of that name. `SHFile_addEntrypoint` checks this; annotated binaries can be shared by any entry.
+- Graphics inputs and outputs are stored up to their last used slot, with unused slots in between stored as 0, so a gap round-trips. `SHFile_addEntrypoint` computes the stored count the same way.
+- Register arrays: `[0]` (unbound) is stored through the array table. More than 32768 distinct array tables are refused, because the id has 15 bits.
+- Array-table deduplication and lookup use an index while retaining first-appearance order in the serialized table.
+- Register array counts (the product of all dimensions) and their sums saturate when checked against the binding limits, so a product that would overflow 64 bits is over every limit.
+- Uniform names are looked up among the uniform names only: a uniform spelled like a define name or value is a separate string.
+- The string table must fit `DLFile_read`'s automatic loading policy.
+  The reader rejects a table with any deferred string, and the writer checks `DLFile_canReadFullyLoaded` before writing.
+  oiDL owns the per-entry and aggregate allocation limits.
+- The CRC32C starts at `SHHeader::uniqueDefines`, so it does not cover `compilerVersion`, `hash` or `sourceHash` (the fields before it). Covering them would change the format.
+- The reader and writer compute that CRC32C incrementally using 16 KiB of scratch storage. The checksum pass rereads the serialized range without allocating a second copy of the whole file.
+
 ## Quirks between DXIL and SPIRV
 
 When combining DXIL and SPIRV binaries and/or switching binary type, there are a few quirks that are important to know:
 
 - In DXIL, registers and elements in buffers all get flattened to a 1D array, even if they were from a 2D array. The array is effectively flattened. Combining a SPIRV input with a DXIL input will unflatten this array (since SPIRV maintains this info).
 - In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: EGfxRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
+- Registers are matched by name when combining, and a match has to be the same resource: texture dimension, SRV vs UAV (`IsWrite`), array flag and buffer kind all have to be equal, or the combine fails. Only the promotions in this list are allowed, and none of them depends on which file is first: sampler + sampler comparison state is a sampler comparison state, a constant buffer (DXIL) + push constants (SPIRV) is push constants, and the combined sampler flag is the union of both.
 - SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
 - DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
 - DXIL has more info about the texture primitive than SPIRV, though SPIRV can have a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.

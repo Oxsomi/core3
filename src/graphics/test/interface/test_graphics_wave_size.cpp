@@ -90,7 +90,8 @@ static oxc::c::U32 Test_runWaveSize(
 	{
 		CommandScope scope = commandList.scope({ outputWrite }, 1, {}, e_rr);
 
-		if(!(
+		if (
+			!(
 			c::Test_assert(t, "waveSizeScope", (c::Bool) scope) &&
 			c::Test_assert(t, "waveSizeBind", scope.setComputePipeline(pipeline, e_rr)) &&
 			c::Test_assert(t, "waveSizePush", scope.setPushConstants(pushData, e_rr)) &&
@@ -100,7 +101,8 @@ static oxc::c::U32 Test_runWaveSize(
 			return 0;
 	}
 
-	if(!(
+	if (
+		!(
 		c::Test_assert(t, "waveSizeEnd", commandList.end(e_rr)) &&
 		submitAndWait(t, dev, commandList) &&
 		pullBuffer(t, dev, emptyList, output) &&
@@ -145,7 +147,8 @@ extern "C" void Test_graphicsWaveSize(oxc::c::Test *t, oxc::c::GraphicsDeviceRef
 
 	CommandList emptyList;
 
-	if(!(
+	if (
+		!(
 		c::Test_assert(t, "waveSizeEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) &&
 		c::Test_assert(t, "waveSizeEmptyBegin", emptyList.begin(true, e_rr)) &&
 		c::Test_assert(t, "waveSizeEmptyEnd", emptyList.end(e_rr))

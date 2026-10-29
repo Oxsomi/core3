@@ -76,7 +76,7 @@ static inline Bool Buffer_isAligned(const Buffer buf) {
 static inline void Buffer_markAligned(Buffer *buf) {
 
 	if(buf)
-		buf->lengthAndRefBits |= (U64)1 << 61;
+		buf->lengthAndRefBits |= (U64) 1 << 61;
 }
 
 //Replaces the length while leaving the ref, const and aligned bits alone.
@@ -102,7 +102,7 @@ static inline Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
 		return Buffer_createNull();
 
 	Buffer buf;
-	buf.ptrNonConst = (U8*)ptr;
+	buf.ptrNonConst = (U8*) ptr;
 	buf.lengthAndRefBits = length;
 	return buf;
 }
@@ -118,8 +118,8 @@ static inline Buffer Buffer_createRef(void *v, U64 length) {
 		return Buffer_createNull();
 
 	Buffer buf;
-	buf.ptrNonConst = (U8*)v;
-	buf.lengthAndRefBits = length | ((U64)1 << 63);
+	buf.ptrNonConst = (U8*) v;
+	buf.lengthAndRefBits = length | ((U64) 1 << 63);
 	return buf;
 }
 
@@ -132,8 +132,8 @@ static inline Buffer Buffer_createRefConst(const void *v, U64 length) {
 		return Buffer_createNull();
 
 	Buffer buf;
-	buf.ptr = (const U8*)v;
-	buf.lengthAndRefBits = length | ((U64)3 << 62);
+	buf.ptr = (const U8*) v;
+	buf.lengthAndRefBits = length | ((U64) 3 << 62);
 	return buf;
 }
 
@@ -147,7 +147,7 @@ static inline Buffer Buffer_createVirtualRefConst(U64 length) {
 		return Buffer_createNull();
 
 	Buffer buf = { { 0 } };
-	buf.lengthAndRefBits = length | ((U64)3 << 62);
+	buf.lengthAndRefBits = length | ((U64) 3 << 62);
 	return buf;
 }
 
@@ -270,8 +270,8 @@ static inline Buffer Buffer_createRefFromBuffer(const Buffer buf, Bool isConst) 
 	// about preventing a free.
 
 	copy = buf;
-	copy.lengthAndRefBits &= ~((U64)1 << 61);
-	copy.lengthAndRefBits |= ((U64)1 << 63) | ((U64)isConst << 62);
+	copy.lengthAndRefBits &= ~((U64) 1 << 61);
+	copy.lengthAndRefBits |= ((U64) 1 << 63) | ((U64) isConst << 62);
 	return copy;
 }
 
@@ -327,10 +327,21 @@ BUFFER_OP_IMPL(F32);
 static inline Bool Buffer_isAscii(const Buffer buf) {
 
 	for (U64 i = 0; i < Buffer_length(buf); ++i)
-		if (!C8_isValidAscii((C8)buf.ptr[i]))
+		if (!C8_isValidAscii((C8) buf.ptr[i]))
 			return false;
 
 	return !!Buffer_length(buf);
+}
+
+//Every byte is zero when the first is and each byte equals the one after it, which is one memcmp at libc's own speed.
+//An empty buffer holds no non-zero byte, so it counts as zero.
+static inline Bool Buffer_isZero(const Buffer buf) {
+
+	const U64 len = Buffer_length(buf);
+
+	return !len || (!buf.ptr[0] && Buffer_eq(
+		Buffer_createRefConst(buf.ptr, len - 1), Buffer_createRefConst(buf.ptr + 1, len - 1)
+	));
 }
 
 typedef struct BitRef {

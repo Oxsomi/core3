@@ -125,6 +125,29 @@ void Test_stringMut(Test *test) {
 
 	Test_assert(test, "CharString_eraseAllStringSensitive (value)", CharString_equalsCStringSensitive(&str, " World,  World!"));
 
+	//Only complete matches inside the selected range are erased.
+
+	fillStr(buf1, "abcab", &str);
+
+	CharString abc = CharString_createRefCStrConst("abc");
+
+	Test_assert(test, "CharString_eraseAllString partial suffix", CharString_eraseAllStringSensitive(&str, &abc, 0, 0));
+	Test_assert(test, "CharString_eraseAllString preserves partial suffix", CharString_equalsCStringSensitive(&str, "ab"));
+
+	fillStr(buf1, "abXTAIL", &str);
+
+	CharString ab = CharString_createRefCStrConst("ab");
+
+	Test_assert(test, "CharString_eraseAllString bounded", CharString_eraseAllStringSensitive(&str, &ab, 0, 3));
+	Test_assert(test, "CharString_eraseAllString preserves tail", CharString_equalsCStringSensitive(&str, "XTAIL"));
+
+	fillStr(buf1, "xxABCabTAIL", &str);
+	Test_assert(test, "CharString_eraseAllString bounded insensitive", CharString_eraseAllStringInsensitive(
+		&str, &abc, 2, 5
+	));
+
+	Test_assert(test, "CharString_eraseAllString preserves both sides", CharString_equalsCStringSensitive(&str, "xxabTAIL"));
+
 	//Test eraseFirstString/eraseLastString
 
 	fillStr(buf1, "test test test", &str);
@@ -237,4 +260,11 @@ void Test_stringMut(Test *test) {
 	fillStr(buf1, "Test", &str);
 	Test_assert(test, "CharString_eraseAtCount (bounds)", !CharString_eraseAtCount(&str, 2, 10, NULL));
 	Test_assert(test, "CharString_popEndCount (bounds)", !CharString_popEndCount(&str, 10, NULL));
+	Test_assert(test, "CharString_eraseAll overflowing range", !CharString_eraseAllSensitive(&str, 'e', 1, U64_MAX));
+	Test_assert(test, "CharString_eraseAllString overflowing range", !CharString_eraseAllStringSensitive(
+		&str, &abc, 1, U64_MAX
+	));
+
+	Test_assert(test, "CharString_replaceAll overflowing range", !CharString_replaceAllSensitive(&str, 'e', 'x', 1, U64_MAX));
+	Test_assert(test, "CharString invalid range unchanged", CharString_equalsCStringSensitive(&str, "Test"));
 }

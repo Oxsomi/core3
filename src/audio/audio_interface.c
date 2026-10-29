@@ -48,10 +48,10 @@ Bool AudioInterface_create(AudioInterfaceRef **interf, const Allocator *alloc, c
 	Bool s_uccess = true;
 	Bool allocated = false;
 
-	if(
+	if (
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioInterface ||
-		RefPtrType_length(type) != (U32)(sizeof(AudioInterface) + AudioInterface_sizeExt) ||
+		RefPtrType_length(type) != (U32) (sizeof(AudioInterface) + AudioInterface_sizeExt) ||
 		type->free != AudioInterface_freeExt ||
 		type->alloc != alloc
 	)

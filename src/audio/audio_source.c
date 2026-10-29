@@ -71,10 +71,10 @@ Bool AudioDeviceRef_createSourceGeneric(
 	ELockAcquire acq = ELockAcquire_Invalid;
 	AudioDevice *dev = NULL;
 
-	if(
+	if (
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioSource ||
-		RefPtrType_length(type) != (U32)(sizeof(AudioSource) + AudioSource_sizeExt) ||
+		RefPtrType_length(type) != (U32) (sizeof(AudioSource) + AudioSource_sizeExt) ||
 		type->free != AudioSource_free ||
 		type->alloc != alloc
 	)

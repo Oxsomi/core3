@@ -31,6 +31,42 @@
 	#include <sys/random.h>
 #endif
 
+#if _PLATFORM_TYPE != PLATFORM_OSX && _PLATFORM_TYPE != PLATFORM_IOS && _PLATFORM_TYPE != PLATFORM_WEB
+
+	#include <errno.h>
+	#include <fcntl.h>
+	#include <unistd.h>
+
+	//The kernel's own pool through its device, for when the getrandom syscall can't be used.
+	static Bool Buffer_csprngDevice(U8 *ptr, U64 left) {
+
+		const int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+
+		if (fd < 0)
+			return false;
+
+		while (left) {
+
+			const ssize_t got = read(fd, ptr, left > ((U64) 1 << 30) ? (size_t) 1 << 30 : (size_t) left);
+
+			if (got < 0 && errno == EINTR)
+				continue;
+
+			if (got <= 0) {
+				close(fd);
+				return false;
+			}
+
+			ptr += got;
+			left -= (U64) got;
+		}
+
+		close(fd);
+		return true;
+	}
+
+#endif
+
 Bool Buffer_csprng(const Buffer target) {
 
 	if(!Buffer_length(target) || Buffer_isConstRef(target))
@@ -51,7 +87,32 @@ Bool Buffer_csprng(const Buffer target) {
 
 		return true;
 	#else
-		size_t bytes = getrandom(target.ptrNonConst, Buffer_length(target), GRND_NONBLOCK);
-		return bytes == Buffer_length(target);
+
+		//getrandom hands out at most 32 MiB - 1 per call, and a call can come back short or be interrupted, so loop.
+		//Without flags it only ever waits once, until the kernel's pool is first seeded, rather than failing early in boot.
+		//Without the syscall (ENOSYS on kernels before 3.17, EPERM in some seccomp sandboxes) the device is the same pool.
+
+		U8 *ptr = target.ptrNonConst;
+		U64 left = Buffer_length(target);
+		const U64 maxCall = ((U64) 1 << 25) - 1;
+
+		while (left) {
+
+			const ssize_t got = getrandom(ptr, (size_t) (left > maxCall ? maxCall : left), 0);
+
+			if (got < 0 && errno == EINTR)
+				continue;
+
+			if (got < 0 && (errno == ENOSYS || errno == EPERM))
+				return Buffer_csprngDevice(ptr, left);
+
+			if (got <= 0)
+				return false;
+
+			ptr += got;
+			left -= (U64) got;
+		}
+
+		return true;
 	#endif
 }

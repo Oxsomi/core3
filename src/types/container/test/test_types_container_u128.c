@@ -105,7 +105,7 @@ void Test_u128BitScan(Test *t) {
 	for (U8 n = 1; n <= 127; ++n) {
 		const U128 shifted  = U128_rsh(allOnes, n);
 		const U16  got      = U128_bitScan(shifted);
-		const U16  expected = (U16)(127 - n);
+		const U16  expected = (U16) (127 - n);
 		Test_assert(t, "U128_bitScan", got == expected);
 	}
 

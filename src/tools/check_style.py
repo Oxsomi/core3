@@ -26,6 +26,9 @@
 #   18. A multi-line statement whose closer is alone on its line (`));`), or a multi-line if/for/while condition
 #       (closed by a lone `)`) with an unbraced body, is followed by a blank line before the next statement
 #       (a closing brace, else and preprocessor lines are exempt)
+#   19. Known scalar casts have a space before their operand
+#   20. Declaration groups are separated from a following if/for/while by a blank line
+#   21. Unambiguous wrapped calls and conditions use aligned closers and indented contents
 #
 # Banned symbols (with per-path allow-lists):
 #   B1.  malloc / free / realloc / calloc
@@ -53,7 +56,7 @@
 #        Allowed in: src/types/container/perf/container_perf.c,
 #                    test_audio_functional_main.c
 #        Use File_openStream / FileHandle_openStream
-#   B10. strtol / strtod / atoi / atof  (always banned)
+#   B10. strtol / strtod / strtof / atoi / atof  (only the CharString parser may use these)
 #        Use CharString_createDec / createHex / format
 #   B11. strlen  (always banned)
 #        Use CharString_calcStrLen or CharString_createRefCStrConst
@@ -82,6 +85,7 @@ import re
 import sys
 import argparse
 from collections import defaultdict
+from style_spacing import check_spacing
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -191,6 +195,8 @@ BANNED_SYMBOLS: list[dict] = [
         "message": "C++ '{}' operator, forbidden (use OxC3 allocators)",
         "allow_paths": (
             "src/shader_compiler/compiler.cpp",
+            # Placement new only: a pushed callable is constructed in storage the queue's allocator owns.
+            "include/types/container/job_queue.hpp",
         ),
         # C++ new/delete cannot appear in a C translation unit, so a hit in a .c file is always a false
         # positive. In practice it is JavaScript inside EM_JS bodies (new Uint8ClampedArray, new Worker),
@@ -253,14 +259,17 @@ BANNED_SYMBOLS: list[dict] = [
         "message": "'{}', use File_openStream / FileHandle_openStream",
         "allow_paths": (
             "src/types/container/perf/container_perf.c",
+            # Unix logging owns the FILE returned by fdopen for its symbolizer's output pipe.
+            "src/types/container/platforms/unix/ulog.c",
             "test_audio_functional_main.c",
         ),
     },
     # B10, string-to-number conversions
     {
-        "pattern": re.compile(r'\b(strtol|strtod|atoi|atof)\s*\('),
-        "message": "'{}', use CharCharString_createDec / createHex / format / parseU64",
-        "allow_paths": (),
+        "pattern": re.compile(r'\b(strtol|strtod|strtof|atoi|atof)\s*\('),
+        "message": "'{}', use CharString_parseDouble / parseFloat / parseU64",
+        # The parser normalizes bounded text before calling the runtime conversion primitive.
+        "allow_paths": ("src/types/base/string_read.c",),
     },
     # B11, strlen
     {
@@ -888,6 +897,11 @@ def check_file(
     # ── 18. Blank line after a multi-line statement's closer ─────────────
     for msg in check_blank_after_closer(lines):
         if add(msg):
+            return violations, todos
+
+    # Token-aware checks leave ambiguous syntax and macro bodies to manual review.
+    for issue in check_spacing(text):
+        if add(f"  line {issue.line}: [{issue.rule}] {issue.message}"):
             return violations, todos
 
     return violations, todos

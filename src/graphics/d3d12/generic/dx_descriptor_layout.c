@@ -212,7 +212,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			if (type == D3D12_ROOT_PARAMETER_TYPE_CBV)
 				rootFlags = 0;
 
-			if(
+			if (
 				!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
 				!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
 			)
@@ -320,7 +320,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		U32 aCount = sortedList.ptr[i - 1].mergedCount ? sortedList.ptr[i - 1].mergedCount : a.count;
 		U32 bCount = sortedList.ptr[i].mergedCount ? sortedList.ptr[i].mergedCount : b.count;
 
-		if(
+		if (
 			dxGetDescriptorType(a.registerType) != dxGetDescriptorType(b.registerType) ||
 			a.binding.space != b.binding.space ||
 			a.binding.binding + aCount != b.binding.binding ||
@@ -359,7 +359,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		if(type == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
 			bindFlags = 0;
 
-		if(
+		if (
 			!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
 			!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && key.binding->count > 1)
 		)
@@ -392,7 +392,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			DescriptorBinding bindj = info.bindings.ptr[j];
 			D3D12_DESCRIPTOR_RANGE_TYPE typej = dxGetDescriptorType(bindj.registerType);
 
-			if(
+			if (
 				typej != type ||
 				bindj.binding.space != key.binding->binding.space ||
 				!(

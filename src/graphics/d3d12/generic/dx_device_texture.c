@@ -133,7 +133,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 			// the 256 aligned pitch only applies to the staging destination
 
 			const U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
-			const U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			const U64 fullH2 = ((U64) texture->base.height + alignmentY - 1) / alignmentY;
 			const U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
@@ -337,7 +337,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 			// the 256 aligned pitch only applies to the staging destination
 
 			const U64 fullRowLen = ETextureFormat_getSize(format, texture->base.width, alignmentY, 1);
-			const U64 fullH2 = ((U64)texture->base.height + alignmentY - 1) / alignmentY;
+			const U64 fullH2 = ((U64) texture->base.height + alignmentY - 1) / alignmentY;
 			const U64 start = fullRowLen * (y / alignmentY + z * fullH2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
@@ -372,7 +372,8 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_SOURCE,
 					&deviceExt->bufferTransitions,
-					&bufDep, alloc, e_rr));
+					&bufDep, alloc, e_rr
+				));
 
 				RefPtr_inc(device->staging);
 				gotoIfError3(clean, GraphicsDevice_addInFlight(device, device->staging, alloc, e_rr));        //Add to in flight
@@ -391,7 +392,8 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				D3D12_BARRIER_LAYOUT_COPY_DEST,
 				&range2,
 				&deviceExt->imageTransitions,
-				&imgDep, alloc, e_rr));
+				&imgDep, alloc, e_rr
+			));
 
 			if(bufDep.NumBarriers || imgDep.NumBarriers) {
 
@@ -424,7 +426,7 @@ Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
 				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
 					//Relative to the staging resource rather than the frame region, since the footprint is resource based
-					.Offset = allocRangeStart + (U64)(location - (const U8*)staging->resource.mappedMemoryExt),
+					.Offset = allocRangeStart + (U64) (location - (const U8*) staging->resource.mappedMemoryExt),
 					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
 						.Format = dxFormat,
 						.Width = w,

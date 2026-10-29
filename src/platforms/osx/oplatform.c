@@ -71,7 +71,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(!containedSlash)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"));
 
-	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
+	CharString appDir = CharString_createRefSizedConst(exeName, (U64) exeNameLen, false);
 	gotoIfError3(clean, CharString_createCopy(appDir, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr));
 
 	//Try to open the main executable within 1s, if it fails we can't init
@@ -108,7 +108,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		if (lc->cmd == LC_SEGMENT_64) {
 
 			const struct segment_command_64 *seg = (const struct segment_command_64*) lc;
-			const struct section_64 *sec = (const struct section_64*)((const C8*)seg + sizeof(struct segment_command_64));
+			const struct section_64 *sec = (const struct section_64*)((const C8*) seg + sizeof(struct segment_command_64));
 
 			for (U32 j = 0; j < seg->nsects; j++) {
 
@@ -132,7 +132,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 			}
 		}
 
-		lc = (const struct load_command*)((const C8*)lc + lc->cmdsize);
+		lc = (const struct load_command*)((const C8*) lc + lc->cmdsize);
 	}
 
 	//Keep file open until end of program.
@@ -162,7 +162,7 @@ clean:
 void Platform_cleanupUnixExt() {
 	if(Platform_instance->data1) {
 		munmap(Platform_instance->data1, Platform_instance->size1);
-		close((I32)(U64) Platform_instance->data);
+		close((I32) (U64) Platform_instance->data);
 	}
 }
 

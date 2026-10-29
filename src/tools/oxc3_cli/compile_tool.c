@@ -80,7 +80,7 @@
 			return false;
 		}
 
-		*threadCount = (U32)num == 0 ? maxThreads : (U32)num;
+		*threadCount = (U32) num == 0 ? maxThreads : (U32) num;
 		return true;
 	}
 
@@ -128,7 +128,7 @@
 						*multipleModes = true;
 					}
 
-					else compileModeU64 |= (U64)1 << j;
+					else compileModeU64 |= (U64) 1 << j;
 
 					match = true;
 					break;
@@ -280,12 +280,12 @@
 
 	clean:
 
-		F64 dt = (F64)(Time_now() - start) / SECOND;
+		F64 dt = (F64) (Time_now() - start) / SECOND;
 
 		if(s_uccess)
-			Log_debugLnx("-- Compile %.*s success in %fs", (int)CharString_length(input), input.ptr, dt);
+			Log_debugLnx("-- Compile %.*s success in %fs", (int) CharString_length(input), input.ptr, dt);
 
-		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr, dt);
+		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int) CharString_length(input), input.ptr, dt);
 
 		Error_print(Platform_instance->alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
 

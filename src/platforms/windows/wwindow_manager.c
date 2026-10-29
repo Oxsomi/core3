@@ -115,6 +115,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	else hIconSm = LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 16, 16, 0);
 
 	HANDLE hCursor = NULL;
+
 	if((hCursor = LoadCursorW(NULL, IDC_ARROW)) == NULL)
 		retError(clean, Error_platformError(0, GetLastError(), "LoadCursorW failed for standard cursor"));
 
@@ -217,7 +218,7 @@ BOOL WWindowManager_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lPar
 	EMonitorOrientation orientation = EMonitorOrientation_Landscape;
  
 	if(EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
-		refreshRate = dm.dmDisplayFrequency > 1 ? (F32)dm.dmDisplayFrequency : 0.f;
+		refreshRate = dm.dmDisplayFrequency > 1 ? (F32) dm.dmDisplayFrequency : 0.f;
  
 		switch(dm.dmDisplayOrientation) {
 			case DMDO_DEFAULT: orientation = EMonitorOrientation_Landscape;         break;
@@ -247,7 +248,7 @@ BOOL WWindowManager_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lPar
 	DWRITE_PIXEL_GEOMETRY geometry = DWRITE_PIXEL_GEOMETRY_FLAT;
 
 	if (SUCCEEDED(((IDWriteFactoryC*)dat->factory)->lpVtbl->CreateMonitorRenderingParams(
-		dat->factory, hmon, (void**)&params
+		dat->factory, hmon, (void**) &params
 	))) {
 		geometry = params->lpVtbl->GetPixelGeometry(params);
 		params->lpVtbl->base.Release(params);
@@ -283,6 +284,7 @@ BOOL WWindowManager_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lPar
 	};
  
 	Error err = Error_none();
+
 	if(!ListMonitor_pushBack(dat->monitors, m, Platform_instance->alloc, &err))
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
  
@@ -297,7 +299,7 @@ Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error 
 
 	ListMonitor_clear(monitors, NULL);
 
-	HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory_C, (void**)&factory);
+	HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory_C, (void**) &factory);
 
 	if (FAILED(hr))
 		retError(clean, Error_platformError(0, GetLastError(), "WindowManager_updateMonitors() failed to create factory"));
@@ -366,7 +368,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 						break;
 					}
 
-					seenWindowsLarge.ptrNonConst[i >> 6] |= (U64)1 << (i & 63);
+					seenWindowsLarge.ptrNonConst[i >> 6] |= (U64) 1 << (i & 63);
 					break;
 				}
 			}

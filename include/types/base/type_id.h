@@ -258,7 +258,7 @@ static inline U8 ETypeId_getElements(TypeId id) {
 
 static inline U64 ETypeId_getBytes(TypeId id) {
 
-	U64 siz = ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id);
+	U64 siz = ETypeId_isObject(id) ? 0 : (U64) ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id);
 
 	if (ETypeId_getDataType(id) == EDataType_Bool)    //Bits, not bytes
 		return (siz + 7) >> 3;
@@ -266,8 +266,8 @@ static inline U64 ETypeId_getBytes(TypeId id) {
 	return siz;
 }
 
-static inline U16 ETypeId_getLibraryId(TypeId id) { return (U16)(id >> 19); }
-static inline U16 ETypeId_getLibraryTypeId(TypeId id) { return (U16)((id >> 9) & ((1 << 10) - 1)); }
+static inline U16 ETypeId_getLibraryId(TypeId id) { return (U16) (id >> 19); }
+static inline U16 ETypeId_getLibraryTypeId(TypeId id) { return (U16) ((id >> 9) & ((1 << 10) - 1)); }
 
 #ifdef __cplusplus
 	}

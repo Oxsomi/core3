@@ -45,7 +45,7 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 
 	//The info struct sits behind the backend's pipeline ext, so the ext's stride is what to skip.
 
-	return (U8*)(pipeline + 1) + GraphicsObjectSize_stride(GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline);
+	return (U8*) (pipeline + 1) + GraphicsObjectSize_stride(GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline);
 }
 
 void Pipeline_free(void *pipelineGeneric, const Allocator *alloc) {
@@ -128,7 +128,8 @@ Bool GraphicsDeviceRef_getPipelineExecutables(
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(pipeline);
 
-	if (!(
+	if (
+		!(
 		GraphicsDeviceRef_ptr(pipelinePtr->device)->info.capabilities.flags.features2 &
 		EGraphicsFeatures2_PipelineExecutableInfo
 	))
@@ -290,7 +291,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 				continue;
 			}
 
-			return (U16)i | ((U16)j << 16);
+			return (U16) i | ((U16) j << 16);
 		}
 
 		return U32_MAX;

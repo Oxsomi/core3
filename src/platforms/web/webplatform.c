@@ -104,7 +104,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 				gotoIfError3(clean, CharString_format(
 					Platform_instance->alloc, &sectionPath, e_rr, "%s/%.*s",
-					ent->d_name, (int)(nameLen - 5), sub->d_name
+					ent->d_name, (int) (nameLen - 5), sub->d_name
 				));
 
 				VirtualSection virtualSection = (VirtualSection) { .path = sectionPath };
@@ -363,7 +363,7 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 	if(code[0] && oxc3_keyboardLayoutInit()) {
 
 		const I32 len = oxc3_keyboardLayoutLabel(
-			(unsigned long long) code, (unsigned long long) label, (unsigned int)(sizeof(label) - 1)
+			(unsigned long long) code, (unsigned long long) label, (unsigned int) (sizeof(label) - 1)
 		);
 
 		if(len > 0) {

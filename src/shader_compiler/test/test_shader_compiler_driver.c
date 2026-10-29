@@ -72,6 +72,7 @@ void Test_shaderCompilerDriver(Test *t) {
 	Bool okSingle = compileInlineShaders(alloc, shaders, n, EGfxBinaryType_SPIRV, 1, "driver_batch", true, &single, &err);
 
 	U64 produced = 0;
+
 	if (okSingle)
 		for (U64 i = 0; i < single.length; ++i)
 			if (Buffer_length(single.ptr[i]))
@@ -184,7 +185,8 @@ void Test_shaderCompilerDriver(Test *t) {
 		Bool reread = rewrote && readOiSH(alloc, rewritten, &b, &err);
 
 		Test_assert(t, "re-read oiSH keeps entry + binary counts",
-			reread && a.entries.length == b.entries.length && a.binaries.length == b.binaries.length);
+			reread && a.entries.length == b.entries.length && a.binaries.length == b.binaries.length
+		);
 
 		Buffer_free(&rewritten, alloc);
 		SHFile_free(&a, alloc);

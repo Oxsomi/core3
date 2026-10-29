@@ -62,6 +62,7 @@ void Test_CAAddFile(Test *t) {
 
 	{                        //Single file added to root
 		CAFile ca = { 0 };
+
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
 			Test_assert(t, "Create ca for addFile", false);
 			goto doneAddSingle;
@@ -188,6 +189,7 @@ void Test_CAAddFile(Test *t) {
 
 	{                        //Null caFile / null name must fail
 		CAFile ca = { 0 };
+
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
 			Test_assert(t, "Create ca for null guards", false);
 			goto doneNullGuards;
@@ -480,7 +482,7 @@ void Test_CAGetInfo(Test *t) {
 			goto doneGetInfo;
 		}
 
-		Ns ts = (Ns)5000 * MS;
+		Ns ts = (Ns) 5000 * MS;
 		CAHandle hDir  = addFolder(t, &ca, root, "subdir", false);
 		CAHandle hFile = addFile(t,   &ca, hDir, "info.txt", ts, false);
 

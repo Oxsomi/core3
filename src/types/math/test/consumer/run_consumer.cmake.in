@@ -1,0 +1,45 @@
+set(consumerSource "@CMAKE_CURRENT_SOURCE_DIR@/test/consumer")
+set(consumerBuild "@CMAKE_CURRENT_BINARY_DIR@/consumer/$<CONFIG>")
+set(generatorOptions -G "@CMAKE_GENERATOR@")
+if(NOT "@CMAKE_GENERATOR_PLATFORM@" STREQUAL "")
+	list(APPEND generatorOptions -A "@CMAKE_GENERATOR_PLATFORM@")
+endif()
+if(NOT "@CMAKE_GENERATOR_TOOLSET@" STREQUAL "")
+	list(APPEND generatorOptions -T "@CMAKE_GENERATOR_TOOLSET@")
+endif()
+
+execute_process(
+	COMMAND "@CMAKE_COMMAND@" -S "${consumerSource}" -B "${consumerBuild}" ${generatorOptions}
+		"-DCMAKE_C_COMPILER=@CMAKE_C_COMPILER@"
+		"-DCMAKE_CXX_COMPILER=@CMAKE_CXX_COMPILER@"
+		"-DCMAKE_MAKE_PROGRAM=@CMAKE_MAKE_PROGRAM@"
+		"-DCMAKE_MSVC_RUNTIME_LIBRARY=@CMAKE_MSVC_RUNTIME_LIBRARY@"
+		"-DCMAKE_BUILD_TYPE=$<CONFIG>"
+		"-DCMAKE_OSX_ARCHITECTURES=@CMAKE_OSX_ARCHITECTURES@"
+		"-DCMAKE_OSX_DEPLOYMENT_TARGET=@CMAKE_OSX_DEPLOYMENT_TARGET@"
+		"-DOXC3_TYPES_TARGETS=@CMAKE_BINARY_DIR@/OxC3TypesTargets.cmake"
+		"-DOXC3_LIBRARY_CONFIG=$<CONFIG>"
+		"-DOXC3_EXPECTED_SIMD=@SIMD@"
+		"-DOXC3_EXPECTED_ERROR_FRAMES=$<IF:$<CONFIG:Release,RelWithDebInfo,MinSizeRel>,1,32>"
+		"-DOXC3_TEST_LINK_SETTINGS=@CMAKE_CURRENT_BINARY_DIR@/consumer-link-settings-$<CONFIG>.cmake"
+	RESULT_VARIABLE result
+)
+if(NOT result EQUAL 0)
+	message(FATAL_ERROR "Independent types consumer configure failed: ${result}")
+endif()
+
+execute_process(
+	COMMAND "@CMAKE_COMMAND@" --build "${consumerBuild}" --config "$<CONFIG>"
+	RESULT_VARIABLE result
+)
+if(NOT result EQUAL 0)
+	message(FATAL_ERROR "Independent types consumer build failed: ${result}")
+endif()
+
+execute_process(
+	COMMAND "@CMAKE_CTEST_COMMAND@" --test-dir "${consumerBuild}" -C "$<CONFIG>" --output-on-failure
+	RESULT_VARIABLE result
+)
+if(NOT result EQUAL 0)
+	message(FATAL_ERROR "Independent types consumer test failed: ${result}")
+endif()

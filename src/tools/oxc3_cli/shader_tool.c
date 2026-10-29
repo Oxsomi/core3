@@ -177,7 +177,7 @@
 			Log_debugLnx(
 				"\t%.*s (shader model %u.%u):",
 				(int) CharString_length(id->entrypoint), id->entrypoint.ptr,
-				(U32)(id->shaderVersion >> 8), (U32)(id->shaderVersion & 0xFF)
+				(U32) (id->shaderVersion >> 8), (U32) (id->shaderVersion & 0xFF)
 			);
 
 			for(U8 j = 0; j < EGfxBinaryType_Count; ++j)

@@ -132,7 +132,7 @@ void DescriptorTable_free(void *tableGeneric, const Allocator *alloc) {
 
 				if(tb->single.stackTrace.stackTrace[0])
 					Log_printCapturedStackTraceCustom(
-										alloc,
+						alloc,
 						(const void**) tb->single.stackTrace.stackTrace,
 						sizeof(tb->single.stackTrace) / sizeof(void*),
 						ELogLevel_Warn,
@@ -199,7 +199,7 @@ Bool DescriptorHeapRef_createDescriptorTable(
 	DescriptorHeap *parentPtr = DescriptorHeapRef_ptr(parent);
 	DescriptorLayout *layoutPtr = DescriptorLayoutRef_ptr(layout);
 
-	if(
+	if (
 		!(parentPtr->info.flags & EDescriptorHeapFlags_AllowBindless) &&
 		(layoutPtr->info.flags & EDescriptorLayoutFlags_AllowBindlessAny)
 	)
@@ -358,7 +358,7 @@ U64 Descriptor_bufferViewLength(const Descriptor *d, EGfxRegisterType type) {
 U32 Descriptor_counterOffset(const Descriptor *d) {
 	return !d ? 0 :
 		d->buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
-		((U32)d->buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
+		((U32) d->buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
 }
 
 //The one site in graphics that erases constantly, and nothing reads the list in order: only
@@ -519,7 +519,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 			WeakRefPtr *ref = binding->multiple.resources.ptr[i];
 			const Bool maintained = (binding->multiple.maintainRef.ptr[i >> 6] >> (i & 63)) & 1;
 
-			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
+			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64) 1 << (i & 63));
 
 			if(ref && ref->refPtrType->typeId == (TypeId) EGraphicsTypeId_DeviceBuffer) {
 
@@ -669,7 +669,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 		if(!d.resource) {
 
-			if(
+			if (
 				d.buffer.counter ||
 				d.buffer.startRegionAndCounterOffset.region48 ||
 				d.buffer.endRegionAndCounterOffset.region48
@@ -850,7 +850,7 @@ Bool DescriptorTableRef_setDescriptors(
 						3, 0, "DescriptorTableRef_setDescriptors() tlas set at a non tlas register"
 					));
 
-				if(
+				if (
 					d.buffer.counter ||
 					d.buffer.startRegionAndCounterOffset.region48 ||
 					d.buffer.endRegionAndCounterOffset.region48
@@ -876,7 +876,7 @@ Bool DescriptorTableRef_setDescriptors(
 				//The other direction still holds, because a SamplerComparisonState register can only come from
 				// a backend that knew, either DXIL reflection or a combine that promoted it from one.
 
-				if(
+				if (
 					d.resource &&
 					type == EGfxRegisterType_SamplerComparisonState &&
 					!SamplerRef_ptr(d.resource)->info.enableComparison
@@ -887,7 +887,7 @@ Bool DescriptorTableRef_setDescriptors(
 						"created with enableComparison"
 					));
 
-				if(
+				if (
 					d.buffer.counter ||
 					d.buffer.startRegionAndCounterOffset.region48 ||
 					d.buffer.endRegionAndCounterOffset.region48
@@ -974,7 +974,8 @@ Bool DescriptorTableRef_setDescriptors(
 				//Same thing as reading all TextureDescriptor values; Texture2DMS isn't allowed to specify anything
 				// nor used as a regular texture
 
-				if (tex.sampleCount && (
+				if (
+					tex.sampleCount && (
 					d.texture.mipId || d.texture.planeId || d.texture.imageId ||
 					(d.texture.mipCount != tex.levels && d.texture.mipCount)
 				))
@@ -1039,10 +1040,11 @@ Bool DescriptorTableRef_setDescriptors(
 		}
 	}
 
-	//Capture stackTrace
+	//Zero the tail for full-array comparisons when suppressing duplicate stack traces.
 
-	DescriptorStackTrace stack;
-	Error_captureStackTrace(stack.stackTrace, (U8)(sizeof(DescriptorStackTrace) / sizeof(void*)), 1);
+	DescriptorStackTrace stack = (DescriptorStackTrace) { 0 };
+
+	Error_captureStackTrace(stack.stackTrace, (U8) (sizeof(DescriptorStackTrace) / sizeof(void*)), 1);
 
 	//Lock descriptor and check if descriptor is the same
 
@@ -1120,14 +1122,14 @@ Bool DescriptorTableRef_setDescriptors(
 		for(U64 j = arrayId; j < arrayId + darr->length; ++j) {
 
 			binding->multiple.resources.ptrNonConst[j] = darr->ptr[j - arrayId].resource;
-			binding->multiple.activeList.ptrNonConst[j >> 6] |= (U64)1 << (j & 63);
+			binding->multiple.activeList.ptrNonConst[j >> 6] |= (U64) 1 << (j & 63);
 
 			U64 *maintainRefPtr = &binding->multiple.maintainRef.ptrNonConst[j >> 6];
 
 			if(!maintainRef)
-				*maintainRefPtr &= ~((U64)1 << (j & 63));
+				*maintainRefPtr &= ~((U64) 1 << (j & 63));
 
-			else *maintainRefPtr |= (U64)1 << (j & 63);
+			else *maintainRefPtr |= (U64) 1 << (j & 63);
 
 			if(binding->multiple.stackTraces.ptr)
 				binding->multiple.stackTraces.ptrNonConst[j] = stack;

@@ -30,6 +30,7 @@
 #include "types/container/container_types.h"
 #include "types/container/memory_stream.h"
 #include "types/container/list_basic_types.h"
+#include "types/container/hash_index.h"
 #include "types/base/mathi.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
@@ -37,14 +38,37 @@
 
 #include <stddef.h>
 
-Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const Allocator *alloc, Error *e_rr) {
+static U64 SHArray_hash(const void *key, U64 seed, void *context) {
+
+	(void) context;
+
+	const ListU32 *array = key;
+
+	return Buffer_fnv1a64(ListU32_bufferConst(*array), Buffer_fnv1a64Single(array->length, seed));
+}
+
+static ECompareResult SHArray_compare(const void *a, const void *b, void *context) {
+	(void) context;
+	return ListU32_eq(*(const ListU32*) a, *(const ListU32*) b) ? ECompareResult_Eq : ECompareResult_Gt;
+}
+
+static const HashIndexInfo SHArray_indexInfo = {
+	.hash = SHArray_hash,
+	.compare = SHArray_compare,
+	.stride = sizeof(ListU32),
+	.smallLimit = 4
+};
+
+Bool SHFile_write(StreamRef *streamRef, U64 *startOffset, const SHFile *shFile, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
+	U64 offset = 0;
 
 	DLFile strings = (DLFile){ 0 };
 
 	DLFile shaderBuffers = (DLFile) { 0 };
 	ListListU32 arrays = (ListListU32) { 0 };            //Only contains references
+	HashIndex arrayIndex = { 0 };
 	ListSBFile shaderBufferList = (ListSBFile) { 0 };    //Only contains references
 
 	StreamCursor cursor = (StreamCursor) { 0 };
@@ -54,15 +78,17 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	Buffer tmp = Buffer_createNull();
 
-	if (!streamRef || !offset)
+	if (!streamRef || !startOffset)
 		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "SHFile_write()::streamRef and offset are required"));
+
+	offset = *startOffset;
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if (streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream || !stream->write)
 		retError(clean, Error_invalidOperation(0, "SHFile_write()::streamRef invalid type"));
 
-	if (*offset & 15)
+	if (offset & 15)
 		retError(clean, Error_unsupportedOperation(0, "SHFile_write() at misaligned offset is unsupported (16-byte)"));
 
 	if (!shFile || !shFile->entries.ptr)
@@ -73,7 +99,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	if (!shFile->entries.length)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_write()::shFile has no entrypoints"));
 
-	U64 fileStart = *offset;
+	U64 fileStart = offset;
 
 	//Get header size
 
@@ -130,7 +156,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			gotoIfError3(clean, DLFile_addEntryString(&strings, &str, alloc, e_rr));
 
-			if(strings.entryBuffers.length - defineNameStart >= (U16)(U16_MAX - 1))
+			if(strings.entryBuffers.length - defineNameStart >= (U16) (U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for define names"));
 		}
 
@@ -176,7 +202,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			if(DLFile_findLoadedString(&strings, defineValStart, strings.entryBuffers.length, &str) != U64_MAX)
 				continue;
 
-			if (strings.entryBuffers.length - defineValStart >= (U16)(U16_MAX - 1))
+			if (strings.entryBuffers.length - defineValStart >= (U16) (U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for define values"));
 
 			gotoIfError3(clean, DLFile_addEntryString(&strings, &str, alloc, e_rr));
@@ -199,7 +225,9 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			CharString str = CharString_createRefStrConst(uniforms.ptr[j].name);
 
-			if (DLFile_findLoadedString(&strings, 0, U64_MAX, &str) != U64_MAX)
+			//Only the uniform names count: a define name or value spelled the same is a different string table entry.
+
+			if (DLFile_findLoadedString(&strings, uniNamesStart, strings.entryBuffers.length, &str) != U64_MAX)
 				continue;
 
 			gotoIfError3(clean, DLFile_addEntryString(&strings, &str, alloc, e_rr));
@@ -227,7 +255,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			if(DLFile_findLoadedString(&strings, regNameStart, strings.entryBuffers.length, &str) == U64_MAX) {
 
-				if (strings.entryBuffers.length - regNameStart >= (U16)(U16_MAX - 1))
+				if (strings.entryBuffers.length - regNameStart >= (U16) (U16_MAX - 1))
 					retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for register names"));
 
 				gotoIfError3(clean, DLFile_addEntryString(&strings, &str, alloc, e_rr));
@@ -235,21 +263,28 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			//Add array if it's new
 
-			Bool isSmallArray = reg.arrays.length == 1 && reg.arrays.ptr[0] <= 32767;
+			//[0] (unbound) isn't small: arrayDimOrId 0 means 'no array', so it goes through the array table.
+
+			Bool isSmallArray = reg.arrays.length == 1 && reg.arrays.ptr[0] && reg.arrays.ptr[0] <= 32767;
 
 			if(reg.arrays.length && !isSmallArray) {
 
-				U16 arrayId = 0;
+				U64 arrayId = HashIndex_find(&arrayIndex, &SHArray_indexInfo, arrays.ptr, &reg.arrays);
 
-				for(; arrayId < arrays.length; ++arrayId)
-					if(ListU32_eq(arrays.ptr[arrayId], reg.arrays))
-						break;
+				//The id shares a U16 with the 0x8000 'is an id' bit, so it has to fit in 15 bits.
 
-				if (arrayId >= (U16)(U16_MAX - 1))
+				if (arrayId == U64_MAX && arrays.length > 0x7FFF)
 					retError(clean, Error_invalidState(0, "SHFile_write() No more space for arrays"));
 
-				if(arrayId == arrays.length)
+				if(arrayId == U64_MAX) {
+
+					gotoIfError3(clean, ListListU32_reserveForPush(&arrays, alloc, e_rr));
+					gotoIfError3(clean, HashIndex_insert(
+						&arrayIndex, &SHArray_indexInfo, arrays.ptr, &reg.arrays, arrays.length, NULL, alloc, e_rr
+					));
+
 					gotoIfError3(clean, ListListU32_pushBack(&arrays, ListU32_createRefFromList(reg.arrays), alloc, e_rr));
+				}
 			}
 
 			//Add shader buffer if it's new
@@ -262,7 +297,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 					if(SBFile_equals(shaderBufferList.ptr + shaderBufferId, &reg.shaderBuffer))
 						break;
 
-				if (shaderBufferId >= (U16)(U16_MAX - 1))
+				if (shaderBufferId >= (U16) (U16_MAX - 1))
 					retError(clean, Error_invalidState(0, "SHFile_write() No more space for shader buffers"));
 
 				if(shaderBufferId == shaderBufferList.length) {
@@ -303,18 +338,15 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 				dataSize += sizeof(U8) * 2;        //U8 inputsAvail, outputsAvail;
 
-				U8 inputs = 0, outputs = 0;
+				//Slots are stored up to the last used one, so a gap in between is stored as an empty slot.
 
-				//We align to 2 elements since we store U4s.
-				//So we store 4 bits too much, but who cares.
+				U8 inputs = 16, outputs = 16;
 
-				for(; inputs < 16; ++inputs)
-					if(!entry.inputs[inputs])
-						break;
+				while(inputs && !entry.inputs[inputs - 1])
+					--inputs;
 
-				for(; outputs < 16; ++outputs)
-					if(!entry.outputs[outputs])
-						break;
+				while(outputs && !entry.outputs[outputs - 1])
+					--outputs;
 
 				dataSize += inputs + outputs;
 
@@ -375,6 +407,9 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				0, entry.uniqueInputSemantics, 16, "SHFile_write() exceeded unique input semantic count"
 			));
 	}
+
+	if (!DLFile_canReadFullyLoaded(&strings))
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_write()::strings exceed oiDL automatic loading limits"));
 
 	//We reserve once into a single memory stream to save allocations.
 	//We can't fully solve allocations, since DLFile needs to reference the exact size of each DLFile.
@@ -437,7 +472,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	}
 
 	if (stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *offset + len, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, offset + len, alloc, e_rr));
 
 	//Create header & DLFiles
 
@@ -478,18 +513,18 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	gotoIfError3(clean, stream->write(        //Rawdog this, we can't pass StreamCursor to DLFile yet
 		stream,
-		*offset,
+		offset,
 		sizeof(header) - hdrOff,
-		Buffer_createRefConst((const U8*)&header + hdrOff, sizeof(header) - hdrOff),
+		Buffer_createRefConst((const U8*) &header + hdrOff, sizeof(header) - hdrOff),
 		alloc,
 		e_rr
 	));
 
-	*offset = (*offset + sizeof(header) - hdrOff + 15) & ~15;
+	offset = (offset + sizeof(header) - hdrOff + 15) & ~15;
 
-	gotoIfError3(clean, DLFile_write(&strings, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
-	*offset = (*offset + 15) & ~15;
-	gotoIfError3(clean, DLFile_write(&shaderBuffers, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
+	gotoIfError3(clean, DLFile_write(&strings, alloc, streamRef, NULL, I32x4_zero(), &offset, e_rr));
+	offset = (offset + 15) & ~15;
+	gotoIfError3(clean, DLFile_write(&shaderBuffers, alloc, streamRef, NULL, I32x4_zero(), &offset, e_rr));
 
 	//Easy contents of SHFile (relatively static sized)
 
@@ -526,11 +561,11 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 		BinaryInfoFixedSize binInfo = (BinaryInfoFixedSize) {
 
 			.shaderModel = ((binary.identifier.shaderVersion >> 4) & 0xF0) | (binary.identifier.shaderVersion & 0xF),
-			.entrypointType = (U8)binary.identifier.stageType,
-			.entrypoint = (U16)(entrypoint - entryStart),
+			.entrypointType = (U8) binary.identifier.stageType,
+			.entrypoint = (U16) (entrypoint - entryStart),
 
 			.vendorMask = binary.vendorMask,
-			.defineCount = (U8)(binary.identifier.defines.length >> 1),
+			.defineCount = (U8) (binary.identifier.defines.length >> 1),
 			.binaryFlags = binaryFlags,
 
 			.extensions = binary.identifier.extensions,
@@ -538,11 +573,11 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			.extensions2 = binary.identifier.extensions2,
 			.dormantExt2 = binary.dormantExtensions2,
 
-			.registerCount = (U16)binary.registers.length,
-			.uniformCount = (U8)binary.identifier.uniforms.length
+			.registerCount = (U16) binary.registers.length,
+			.uniformCount = (U8) binary.identifier.uniforms.length
 		};
 
-		gotoIfError3(clean, StreamCursor_append(&cursor, offset, &binInfo, sizeof(binInfo), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &binInfo, sizeof(binInfo), alloc, e_rr));
 	}
 
 	for (U64 i = 0; i < entries; ++i) {
@@ -551,20 +586,20 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 		EntryInfoFixedSize entryInfo = (EntryInfoFixedSize) {
 			.pipelineStage = entry.stage,
-			.binaryCount = (U8)entry.binaryIds.length
+			.binaryCount = (U8) entry.binaryIds.length
 		};
 
-		gotoIfError3(clean, StreamCursor_append(&cursor, offset, &entryInfo, sizeof(entryInfo), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &entryInfo, sizeof(entryInfo), alloc, e_rr));
 	}
 
 	for (U64 i = 0; i < shFile->includes.length; ++i)
-		gotoIfError3(clean, StreamCursor_appendU32(&cursor, offset, shFile->includes.ptr[i].crc32c, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, &offset, shFile->includes.ptr[i].crc32c, alloc, e_rr));
 
 	for (U64 i = 0; i < arrays.length; ++i)
-		gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, (U8)arrays.ptr[i].length, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU8(&cursor, &offset, (U8) arrays.ptr[i].length, alloc, e_rr));
 
 	for (U64 i = 0; i < arrays.length; ++i)
-		gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListU32_bufferConst(arrays.ptr[i]), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, ListU32_bufferConst(arrays.ptr[i]), alloc, e_rr));
 
 	//Fill binaries
 
@@ -572,7 +607,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 		SHBinaryInfo binary = shFile->binaries.ptr[i];
 
-		U8 defineCount = (U8)(binary.identifier.defines.length >> 1);
+		U8 defineCount = (U8) (binary.identifier.defines.length >> 1);
 		ListCharString defines = binary.identifier.defines;
 
 		for (U64 j = 0; j < defineCount; ++j) {
@@ -582,7 +617,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			if (defineName == U64_MAX)
 				retError(clean, Error_invalidState(0, "SHFile_write() couldn't find define name"));
 
-			gotoIfError3(clean, StreamCursor_appendU16(&cursor, offset, (U16)(defineName - defineNamesStart), alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, (U16) (defineName - defineNamesStart), alloc, e_rr));
 		}
 
 		for (U64 j = 0; j < defineCount; ++j) {
@@ -592,7 +627,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			if (defineValue == U64_MAX)
 				retError(clean, Error_invalidState(0, "SHFile_write() couldn't find define value"));
 
-			gotoIfError3(clean, StreamCursor_appendU16(&cursor, offset, (U16)(defineValue - defineValStart), alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, (U16) (defineValue - defineValStart), alloc, e_rr));
 		}
 
 		for (U64 j = 0; j < binary.identifier.uniforms.length; ++j) {
@@ -606,10 +641,10 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			SHUniform uniformStatic = (SHUniform) {
 				.dataOffset = uniform.dataOffset,
 				.typeIdShort = uniform.typeIdShort,
-				.nameId = (U8)(uniformNameId - uniNamesStart)
+				.nameId = (U8) (uniformNameId - uniNamesStart)
 			};
 
-			gotoIfError3(clean, StreamCursor_append(&cursor, offset, &uniformStatic, sizeof(uniformStatic), alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &uniformStatic, sizeof(uniformStatic), alloc, e_rr));
 		}
 
 		for (U64 j = 0; j < binary.registers.length; ++j) {
@@ -628,14 +663,18 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			else {
 
-				if (reg.arrays.length == 1 && reg.arrays.ptr[0] <= 32767)
-					reg.reg.arrayDimOrId = (U16)reg.arrays.ptr[0];
+				if (reg.arrays.length == 1 && reg.arrays.ptr[0] && reg.arrays.ptr[0] <= 32767)
+					reg.reg.arrayDimOrId = (U16) reg.arrays.ptr[0];
 
-				else for (U64 arrayId = 0; arrayId < arrays.length; ++arrayId)
-					if (ListU32_eq(arrays.ptr[arrayId], reg.arrays)) {
-						reg.reg.arrayDimOrId = (U16)arrayId | 0x8000;
-						break;
-					}
+				else {
+
+					U64 arrayId = HashIndex_find(&arrayIndex, &SHArray_indexInfo, arrays.ptr, &reg.arrays);
+
+					if(arrayId == U64_MAX)
+						retError(clean, Error_invalidState(0, "SHFile_write() couldn't find register array"));
+
+					reg.reg.arrayDimOrId = (U16) arrayId | 0x8000;
+				}
 			}
 
 			U8 realReg = reg.reg.registerType & EGfxRegisterType_TypeMask;
@@ -654,11 +693,11 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				reg.reg.shaderBufferId = (U16) k;
 			}
 
-			gotoIfError3(clean, StreamCursor_append(&cursor, offset, &reg.reg, sizeof(reg.reg), alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &reg.reg, sizeof(reg.reg), alloc, e_rr));
 		}
 
 		gotoIfError3(clean, StreamCursor_appendBuffer(
-			&cursor, offset, ListU8_bufferConst(binary.identifier.uniformData), alloc, e_rr
+			&cursor, &offset, ListU8_bufferConst(binary.identifier.uniformData), alloc, e_rr
 		));
 
 		for (U8 j = 0; j < EGfxBinaryType_Count; ++j) {
@@ -666,11 +705,11 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			U64 length = Buffer_length(binary.binaries[j]);
 
 			if(length)
-				gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, offset, length, requiredTypes[j], alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, &offset, length, requiredTypes[j], alloc, e_rr));
 		}
 
 		for (U8 j = 0; j < EGfxBinaryType_Count; ++j)
-			gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, binary.binaries[j], alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, binary.binaries[j], alloc, e_rr));
 	}
 
 	//Fill entries
@@ -683,25 +722,23 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			default: {
 
-				U8 inputs = 0, outputs = 0;
+				U8 inputs = 16, outputs = 16;
 
-				for (; inputs < 16; ++inputs)
-					if (!entry.inputs[inputs])
-						break;
+				while (inputs && !entry.inputs[inputs - 1])
+					--inputs;
 
-				for (; outputs < 16; ++outputs)
-					if (!entry.outputs[outputs])
-						break;
+				while (outputs && !entry.outputs[outputs - 1])
+					--outputs;
 
 				Bool hasSemantics =
 					entry.inputSemanticNamesU64[0] | entry.inputSemanticNamesU64[1] |
 					entry.outputSemanticNamesU64[0] | entry.outputSemanticNamesU64[1];
 
-				gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, inputs | (hasSemantics ? 0x80 : 0), alloc, e_rr));
-				gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, outputs, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU8(&cursor, &offset, inputs | (hasSemantics ? 0x80 : 0), alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU8(&cursor, &offset, outputs, alloc, e_rr));
 
-				gotoIfError3(clean, StreamCursor_append(&cursor, offset, entry.inputs, inputs * sizeof(U8), alloc, e_rr));
-				gotoIfError3(clean, StreamCursor_append(&cursor, offset, entry.outputs, outputs * sizeof(U8), alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_append(&cursor, &offset, entry.inputs, inputs * sizeof(U8), alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_append(&cursor, &offset, entry.outputs, outputs * sizeof(U8), alloc, e_rr));
 
 				if(hasSemantics) {
 
@@ -709,14 +746,14 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 						((U8) entry.uniqueInputSemantics) |
 						((U8) (entry.semanticNames.length - entry.uniqueInputSemantics) << 4);
 
-					gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, semanticCounts, alloc, e_rr));
+					gotoIfError3(clean, StreamCursor_appendU8(&cursor, &offset, semanticCounts, alloc, e_rr));
 
 					gotoIfError3(clean, StreamCursor_append(
-						&cursor, offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr
+						&cursor, &offset, entry.inputSemanticNames, inputs * sizeof(U8), alloc, e_rr
 					));
 
 					gotoIfError3(clean, StreamCursor_append(
-						&cursor, offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr
+						&cursor, &offset, entry.outputSemanticNames, outputs * sizeof(U8), alloc, e_rr
 					));
 				}
 
@@ -728,7 +765,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			case EGfxPipelineStage_Compute: {
 				SHGroups groups = { .x = entry.groupX, .y = entry.groupY, .z = entry.groupZ, .waveSize = entry.waveSize };
-				gotoIfError3(clean, StreamCursor_append(&cursor, offset, &groups, sizeof(groups), alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &groups, sizeof(groups), alloc, e_rr));
 				break;
 			}
 
@@ -738,16 +775,16 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			case EGfxPipelineStage_ClosestHitExt:
 			case EGfxPipelineStage_AnyHitExt:
 			case EGfxPipelineStage_IntersectionExt:
-				gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, entry.intersectionSize, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU8(&cursor, &offset, entry.intersectionSize, alloc, e_rr));
 				//fallthrough
 
 			case EGfxPipelineStage_CallableExt:
 			case EGfxPipelineStage_MissExt:
-				gotoIfError3(clean, StreamCursor_appendU8(&cursor, offset, entry.payloadSize, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU8(&cursor, &offset, entry.payloadSize, alloc, e_rr));
 				break;
 		}
 
-		gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, offset, ListU16_bufferConst(entry.binaryIds), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendBuffer(&cursor, &offset, ListU16_bufferConst(entry.binaryIds), alloc, e_rr));
 	}
 
 	gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
@@ -763,24 +800,38 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	}
 
 	U64 hashStart = fileStart + ignoredStart;
-	U64 hashLen = *offset - hashStart;
+	U64 hashLen = offset - hashStart;
+	U8 scratch[16 * 1024];
+	U32 hash = 0;
 
-	gotoIfError3(clean, Buffer_createUninitializedBytes(hashLen, alloc, &tmp, e_rr));
-	gotoIfError3(clean, StreamCursor_read(&cursor, tmp, hashStart, 0, hashLen, false, alloc, e_rr));
+	while(hashLen) {
 
-	U32 hash = Buffer_crc32c(tmp);
-	Buffer_free(&tmp, alloc);
+		U64 chunkSize = U64_min(hashLen, sizeof(scratch));
+		Buffer chunk = Buffer_createRef(scratch, chunkSize);
+
+		gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, &hashStart, chunk, alloc, e_rr));
+		hash = Buffer_crc32cChained(chunk, hash);
+		hashLen -= chunkSize;
+	}
 
 	gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
 
 	U64 hashLoc = headerStart + offsetof(SHHeader, hash);
 	gotoIfError3(clean, StreamCursor_appendU32(&cursor, &hashLoc, hash, alloc, e_rr));
 
+	//The hash is only appended to the cursor's cache; closing flushes it without being able to report a failure.
+
+	gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
 clean:
+	if(s_uccess)
+		*startOffset = offset;
+
 	StreamCursor_close(&cursor, alloc);
 	RefPtr_dec(&memoryStream);
 	ListSBFile_free(&shaderBufferList, alloc);
 	ListListU32_free(&arrays, alloc);            //Doesn't need freeUnderlying, it's all references
+	HashIndex_free(&arrayIndex, alloc);
 	DLFile_free(&shaderBuffers, alloc);
 	DLFile_free(&strings, alloc);
 	Buffer_free(&tmp, alloc);

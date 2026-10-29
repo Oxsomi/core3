@@ -90,7 +90,7 @@ static Bool CLI_aesDecodeHex(CharString hex, U32 outKey[8], Error *e_rr) {
 	for(U64 i = off; i + 1 < CharString_length(hex); ++i) {
 		const U8 v0 = C8_hex(hex.ptr[i]);
 		const U8 v1 = C8_hex(hex.ptr[++i]);
-		*((U8*)outKey + ((i - off) >> 1)) = (U8)((v0 << 4) | v1);
+		*((U8*) outKey + ((i - off) >> 1)) = (U8) ((v0 << 4) | v1);
 	}
 
 clean:
@@ -529,6 +529,7 @@ static Bool CLI_fileListImpl(const ParsedArgs *args, Bool isRecursive) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input))
 		input = CharString_createRefCStrConst(".");        //Default to the working directory
 
@@ -559,6 +560,7 @@ Bool CLI_fileStat(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
@@ -608,6 +610,7 @@ Bool CLI_fileCount(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input))
 		input = CharString_createRefCStrConst(".");        //Default to the working directory
 
@@ -646,7 +649,8 @@ Bool CLI_fileCopy(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull(), output = CharString_createNull();
-	if(
+
+	if (
 		!CLI_fileArg(args, EOperationHasParameter_InputShift, &input) ||
 		!CLI_fileArg(args, EOperationHasParameter_OutputShift, &output)
 	) {
@@ -730,7 +734,8 @@ Bool CLI_fileMove(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull(), output = CharString_createNull();
-	if(
+
+	if (
 		!CLI_fileArg(args, EOperationHasParameter_InputShift, &input) ||
 		!CLI_fileArg(args, EOperationHasParameter_OutputShift, &output)
 	) {
@@ -767,6 +772,7 @@ Bool CLI_fileDelete(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
@@ -795,6 +801,7 @@ static Bool CLI_fileAddImpl(const ParsedArgs *args, EFileType type) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
@@ -828,7 +835,8 @@ Bool CLI_fileCmp(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString a = CharString_createNull(), b = CharString_createNull();
-	if(
+
+	if (
 		!CLI_fileArg(args, EOperationHasParameter_InputShift, &a) ||
 		!CLI_fileArg(args, EOperationHasParameter_Input2Shift, &b)
 	) {
@@ -1136,7 +1144,7 @@ Bool CLI_fileDiff(const ParsedArgs *args) {
 
 	CharString a = CharString_createNull(), b = CharString_createNull();
 
-	if(
+	if (
 		!CLI_fileArg(args, EOperationHasParameter_InputShift, &a) ||
 		!CLI_fileArg(args, EOperationHasParameter_Input2Shift, &b)
 	) {
@@ -1267,6 +1275,7 @@ Bool CLI_fileWipe(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
@@ -1329,6 +1338,7 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("Invalid argument -input <path>.");
 		return false;
@@ -1347,7 +1357,7 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 	const Bool hasLength = (args->parameters & EOperationHasParameter_Length) != 0;
 	CharString tmp = CharString_createNull();
 
-	if(
+	if (
 		(args->parameters & EOperationHasParameter_StartOffset) &&
 		CLI_fileArg(args, EOperationHasParameter_StartOffsetShift, &tmp)
 	)
@@ -1400,7 +1410,7 @@ Bool CLI_fileHexdump(const ParsedArgs *args) {
 			//Offset
 
 			for(int shift = 28; shift >= 0; shift -= 4)
-				line[c++] = C8_createHex((U8)((start + chunkOff + i) >> shift) & 0xF);
+				line[c++] = C8_createHex((U8) ((start + chunkOff + i) >> shift) & 0xF);
 
 			line[c++] = ':';
 			line[c++] = ' ';
@@ -1451,6 +1461,7 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString input = CharString_createNull();
+
 	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
 		Log_errorLnx("file gmac requires -input <file>.");
 		return false;
@@ -1479,6 +1490,7 @@ Bool CLI_fileGmac(const ParsedArgs *args) {
 	const U64 size = info.fileSize;
 
 	AESEncryptionKey aesKey = (AESEncryptionKey) { 0 };
+
 	for(U8 i = 0; i < 8; ++i)
 		aesKey.u32x8[i] = keyV[i];
 

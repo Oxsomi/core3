@@ -52,7 +52,8 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 		ListVkImageViewMapping_free(&image->views, alloc);
 
-		if(image->image && (
+		if (
+			image->image && (
 			utex.resource.type != EResourceType_Swapchain ||
 			(utex.resource.flags & EGraphicsResourceFlag_InternalOwnsImages)
 		))

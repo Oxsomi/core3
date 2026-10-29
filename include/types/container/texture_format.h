@@ -441,8 +441,8 @@ static inline Bool ETextureFormat_hasAlpha(ETextureFormat f) { return ETextureFo
 
 static inline U8 ETextureFormat_getChannels(ETextureFormat f) {
 	return
-		(U8)ETextureFormat_hasRed(f)  + (U8)ETextureFormat_hasGreen(f) +
-		(U8)ETextureFormat_hasBlue(f) + (U8)ETextureFormat_hasAlpha(f);
+		(U8) ETextureFormat_hasRed(f)  + (U8) ETextureFormat_hasGreen(f) +
+		(U8) ETextureFormat_hasBlue(f) + (U8) ETextureFormat_hasAlpha(f);
 }
 
 static inline ETextureCompressionType ETextureFormat_getCompressionType(ETextureFormat f) {
@@ -530,18 +530,20 @@ static inline Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y) {
 }
 
 //Get texture's size in bytes, if misaligned it will align to next block count
+//The caller bounds the extents: the size only fits a U64 while w * h * l stays below 2^57 (a block is at most 128 bits).
 static inline U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l) {
 
 	U8 alignW = 1, alignH = 1;
+	U64 blocksW = w, blocksH = h;
 
 	//If compressed; the size of the texture format is specified per blocks
 
 	if (ETextureFormat_getAlignment(f, &alignW, &alignH)) {
-		w += alignW - 1;    h += alignH - 1;
-		w /= alignW;        h /= alignH;
+		blocksW = (blocksW + alignW - 1) / alignW;
+		blocksH = (blocksH + alignH - 1) / alignH;
 	}
 
-	return ((((U64)w * h * ETextureFormat_getBits(f)) + 7) >> 3) * l;
+	return (((blocksW * blocksH * ETextureFormat_getBits(f)) + 7) >> 3) * l;
 }
 
 //Map ETextureFormat to simplified id for storing in a more compact manner
@@ -775,7 +777,7 @@ static const U8 DXFormat_toTextureFormatIdArr[100] = {
 
 static inline ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
 
-	if ((U64)format >= sizeof(DXFormat_toTextureFormatIdArr))
+	if ((U64) format >= sizeof(DXFormat_toTextureFormatIdArr))
 		return ETextureFormatId_Undefined;
 
 	U8 i = DXFormat_toTextureFormatIdArr[format];
@@ -819,6 +821,7 @@ static inline U8 ETextureFormatId_texelBytes(ETextureFormatId id) {
 //A value out of the format's range SATURATES rather than wrapping, and a NaN reaches an integer format as
 // zero, because converting either is undefined in C rather than merely wrong.
 
+//Channels are RGBA. BGR10A2 uses the GPU R10G10B10A2 layout, with R in bits 0..9.
 void ETextureFormatId_encode(U8 *dst, ETextureFormatId id, const F32 *src, U8 srcCount);
 void ETextureFormatId_decode(const U8 *src, ETextureFormatId id, F32 *dst, U8 dstCount);
 
@@ -871,15 +874,15 @@ static const U8 EDepthStencilFormat_toDXFormatArr[] = { 0, 55, 40, 45, 20, 0 };
 
 static inline DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format) {
 
-	if ((U64)format >= sizeof(EDepthStencilFormat_toDXFormatArr))
+	if ((U64) format >= sizeof(EDepthStencilFormat_toDXFormatArr))
 		return 0;
 
-	return EDepthStencilFormat_toDXFormatArr[(U64)format];
+	return EDepthStencilFormat_toDXFormatArr[(U64) format];
 }
 
 static inline EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format) {
 
-	if ((U64)format >= sizeof(DXFormat_toTextureFormatIdArr))
+	if ((U64) format >= sizeof(DXFormat_toTextureFormatIdArr))
 		return EDepthStencilFormat_None;
 
 	U8 i = DXFormat_toTextureFormatIdArr[format];

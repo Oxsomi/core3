@@ -2037,7 +2037,7 @@ namespace oxc {
 				OwnedList<c::ListPipelineStage> stages(alloc);
 				OwnedList<c::ListPipelineRaytracingGroup> groups(alloc);
 
-				if(
+				if (
 					!c::ListPipelineStage_resize(&stages.list, stageCount, alloc, e_rr) ||
 					!c::ListPipelineRaytracingGroup_resize(&groups.list, closestHitEntries.size(), alloc, e_rr)
 				)

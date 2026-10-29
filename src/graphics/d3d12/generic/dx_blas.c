@@ -170,7 +170,7 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 			if (geom.indexFormatId) {
 				tri->IndexFormat = ETextureFormatId_toDXFormat(geom.indexFormatId);
 				tri->IndexBuffer = getDxLocation(geom.indexBuffer, 0);
-				tri->IndexCount = (U32)(geom.indexBuffer.len / (geom.indexFormatId == ETextureFormatId_R32u ? 4 : 2));
+				tri->IndexCount = (U32) (geom.indexBuffer.len / (geom.indexFormatId == ETextureFormatId_R32u ? 4 : 2));
 			}
 
 			//Opacity micromaps, stage 1.

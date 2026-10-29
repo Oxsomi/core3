@@ -350,6 +350,54 @@ void Test_containerBuffer(Test *t) {
 	Test_setModule(t, "BufferUnicode");
 
 	{
+
+		static const U32 values[] = { 0xD7FF, 0xE000, 0xFF21, 0xFFFD, 0xFFFF, 0x10000, 0x1F600, 0x20000, 0x10FFFF };
+		static const U16 units[][2] = {
+			{ 0xD7FF, 0 }, { 0xE000, 0 }, { 0xFF21, 0 }, { 0xFFFD, 0 }, { 0xFFFF, 0 },
+			{ 0xD800, 0xDC00 }, { 0xD83D, 0xDE00 }, { 0xD840, 0xDC00 }, { 0xDBFF, 0xDFFF }
+		};
+
+		for(U64 i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
+
+			U16 encoded[2] = { 0 };
+			U8 written = 0;
+			UnicodeCodePointInfo decoded = { 0 };
+			const U8 bytes = values[i] < 0x10000 ? 2 : 4;
+
+			Test_assert(t, "UTF16 write scalar", Buffer_writeAsUTF16(
+				Buffer_createRef(encoded, sizeof(encoded)), 0, values[i], &written, e_rr
+			));
+
+			Test_assert(t, "UTF16 canonical units", written == bytes && encoded[0] == units[i][0] && encoded[1] == units[i][1]);
+			Test_assert(t, "UTF16 read canonical scalar", Buffer_readAsUTF16(
+				Buffer_createRefConst(units[i], bytes), 0, &decoded, NULL
+			) && decoded.index == values[i] && decoded.bytes == bytes);
+		}
+
+		static const U8 invalid[][4] = {
+			{ 0xC0, 0x80 }, { 0xC0, 0xAF }, { 0xE0, 0x80, 0xAF }, { 0xED, 0xA0, 0x80 },
+			{ 0xF0, 0x80, 0x80, 0xAF }, { 0xF4, 0x90, 0x80, 0x80 }, { 0xF8, 0x88, 0x80, 0x80 }
+		};
+
+		for(U64 i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+
+			UnicodeCodePointInfo decoded = { .index = 42, .bytes = 1, .chars = 1 };
+
+			Test_assert(t, "UTF8 rejects invalid scalar encoding", !Buffer_readAsUTF8(
+				Buffer_createRefConst(invalid[i], sizeof(invalid[i])), 0, &decoded, NULL
+			));
+
+			Test_assert(t, "UTF8 failure preserves result", decoded.index == 42 && decoded.bytes == 1 && decoded.chars == 1);
+		}
+
+		U8 storage[8] = { 0 };
+		const Buffer target = Buffer_createRef(storage, sizeof(storage));
+
+		Test_assert(t, "UTF8 refuses surrogate", !Buffer_writeAsUTF8(target, 0, 0xD800, NULL, NULL));
+		Test_assert(t, "UTF16 refuses surrogate", !Buffer_writeAsUTF16(target, 0, 0xDFFF, NULL, NULL));
+	}
+
+	{
 		//Codepoints U+0061, U+00E9 and U+20AC: 1, 2 and 3 byte UTF-8 sequences, so every width is exercised
 
 		const U8 utf8[] = { 'a', 0xC3, 0xA9, 0xE2, 0x82, 0xAC };
@@ -456,7 +504,7 @@ void Test_containerBuffer(Test *t) {
 					1 + i * 13, alignment, 0, alloc, &allocs[i], e_rr
 				));
 
-				aligned &= !((U64)allocs[i].ptr & (alignment - 1));
+				aligned &= !((U64) allocs[i].ptr & (alignment - 1));
 				zeroed &= !allocs[i].ptr[0];
 
 				allocs[i].ptrNonConst[0] = 0xAB;        //Catch a free that hands back the wrong base
@@ -479,7 +527,7 @@ void Test_containerBuffer(Test *t) {
 			256, 64, 24, alloc, &offset, e_rr
 		));
 
-		Test_assert(t, "header offset lands aligned", !((U64)(offset.ptr + 24) & 63));
+		Test_assert(t, "header offset lands aligned", !((U64) (offset.ptr + 24) & 63));
 		Buffer_free(&offset, alloc);
 
 		//Rejected up front rather than silently rounded

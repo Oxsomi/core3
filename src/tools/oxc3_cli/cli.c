@@ -342,7 +342,7 @@ Bool CLI_execute(ListCharString argList) {
 		for(U64 j = 2; j < argList.length; ++j)
 			if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationHasParameter_names[i])) {
 
-				const U64 param = (U64)1 << i;
+				const U64 param = (U64) 1 << i;
 
 				//Check neighbor and save as list entry
 
@@ -407,7 +407,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	//Invalid usage
 
-	if(
+	if (
 		(args.format == EFormat_Invalid && !formatLess) ||
 		!supportsFormat
 	) {
@@ -549,7 +549,7 @@ U64 CLI_parseGraphicsAPIs(const ParsedArgs *args) {
 			.s = &arg, .allocator = Platform_instance->alloc, .result = &strings
 		}, ',', e_rr));
 
-		U64 nativeBit = (U64)1 << (
+		U64 nativeBit = (U64) 1 << (
 			Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan
 		);
 
@@ -557,19 +557,19 @@ U64 CLI_parseGraphicsAPIs(const ParsedArgs *args) {
 
 			CharString str = strings.ptr[i];
 
-			if(
+			if (
 				CharString_equalsCStringInsensitive(&str, "d3d12") ||
 				CharString_equalsCStringInsensitive(&str, "directx12") ||
 				CharString_equalsCStringInsensitive(&str, "direct3d12") ||
 				CharString_equalsCStringInsensitive(&str, "dx12")
 			)
-				queried |= (U64)1 << EGraphicsApi_Direct3D12;
+				queried |= (U64) 1 << EGraphicsApi_Direct3D12;
 
-			else if(
+			else if (
 				CharString_equalsCStringInsensitive(&str, "vulkan") ||
 				CharString_equalsCStringInsensitive(&str, "vk")
 			)
-				queried |= (U64)1 << EGraphicsApi_Vulkan;
+				queried |= (U64) 1 << EGraphicsApi_Vulkan;
 
 			else if(CharString_equalsCStringInsensitive(&str, "all"))
 				queried = U32_MAX;

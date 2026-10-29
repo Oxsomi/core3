@@ -50,7 +50,7 @@ void Test_SHFileAddBinNoBinaryData(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 		//binaries[] all empty
 	};
 
@@ -91,7 +91,7 @@ void Test_SHFileAddBinVendorMaskOutOfBounds(Test *t) {
 	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "main", false);
 
 	//Set a bit beyond the valid vendor range but not the U16_MAX special case
-	info.vendorMask = (U16)(1u << ESHVendor_Count);
+	info.vendorMask = (U16) (1u << ESHVendor_Count);
 	Test_assert(t, "oob vendorMask rejected", !SHFile_addBinary(&sh, &info, t->alloc, NULL));
 	SHFile_free(&sh, t->alloc);
 }
@@ -108,7 +108,7 @@ void Test_SHVendorMaskWidening(Test *t) {
 
 	//Two vendors fewer, which is exactly the step that adding GOGL and MESA represented
 
-	const U16 olderCount = (U16)(ESHVendor_Count - 2);
+	const U16 olderCount = (U16) (ESHVendor_Count - 2);
 	const U16 olderAll = ESHVendor_allMask(olderCount);
 
 	Test_assert(t, "older all differs from current all", olderAll != nowAll);
@@ -117,8 +117,8 @@ void Test_SHVendorMaskWidening(Test *t) {
 
 	//A mask naming specific vendors never claimed to cover the new ones, so it must survive untouched
 
-	const U16 justNV = (U16)(1u << ESHVendor_NV);
-	const U16 nvAndAmd = (U16)((1u << ESHVendor_NV) | (1u << ESHVendor_AMD));
+	const U16 justNV = (U16) (1u << ESHVendor_NV);
+	const U16 nvAndAmd = (U16) ((1u << ESHVendor_NV) | (1u << ESHVendor_AMD));
 
 	Test_assert(t, "single vendor untouched", ESHVendor_widenMask(justNV, olderCount) == justNV);
 	Test_assert(t, "vendor pair untouched", ESHVendor_widenMask(nvAndAmd, olderCount) == nvAndAmd);
@@ -126,7 +126,7 @@ void Test_SHVendorMaskWidening(Test *t) {
 
 	//The count is capped by vendorMask being 16 bits wide
 
-	Test_assert(t, "16 saturates", ESHVendor_allMask(16) == (U16)0xFFFF);
+	Test_assert(t, "16 saturates", ESHVendor_allMask(16) == (U16) 0xFFFF);
 	Test_assert(t, "count fits the mask", ESHVendor_Count <= 16);
 }
 
@@ -206,7 +206,7 @@ void Test_SHFileAddBinSPIRVMisaligned(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	info.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(oddSPIRV, 5);

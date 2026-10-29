@@ -89,6 +89,15 @@ OXC3_TEST_MAIN(formats_oiSB) {
 	Test_SBFileCombineFlatSizeMismatch(&t);
 	Test_SBFileHashConsistency(&t);
 
+	Test_SBFileOffsetOverflow(&t);
+	Test_SBFileChildInsideParent(&t);
+	Test_SBFileSelfAlignment(&t);
+	Test_SBFileHashUnchangedOnFailure(&t);
+	Test_SBFileCombineHash(&t);
+	Test_SBFileCombineReadBack(&t);
+	Test_SBFileWriteFailures(&t);
+	Test_SBFileReadHugeCounts(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);
 }

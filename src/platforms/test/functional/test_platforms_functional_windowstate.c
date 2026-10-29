@@ -86,6 +86,7 @@ static void Pattern_onDraw(Window *w, PatternState *ps) {
 static Bool Pattern_waitForDraw(volatile Bool *drawn, Ns timeout) {
 
 	Ns waited = 0;
+
 	while (!*drawn && waited < timeout) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -204,6 +205,7 @@ static void Test_resizeVirtual(Test *t) {
 	Test_assert(t, "maxW",  I32x2_x(w->maxSize) == 1920);
 
 	I32x2 newSz = I32x2_create2(512, 384);
+
 	if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, newSz, &t->err)))
 		goto clean;
 
@@ -424,7 +426,7 @@ static void Test_monitorInfo(Test *t) {
 				(REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) << 8)   \
 			)
 
-			U16 rgb16 = (U16)REMAP_RGB_OFF(m->offsetR, m->offsetG, m->offsetB);
+			U16 rgb16 = (U16) REMAP_RGB_OFF(m->offsetR, m->offsetG, m->offsetB);
 
 			const C8 *spName = "None";
 
@@ -444,7 +446,7 @@ static void Test_monitorInfo(Test *t) {
 				"-- Monitor %"PRIu64": %"PRIi32"x%"PRIi32" @ %.1f Hz, offset (%"PRIi32",%"PRIi32"), "
 				"size %"PRIi32"x%"PRIi32" mm\n"
 				"--- Subpixel: %s",
-				(U64)i,
+				(U64) i,
 				I32x2_x(m->sizePixels), I32x2_y(m->sizePixels),
 				m->refreshRate,
 				I32x2_x(m->offsetPixels), I32x2_y(m->offsetPixels),
@@ -536,6 +538,7 @@ static void Test_windowMove(Test *t) {
 	Test_print(t, "    If you only have one monitor, this test will time out and warn.");
 
 	Ns waited = 0;
+
 	while (!movedToSecondMonitor && waited < 10 * SECOND) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -919,7 +922,7 @@ static void F21_onDraw(Window *w) {
 	for(I32 y = 0; y < H; ++y) {
 		for(I32 x = 0; x < W; ++x) {
 			I32x2 d = I32x2_sub(I32x2_create2(x, y), I32x2_create2(F21_CX, F21_CY));
-			px[y * W + x] = I32x2_dot(d, d) <= I32_pow2(F21_RADIUS) ? (U32)0xFF0000FF : (U32)0x00000000;
+			px[y * W + x] = I32x2_dot(d, d) <= I32_pow2(F21_RADIUS) ? (U32) 0xFF0000FF : (U32) 0x00000000;
 		}
 	}
 
@@ -980,6 +983,7 @@ static void Test_transparent(Test *t) {
 		Test_assert(t, "cornerIsTransparent", corner == 0x00000000);
 
 		I32 outsideX = F21_CX + F21_RADIUS + 2;
+
 		if(outsideX < W) {
 			U32 outside = px[F21_CY * W + outsideX];
 			Test_assert(t, "outsideIsTransparent", outside == 0x00000000);

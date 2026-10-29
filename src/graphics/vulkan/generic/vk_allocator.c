@@ -195,7 +195,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	const U64 blockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
 	isDedicated |= memReq.size > blockSize / 2;
 
-	if(
+	if (
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
 		prefersDedicated &&
 		!requiresDedicated &&
@@ -239,7 +239,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		//Host memory on a dedicated device never takes a type of a device local heap, which is video memory
 
-		if(
+		if (
 			hostMemory && allocator->device->info.type == EGraphicsDeviceType_Dedicated &&
 			(deviceExt->memoryProperties.memoryHeaps[deviceExt->memoryProperties.memoryTypes[memoryId].heapIndex].flags &
 			VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
@@ -254,7 +254,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 			DeviceMemoryBlock *blocki = &allocator->blocks.ptrNonConst[i];
 
-			if(
+			if (
 				!blocki->ext ||
 				blocki->isDedicated ||
 				blocki->typeExt != memoryId ||
@@ -318,7 +318,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		const Bool known = usedMem != U64_MAX && budget != U64_MAX;
 
-		while(
+		while (
 			known && !isDedicated &&
 			usedMem + memAlloc.allocationSize > budget && (memAlloc.allocationSize >> 1) >= memReq.size
 		)
@@ -433,7 +433,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	gotoIfError3(clean, AllocationBuffer_create(&allocationCreate, true, e_rr));
 
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
-		Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
+		Error_captureStackTrace(block.stackTrace, (U8) (sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 	//Find a spot in the blocks list
 
@@ -455,7 +455,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Named before the block is listed, so a failure here leaves nothing pointing at the memory clean frees
 
-	if(
+	if (
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
 		objectName && CharString_length(*objectName) && instanceExt->debugSetName
 	) {

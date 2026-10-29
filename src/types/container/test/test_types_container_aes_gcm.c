@@ -313,7 +313,7 @@ void Test_aesValidation(Test *t) {
 
 			const U64    siz        = sizes[i];
 			Buffer       unit       = Buffer_createRef(full.ptrNonConst, siz);
-			const I32x4  tagExpect  = I32x4_load4((const void*)&tagForValidation[i]);
+			const I32x4  tagExpect  = I32x4_load4((const void*) &tagForValidation[i]);
 
 			//Encrypt
 
@@ -360,6 +360,217 @@ void Test_aesValidation(Test *t) {
 	Buffer_free(&full, t->alloc);
 }
 
+//Lengths that leave the wide batches 4 to 15 blocks, with partial final blocks among them. Every batch size on every
+// path the CPU has must match the one block path byte for byte, tag included, and leave the bytes after the data alone,
+// both encrypting and decrypting. The sizes above are all powers of two, which never leave such a remainder.
+
+static void Test_aesBatchTails(Test *t) {
+
+	Test_setModule(t, "aes256gcm batch tails");
+
+	static const U32 lengths[] = { 320, 400, 448, 500, 1152, 1200, 1213, 1408, 1500, 2077, 4296 };
+	static const I64 batches[] = { -16, -8, -4 };
+	const U64 maxLength = 4296, canary = 256;
+
+	AESEncryptionKey key = { 0 };
+
+	for (U8 i = 0; i < 8; ++i)
+		key.u32x8[i] = 0x01234567u * (i + 1);
+
+	Buffer plain = Buffer_createNull(), expected = Buffer_createNull(), work = Buffer_createNull();
+
+	if (
+		!Test_assert(t, "plain", Buffer_createUninitializedBytes(maxLength, t->alloc, &plain, &t->err)) ||
+		!Test_assert(t, "expected", Buffer_createUninitializedBytes(maxLength, t->alloc, &expected, &t->err)) ||
+		!Test_assert(t, "work", Buffer_createUninitializedBytes(maxLength + canary, t->alloc, &work, &t->err))
+	)
+		goto clean;
+
+	for (U64 i = 0; i < maxLength; ++i)
+		plain.ptrNonConst[i] = (U8) (i * 13 + 5);
+
+	for (U64 n = 0; n < sizeof(lengths) / sizeof(lengths[0]); ++n) {
+
+		const U64 len = lengths[n];
+		const Buffer plainPart = Buffer_createRefConst(plain.ptr, len);
+		const Buffer expectedPart = Buffer_createRef(expected.ptrNonConst, len);
+		const Buffer workPart = Buffer_createRef(work.ptrNonConst, len);
+		const Buffer canaryPart = Buffer_createRef(work.ptrNonConst + len, canary);
+
+		AESEncryptionContext ctx = { 0 };
+		U8 blockSizeMax = 0, use256Or512 = 0;
+
+		//Reference: one block at a time on the 128-bit path
+
+		if (!aesCreateCtx(t, "reference create", -1, 0, key, &ctx, &blockSizeMax, &use256Or512))
+			continue;
+
+		Buffer_memcpy(expectedPart, plainPart);
+		Buffer_aesExpertEncUpdate(&ctx, expectedPart, 0, blockSizeMax, use256Or512);
+		Buffer_aesExpertFinalize(&ctx, 0, len, I32x4_zero());
+
+		const I32x4 expectedTag = ctx.tag;
+
+		for (U64 s = 0; s < sizeof(cryptoState) / sizeof(cryptoState[0]); ++s)
+			for (U64 b = 0; b < sizeof(batches) / sizeof(batches[0]); ++b) {
+
+				if (!aesCreateCtx(t, "batch create", batches[b], cryptoState[s], key, &ctx, &blockSizeMax, &use256Or512))
+					continue;
+
+				if (use256Or512 != cryptoState[s])        //Hardware doesn't support this path
+					continue;
+
+				Buffer_memcpy(workPart, plainPart);
+				Buffer_unsetAllBits(canaryPart, NULL);
+
+				Buffer_aesExpertEncUpdate(&ctx, workPart, 0, blockSizeMax, use256Or512);
+				Buffer_aesExpertFinalize(&ctx, 0, len, I32x4_zero());
+
+				Test_assert(t, "batch ciphertext matches one block", Buffer_eq(workPart, expectedPart));
+				Test_assert(t, "batch tag matches one block", !I32x4_neq4(ctx.tag, expectedTag));
+				Test_assert(t, "encrypt leaves the bytes after the data", Buffer_isZero(canaryPart));
+
+				if (!aesCreateCtx(t, "batch decrypt", batches[b], cryptoState[s], key, &ctx, &blockSizeMax, &use256Or512))
+					continue;
+
+				Buffer_aesExpertDecUpdate(&ctx, workPart, 0, blockSizeMax, use256Or512);
+
+				Test_assert(t, "batch decrypt verifies", Buffer_aesExpertFinalize(&ctx, 0, len, expectedTag));
+				Test_assert(t, "batch decrypt restores", Buffer_eq(workPart, plainPart));
+				Test_assert(t, "decrypt leaves the bytes after the data", Buffer_isZero(canaryPart));
+			}
+	}
+
+clean:
+	Buffer_free(&work, t->alloc);
+	Buffer_free(&expected, t->alloc);
+	Buffer_free(&plain, t->alloc);
+}
+
+//The expert updates refuse what isn't GCM, after which the context only finalizes to a zero tag: more data after a
+// partial block, AAD after data, misaligned input and a counter that would wrap. Batch arguments beyond what create chose
+// are clamped to it instead.
+
+static Bool aesExpertPoisoned(Test *t, const C8 *label, AESEncryptionContext *ctx, U64 aadLen, U64 dataLen) {
+	const Bool finalized = Buffer_aesExpertFinalize(ctx, aadLen, dataLen, I32x4_zero());
+	return Test_assert(t, label, !finalized && !I32x4_any(ctx->tag));
+}
+
+static void Test_aesExpertMisuse(Test *t) {
+
+	Test_setModule(t, "aes256gcm expert updates refuse misuse");
+
+	AESEncryptionKey key = { 0 };
+
+	for (U8 i = 0; i < 8; ++i)
+		key.u32x8[i] = 0x89ABCDEFu * (i + 3);
+
+	alignas(16) U8 data[96] = { 0 };
+
+	for (U8 i = 0; i < sizeof(data); ++i)
+		data[i] = (U8) (i * 7 + 1);
+
+	AESEncryptionContext ctx = { 0 };
+	U8 blockSizeMax = 0, use256Or512 = 0;
+
+	//More data after a partial block
+
+	if (aesCreateCtx(t, "partial create", 0, U8_MAX, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+		Test_assert(t, "partial block accepted", Buffer_aesExpertEncUpdate(
+			&ctx, Buffer_createRef(data, 20), 0, blockSizeMax, use256Or512
+		));
+
+		Test_assert(t, "data after a partial block refused", !Buffer_aesExpertEncUpdate(
+			&ctx, Buffer_createRef(data + 32, 32), 2, blockSizeMax, use256Or512
+		));
+
+		aesExpertPoisoned(t, "partial: finalize fails with a zero tag", &ctx, 0, 52);
+	}
+
+	//AAD after data, and AAD after a partial AAD block
+
+	if (aesCreateCtx(t, "aad create", 0, U8_MAX, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+		Test_assert(t, "aad accepted", Buffer_aesExpertUpdateAAD(&ctx, Buffer_createRef(data, 32), blockSizeMax, use256Or512));
+		Test_assert(t, "data accepted", Buffer_aesExpertEncUpdate(
+			&ctx, Buffer_createRef(data + 32, 32), 0, blockSizeMax, use256Or512
+		));
+
+		Test_assert(t, "aad after data refused", !Buffer_aesExpertUpdateAAD(
+			&ctx, Buffer_createRef(data + 64, 16), blockSizeMax, use256Or512
+		));
+
+		aesExpertPoisoned(t, "aad: finalize fails with a zero tag", &ctx, 48, 32);
+	}
+
+	if (aesCreateCtx(t, "partial aad create", 0, U8_MAX, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+		Test_assert(t, "partial aad accepted", Buffer_aesExpertUpdateAAD(
+			&ctx, Buffer_createRef(data, 20), blockSizeMax, use256Or512
+		));
+
+		Test_assert(t, "aad after a partial aad block refused", !Buffer_aesExpertUpdateAAD(
+			&ctx, Buffer_createRef(data + 32, 16), blockSizeMax, use256Or512
+		));
+
+		aesExpertPoisoned(t, "partial aad: finalize fails with a zero tag", &ctx, 36, 0);
+	}
+
+	//Misaligned input
+
+	if (aesCreateCtx(t, "misaligned create", 0, U8_MAX, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+		Test_assert(t, "misaligned data refused", !Buffer_aesExpertEncUpdate(
+			&ctx, Buffer_createRef(data + 1, 32), 0, blockSizeMax, use256Or512
+		));
+
+		aesExpertPoisoned(t, "misaligned: finalize fails with a zero tag", &ctx, 0, 32);
+	}
+
+	//The counter: 2^32 - 2 blocks is the limit, one more would wrap into the counter that masks the tag
+
+	if (aesCreateCtx(t, "counter limit create", 0, U8_MAX, key, &ctx, &blockSizeMax, &use256Or512))
+		Test_assert(t, "last two blocks accepted", Buffer_aesExpertEncUpdate(
+			&ctx, Buffer_createRef(data, 32), U32_MAX - 3, blockSizeMax, use256Or512
+		));
+
+	if (aesCreateCtx(t, "counter wrap create", 0, U8_MAX, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+		Test_assert(t, "a block past the limit refused", !Buffer_aesExpertEncUpdate(
+			&ctx, Buffer_createRef(data, 32), U32_MAX - 2, blockSizeMax, use256Or512
+		));
+
+		aesExpertPoisoned(t, "counter: finalize fails with a zero tag", &ctx, 0, 32);
+	}
+
+	//Batch arguments beyond create's choice are clamped: the one block context gives the one block result
+
+	alignas(16) U8 reference[96], clamped[96];
+	Buffer_memcpy(Buffer_createRef(reference, sizeof(reference)), Buffer_createRefConst(data, sizeof(data)));
+	Buffer_memcpy(Buffer_createRef(clamped, sizeof(clamped)), Buffer_createRefConst(data, sizeof(data)));
+
+	if (aesCreateCtx(t, "reference create", -1, 0, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+		Buffer_aesExpertEncUpdate(&ctx, Buffer_createRef(reference, sizeof(reference)), 0, blockSizeMax, use256Or512);
+		Buffer_aesExpertFinalize(&ctx, 0, sizeof(reference), I32x4_zero());
+		const I32x4 referenceTag = ctx.tag;
+
+		if (aesCreateCtx(t, "clamped create", -1, 0, key, &ctx, &blockSizeMax, &use256Or512)) {
+
+			Test_assert(t, "oversized batch accepted", Buffer_aesExpertEncUpdate(
+				&ctx, Buffer_createRef(clamped, sizeof(clamped)), 0, 16, 3
+			));
+
+			Buffer_aesExpertFinalize(&ctx, 0, sizeof(clamped), I32x4_zero());
+
+			Test_assert(t, "clamped to create's batch", !I32x4_neq4(ctx.tag, referenceTag) && Buffer_eq(
+				Buffer_createRefConst(clamped, sizeof(clamped)), Buffer_createRefConst(reference, sizeof(reference))
+			));
+		}
+	}
+}
+
 //Test vectors 13-16: https://luca-giuzzi.unibs.it/corsi/Support/papers-cryptography/gcm-spec.pdf
 //Test vectors 2.1.2, 2.8.2: https://www.ieee802.org/1/files/public/docs2011/bn-randall-test-vectors-0511-v1.pdf
 
@@ -372,7 +583,8 @@ void Test_aes256gcm(Test *t) {
 		CharString_createRefSizedConst(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
-			32, true),
+			32, true
+		),
 
 		CharString_createRefSizedConst(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -572,7 +784,8 @@ void Test_aes256gcm(Test *t) {
 
 		CharString_createRefSizedConst(
 			"\x53\x0F\x8A\xFB\xC7\x45\x36\xB9\xA9\x63\xB4\xF1\xC4\xCB\x73\x8B",
-			16, true),
+			16, true
+		),
 
 		CharString_createRefSizedConst(
 			"\xCE\xA7\x40\x3D\x4D\x60\x6B\x6E\x07\x4E\xC5\xD3\xBA\xF3\x9D\x18"
@@ -647,6 +860,8 @@ void Test_aes256gcm(Test *t) {
 	//Test different chunkSizes for AVX2/AVX512/etc.
 
 	Test_aesValidation(t);
+	Test_aesBatchTails(t);
+	Test_aesExpertMisuse(t);
 }
 
 void Test_aes128gcm(Test *t) {
@@ -733,7 +948,8 @@ void Test_aes128gcm(Test *t) {
 			"\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20"
 			"\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C\x2D\x2E\x2F\x30"
 			"\x31\x32\x33\x34\x00\x01",
-			70, true),
+			70, true
+		),
 
 		CharString_createRefSizedConst(
 			"\xD6\x09\xB1\xF0\x56\x63\x7A\x0D\x46\xDF\x99\x8D\x88\xE5\x2E\x00"

@@ -82,7 +82,8 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 
 			prim = ESBPrimitive_Float;
 
-			if(numeric.scalar.signedness || (
+			if (
+				numeric.scalar.signedness || (
 				numeric.scalar.width != 16 &&
 				numeric.scalar.width != 32 &&
 				numeric.scalar.width != 64
@@ -617,7 +618,7 @@ Bool Compiler_convertRegisterSPIRV(
 			SpvReflectDecorationFlags sbufferFlags =
 				SPV_REFLECT_DECORATION_ROW_MAJOR | SPV_REFLECT_DECORATION_COLUMN_MAJOR | SPV_REFLECT_DECORATION_NON_WRITABLE;
 
-			if(
+			if (
 				!binding->block.member_count ||
 				(binding->block.decoration_flags && binding->block.decoration_flags != SPV_REFLECT_DECORATION_NON_WRITABLE) ||
 				(binding->block.flags && binding->block.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED) ||
@@ -695,7 +696,7 @@ Bool Compiler_convertRegisterSPIRV(
 			if(bufferType == ESHBufferType_StorageBuffer && isAtomic)
 				bufferType = ESHBufferType_StorageBufferAtomic;
 
-			if(
+			if (
 				bufferType != ESHBufferType_StorageBufferAtomic &&
 				bufferType != ESHBufferType_StructuredBufferAtomic &&
 				isAtomic
@@ -744,7 +745,7 @@ Bool Compiler_convertRegisterSPIRV(
 					1, "Compiler_convertRegisterSPIRV() invalid register had buffer decorations but wasn't one"
 				));
 
-		if(
+		if (
 			binding->uav_counter_binding ||
 			binding->uav_counter_id != U32_MAX ||
 			binding->block.spirv_id ||
@@ -785,7 +786,7 @@ Bool Compiler_convertRegisterSPIRV(
 				registers,
 				ESHBufferType_ConstantBuffer,
 				false,
-				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+				(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				NULL,
 				&sbFile,
@@ -810,7 +811,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
-				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+				(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 				false,
 				&name,
 				arrays.length ? &arrays : NULL,
@@ -905,7 +906,7 @@ Bool Compiler_convertRegisterSPIRV(
 					type,
 					isArray,
 					false,
-					(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+					(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 					EGfxTexturePrimitive_Count,
 					&name,
 					arrays.length ? &arrays : NULL,
@@ -973,7 +974,7 @@ Bool Compiler_convertRegisterSPIRV(
 					registers,
 					type,
 					isArray,
-					(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+					(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 					EGfxTexturePrimitive_Count,
 					formatId,
 					&name,
@@ -989,7 +990,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
 
-			if(
+			if (
 				binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SRV &&
 				binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_UAV
 			)
@@ -1017,7 +1018,7 @@ Bool Compiler_convertRegisterSPIRV(
 				registers,
 				bufferType,
 				isWrite,
-				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+				(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				arrays.length ? &arrays : NULL,
 				hasSBFile ? &sbFile : NULL,
@@ -1043,7 +1044,7 @@ Bool Compiler_convertRegisterSPIRV(
 				registers,
 				ESHBufferType_AccelerationStructure,
 				false,
-				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+				(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				arrays.length ? &arrays : NULL,
 				NULL,
@@ -1074,7 +1075,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
 				registers,
-				(U8)((!isUnused) << EGfxBinaryType_SPIRV),
+				(U8) ((!isUnused) << EGfxBinaryType_SPIRV),
 				&name,
 				bindings,
 				(U16) binding->input_attachment_index,

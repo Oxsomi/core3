@@ -437,7 +437,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
 				CharString_free(&temp, alloc);
-				gotoIfError3(clean, CharString_format(alloc, &temp, e_rr, "Swapchain semaphore %"PRIu64, (U64)i));
+				gotoIfError3(clean, CharString_format(alloc, &temp, e_rr, "Swapchain semaphore %"PRIu64, (U64) i));
 
 				const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -526,7 +526,7 @@ clean:
 
 void VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	SwapchainRef *swapchainRef = (RefPtr*) swapchain - 1;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);

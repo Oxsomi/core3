@@ -144,7 +144,8 @@ Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lock
 
 			if(verId != v.version)
 				retError(clean, Error_invalidOperation(
-					1, "CommandListRef_begin() can't be called without clear if pre-recorded swapchain versionId changed"));
+					1, "CommandListRef_begin() can't be called without clear if pre-recorded swapchain versionId changed"
+				));
 		}
 	}
 
@@ -213,12 +214,12 @@ clean:
 }
 
 Bool CommandListRef_imageRangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
-	(void)range2; (void)range1;        //TODO:
+	(void) range2; (void) range1;        //TODO:
 	return image1 == image2;
 }
 
 Bool CommandListRef_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, RefPtr *buffer2, BufferRange range2) {
-	(void)range2; (void)range1;        //TODO:
+	(void) range2; (void) range1;        //TODO:
 	return buffer1 == buffer2;
 }
 
@@ -293,7 +294,7 @@ Bool CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32
 	Bool s_uccess = true;
 	const Allocator *alloc = commandList ? GraphicsDeviceRef_getAlloc(commandList->device) : NULL;
 
-	(void)extraSkipStacktrace;
+	(void) extraSkipStacktrace;
 
 	const U64 len = Buffer_length(buf);
 	Bool didPush = false;
@@ -390,6 +391,7 @@ Bool CommandListRef_transitionBuffer(
 		return s_uccess;
 
 	TransitionInternal *oldState = NULL;
+
 	if(CommandListRef_isBound(commandList, buffer, (ResourceRange) { .buffer = range }, &oldState)) {
 
 		if(oldState->type != type)
@@ -607,6 +609,7 @@ Bool CommandListRef_transitionImage(
 		return s_uccess;
 
 	TransitionInternal *oldState = NULL;
+
 	if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = range }, &oldState)) {
 
 		if(oldState->type != type)
@@ -769,7 +772,8 @@ Bool CommandListRef_startScope(
 
 					gotoIfError3(clean, CommandListRef_transitionRTAS(
 						commandList, dat.blasCpu,
-						ETransitionType_ShaderRead, transition.stage, e_rr));
+						ETransitionType_ShaderRead, transition.stage, e_rr
+					));
 				}
 
 			resource = (GraphicsResource) {
@@ -786,7 +790,8 @@ Bool CommandListRef_startScope(
 
 		else {
 			retError(clean, Error_invalidParameter(
-			1, 0, "CommandListRef_startScope()::transitions[i].resource's type is unsupported"));
+				1, 0, "CommandListRef_startScope()::transitions[i].resource's type is unsupported"
+			));
 		}
 
 		TransitionInternal transitionDst;
@@ -795,7 +800,8 @@ Bool CommandListRef_startScope(
 
 			if (transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderWrite))
 				retError(clean, Error_constData(
-					0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"));
+					0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"
+				));
 
 			//A constant buffer read is a shader read too: CBV capability comes from the uniform usage
 			// rather than ShaderRead, which is the SRV path (see EGraphicsResourceFlag_ShaderRead's docs)
@@ -806,7 +812,8 @@ Bool CommandListRef_startScope(
 
 			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead) && !isUniform)
 				retError(clean, Error_unsupportedOperation(
-					1, "CommandListRef_startScope()::transitions[i].resource should be readable"));
+					1, "CommandListRef_startScope()::transitions[i].resource should be readable"
+				));
 
 			transitionDst = (TransitionInternal) {
 				.resource = res,
@@ -824,6 +831,7 @@ Bool CommandListRef_startScope(
 			));
 
 		TransitionInternal *found = NULL;
+
 		if(CommandListRef_isBound(commandList, res, transition.range, &found)) {
 
 			if(found->type != transitionDst.type)
@@ -937,7 +945,7 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 
 	//Check if scope has to be hidden.
 
-	if(
+	if (
 		(commandList->tempStateFlags & ECommandStateFlags_InvalidState) ||            //Hide scope
 		!(commandList->tempStateFlags & ECommandStateFlags_HasModifyOp)
 	) {
@@ -971,7 +979,7 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 			"CommandListRef_endScope() transitionCount of command list can't exceed U32_MAX"
 		));
 
-	const U32 commandOps = (U32)((commandList->commandOps.length + 1) - commandList->lastCommandId);
+	const U32 commandOps = (U32) ((commandList->commandOps.length + 1) - commandList->lastCommandId);
 	const U64 commandLen = commandList->next - commandList->lastOffset;
 	const U32 transitionOffset = (U32) commandList->transitions.length;
 
@@ -1059,7 +1067,7 @@ void CommandList_free(void *cmdGeneric, const Allocator *alloc) {
 
 	CommandList *cmd = (CommandList*) cmdGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	SpinLock_lock(&cmd->lock, U64_MAX);
 

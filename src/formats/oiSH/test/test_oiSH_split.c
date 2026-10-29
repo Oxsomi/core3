@@ -80,7 +80,7 @@ static Bool Test_SHSplitMakeMerged(Test *t, SHFile *sh) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	info.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
@@ -146,7 +146,7 @@ void Test_SHFileSplitReflectionOnlyFiltersRegisters(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	CharString sharedName = CharString_createRefCStrConst("gShared");
@@ -345,7 +345,7 @@ void Test_SHFileSplitKeepsSpirvPushConstant(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	info.binaries[EGfxBinaryType_SPIRV] = Buffer_createRefConst(kDummySPIRV, sizeof(kDummySPIRV));
@@ -418,7 +418,7 @@ void Test_SHFileSplitDropsEntrypointAndRemapsIds(Test *t) {
 			.shaderVersion = OISH_SHADER_MODEL_MIN,
 			.stageType     = EGfxPipelineStage_Compute
 		},
-		.vendorMask = (U16)((1u << ESHVendor_Count) - 1)
+		.vendorMask = (U16) ((1u << ESHVendor_Count) - 1)
 	};
 
 	dxilInfo.binaries[EGfxBinaryType_DXIL] = Buffer_createRefConst(kDummyDXIL, sizeof(kDummyDXIL));

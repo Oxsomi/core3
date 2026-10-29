@@ -23,6 +23,11 @@
 #pragma once
 #include "types/math/vec4f_swizzle.h"
 
+//For unit q, applyToNormal(q, p) evaluates conjugate(q) * p * q, and the orientation helpers use that same sense.
+//A positive 90-degree angleAxis around +Z therefore maps +X to -Y. Matrix rotateZ(+pi/2) maps +X to +Y.
+//Use rotateQuat(q) for a matrix with the quaternion's exact rotation, or conjugate q to reverse its rotation.
+//angleAxis takes radians; fromEuler and toEuler take and return degrees.
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -73,7 +78,7 @@ static inline void Quat##T##_set(Quat##T *a, U8 i, T v) { T##x4_setRef(a, i, v);
 																												\
 static inline Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc) { return T##x4_lerp(a, b, perc); }           \
 																												\
-/* We use a right handed system */                                                                              \
+/* Applies the unit quaternion using the convention above */                                                     \
 static inline T##x4 Quat##T##_applyToNormal(Quat##T Q, T##x4 P) {                                               \
 	T##x4 qXyz = T##x4_trunc3(Q);                                                                               \
 	T##x4 t = T##x4_mul(T##x4_cross3(P, qXyz), T##x4_xxxx4(2));                                                 \

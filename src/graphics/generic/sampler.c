@@ -34,7 +34,7 @@ void Sampler_free(void *samplerGeneric, const Allocator *alloc) {
 
 	Sampler *sampler = (Sampler*) samplerGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	if(sampler->bindlessDescriptorTable) {
 
@@ -101,7 +101,7 @@ Bool GraphicsDeviceRef_createSamplerInternal(
 			1, 0, "GraphicsDeviceRef_createSampler()::info.filter contains invalid bits"
 		));
 
-	if(
+	if (
 		info.addressU >= ESamplerAddressMode_Count ||
 		info.addressV >= ESamplerAddressMode_Count ||
 		info.addressW >= ESamplerAddressMode_Count
@@ -122,7 +122,7 @@ Bool GraphicsDeviceRef_createSamplerInternal(
 
 	//The integer borders are reserved, so no sampler carries one and neither backend has to describe it.
 
-	if(
+	if (
 		info.borderColor == ESamplerBorderColor_ReservedOpaqueBlackInt ||
 		info.borderColor == ESamplerBorderColor_ReservedOpaqueWhiteInt
 	)
@@ -135,7 +135,7 @@ Bool GraphicsDeviceRef_createSamplerInternal(
 			1, 6, "GraphicsDeviceRef_createSampler()::info.comparisonFunction is out of bounds"
 		));
 
-	if(
+	if (
 		!EFloatType_isFinite(EFloatType_F16, info.mipBias) ||
 		!EFloatType_isFinite(EFloatType_F16, info.minLod) ||
 		!EFloatType_isFinite(EFloatType_F16, info.maxLod)

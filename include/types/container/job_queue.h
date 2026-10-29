@@ -117,6 +117,8 @@ TListNamed(Thread*, ListThreadHandle);
 typedef struct JobQueue {
 
 	ListJob jobs[EJobLane_Count];   //FIFO per lane, guarded by lock
+	U64 jobsHead[EJobLane_Count];   //First unconsumed slot, guarded by lock
+	U64 jobsRemoved[EJobLane_Count]; //Empty slots after the head from filtered pops, guarded by lock
 	ListThreadHandle threads;       //threadCount - 1 workers, empty in single threaded mode
 	U8 padding0[32];
 
@@ -199,7 +201,9 @@ Bool JobQueue_pushLane(
 Bool JobQueue_wait(JobQueue *queue, Error *e_rr);
 
 //Wait for one group instead of the whole queue, running that group's jobs on the calling thread.
-//Returns once the group's last token drops, leaving the rest of the queue to the workers.
+//Returns once the group's last token is released and its completion bookkeeping finishes.
+//The finalize or dataDestructor callback may still be running and owns data until it finishes.
+//Do not wait on a group embedded in data that its completion callback frees; wait on the queue or a parent group.
 //
 //Only jobs tagged with this group (JobQueue_pushGroup) are run here, and that is what makes the call safe
 // under a lock the queue's other jobs may also take: the caller keeps draining its own work even when
@@ -259,7 +263,7 @@ typedef struct JobGroup {
 	void *data;                     //Shared accumulator passed to finalize
 	JobDestructor dataDestructor;   //May be NULL; frees data when finalize won't run
 
-	AtomicI64 outstanding;          //Tokens; the group completes when this reaches 0
+	AtomicI64 outstanding;          //Tokens; -1 reserves completion bookkeeping, 0 publishes completion
 	AtomicI64 failed;               //Sticky; set via JobGroup_fail
 
 } JobGroup;
@@ -280,7 +284,7 @@ Bool JobGroup_enter(JobGroup *group, U64 count, Error *e_rr);
 //Release one token.
 //When the last one drops: pushes finalize (success) or runs dataDestructor
 // (if any JobGroup_fail happened, or there is no finalize).
-//Returns false only on invalid usage.
+//Returns false on invalid usage or if enqueueing finalize fails; dataDestructor still runs on enqueue failure.
 Bool JobGroup_leave(JobGroup *group, Error *e_rr);
 
 //Mark the group failed (sticky).

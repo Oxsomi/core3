@@ -156,7 +156,7 @@ static void VkGraphicsDevice_createBreadcrumbs(GraphicsDevice *device, VkGraphic
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
 
-	if(
+	if (
 		!deviceExt->breadcrumbHost ||
 		deviceExt->getMemoryHostPointerProperties(
 			deviceExt->device, handleType, deviceExt->breadcrumbHost, &hostProps
@@ -210,7 +210,7 @@ static void VkGraphicsDevice_createBreadcrumbs(GraphicsDevice *device, VkGraphic
 		.memoryTypeIndex = typeIndex
 	};
 
-	if(
+	if (
 		typeIndex == U32_MAX ||
 		deviceExt->allocateMemory(deviceExt->device, &allocInfo, NULL, &deviceExt->breadcrumbMemory) != VK_SUCCESS ||
 		deviceExt->bindBufferMemory(deviceExt->device, deviceExt->breadcrumbBuffer, deviceExt->breadcrumbMemory, 0) !=
@@ -235,7 +235,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	Bool s_uccess = true;
 
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-	(void)instanceExt;
+	(void) instanceExt;
 
 	EGraphicsFeatures feat = physicalDevice->capabilities.flags.features;
 	EGraphicsFeatures2 feat2 = physicalDevice->capabilities.flags.features2;
@@ -248,7 +248,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		.imageCubeArray = true,
 		.independentBlend = true,
 
-		.geometryShader = (Bool)(feat & EGraphicsFeatures_GeometryShader),
+		.geometryShader = (Bool) (feat & EGraphicsFeatures_GeometryShader),
 		.tessellationShader = true,
 
 		.multiDrawIndirect = true,
@@ -261,22 +261,22 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		.depthBiasClamp = true,
 		.samplerAnisotropy = true,
 
-		.textureCompressionASTC_LDR = (Bool)(types & EGraphicsDataTypes_ASTC),
-		.textureCompressionBC = (Bool)(types & EGraphicsDataTypes_BCn),
+		.textureCompressionASTC_LDR = (Bool) (types & EGraphicsDataTypes_ASTC),
+		.textureCompressionBC = (Bool) (types & EGraphicsDataTypes_BCn),
 
 		.shaderUniformBufferArrayDynamicIndexing = true,
 		.shaderSampledImageArrayDynamicIndexing = true,
 		.shaderStorageBufferArrayDynamicIndexing = true,
 		.shaderStorageImageArrayDynamicIndexing = true,
 
-		.shaderFloat64 = (Bool)(types & EGraphicsDataTypes_F64),
-		.shaderInt64 = (Bool)(types & EGraphicsDataTypes_I64),
+		.shaderFloat64 = (Bool) (types & EGraphicsDataTypes_F64),
+		.shaderInt64 = (Bool) (types & EGraphicsDataTypes_I64),
 		.shaderInt16 = true,
 
-		.fillModeNonSolid = (Bool)(feat & EGraphicsFeatures_Wireframe),
-		.logicOp = (Bool)(feat & EGraphicsFeatures_LogicOp),
-		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend),
-		.shaderStorageImageMultisample = (Bool)(feat & EGraphicsFeatures_WriteMSTexture)
+		.fillModeNonSolid = (Bool) (feat & EGraphicsFeatures_Wireframe),
+		.logicOp = (Bool) (feat & EGraphicsFeatures_LogicOp),
+		.dualSrcBlend = (Bool) (feat & EGraphicsFeatures_DualSrcBlend),
+		.shaderStorageImageMultisample = (Bool) (feat & EGraphicsFeatures_WriteMSTexture)
 	};
 
 	VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {
@@ -664,10 +664,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64),
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
-			.shaderBufferFloat32AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat32Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat64AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF64),
-			.shaderBufferFloat64Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF64)
+			.shaderBufferFloat32AtomicAdd = (Bool) (types & EGraphicsDataTypes_AtomicF32),
+			.shaderBufferFloat32Atomics = (Bool) (types & EGraphicsDataTypes_AtomicF32),
+			.shaderBufferFloat64AtomicAdd = (Bool) (types & EGraphicsDataTypes_AtomicF64),
+			.shaderBufferFloat64Atomics = (Bool) (types & EGraphicsDataTypes_AtomicF64)
 		}
 	)
 
@@ -1014,7 +1014,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	if(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate)
 		getVkFunctionDevice(clean, vkCmdWriteBufferMarker2AMD, deviceExt->cmdWriteBufferMarker2);
 
-	if(
+	if (
 		(device->info.capabilities.flags.featuresExt & EVkGraphicsFeatures_ExternalHostMemory) &&
 		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_WriteBufferImmediate) &&
 		(device->flags & (EGraphicsDeviceFlags_Breadcrumbs | EGraphicsDeviceFlags_IsDebug))
@@ -1754,7 +1754,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_reportLoss)(GraphicsDeviceRef *deviceRef) {
 
 	counts.vendorBinarySize = 0;
 
-	if(
+	if (
 		!ListVkDeviceFaultAddressInfoEXT_resize(&addresses, counts.addressInfoCount, alloc, NULL) ||
 		!ListVkDeviceFaultVendorInfoEXT_resize(&vendors, counts.vendorInfoCount, alloc, NULL)
 	) {
@@ -1862,7 +1862,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 	const U64 threadCount = Platform_getThreads();
 
-	if(
+	if (
 		!device ||
 		resolvedQueueId >= device->resolvedQueues ||
 		threadId >= threadCount ||
@@ -2329,7 +2329,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	// fence has proven it done. A host read, no GPU copy: the fence is the barrier. Best effort, since a failed read
 	// back only costs a frame of timings, never the submit.
 
-	if(
+	if (
 		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_Timestamps) &&
 		device->submitId > device->framesInFlight && slotWasPending && device->timingSlots[device->fifId]
 	) {
@@ -2535,8 +2535,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		//The pool keeps its memory for the next recording of this frame, so the driver doesn't hand it out and take it back
 
 		else gotoIfError3(clean, VkGraphicsDevice_check(deviceExt, deviceExt->resetCommandPool(
-				deviceExt->device, allocator->pool, 0
-			), e_rr
+			deviceExt->device, allocator->pool, 0
+		), e_rr
 		));
 
 		//Allocate command buffer if not present yet

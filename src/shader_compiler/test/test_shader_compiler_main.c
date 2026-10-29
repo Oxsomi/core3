@@ -31,6 +31,7 @@
 OXC3_TEST_ENTRY(shader_compiler) {
 
 	Error err = Error_none();
+
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
 		Test_printPlatformCreateFail(&err);
 		Platform_return(1);

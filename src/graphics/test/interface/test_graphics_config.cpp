@@ -228,7 +228,7 @@ extern "C" void Test_graphicsConfigVariants(
 			gfxtest::OwnedLayoutInfo refLayout(alloc);
 			Sampler baseSampler;
 
-			if(
+			if (
 				Test_assert(t, "staticSamplerRefLayout", c::GraphicsDevice_defaultBindlessLayout(
 					info, binaryType, c::EGraphicsDeviceFlags_None, &refLayout.list, alloc, &t->err
 				)) &&
@@ -270,7 +270,7 @@ extern "C" void Test_graphicsConfigVariants(
 		gfxtest::OwnedLayoutInfo staticLayout(alloc);
 		c::U32 staticId = 0, staticIdRepeat = 0;
 
-		if(
+		if (
 			Test_assert(t, "staticSamplerLayout", c::GraphicsDevice_defaultBindlessLayout(
 				info, binaryType, c::EGraphicsDeviceFlags_None, &staticLayout.list, alloc, &t->err
 			)) &&

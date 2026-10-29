@@ -164,7 +164,7 @@ Bool GraphicsDeviceInfo_disableCapability(GraphicsDeviceInfo *deviceInfo, EGraph
 
 	for (U64 i = 0; i < EGraphicsFeatures_Count; ++i)
 		if(CharString_equalsCStringSensitive(&name, EGraphicsFeatures_names[i])) {
-			const U32 bit = (U32)1 << i;
+			const U32 bit = (U32) 1 << i;
 			cap->flags.features = (EGraphicsFeatures) ((U32) cap->flags.features &~ bit);
 			GraphicsDeviceInfo_fixCapabilities(deviceInfo, api);
 			return true;
@@ -172,7 +172,7 @@ Bool GraphicsDeviceInfo_disableCapability(GraphicsDeviceInfo *deviceInfo, EGraph
 
 	for (U64 i = 0; i < EGraphicsFeatures2_Count; ++i)
 		if(CharString_equalsCStringSensitive(&name, EGraphicsFeatures2_names[i])) {
-			const U32 bit = (U32)1 << i;
+			const U32 bit = (U32) 1 << i;
 			cap->flags.features2 = (EGraphicsFeatures2) ((U32) cap->flags.features2 &~ bit);
 			GraphicsDeviceInfo_fixCapabilities(deviceInfo, api);
 			return true;
@@ -180,7 +180,7 @@ Bool GraphicsDeviceInfo_disableCapability(GraphicsDeviceInfo *deviceInfo, EGraph
 
 	for (U64 i = 0; i < EGraphicsDataTypes_Count; ++i)
 		if(CharString_equalsCStringSensitive(&name, EGraphicsDataTypes_names[i])) {
-			cap->flags.dataTypes = (EGraphicsDataTypes) ((U32) cap->flags.dataTypes &~ ((U32)1 << i));
+			cap->flags.dataTypes = (EGraphicsDataTypes) ((U32) cap->flags.dataTypes &~ ((U32) 1 << i));
 			GraphicsDeviceInfo_fixCapabilities(deviceInfo, api);
 			return true;
 		}
@@ -193,7 +193,7 @@ Bool GraphicsDeviceInfo_disableCapability(GraphicsDeviceInfo *deviceInfo, EGraph
 
 	for (U64 i = 0; i < extCount; ++i)
 		if(CharString_equalsCStringSensitive(&name, extNames[i])) {
-			cap->flags.featuresExt &=~ ((U32)1 << i);
+			cap->flags.featuresExt &=~ ((U32) 1 << i);
 			GraphicsDeviceInfo_fixCapabilities(deviceInfo, api);
 			return true;
 		}
@@ -460,7 +460,7 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.flags.featuresExt & EDxGraphicsFeatures_ReBAR)
 				Log_debugLnx("\t\tReBAR");
 
-			if(
+			if (
 				(cap.flags.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 				EDxGraphicsFeatures_ReallyReportReBARWrites
 			)
@@ -570,7 +570,7 @@ void GraphicsDeviceInfo_deriveCapabilities(GraphicsDeviceInfo *deviceInfo) {
 
 	//See the header for why a ray pipeline without a ray query is NVIDIA's software traversal set.
 
-	if(
+	if (
 		deviceInfo->vendor == EGraphicsVendorId_NV &&
 		(deviceInfo->capabilities.flags.features & EGraphicsFeatures_RayPipeline) &&
 		!(deviceInfo->capabilities.flags.features & EGraphicsFeatures_RayQuery)

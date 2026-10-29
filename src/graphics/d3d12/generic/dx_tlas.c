@@ -31,7 +31,7 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "types/container/string.h"
 
-void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }        //No-op
+void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void) tlas; }        //No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
 //Writes the instance array into its upload buffer and turns every BLAS reference into the device address the
@@ -61,8 +61,8 @@ static void DxTLAS_fillInstances(TLAS *tlas) {
 		if(!dat->blasCpu)
 			continue;
 
-		U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstances.ptr;
-		*(U64*)(mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
+		U64 off = (const U8*) &dat->blasDeviceAddress - (const U8*) tlas->cpuInstances.ptr;
+		*(U64*) (mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
 
 		//A snapshot. A compaction that later moves one of these structures marks this TLAS, and the
 		// refill on its next build re-resolves them; see CommandListRef_compactBLASExt.
@@ -123,7 +123,8 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 
 	if(instancesU64 >> 24)
 		retError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "D3D12TLAS_init() only instance count of <U24_MAX is supported"));
+			0, instancesU64, 1 << 24, "D3D12TLAS_init() only instance count of <U24_MAX is supported"
+		));
 
 	//Convert to DXR dependent version
 
