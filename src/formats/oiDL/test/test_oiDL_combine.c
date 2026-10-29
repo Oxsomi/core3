@@ -72,6 +72,7 @@ void Test_DLCombine(Test *t) {
 
 		for (U8 i = 0; i < 3 && entry; ++i) {
 			Buffer out = Buffer_createNull();
+
 			if (DLFile_loadedBufferAtConst(&c, i, &out, &t->err)) {
 				U32 v = 0;
 				entry = Buffer_consumeU32(&out, &v, NULL) && v == C8x4(i, i, i, i);
@@ -82,6 +83,7 @@ void Test_DLCombine(Test *t) {
 
 		for (U8 i = 0; i < 5 && entry; ++i) {
 			Buffer out = Buffer_createNull();
+
 			if (DLFile_loadedBufferAtConst(&c, i + 3, &out, &t->err)) {
 				U64 v = 0;
 				U8 j = i + 10;
@@ -125,6 +127,7 @@ void Test_DLCombine(Test *t) {
 		for (U8 i = 0; i < 5 && contentOk; ++i) {
 			CharString out = CharString_createNull();
 			CharString exp = CharString_createRefCStrConst(expected[i]);
+
 			if (DLFile_loadedStringAtConst(&c, i, &out, &t->err))
 				contentOk = CharString_equalsStringSensitive(&out, &exp);
 		}

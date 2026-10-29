@@ -38,7 +38,7 @@ HOST_TOOL_OPTIONS = {
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "3.2.106"
+	version = "3.2.107"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -103,8 +103,6 @@ class oxc3(ConanFile):
 		"enableUBSAN": False
 	}
 
-	exports_sources = [ "include/*", "cmake/*" ]
-
 	def layout(self):
 		cmake_layout(self)
 
@@ -157,15 +155,18 @@ class oxc3(ConanFile):
 
 		tc.generate()
 
+	# conanfile.py and conandata.yml can be copied together without an OxC3 checkout.
+
 	def source(self):
+
+		source = self.conan_data["sources"][self.version]
 		git = Git(self)
-		git.clone(url=self.conan_data["sources"][self.version]["url"])
+		git.clone(url=source["url"], target="core3")
 		git.folder = os.path.join(self.source_folder, "core3")
-		git.checkout(self.conan_data["sources"][self.version]["checkout"])
+		git.checkout(source["checkout"])
 		git.run("submodule update --init --recursive")
 
-	# Where CMakeLists.txt lives. `conan build`/`export-pkg` run against a working tree so that's the recipe
-	# folder itself, while `conan create` calls source() first which clones the repo into ./core3.
+	# Fetched sources live under core3; local build/export-pkg commands use the working tree.
 
 	def _cmakeRoot(self):
 
@@ -193,8 +194,7 @@ class oxc3(ConanFile):
 	#
 	# It's a tool_requires, so conan resolves it against the *build* profile and puts its bin/ on PATH;
 	# that's how add_virtual_files()'s find_program(OxC3_package) resolves while cross compiling.
-	# build_android.py prebuilds this from the working tree, otherwise conan falls back to building oxc3
-	# from github (see source()), which is almost never what you want locally.
+	# build_android.py prebuilds this from the working tree so the host tool matches the target sources.
 
 	def build_requirements(self):
 
@@ -281,10 +281,7 @@ class oxc3(ConanFile):
 		cmake = CMake(self)
 		cmake.build()
 
-		# Headers ship from the SAME tree the libraries were built from. source_folder holds the exported
-		# working tree, which `conan create` leaves sitting beside the clone, so packaging from it shipped
-		# whatever branch the local checkout happened to be on while the binaries came from the pinned
-		# commit. A consumer then compiled against one revision's headers and linked another's objects.
+		# Headers and binaries come from the same fetched source tree or local working tree.
 
 		root = self._cmakeRoot()
 
@@ -397,20 +394,112 @@ class oxc3(ConanFile):
 
 	def package_info(self):
 
+		# Match the built library's public vector ABI and Error layout regardless of consumer build mode.
+
+		traceFrames = 32 if str(self.settings.build_type) == "Debug" else 1
+
+		self.cpp_info.defines = [
+			f"_ENABLE_SIMD={int(bool(self.options.enableSIMD))}",
+			f"_FORCE_FLOAT_FALLBACK={int(bool(self.options.forceFloatFallback))}",
+			f"_OXC3_ERROR_STACKTRACE={traceFrames}"
+		]
+
+		# Public headers require conforming macro expansion and anonymous aggregate extensions.
+
+		compiler = str(self.settings.compiler)
+
+		if compiler == "msvc":
+			self.cpp_info.cxxflags.append("/Zc:preprocessor")
+
+		elif compiler in ("clang", "apple-clang", "gcc", "emcc"):
+
+			headerFlags = [ "-fms-extensions" ]
+
+			if self.settings.os == "Windows" and compiler == "clang":
+				headerFlags.append("-fno-ms-compatibility")
+
+			self.cpp_info.cflags.extend(headerFlags)
+			self.cpp_info.cxxflags.extend(headerFlags)
+
+		# Keep these instruction requirements in step with OxC3_types_math's CMake interface.
+
+		if self.options.enableSIMD:
+
+			if self.settings.os == "Emscripten":
+				simdFlags = [ "-msimd128" ]
+
+			elif self.settings.arch == "x86_64":
+
+				if self.settings.compiler == "msvc":
+					simdFlags = [ "/d2archSSE42" ]
+
+				else:
+
+					simdFlags = [
+						"-msse", "-msse2", "-msse3", "-mssse3", "-msse4.1", "-msse4.2",
+						"-mrdrnd", "-msha", "-maes", "-mpclmul", "-mbmi2", "-mf16c", "-mavx", "-mfma"
+					]
+
+			elif self.settings.compiler == "msvc":
+				simdFlags = []
+
+			elif self.settings.os == "Windows":
+				simdFlags = [ "/clang:-march=armv8-a+simd+crypto+crc" ]
+
+			else:
+				simdFlags = [ "-march=armv8-a+simd+crypto+crc" ]
+
+			self.cpp_info.cflags.extend(simdFlags)
+			self.cpp_info.cxxflags.extend(simdFlags)
+
 		if self.settings.os == "Windows":
 			self.cpp_info.system_libs = [ "Bcrypt", "dxgi", "dwmapi", "dwrite", "Msimg32" ]
+
+			if self.options.forceVulkan and not self.options.dynamicLinkingGraphics:
+				self.cpp_info.system_libs.append("dxguid")
 
 		elif self.settings.os == "Macos" or self.settings.os == "iOS" or self.settings.os == "watchOS":
 			self.cpp_info.frameworks = [ "Security", "CoreFoundation", "ApplicationServices", "AppKit" ]
 
+		elif self.settings.os == "Android":
+			self.cpp_info.system_libs = [ "m", "android", "log" ]
+
 		elif self.settings.os == "Emscripten":
 			# -lopenal resolves to emscripten's built-in OpenAL (WebAudio-backed)
-			self.cpp_info.system_libs = [ "openal" ]
+			self.cpp_info.system_libs = [ "m", "openal" ]
+
+			if self.options.enableHostCrypto:
+				self.cpp_info.defines.append("_OXC3_HOST_CRYPTO")
 
 		else:
 			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
-		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr", "OxC3_formats_obj", "OxC3_formats_ply", "OxC3_types_mesh" ]
+		# Static archives must precede the libraries they use, including oiSP before oiSH and oiPL.
+
+		self.cpp_info.libs = []
+
+		if self.options.enableShaderCompiler:
+
+			self.cpp_info.libs.append("OxC3_shader_compiler")
+
+			# Match CMake's coercion to static linking on Android and the web.
+
+			if self.options.dynamicLinkingShaderCompiler and self.settings.os not in ("Android", "Emscripten"):
+
+				self.cpp_info.defines.append("SHADER_COMPILER_DYNAMIC")
+
+				# Shared libraries live in bin beside the executables; Windows import libraries live in lib.
+
+				if self.settings.os != "Windows":
+					self.cpp_info.libdirs.append("bin")
+
+			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":
+				self.cpp_info.defines.append("SHADER_COMPILER_OFFLINE_ISA")
+
+		self.cpp_info.libs += [
+			"OxC3_audio", "OxC3_formats_bmp", "OxC3_formats_oiBC", "OxC3_formats_hdr",
+			"OxC3_formats_obj", "OxC3_formats_ply", "OxC3_types_mesh"
+		]
 
 		# Headless: no graphics module on the web target (no WebGPU backend yet)
 		if self.settings.os != "Emscripten":
@@ -420,14 +509,13 @@ class oxc3(ConanFile):
 		# see the same declarations the library was built with.
 		# The backends themselves are DLLs in bin, which apply_dependencies copies next to the executable.
 		if self.options.dynamicLinkingGraphics:
-			self.cpp_info.defines = [ "GRAPHICS_API_DYNAMIC" ]
+			self.cpp_info.defines.append("GRAPHICS_API_DYNAMIC")
 
-		self.cpp_info.libs += [ "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiSP", "OxC3_formats_oiPL", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_formats_json", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
-
-		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the
-		# vulkan_headers package, so there's no Vulkan import lib, system lib or SDK dir to link/include here.
-		if self.settings.os == "Android":
-			self.cpp_info.system_libs += [ "android", "log" ]
+		self.cpp_info.libs += [
+			"OxC3_formats_oiSP", "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_formats_oiPL", "OxC3_formats_oiSR",
+			"OxC3_formats_wav", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL",
+			"OxC3_formats_oiXX", "OxC3_formats_json", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base"
+		]
 
 		self.cpp_info.set_property("cmake_file_name", "oxc3")
 		self.cpp_info.set_property("cmake_target_name", "oxc3::oxc3")

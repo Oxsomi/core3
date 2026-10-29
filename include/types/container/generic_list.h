@@ -85,41 +85,41 @@ static inline void *GenericList_begin(const GenericList list) {
 }
 
 static inline void *GenericList_end(const GenericList list) {
-	return GenericList_isConstRef(list) ? NULL : (U8*)list.ptrNonConst + GenericList_bytes(list);
+	return GenericList_isConstRef(list) ? NULL : (U8*) list.ptrNonConst + GenericList_bytes(list);
 }
 
 static inline void *GenericList_last(const GenericList list) {
 	return GenericList_isConstRef(list) || !list.length ? NULL :
-		(U8*)list.ptrNonConst + GenericList_bytes(list) - list.stride;
+		(U8*) list.ptrNonConst + GenericList_bytes(list) - list.stride;
 }
 
 static inline const void *GenericList_beginConst(const GenericList list) { return list.ptr; }
 
 static inline const void *GenericList_endConst(const GenericList list) {
-	return (const U8*)list.ptr + GenericList_bytes(list);
+	return (const U8*) list.ptr + GenericList_bytes(list);
 }
 
 static inline const void *GenericList_lastConst(const GenericList list) {
-	return !list.length ? NULL : (const U8*)list.ptr + GenericList_bytes(list) - list.stride;
+	return !list.length ? NULL : (const U8*) list.ptr + GenericList_bytes(list) - list.stride;
 }
 
 static inline const void *GenericList_ptrConst(const GenericList list, U64 elementOffset) {
-	return elementOffset < list.length ? (const U8*)list.ptr + elementOffset * list.stride : NULL;
+	return elementOffset < list.length ? (const U8*) list.ptr + elementOffset * list.stride : NULL;
 }
 
 static inline void *GenericList_ptr(const GenericList list, U64 elementOffset) {
 	return !GenericList_isConstRef(list) && elementOffset < list.length ?
-		(U8*)list.ptrNonConst + elementOffset * list.stride : NULL;
+		(U8*) list.ptrNonConst + elementOffset * list.stride : NULL;
 }
 
 static inline Buffer GenericList_atConst(const GenericList list, U64 offset) {
 	return offset < list.length ?
-		Buffer_createRefConst((const U8*)list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
+		Buffer_createRefConst((const U8*) list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
 static inline Buffer GenericList_at(const GenericList list, U64 offset) {
 	return offset < list.length && !GenericList_isConstRef(list) ?
-		Buffer_createRef((U8*)list.ptrNonConst + offset * list.stride, list.stride) : Buffer_createNull();
+		Buffer_createRef((U8*) list.ptrNonConst + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
 static inline Bool GenericList_eq(const GenericList *a, const GenericList *b) {
@@ -227,7 +227,7 @@ Bool GenericList_copy(
 	Error *e_rr
 );
 
-//Limitation of a max stride of 1024, like GenericList_sortCustom, used to put a temp on the stack.
+//Swaps arbitrary nonzero strides using bounded temporary stack storage.
 Bool GenericList_swap(GenericList list, U64 i, U64 j, Error *e_rr);
 
 static inline Bool GenericList_reverse(GenericList l) {
@@ -363,6 +363,8 @@ clean:
 }
 
 Bool GenericList_insert(GenericList *list, U64 index, const Buffer *buf, const Allocator *allocator, Error *e_rr);
+
+//Bulk insertion accepts a source view into the destination and snapshots it before changing storage
 Bool GenericList_pushAll(GenericList *list, const GenericList other, const Allocator *allocator, Error *e_rr);
 Bool GenericList_insertAll(GenericList *list, const GenericList other, U64 offset, const Allocator *allocator, Error *e_rr);
 

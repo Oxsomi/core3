@@ -27,7 +27,7 @@ Bool Platform_checkCPUSupport() {
 
 	U16 v = 1;
 
-	if(!*(const U8*)&v)        //Little endian only
+	if(!*(const U8*) &v)        //Little endian only
 		return false;
 
 	//CMakeLists.txt compiles the whole arm64 build with -march=armv8-a+simd+crypto+crc, and the NEON encrypt

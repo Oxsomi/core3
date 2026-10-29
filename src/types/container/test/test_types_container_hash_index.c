@@ -414,7 +414,7 @@ void Test_hashIndex(Test *t) {
 			ok &= HashIndexTest_add(&index, &info, &list, key, &existing, alloc, e_rr);
 		}
 
-		Test_assert(t, "786000 random keys added", ok && index.slots.length == ((U64)1 << 20));
+		Test_assert(t, "786000 random keys added", ok && index.slots.length == ((U64) 1 << 20));
 
 		U64 maxDisplacement = 0;
 
@@ -498,7 +498,7 @@ void Test_hashIndex(Test *t) {
 	{
 		Test_assert(t, "ceiling of the smallest table", HashIndex_displacementCeiling(HashIndex_minCapacity) == 28);
 		Test_assert(t, "ceiling gains two per doubling", HashIndex_displacementCeiling(128) == 30);
-		Test_assert(t, "ceiling at 2^20 slots", HashIndex_displacementCeiling((U64)1 << 20) == 56);
+		Test_assert(t, "ceiling at 2^20 slots", HashIndex_displacementCeiling((U64) 1 << 20) == 56);
 		Test_assert(t, "ceiling of the widest table", HashIndex_displacementCeiling(HashIndex_maxCapacity) == 80);
 		Test_assert(t, "ceiling rounds a size that is no power of two up", HashIndex_displacementCeiling(65) == 30);
 		Test_assert(t, "ceiling of zero", HashIndex_displacementCeiling(0) == 16);

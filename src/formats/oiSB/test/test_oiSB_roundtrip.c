@@ -397,15 +397,16 @@ void Test_SBFileAllowSameNameInDifferentScopes(Test *t) {
 			SBFile_addVariableAsStruct(&sb, &vNameB, 32, U16_MAX, 1, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);
 
-		//Both children named "x" but under different parents (vars index 0 and 1)
+		//Both children named "x" but under different parents (vars index 0 and 1); offsets are from the buffer start
 		CharString xA = CharString_createRefCStrConst("x");
 		CharString xB = CharString_createRefCStrConst("x");
 		Test_assert(t, "child x under varA",
 			SBFile_addVariableAsType(&sb, &xA, 0, 0, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);
 
-		Test_assert(t, "child x under varB",
-			SBFile_addVariableAsType(&sb, &xB, 0, 1, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
+		Test_assert(
+			t, "child x under varB",
+			SBFile_addVariableAsType(&sb, &xB, 32, 1, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
 		);
 
 		Test_assert(t, "scopes round-trip", sbRoundTrip(t, &sb, &archiveSr, &result, &type));

@@ -148,10 +148,10 @@ typedef struct FileHandle {
 
 static inline U64 FileHandle_makeFileSizeType(U64 fileSize, EFileOpenType type) {
 
-	if((fileSize >> 62) || (U64)type > (U64)EFileOpenType_ReadWrite)
+	if((fileSize >> 62) || (U64) type > (U64) EFileOpenType_ReadWrite)
 		return U64_MAX;
 
-	return fileSize | ((U64)type << 62);
+	return fileSize | ((U64) type << 62);
 }
 
 static inline U64 FileHandle_fileSize(const FileHandle *handle) { return handle ? handle->fileSizeType << 2 >> 2 : 0; }

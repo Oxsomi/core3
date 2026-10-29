@@ -274,6 +274,7 @@ clean:
 	if(pid > 0) {
 		kill(pid, SIGKILL);
 		int ignored = 0;
+
 		while(waitpid(pid, &ignored, 0) < 0 && errno == EINTR) {}
 	}
 

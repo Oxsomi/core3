@@ -24,6 +24,8 @@
 //test_types_container_list.c and test_types_container_job_queue.c coverage), including
 //C++ callables with captures and the shutdown-discard path (which must free their storage).
 
+#include <memory>        //std::make_unique for a move-only callable
+
 #include "types/container/list.hpp"
 #include "types/container/job_queue.hpp"
 
@@ -58,6 +60,20 @@ OXC_BIND_LIST(ListU32)
 //The two are the same type to the linker but not to -fsanitize=function, which reads that as a call through
 // an incorrect function type; declaring it here and defining it in C keeps both sides honest.
 extern "C" oxc::c::ECompareResult cmpU32Desc(const void *a, const void *b, void *context);
+
+struct alignas(256) AlignedJob {
+
+	oxc::c::AtomicI64 *ran;
+	oxc::c::U8 padding[256 - sizeof(ran)];
+	oxc::c::Bool operator()(oxc::c::U64) const {
+
+		if((uintptr_t) this % alignof(AlignedJob))
+			return false;
+
+		oxc::c::AtomicI64_inc(ran);
+		return true;
+	}
+};
 
 extern "C" void Test_hpp(oxc::c::Test *t) {
 
@@ -182,6 +198,29 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 	}
 
 	//A failing callable marks the queue failed but the rest still run.
+
+	{
+
+		JobQueue queue;
+
+		Test_assert(t, "JobQueue: init for callable storage", queue.init(1, alloc));
+
+		c::AtomicI64 ran{};
+		auto callable = [&ran](c::U64) { c::AtomicI64_inc(&ran); return true; };
+		const auto constCallable = callable;
+		AlignedJob aligned{ &ran, {} };
+
+		Test_assert(t, "JobQueue: copy lvalue callable", queue.push(callable));
+		Test_assert(t, "JobQueue: copy const callable", queue.push(constCallable));
+		Test_assert(t, "JobQueue: over-aligned callable", queue.push(aligned));
+		Test_assert(t, "JobQueue: move-only callable", queue.push([value = std::make_unique<int>(42)](c::U64) {
+			return *value == 42;
+		}));
+
+		Test_assert(t, "JobQueue: callable storage wait", queue.wait());
+		Test_assert(t, "JobQueue: copied callables ran", c::AtomicI64_load(&ran) == 3);
+		Test_assert(t, "JobQueue: callable alignment", queue.isSuccess());
+	}
 
 	{
 		JobQueue queue;

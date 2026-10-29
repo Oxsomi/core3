@@ -437,7 +437,8 @@ static void Test_graphicsDeviceSingle(c::Test *t, c::GraphicsInstanceRef *instRe
 	));
 
 	Test_assert(t, "bufferTypeId", buffer.valid() &&
-		buffer.handle()->refPtrType->typeId == (c::TypeId) c::EGraphicsTypeId_DeviceBuffer);
+		buffer.handle()->refPtrType->typeId == (c::TypeId) c::EGraphicsTypeId_DeviceBuffer
+	);
 
 	Test_assert(t, "bufferSize", buffer.valid() && buffer.data()->resource.size == 256);
 
@@ -976,6 +977,7 @@ using namespace oxc::c;
 OXC3_TEST_ENTRY(graphics_interface) {
 
 	Error err = Error_none();
+
 	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
 		Test_printPlatformCreateFail(&err);
 		Platform_return(1);

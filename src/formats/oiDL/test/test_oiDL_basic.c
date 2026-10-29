@@ -43,9 +43,11 @@ void Test_DLCreateFree(Test *t) {
 
 	{                        //Data
 		DLFile f = { 0 };
+		Test_assert(t, "Unallocated cannot read fully loaded", !DLFile_canReadFullyLoaded(&f));
 		Test_assert(t, "Create Data",    DLFile_create(&s, 0, t->alloc, &f, &t->err));
 		Test_assert(t, "IsAllocated",    DLFile_isAllocated(&f));
 		Test_assert(t, "EntryCount 0",   DLFile_entryCount(&f) == 0);
+		Test_assert(t, "Initialized empty can read fully loaded", DLFile_canReadFullyLoaded(&f));
 		DLFile_free(&f, t->alloc);
 		Test_assert(t, "Free clears",    !DLFile_isAllocated(&f));
 	}
@@ -112,6 +114,7 @@ void Test_DLCreateFree(Test *t) {
 	Test_assert(t, "isAllocated(NULL) == false",   !DLFile_isAllocated(NULL));
 	Test_assert(t, "isFullyLoaded(NULL) == false", !DLFile_isFullyLoaded(NULL, 0));
 	Test_assert(t, "entrySize(NULL) == 0",         DLFile_entrySize(NULL, 0) == 0);
+	Test_assert(t, "canReadFullyLoaded(NULL) == false", !DLFile_canReadFullyLoaded(NULL));
 }
 
 void Test_DLLoadedAt(Test *t) {
@@ -239,7 +242,7 @@ void Test_DLCreateFromList(Test *t) {
 		U8 data[5][8];
 
 		for (U8 i = 0; i < 5 && setupOk; ++i) {
-			Buffer_setAllToU8(Buffer_createRef(data[i], 8), (U8)i, NULL);
+			Buffer_setAllToU8(Buffer_createRef(data[i], 8), (U8) i, NULL);
 			Buffer buf = Buffer_createNull();
 			setupOk =
 				Buffer_createCopy(Buffer_createRefConst(data[i], 8), t->alloc, &buf, &t->err) &&
@@ -366,13 +369,15 @@ void Test_DLFindLoadedString(Test *t) {
 	{        //No match for third apple
 		CharString needle = CharString_createRefCStrConst("apple");
 		Test_assert(t, "find 'apple' in [1,3) not found",
-			DLFile_findLoadedString(&f, 1, 3, &needle) == U64_MAX);
+			DLFile_findLoadedString(&f, 1, 3, &needle) == U64_MAX
+		);
 	}
 
 	{        //No match
 		CharString needle = CharString_createRefCStrConst("elderberry");
 		Test_assert(t, "find absent word == U64_MAX",
-			DLFile_findLoadedString(&f, 0, 5, &needle) == U64_MAX);
+			DLFile_findLoadedString(&f, 0, 5, &needle) == U64_MAX
+		);
 	}
 
 	{        //Wrong data type

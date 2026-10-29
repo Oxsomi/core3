@@ -35,7 +35,7 @@
 U32 Window_extSize = 0;
 
 Bool OWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
-	(void)w; (void)size; (void) e_rr;
+	(void) w; (void) size; (void) e_rr;
 	Bool s_uccess = true;
 	retError(clean, Error_unimplemented(0, "OWindow_initSize() is unimplemented"));        //TODO:
 clean:
@@ -849,6 +849,7 @@ clean:
 Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
+
 	if(!w || !I32x2_any(w->size) || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"));
 

@@ -60,13 +60,18 @@ Bool DDS_read(
 
 	DDSHeaderMax dds;
 
-	Bool canHaveDXT10 = stream->size >= sizeof(dds);
+	//The offsets below are local until the read succeeds, so a failed read leaves *streamOff where it was
+
+	U64 off = *streamOff;
+
+	if(off > stream->size || stream->size - off < sizeof(DDSHeader))
+		retError(clean, Error_outOfBounds(1, off, stream->size, "DDS_read()::stream is too small for a DDS header"));
 
 	gotoIfError3(clean, stream->read(
 		stream,
-		*streamOff,
-		canHaveDXT10 ? sizeof(dds) : sizeof(DDSHeader),
-		Buffer_createRef(&dds, sizeof(dds)),
+		off,
+		sizeof(dds.header),
+		Buffer_createRef(&dds.header, sizeof(dds.header)),
 		alloc,
 		e_rr
 	));
@@ -101,11 +106,14 @@ Bool DDS_read(
 	if(!(dds.header.flags & EDDSFlag_Depth))
 		dds.header.depth = 1;
 
-	if(!dds.header.depth || !dds.header.mips)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid depth or mips"));
+	if(!dds.header.depth)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid depth"));
+
+	if(!dds.header.mips)
+		dds.header.mips = 1;
 
 	U32 biggestSize2 = (U32) U64_max(U64_max(dds.header.width, dds.header.height), dds.header.depth);
-	const U32 mips = U32_max(1, (U32) F64_floor(F64_log2((F64)biggestSize2)) + 1);
+	const U32 mips = U32_max(1, (U32) F64_floor(F64_log2((F64) biggestSize2)) + 1);
 
 	if(dds.header.mips > mips)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds mip count exceeded available mip count"));
@@ -121,10 +129,15 @@ Bool DDS_read(
 
 	if(useMagic && dds.header.format.magicNumber == EDDSFormatMagic_DX10) {
 
-		if(!canHaveDXT10)
+		if(stream->size - off < sizeof(dds))
 			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds didn't contain DXT10 even though it was requested"));
 
-		*streamOff += sizeof(dds);
+		gotoIfError3(clean, stream->read(
+			stream, off + sizeof(dds.header), sizeof(dds.header10),
+			Buffer_createRef(&dds.header10, sizeof(dds.header10)), alloc, e_rr
+		));
+
+		off += sizeof(dds);
 
 		formatId = DXFormat_toTextureFormatId(dds.header10.format);
 		format = ETextureFormatId_unpack[formatId];
@@ -158,16 +171,22 @@ Bool DDS_read(
 		if((dds.header.caps.flag2 & EDDSCapsFlags2_Volume) && dds.header10.dim != EDX10Dim_3D)
 			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had volume flag but had invalid state"));
 
-		if(
+		if (
 			(dds.header10.miscFlag & EDX10Misc_IsCube) && (
 				dds.header10.dim != EDX10Dim_2D || (dds.header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap
 			)
 		)
 			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had cubemap flag but had invalid state"));
 
+		//For a cube arraySize counts cubes, not faces: N cubes are 6N layers, all of which are read
+
 		if(dds.header10.miscFlag & EDX10Misc_IsCube) {
+
+			if(dds.header10.arraySize > U32_MAX / 6)
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had too many cubemaps in the array"));
+
 			type = ETextureType_Cube;
-			dds.header10.arraySize = 6;
+			dds.header10.arraySize *= 6;
 		}
 
 		if(dds.header10.miscFlags2 >= EDX10AlphaMode_Count)
@@ -183,7 +202,7 @@ Bool DDS_read(
 
 	else {
 
-		*streamOff += sizeof(dds.header);
+		off += sizeof(dds.header);
 
 		//Detect cubemap and volume
 
@@ -234,23 +253,39 @@ Bool DDS_read(
 
 		if (!formatId && (dds.header.format.flags & EDDSPixelFormatFlag_RGB) && dds.header.format.rgbBitCount == 32) {
 
-			if(dds.header.format.masks[0] == U16_MAX && dds.header.format.masks[1] == ((U32)U16_MAX << 16))
+			//Every mask has to match, including the ones that have to be empty or the format isn't the one it looks like
+
+			if (
+				dds.header.format.masks[0] == U16_MAX && dds.header.format.masks[1] == ((U32) U16_MAX << 16) &&
+				!dds.header.format.masks[2] && !dds.header.format.masks[3]
+			)
 				formatId = ETextureFormatId_RG16;
 
-			else if(
+			//ETextureFormat_BGR10A2 is DXGI's R10G10B10A2: red is in the low bits and alpha in the top two
+
+			else if (
 				dds.header.format.masks[0] == 0x3FF &&
-				dds.header.format.masks[1] == (0x3FF << 10) &&
-				dds.header.format.masks[2] == (0x3FF << 20)
+				dds.header.format.masks[1] == (0x3FFU << 10) &&
+				dds.header.format.masks[2] == (0x3FFU << 20) &&
+				dds.header.format.masks[3] == (3U << 30)
 			)
 				formatId = ETextureFormatId_BGR10A2;
 
 			else if (
 				dds.header.format.masks[0] == U8_MAX &&
-				dds.header.format.masks[1] == ((U32)U8_MAX << 8) &&
-				dds.header.format.masks[2] == ((U32)U8_MAX << 16) &&
-				dds.header.format.masks[3] == ((U32)U8_MAX << 24)
+				dds.header.format.masks[1] == ((U32) U8_MAX << 8) &&
+				dds.header.format.masks[2] == ((U32) U8_MAX << 16) &&
+				dds.header.format.masks[3] == ((U32) U8_MAX << 24)
 			)
 				formatId = ETextureFormatId_RGBA8;
+
+			else if (
+				dds.header.format.masks[0] == 0x00FF0000 &&
+				dds.header.format.masks[1] == 0x0000FF00 &&
+				dds.header.format.masks[2] == 0x000000FF &&
+				dds.header.format.masks[3] == 0xFF000000
+			)
+				formatId = ETextureFormatId_BGRA8;
 		}
 
 		if(formatId == ETextureFormatId_Undefined)
@@ -259,36 +294,56 @@ Bool DDS_read(
 		format = ETextureFormatId_unpack[formatId];
 	}
 
-	U64 len = ETextureFormat_getSize(format, dds.header.width, dds.header.height, dds.header.depth);
+	//Only a volume has depth; the flag on any other texture would multiply every mip by a bogus length
+
+	if(type != ETextureType_3D && dds.header.depth != 1)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had a depth but isn't a volume texture"));
+
+	//ETextureFormat_getSize leaves bounding the extents to the caller, and the first mip is the largest.
+
+	if((U64) dds.header.width * dds.header.height >= ((U64) 1 << 57) / dds.header.depth)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds size is too large"));
 
 	//Calculate expected length, because header.pitch is not even close to being reliable.
+	//None of the sums or products may wrap.
 
-	U64 expectedLength = len;
-	U32 currW = U32_max(1, dds.header.width >> 1);
-	U32 currH = U32_max(1, dds.header.height >> 1);
-	U32 currL = U32_max(1, dds.header.depth >> 1);
+	U64 expectedLength = 0;
+	U64 totalSubResources = 0;
+	U32 currW = dds.header.width;
+	U32 currH = dds.header.height;
+	U32 currL = dds.header.depth;
 
-	for (U64 i = 1; i < dds.header.mips; ++i) {
-		expectedLength += ETextureFormat_getSize(format, currW, currH, currL);
+	for (U64 i = 0; i < dds.header.mips; ++i) {
+
+		const U64 mipLen = ETextureFormat_getSize(format, currW, currH, currL);
+
+		if(expectedLength > U64_MAX - mipLen)
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds size is too large"));
+
+		expectedLength += mipLen;
+		totalSubResources += currL;
+
 		currW = U32_max(1, currW >> 1);
 		currH = U32_max(1, currH >> 1);
 		currL = U32_max(1, currL >> 1);
 	}
 
-	expectedLength *= arraySize;
+	const U64 left = stream->size - off;
 
-	if(*streamOff + expectedLength > stream->size)
+	if(expectedLength > U64_MAX / arraySize || totalSubResources > U64_MAX / arraySize)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds size is too large"));
+
+	expectedLength *= arraySize;
+	totalSubResources *= arraySize;
+
+	if(expectedLength > left)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::stream had invalid size"));
 
-	currL = dds.header.depth;
-	U64 totalSubResources = 0;
+	//Every subresource takes at least a byte, so the count can't exceed the bytes that are left.
+	//This keeps a tiny file from making the list allocate for billions of subresources.
 
-	for (U32 j = 0; j < dds.header.mips; ++j) {
-		totalSubResources += currL;
-		currL = U32_max(1, currL >> 1);
-	}
-
-	totalSubResources *= arraySize;
+	if(totalSubResources > left)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::stream had fewer bytes than subresources"));
 
 	//Output parsed result
 
@@ -304,7 +359,7 @@ Bool DDS_read(
 
 			for (U32 k = 0; k < currL; ++k) {
 
-				len = ETextureFormat_getSize(format, currW, currH, 1);
+				const U64 len = ETextureFormat_getSize(format, currW, currH, 1);
 
 				RefPtr_inc(streamRef);
 
@@ -313,11 +368,11 @@ Bool DDS_read(
 					.mipId = j,
 					.z = k,
 					.stream = streamRef,
-					.streamOff = *streamOff,
+					.streamOff = off,
 					.streamLen = len
 				};
 				
-				*streamOff += len;
+				off += len;
 			}
 
 			currW = U32_max(1, currW >> 1);
@@ -325,6 +380,8 @@ Bool DDS_read(
 			currL = U32_max(1, currL >> 1);
 		}
 	}
+
+	*streamOff = off;
 
 	*info = (DDSInfo) {
 		.w = dds.header.width,

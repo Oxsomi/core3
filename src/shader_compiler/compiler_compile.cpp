@@ -202,7 +202,7 @@ Bool Compiler_compile(
 
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, targetEnvArg, alloc, e_rr));
 				
-			if(
+			if (
 				toCompile->stageType == EGfxPipelineStage_Vertex ||
 				toCompile->stageType == EGfxPipelineStage_Domain ||
 				toCompile->stageType == EGfxPipelineStage_GeometryExt ||
@@ -227,7 +227,7 @@ Bool Compiler_compile(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
 				));
 
-			if(
+			if (
 				listExtensions &&
 				toCompile->stageType >= EGfxPipelineStage_RtStartExt &&
 				toCompile->stageType <= EGfxPipelineStage_RtEndExt
@@ -324,7 +324,7 @@ Bool Compiler_compile(
 		);
 
 		U32 major = toCompile->shaderVersion >> 8;
-		U32 minor = (U8)toCompile->shaderVersion;
+		U32 minor = (U8) toCompile->shaderVersion;
 
 		gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor));
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));

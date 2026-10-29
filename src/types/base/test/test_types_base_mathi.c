@@ -35,12 +35,12 @@ void Test_mathu(Test *test) {
 	Test_assert(test, "U32_exp10", U32_exp10(0) == 1);
 	Test_assert(test, "U32_exp10", U32_exp10(1) == 10);
 	Test_assert(test, "U32_exp10", U32_exp10(9) == 1000000000);
-	Test_assert(test, "U32_exp10 out of bounds", U32_exp10(10) == (U32)-1);
+	Test_assert(test, "U32_exp10 out of bounds", U32_exp10(10) == (U32) -1);
 
 	Test_assert(test, "U32_exp2", U32_exp2(0) == 1);
 	Test_assert(test, "U32_exp2", U32_exp2(1) == 2);
 	Test_assert(test, "U32_exp2", U32_exp2(31) == 0x80000000);
-	Test_assert(test, "U32_exp2 out of bounds", U32_exp2(32) == (U32)-1);
+	Test_assert(test, "U32_exp2 out of bounds", U32_exp2(32) == (U32) -1);
 
 	//Safe div
 	
@@ -68,11 +68,11 @@ void Test_mathu(Test *test) {
 
 	Test_assert(test, "U64_exp10", U64_exp10(0) == 1);
 	Test_assert(test, "U64_exp10", U64_exp10(19) == UINT64_C(10000000000000000000));
-	Test_assert(test, "U64_exp10", U64_exp10(20) == (U64)-1);
+	Test_assert(test, "U64_exp10", U64_exp10(20) == (U64) -1);
 
 	Test_assert(test, "U64_exp2", U64_exp2(0) == 1);
 	Test_assert(test, "U64_exp2", U64_exp2(63) == UINT64_C(0x8000000000000000));
-	Test_assert(test, "U64_exp2", U64_exp2(64) == (U64)-1);
+	Test_assert(test, "U64_exp2", U64_exp2(64) == (U64) -1);
 
 	Test_assert(test, "U64_safeDiv", U64_safeDiv(100, 10) == 10);
 	Test_assert(test, "U64_safeDiv", U64_safeDiv(1, 0) == 0);
@@ -84,11 +84,11 @@ void Test_mathu(Test *test) {
 
 	Test_assert(test, "U16_exp10", U16_exp10(0) == 1);
 	Test_assert(test, "U16_exp10", U16_exp10(4) == 10000);
-	Test_assert(test, "U16_exp10", U16_exp10(5) == (U16)-1);
+	Test_assert(test, "U16_exp10", U16_exp10(5) == (U16) -1);
 
 	Test_assert(test, "U16_exp2", U16_exp2(0) == 1);
 	Test_assert(test, "U16_exp2", U16_exp2(15) == 0x8000u);
-	Test_assert(test, "U16_exp2", U16_exp2(16) == (U16)-1);
+	Test_assert(test, "U16_exp2", U16_exp2(16) == (U16) -1);
 
 	Test_assert(test, "U16_safeDiv", U16_safeDiv(100, 4) == 25);
 	Test_assert(test, "U16_safeDiv", U16_safeDiv(100, 0) == 0);
@@ -97,11 +97,11 @@ void Test_mathu(Test *test) {
 
 	Test_assert(test, "U8_exp10", U8_exp10(0) == 1);
 	Test_assert(test, "U8_exp10", U8_exp10(2) == 100);
-	Test_assert(test, "U8_exp10", U8_exp10(3) == (U8)-1);
+	Test_assert(test, "U8_exp10", U8_exp10(3) == (U8) -1);
 
 	Test_assert(test, "U8_exp2", U8_exp2(0) == 1);
 	Test_assert(test, "U8_exp2", U8_exp2(7) == 128);
-	Test_assert(test, "U8_exp2", U8_exp2(8) == (U8)-1);
+	Test_assert(test, "U8_exp2", U8_exp2(8) == (U8) -1);
 
 	Test_assert(test, "U8_safeDiv", U8_safeDiv(200, 4) == 50);
 	Test_assert(test, "U8_safeDiv", U8_safeDiv(200, 0) == 0);

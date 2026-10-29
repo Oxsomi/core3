@@ -53,3 +53,10 @@ void Test_HDRReadUnsupportedFormat(Test *t);
 void Test_HDRReadZeroRepeat(Test *t);
 void Test_HDRReadBeginRefusesOutput(Test *t);
 void Test_HDRReadUnwritableSink(Test *t);
+
+void Test_HDRReadHugeHeader(Test *t);
+void Test_HDRReadCRLF(Test *t);
+void Test_HDRFloatRoundTripStable(Test *t);
+void Test_HDRExposureLocale(Test *t);
+void Test_HDRWriteFailedWrites(Test *t);
+void Test_HDRReadUnalignedOutput(Test *t);

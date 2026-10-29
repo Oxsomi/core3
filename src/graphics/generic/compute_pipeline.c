@@ -107,7 +107,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 		.device = deviceRef,
 		.type = EPipelineType_Compute,
 		.flags = flags,
-		.extensions = (U32)(binary->identifier.extensions &~ binary->dormantExtensions)
+		.extensions = (U32) (binary->identifier.extensions &~ binary->dormantExtensions)
 	};
 
 	if(!layout)

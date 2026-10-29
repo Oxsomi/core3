@@ -26,6 +26,8 @@
 #include "types/container/ref_ptr.h"
 #include "types/container/buffer.h"
 #include "types/base/string_base.h"
+#include "types/base/constants.h"
+#include "types/container/test/failing_stream.h"
 #include "types/base/string_read_helper.h"
 
 //A node with all "none" sentinels; caller overrides what it needs.
@@ -97,7 +99,7 @@ static void srExpectReadFailsTamper(Test *t, const RefPtrType *type, U64 byteOff
 
 		MemoryStream *ms = RefPtr_data(s, MemoryStream);
 
-		if(byteOff < Buffer_length(ms->data)) {
+		if(byteOff < ms->parent.size) {
 			ms->data.ptrNonConst[byteOff] |= orVal;
 			tampered = true;
 		}
@@ -186,6 +188,7 @@ void Test_SRReadSymbolAndAnnotationBounds(Test *t) {
 	//Symbol fileNameId out of bounds (needs a HasSymbols file: 2 nodes, 2 parallel symbols)
 	{
 		SRFile sr = { 0 };
+
 		if(SRFile_create(ESRSettingsFlags_HasSymbols, ESRFeature_All | ESRFeature_SymbolInfo, t->alloc, &sr, &t->err)) {
 
 			U32 id = 0; CharString n = CharString_createRefCStrConst("n");
@@ -209,6 +212,7 @@ void Test_SRReadSymbolAndAnnotationBounds(Test *t) {
 	//Annotation nameId out of bounds
 	{
 		SRFile sr = { 0 };
+
 		if(srBuildMinimal(t, &sr)) {
 
 			SRAnnotation bad = (SRAnnotation) { .nameId = 9, .isBuiltin = 1 };    //nameCount == 1
@@ -254,8 +258,10 @@ void Test_SRReadFwdDeclare(Test *t) {
 		SRFile sr = { 0 }, result = { 0 };
 		StreamRef *s = NULL;
 
-		if(srBuildFwdPair(t, &sr) && SRFile_finalize(&sr, t->alloc, &t->err) &&
-			MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err)) {
+		if (
+			srBuildFwdPair(t, &sr) && SRFile_finalize(&sr, t->alloc, &t->err) &&
+			MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err)
+		) {
 
 			U64 off = 0;
 			Bool ok = SRFile_write(&sr, t->alloc, s, &off, &t->err);
@@ -300,6 +306,7 @@ void Test_SRReadStreamShape(Test *t) {
 	if(srBuildMinimal(t, &sr) && MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err)) {
 
 		U64 off = 0;
+
 		if(SRFile_write(&sr, t->alloc, s, &off, &t->err)) {
 			total = off;
 			MemoryStream *ms = RefPtr_data(s, MemoryStream);
@@ -353,6 +360,7 @@ void Test_SRReadStreamShape(Test *t) {
 
 			SRFile result = { 0 };
 			Bool readOk = false;
+
 			if(made) { U64 ro = 0; readOk = SRFile_read(trailing, &ro, false, t->alloc, &result, NULL); }
 
 			Test_assert(t, "trailing data rejected (non-subfile)", made && !readOk);
@@ -365,6 +373,7 @@ void Test_SRReadStreamShape(Test *t) {
 	//Misaligned offset on both read and write
 	{
 		StreamRef *s2 = NULL;
+
 		if(MemoryStream_create(64, EMemoryStreamFlags_WriteResize, &type, &s2, &t->err)) {
 			U64 badWrite = 8;
 			Test_assert(t, "misaligned write rejected", !SRFile_write(&sr, t->alloc, s2, &badWrite, NULL));
@@ -388,6 +397,7 @@ static Bool srRoundTrip(Test *t, const SRFile *src, const RefPtrType *type, Stre
 		return false;
 
 	U64 off = 0;
+
 	if(!SRFile_write(src, t->alloc, *s, &off, &t->err))
 		return false;
 
@@ -405,8 +415,10 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 		SRFile sr = { 0 }, result = { 0 };
 		StreamRef *s = NULL;
 
-		if(SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, &t->err) &&
-			SRFile_finalize(&sr, t->alloc, &t->err)) {
+		if (
+			SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, &t->err) &&
+			SRFile_finalize(&sr, t->alloc, &t->err)
+		) {
 
 			Bool ok = srRoundTrip(t, &sr, &type, &s, &result);
 			Test_assert(t, "empty file round-trips", ok);
@@ -464,6 +476,7 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 
 			for(U32 i = 1; i < N; ++i) {
 				SRNode c = srNode(ESRNodeType_Variable, id, 0);
+
 				if(i == 1) c.interpolation = ESRInterpolation_LinearNoperspective;
 				ListSRNode_pushBack(&sr.nodes, c, t->alloc, &t->err);
 			}
@@ -474,7 +487,9 @@ void Test_SRFileStructuralRoundTrips(Test *t) {
 			Test_assert(t, "large-N file round-trips", ok);
 			Test_assert(t, "large-N node count", ok && result.nodes.length == N);
 			Test_assert(t, "interpolation field survives",
-				ok && result.nodes.length == N && result.nodes.ptr[1].interpolation == ESRInterpolation_LinearNoperspective);
+				ok && result.nodes.length == N && result.nodes.ptr[1].interpolation == ESRInterpolation_LinearNoperspective
+			);
+
 			Test_assert(t, "large-N hash preserved", ok && result.hash == sr.hash);
 		}
 		else Test_assert(t, "create large-N", false);
@@ -515,8 +530,10 @@ void Test_SRFileHashAndName(Test *t) {
 	//ESRNodeType_name: every enum value maps to a non-empty distinct-ish string, and out-of-range -> "Invalid"
 	{
 		Bool allNamed = true;
+
 		for(U32 i = 0; i < ESRNodeType_Count; ++i) {
 			const C8 *nm = ESRNodeType_name((ESRNodeType) i);
+
 			if(!nm || !nm[0]) allNamed = false;
 		}
 		Test_assert(t, "every ESRNodeType has a name", allNamed);
@@ -544,22 +561,29 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 	{
 		SRFile sr = { 0 };
 		Test_assert(t, "create rejects invalid flags",
-			!SRFile_create((ESRSettingsFlags) 0x80000000, ESRFeature_All, t->alloc, &sr, NULL));
+			!SRFile_create((ESRSettingsFlags) 0x80000000, ESRFeature_All, t->alloc, &sr, NULL)
+		);
+
 		SRFile_free(&sr, t->alloc);
 	}
 	{
 		SRFile sr = { 0 };
 		Test_assert(t, "create rejects unknown feature bits",
-			!SRFile_create(ESRSettingsFlags_None, (U32) (1 << 20), t->alloc, &sr, NULL));
+			!SRFile_create(ESRSettingsFlags_None, (U32) (1 << 20), t->alloc, &sr, NULL)
+		);
+
 		SRFile_free(&sr, t->alloc);
 	}
 
 	//create rejects a non-empty target (memleak guard)
 	{
 		SRFile sr = { 0 };
+
 		if(srBuildMinimal(t, &sr))
 			Test_assert(t, "create rejects non-empty target",
-				!SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, NULL));
+				!SRFile_create(ESRSettingsFlags_None, ESRFeature_All, t->alloc, &sr, NULL)
+			);
+
 		SRFile_free(&sr, t->alloc);
 	}
 
@@ -567,13 +591,16 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 	{
 		SRFile sr = { 0 };
 		Test_assert(t, "CreateNoReserve succeeds",
-			SRFile_create(ESRSettingsFlags_CreateNoReserve, ESRFeature_All, t->alloc, &sr, &t->err));
+			SRFile_create(ESRSettingsFlags_CreateNoReserve, ESRFeature_All, t->alloc, &sr, &t->err)
+		);
+
 		SRFile_free(&sr, t->alloc);
 	}
 
 	//write + finalize reject a symbols/nodes parallelism mismatch
 	{
 		SRFile sr = { 0 };
+
 		if(SRFile_create(ESRSettingsFlags_HasSymbols, ESRFeature_All | ESRFeature_SymbolInfo, t->alloc, &sr, &t->err)) {
 
 			U32 id = 0; CharString n = CharString_createRefCStrConst("n");
@@ -584,6 +611,7 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 			Test_assert(t, "finalize rejects symbol/node mismatch", !SRFile_finalize(&sr, t->alloc, NULL));
 
 			StreamRef *s = NULL;
+
 			if(MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err)) {
 				U64 off = 0;
 				Test_assert(t, "write rejects symbol/node mismatch", !SRFile_write(&sr, t->alloc, s, &off, NULL));
@@ -592,4 +620,118 @@ void Test_SRFileCreateAndWriteGuards(Test *t) {
 		}
 		SRFile_free(&sr, t->alloc);
 	}
+}
+
+//The header counts come from the file: nothing big may be requested for a file that can't hold what they declare
+
+typedef struct SRPeakAlloc {
+	Allocator inner;
+	U64 peak;
+} SRPeakAlloc;
+
+static Bool srPeakAlloc(void *ctx, U64 length, Buffer *output, Error *e_rr) {
+
+	SRPeakAlloc *peak = (SRPeakAlloc*) ctx;
+
+	if (length > peak->peak)
+		peak->peak = length;
+
+	//The stream cursor takes a 128 KiB cache, the file's counts would take more
+	if (length > 192 * KIBI) {
+		if (e_rr) *e_rr = Error_outOfMemory(0, "srPeakAlloc() capped");
+		return false;
+	}
+
+	return peak->inner.alloc(peak->inner.ptr, length, output, e_rr);
+}
+
+static void srPeakFree(void *ctx, Buffer buf) {
+	SRPeakAlloc *peak = (SRPeakAlloc*) ctx;
+	peak->inner.free(peak->inner.ptr, buf);
+}
+
+void Test_SRReadHugeCounts(Test *t) {
+
+	Test_setModule(t, "SRFile read: counts the stream can't hold are rejected before allocating");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	//[magic 4][SRHeader: version, flags, pad, features @8, then nodeCount @12 up to interfaceCount @36]
+	//Every list gets its own turn at being the one that is too big, then all of them at once.
+
+	for (U32 which = 0; which <= 7; ++which) {
+
+		SRFile sr = { 0 };
+		StreamRef *s = NULL;
+		U64 off = 0;
+
+		Bool built = srBuildMinimal(t, &sr) && MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err);
+
+		Test_assert(t, "build and stream", built);
+		Test_assert(t, "write", built && SRFile_write(&sr, t->alloc, s, &off, &t->err));
+
+		if (built) {
+
+			MemoryStream *ms = RefPtr_data(s, MemoryStream);
+
+			for (U32 field = 0; field < 7; ++field)
+				if (which == 7 || field == which) {
+					const U32 count = 0x7FFFFFFF;
+					Buffer_memcpy(Buffer_createRef(ms->data.ptrNonConst + 12 + field * 4, 4), Buffer_createRefConst(&count, 4));
+				}
+
+			SRPeakAlloc peak = (SRPeakAlloc) { .inner = *t->alloc };
+			Allocator capped = (Allocator) { .ptr = &peak, .alloc = srPeakAlloc, .free = srPeakFree };
+
+			SRFile result = { 0 };
+			U64 ro = 0;
+
+			Test_assert(t, "read fails", !SRFile_read(s, &ro, false, &capped, &result, NULL));
+			Test_assert(t, "nothing big was requested", peak.peak <= 192 * KIBI);
+			SRFile_free(&result, &capped);
+		}
+
+		SRFile_free(&sr, t->alloc);
+		RefPtr_dec(&s);
+	}
+}
+
+//A write that fails anywhere has to fail the writer
+
+void Test_SRWriteFailures(Test *t) {
+
+	Test_setModule(t, "SRFile write: every failing write is reported");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+	SRFile sr = { 0 };
+
+	Test_assert(t, "build", srBuildMinimal(t, &sr));
+
+	StreamRef *s = NULL;
+	U64 off = 0;
+
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err));
+	FailingStream_arm(s, 0);
+	Test_assert(t, "counting write", SRFile_write(&sr, t->alloc, s, &off, &t->err));
+
+	U64 writes = FailingStream_writes();
+
+	RefPtr_dec(&s);
+	Test_assert(t, "the writer writes", writes > 0);
+
+	for (U64 i = 1; i <= writes; ++i) {
+
+		off = 0;
+		Test_assert(t, "stream again", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err));
+		FailingStream_arm(s, i);
+
+		Bool ok = SRFile_write(&sr, t->alloc, s, &off, NULL);
+
+		Test_assert(t, "the write was reached", FailingStream_failed());
+		Test_assert(t, "a failed write fails the writer", !ok);
+		Test_assert(t, "a failed write leaves the offset", !off);
+		RefPtr_dec(&s);
+	}
+
+	SRFile_free(&sr, t->alloc);
 }

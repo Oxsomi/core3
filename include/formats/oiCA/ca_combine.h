@@ -45,6 +45,8 @@ typedef enum EArchiveCombineFlags {
 	EArchiveCombineFlags_ResolveAcceptLatest = 1 << 1        //Override file with latest file contents, otherwise conflict
 } EArchiveCombineFlags;
 
+//a and b need the same encryption settings and the same date flags, otherwise the combined archive would hold files
+// without a date it can store.
 Bool CAFile_combine(
 	const CAFile *a,
 	const CAFile *b,

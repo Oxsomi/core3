@@ -96,7 +96,7 @@ T##x4x4 T##x4x4_perspective(T fovYRad, T aspect, T nearPlane, T farPlane) {     
 	m.v[0] = T##x4_create4(scale / aspect, 0, 0, 0);                                                                    \
 	m.v[1] = T##x4_create4(0, scale, 0, 0);                                                                             \
 	m.v[2] = T##x4_create4(0, 0, -nearPlane / range, 1);                                                                \
-	m.v[3] = T##x4_create4(0, 0, nearPlane * farPlane / range, 0);                                                      \
+	m.v[3] = T##x4_create4(0, 0, T##_isInf(farPlane) ? nearPlane : nearPlane * (farPlane / range), 0);                 \
 	return m;                                                                                                           \
 }                                                                                                                       \
 																														\
@@ -131,8 +131,28 @@ T##x4x4 T##x4x4_construct(T##x4 x, T##x4 y, T##x4 z, T##x4 eye) {               
 }                                                                                                                       \
 																														\
 T##x4x4 T##x4x4_lookDir(T##x4 eye, T##x4 direction, T##x4 up) {                                                         \
-	const T##x4 z = T##x4_normalize3(direction);                                                                        \
-	const T##x4 x = T##x4_normalize3(T##x4_cross3(T##x4_normalize3(up), z));                                            \
+																														\
+	const T directionLength = T##x4_len3(direction);                                                                    \
+	const T##x4 z = directionLength > 0 ? T##x4_div(direction, T##x4_xxxx4(directionLength)) :                          \
+		T##x4_create3(0, 0, 1);                                                                                         \
+																														\
+	const T upLength = T##x4_len3(up);                                                                                  \
+																														\
+	if(upLength > 0)                                                                                                    \
+		up = T##x4_div(up, T##x4_xxxx4(upLength));                                                                      \
+																														\
+	T##x4 x = T##x4_cross3(up, z);                                                                                      \
+																														\
+	if(T##x4_sqLen3(x) < 1e-12##suffix) {                                                                               \
+																														\
+		const T##x4 fallbackUp = T##_abs(T##x4_y(z)) < 0.9##suffix ?                                                    \
+			T##x4_create3(0, 1, 0) : T##x4_create3(1, 0, 0);                                                            \
+																														\
+		x = T##x4_cross3(fallbackUp, z);                                                                                \
+	}                                                                                                                   \
+																														\
+	x = T##x4_div(x, T##x4_xxxx4(T##x4_len3(x)));                                                                       \
+																														\
 	const T##x4 y = T##x4_cross3(z, x);                                                                                 \
 	return T##x4x4_construct(x, y, z, eye);                                                                             \
 }                                                                                                                       \
@@ -168,52 +188,51 @@ Bool T##x4x4_inverse(T##x4x4 m, T##x4x4 *result) {                              
 	if(!result)                                                                                                         \
 		return false;                                                                                                   \
 																														\
-	const T a00 = T##x4_x(m.v[0]), a01 = T##x4_y(m.v[0]), a02 = T##x4_z(m.v[0]), a03 = T##x4_w(m.v[0]);                 \
-	const T a10 = T##x4_x(m.v[1]), a11 = T##x4_y(m.v[1]), a12 = T##x4_z(m.v[1]), a13 = T##x4_w(m.v[1]);                 \
-	const T a20 = T##x4_x(m.v[2]), a21 = T##x4_y(m.v[2]), a22 = T##x4_z(m.v[2]), a23 = T##x4_w(m.v[2]);                 \
-	const T a30 = T##x4_x(m.v[3]), a31 = T##x4_y(m.v[3]), a32 = T##x4_z(m.v[3]), a33 = T##x4_w(m.v[3]);                 \
+	const F64 a00 = T##x4_x(m.v[0]), a01 = T##x4_y(m.v[0]), a02 = T##x4_z(m.v[0]), a03 = T##x4_w(m.v[0]);               \
+	const F64 a10 = T##x4_x(m.v[1]), a11 = T##x4_y(m.v[1]), a12 = T##x4_z(m.v[1]), a13 = T##x4_w(m.v[1]);               \
+	const F64 a20 = T##x4_x(m.v[2]), a21 = T##x4_y(m.v[2]), a22 = T##x4_z(m.v[2]), a23 = T##x4_w(m.v[2]);               \
+	const F64 a30 = T##x4_x(m.v[3]), a31 = T##x4_y(m.v[3]), a32 = T##x4_z(m.v[3]), a33 = T##x4_w(m.v[3]);               \
 																														\
-	const T s0 = a00 * a11 - a01 * a10;                                                                                 \
-	const T s1 = a00 * a12 - a02 * a10;                                                                                 \
-	const T s2 = a00 * a13 - a03 * a10;                                                                                 \
-	const T s3 = a01 * a12 - a02 * a11;                                                                                 \
-	const T s4 = a01 * a13 - a03 * a11;                                                                                 \
-	const T s5 = a02 * a13 - a03 * a12;                                                                                 \
+	const F64 s0 = a00 * a11 - a01 * a10;                                                                               \
+	const F64 s1 = a00 * a12 - a02 * a10;                                                                               \
+	const F64 s2 = a00 * a13 - a03 * a10;                                                                               \
+	const F64 s3 = a01 * a12 - a02 * a11;                                                                               \
+	const F64 s4 = a01 * a13 - a03 * a11;                                                                               \
+	const F64 s5 = a02 * a13 - a03 * a12;                                                                               \
 																														\
-	const T c5 = a22 * a33 - a23 * a32;                                                                                 \
-	const T c4 = a21 * a33 - a23 * a31;                                                                                 \
-	const T c3 = a21 * a32 - a22 * a31;                                                                                 \
-	const T c2 = a20 * a33 - a23 * a30;                                                                                 \
-	const T c1 = a20 * a32 - a22 * a30;                                                                                 \
-	const T c0 = a20 * a31 - a21 * a30;                                                                                 \
+	const F64 c5 = a22 * a33 - a23 * a32;                                                                               \
+	const F64 c4 = a21 * a33 - a23 * a31;                                                                               \
+	const F64 c3 = a21 * a32 - a22 * a31;                                                                               \
+	const F64 c2 = a20 * a33 - a23 * a30;                                                                               \
+	const F64 c1 = a20 * a32 - a22 * a30;                                                                               \
+	const F64 c0 = a20 * a31 - a21 * a30;                                                                               \
 																														\
-	const T det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;                                            \
+	const F64 det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;                                          \
 																														\
-	if(!T##_isValid(det) || det == 0)                                                                                   \
+	if(!F64_isValid(det) || det == 0)                                                                                   \
 		return false;                                                                                                   \
 																														\
-	const T id = 1 / det;                                                                                               \
-	T##x4x4 r;                                                                                                          \
-																														\
-	r.v[0] = T##x4_create4(                                                                                             \
+	const F64 id = 1 / det;                                                                                             \
+	/* F64 intermediates keep every product of finite F32 components within range. */                                   \
+	const F64 values[16] = {                                                                                            \
 		( a11 * c5 - a12 * c4 + a13 * c3) * id, (-a01 * c5 + a02 * c4 - a03 * c3) * id,                                 \
-		( a31 * s5 - a32 * s4 + a33 * s3) * id, (-a21 * s5 + a22 * s4 - a23 * s3) * id                                  \
-	);                                                                                                                  \
-																														\
-	r.v[1] = T##x4_create4(                                                                                             \
+		( a31 * s5 - a32 * s4 + a33 * s3) * id, (-a21 * s5 + a22 * s4 - a23 * s3) * id,                                 \
 		(-a10 * c5 + a12 * c2 - a13 * c1) * id, ( a00 * c5 - a02 * c2 + a03 * c1) * id,                                 \
-		(-a30 * s5 + a32 * s2 - a33 * s1) * id, ( a20 * s5 - a22 * s2 + a23 * s1) * id                                  \
-	);                                                                                                                  \
-																														\
-	r.v[2] = T##x4_create4(                                                                                             \
+		(-a30 * s5 + a32 * s2 - a33 * s1) * id, ( a20 * s5 - a22 * s2 + a23 * s1) * id,                                 \
 		( a10 * c4 - a11 * c2 + a13 * c0) * id, (-a00 * c4 + a01 * c2 - a03 * c0) * id,                                 \
-		( a30 * s4 - a31 * s2 + a33 * s0) * id, (-a20 * s4 + a21 * s2 - a23 * s0) * id                                  \
-	);                                                                                                                  \
-																														\
-	r.v[3] = T##x4_create4(                                                                                             \
+		( a30 * s4 - a31 * s2 + a33 * s0) * id, (-a20 * s4 + a21 * s2 - a23 * s0) * id,                                 \
 		(-a10 * c3 + a11 * c1 - a12 * c0) * id, ( a00 * c3 - a01 * c1 + a02 * c0) * id,                                 \
 		(-a30 * s3 + a31 * s1 - a32 * s0) * id, ( a20 * s3 - a21 * s1 + a22 * s0) * id                                  \
-	);                                                                                                                  \
+	};                                                                                                                  \
+	T##x4x4 r = T##x4x4_zero();                                                                                         \
+																														\
+	for(U8 i = 0; i < 16; ++i) {                                                                                        \
+																														\
+		if(!F64_isValid(values[i]) || F64_abs(values[i]) > T##_MAX)                                                     \
+			return false;                                                                                               \
+																														\
+		T##x4_setRef(&r.v[i >> 2], i & 3, (T) values[i]);                                                               \
+	}                                                                                                                   \
 																														\
 	*result = r;                                                                                                        \
 	return true;                                                                                                        \
@@ -238,7 +257,7 @@ U64 F32x4x4_format(F32x4x4 m, C8 *buffer, U64 bufferSize) {
 	for (U8 i = 0; i < 4; ++i) {
 
 		const int n = snprintf(
-			buffer + written, (size_t)(bufferSize - written),
+			buffer + written, (size_t) (bufferSize - written),
 			"[ %10.4f %10.4f %10.4f %10.4f ]\n",
 			(double) F32x4_x(m.v[i]), (double) F32x4_y(m.v[i]),
 			(double) F32x4_z(m.v[i]), (double) F32x4_w(m.v[i])

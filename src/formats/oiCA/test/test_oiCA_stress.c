@@ -42,6 +42,7 @@ void assertResolve(Test *t, const CAFile *ca, const C8 *path, CAHandle expected,
 static Bool setDataByPath(Test *t, CAFile *ca, const C8 *path, const U8 *bytes, U64 len) {
 
 	CAHandle h = CAFile_resolve(ca, CharString_createRefCStrConst(path));
+
 	if (h == CAHandle_Invalid) {
 		Test_assert(t, path, false);
 		return false;
@@ -292,14 +293,14 @@ void Test_CAStress(Test *t) {
 
 				//Unique timestamp: encode dir and file index
 
-				Ns ts = (Ns)((d * 100 + f + 1)) * MS;
+				Ns ts = (Ns) ((d * 100 + f + 1)) * MS;
 
 				CAHandle hFile = addFile(t, &ca, hDir, fileExts[f], ts, false);
 				Test_assert(t, "stress: addFile ok", hFile != CAHandle_Invalid);
 
 				//Unique 2-byte payload: {d, f}
 
-				U8 payload[2] = { (U8)d, (U8)f };
+				U8 payload[2] = { (U8) d, (U8) f };
 				Buffer buf = Buffer_createNull();
 				Buffer_createCopy(Buffer_createRefConst(payload, 2), t->alloc, &buf, NULL);
 				Test_assert(t, "stress: setData ok", CAFile_setData(&ca, hFile, t->alloc, &buf, &t->err));
@@ -328,10 +329,10 @@ void Test_CAStress(Test *t) {
 				if (h == CAHandle_Invalid)
 					continue;
 
-				Ns expectedTs = (Ns)((d * 100 + f + 1)) * MS;
+				Ns expectedTs = (Ns) ((d * 100 + f + 1)) * MS;
 				Test_assert(t, "stress S1: timestamp ok", CAFile_fileTime(&ca, h) == expectedTs);
 
-				U8 expected[2] = { (U8)d, (U8)f };
+				U8 expected[2] = { (U8) d, (U8) f };
 				Bool isValid = false;
 				Buffer got   = CAFile_getDataConst(&ca, h, &isValid);
 				Test_assert(t, "stress S1: data ok", isValid && Buffer_eq(got, Buffer_createRefConst(expected, 2)));
@@ -377,7 +378,7 @@ void Test_CAStress(Test *t) {
 				if (h == CAHandle_Invalid)
 					continue;
 
-				U8 expected[2] = { (U8)d, (U8)f };
+				U8 expected[2] = { (U8) d, (U8) f };
 				Bool isValid = false;
 				Buffer got = CAFile_getDataConst(&ca, h, &isValid);
 				Test_assert(t, "stress S2: data intact", isValid && Buffer_eq(got, Buffer_createRefConst(expected, 2)));
@@ -450,7 +451,7 @@ void Test_CAStress(Test *t) {
 
 			//The moved file came from beta (d = 1), so payload is {1, f}
 
-			U8 expected[2] = { 1, (U8)f };
+			U8 expected[2] = { 1, (U8) f };
 			Bool isValid = false;
 			Buffer got = CAFile_getDataConst(&ca, h, &isValid);
 			Test_assert(t, "stress S3: moved data ok", isValid && Buffer_eq(got, Buffer_createRefConst(expected, 2)));
@@ -484,7 +485,7 @@ void Test_CAStress(Test *t) {
 
 			//Data survives rename
 
-			U8 expected[2] = { 2, (U8)f };
+			U8 expected[2] = { 2, (U8) f };
 			Bool isValid = false;
 			Buffer got = CAFile_getDataConst(&ca, hNew, &isValid);
 			Test_assert(t, "stress S4: data after rename", isValid && Buffer_eq(got, Buffer_createRefConst(expected, 2)));
@@ -525,7 +526,7 @@ void Test_CAStress(Test *t) {
 				if (h == CAHandle_Invalid)
 					continue;
 
-				U8 expected[2] = { (U8)d, (U8)f };
+				U8 expected[2] = { (U8) d, (U8) f };
 				Bool isValid = false;
 				Buffer got = CAFile_getDataConst(&ca, h, &isValid);
 				Test_assert(t, "stress S5: intact dir data", isValid && Buffer_eq(got, Buffer_createRefConst(expected, 2)));

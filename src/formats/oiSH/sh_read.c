@@ -72,6 +72,8 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
 
+	const OxStream *inStream = RefPtr_data(streamRef, OxStream);
+
 	if (!isSubFile) {        //Magic
 
 		U32 magic = 0;
@@ -116,7 +118,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &strings, e_rr));
 
 	U64 minEntryBuffers =
-		(U64)header.stageCount +
+		(U64) header.stageCount +
 		header.includeFileCount +
 		header.semanticCount +
 		header.registerNameCount +
@@ -131,6 +133,12 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		strings.settings.compressionType
 	)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() strings didn't match expectations"));
+
+	//The string table must fit oiDL's automatic loading limits before its entries can be used below.
+
+	for (U64 i = 0; i < strings.entryStrings.length; ++i)
+		if (!DLFile_isFullyLoaded(&strings, i))
+			retError(clean, Error_invalidParameter(0, 1, "SHFile_read()::strings exceed oiDL automatic loading limits"));
 
 	*offset = (*offset + 15) & ~15;
 
@@ -290,12 +298,12 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		ESHExtension autoDormant = (ESHExtension) (
 			(ESHExtension_DxilNative | ESHExtension_SpirvNative) &
-			(header.extensionCount >= 32 ? 0 : ~(((U32)1 << header.extensionCount) - 1))
+			(header.extensionCount >= 32 ? 0 : ~(((U32) 1 << header.extensionCount) - 1))
 		);
 
 		ESHExtension2 autoDormant2 = (ESHExtension2) (
 			(ESHExtension2_DxilNative | ESHExtension2_SpirvNative) &
-			(header.extension2Count >= 32 ? 0 : ~(((U32)1 << header.extension2Count) - 1))
+			(header.extension2Count >= 32 ? 0 : ~(((U32) 1 << header.extension2Count) - 1))
 		);
 
 		//A vendor the writer had never heard of can't have been meant by its mask, so bits above its count are
@@ -344,9 +352,9 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		// then read it all in one shot.
 
 		U64 binaryDataSize =
-			(U64)binary.defineCount * 2 * sizeof(U16) +
-			(U64)binary.uniformCount * sizeof(SHUniform) +
-			(U64)binary.registerCount * sizeof(SHRegister);
+			(U64) binary.defineCount * 2 * sizeof(U16) +
+			(U64) binary.uniformCount * sizeof(SHUniform) +
+			(U64) binary.registerCount * sizeof(SHRegister);
 
 		gotoIfError3(clean, Buffer_createUninitializedBytes(binaryDataSize, alloc, &tmp, e_rr));
 		gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, tmp, alloc, e_rr));
@@ -368,10 +376,10 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		const U8 *regs = NULL;
 
 		if (binaryDataSize) {
-			defineNames = (const U16*)tmp.ptr;
+			defineNames = (const U16*) tmp.ptr;
 			defineValues = defineNames + binary.defineCount;
 			uniforms = (const SHUniform *)(defineValues + binary.defineCount);
-			regs = (const U8 *)(uniforms + binary.uniformCount);
+			regs = (const U8 *) (uniforms + binary.uniformCount);
 		}
 
 		//Compute uniform data size
@@ -391,7 +399,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		//Parse defines
 
 		ListCharString *defineStrs = &binaryInfo.identifier.defines;
-		gotoIfError3(clean, ListCharString_resize(defineStrs, (U64)binary.defineCount * 2, alloc, e_rr));
+		gotoIfError3(clean, ListCharString_resize(defineStrs, (U64) binary.defineCount * 2, alloc, e_rr));
 
 		for (U64 i = 0; i < binary.defineCount; ++i) {
 
@@ -400,9 +408,9 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 			CharString defineName = strings.entryStrings.ptr[defineNames[i]];
 
-			U64 defineValueId = (U64)defineValues[i] + header.uniqueDefines;
+			U64 defineValueId = (U64) defineValues[i] + header.uniqueDefines;
 
-			if (defineValueId >= registerNameStart)
+			if (defineValueId >= uniformNameStart)
 				retError(clean, Error_invalidState(1, "SHFile_read() defineValue out of bounds"));
 
 			CharString defineValue = strings.entryStrings.ptr[defineValueId];
@@ -533,6 +541,8 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		//Read binary sizes and data
 
+		U64 claimedBinaryBytes = 0;
+
 		for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 
 			if (!((binary.binaryFlags >> i) & 1))
@@ -545,6 +555,18 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 			if (!binarySize)
 				continue;
+
+			//The declared size comes from the file, so the stream has to hold it before anything is allocated.
+			//The data of all binary types follows their sizes, so what is already claimed counts too.
+
+			const U64 bytesLeft = *offset > inStream->size ? 0 : inStream->size - *offset;
+
+			if (claimedBinaryBytes > bytesLeft || binarySize > bytesLeft - claimedBinaryBytes)
+				retError(clean, Error_outOfBounds(
+					1, binarySize, bytesLeft, "SHFile_read() binary size exceeds the remaining stream"
+				));
+
+			claimedBinaryBytes += binarySize;
 
 			gotoIfError3(clean, Buffer_createUninitializedBytes(binarySize, alloc, &binaryInfo.binaries[i], e_rr));
 		}
@@ -709,6 +731,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 			for (U64 i = 0; i < shFile->entries.length && !contains; ++i) {
 				ListU16 binaries = shFile->entries.ptr[i].binaryIds;
+
 				for (U64 k = 0; k < binaries.length && !contains; ++k)
 					if (binaries.ptr[k] == j)
 						contains = true;
@@ -718,6 +741,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		else {
 			U16 entryIdx = fixedBinaryInfo[j].entrypoint;
 			ListU16 binaries = shFile->entries.ptr[entryIdx].binaryIds;
+
 			for (U64 i = 0; i < binaries.length && !contains; ++i)
 				if (binaries.ptr[i] == j)
 					contains = true;
@@ -731,11 +755,18 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	{
 		U64 hashLen = *offset - hashStart;
-		gotoIfError3(clean, Buffer_createUninitializedBytes(hashLen, alloc, &tmp, e_rr));
-		gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, &hashStart, tmp, alloc, e_rr));
+		U8 scratch[16 * 1024];
+		U32 hash = 0;
 
-		U32 hash = Buffer_crc32c(tmp);
-		Buffer_free(&tmp, alloc);
+		while(hashLen) {
+
+			U64 chunkSize = U64_min(hashLen, sizeof(scratch));
+			Buffer chunk = Buffer_createRef(scratch, chunkSize);
+
+			gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, &hashStart, chunk, alloc, e_rr));
+			hash = Buffer_crc32cChained(chunk, hash);
+			hashLen -= chunkSize;
+		}
 
 		if (hash != header.hash)
 			retError(clean, Error_unauthorized(0, "SHFile_read() mismatching CRC32C"));

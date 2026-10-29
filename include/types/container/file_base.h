@@ -55,6 +55,7 @@ typedef Bool (*FileCallback)(const FileInfo*, void*, const Allocator*, Error*);
 
 #define MAX_OXC_PATH 1023    //Safest path across all platforms (Apple, Windows, Linux-based)
 
+//maxFilePathLimit bounds the resolved UTF8 byte length without its terminator; zero uses MAX_OXC_PATH.
 Bool File_resolve(
 	const CharString *loc,
 	Bool *isVirtual,

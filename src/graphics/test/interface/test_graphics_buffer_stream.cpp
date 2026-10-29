@@ -392,7 +392,8 @@ static void Test_streamDedicatedStaging(c::Test *t, const StreamFixture &fx) {
 					));
 
 					Test_assert(t, "fileReadCostIsFile", RefPtr_data(fileStream, c::OxStream)->readCost ==
-						(c::U16) c::EStreamReadCost_File);
+						(c::U16) c::EStreamReadCost_File
+					);
 
 					Test_streamedTail(t, fx, fileStream, bigLen, "Big file stream", "bigFileTailUploaded");
 

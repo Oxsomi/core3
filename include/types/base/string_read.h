@@ -31,6 +31,7 @@
 Bool CharString_isValidFileName(const CharString str);
 Bool CharString_isValidFilePath(CharString str);
 
+//Compares unsigned bytes after applying the requested ASCII case transform.
 ECompareResult CharString_compare(const CharString *a, const CharString *b, EStringCase caseSensitive);
 
 static inline ECompareResult CharString_compareSensitive(const CharString *a, const CharString *b) {
@@ -97,10 +98,17 @@ Bool CharString_equalsStringIgnoreEol(const CharString *s, const CharString *oth
 Bool CharString_equalsCString(const CharString *s, const C8 *literal, EStringCase caseSensitive);
 Bool CharString_equals(const CharString s, C8 c, EStringCase caseSensitive);
 
+//Numeric parsers leave the output unchanged on failure.
+
 Bool CharString_parseNyto(CharString s, U64 *result);
 Bool CharString_parseHex(CharString s, U64 *result);
 Bool CharString_parseDec(const CharString s, U64 *result);
 Bool CharString_parseDecSigned(CharString s, I64 *result);
+
+//Decimal syntax permits a sign, decimal point, exponent and optional f/F suffix.
+//At least one mantissa digit and, when present, one exponent digit are required.
+//Conversion is locale independent and rejects overflow; underflow rounds to subnormal or zero.
+
 Bool CharString_parseDouble(CharString s, F64 *result);
 Bool CharString_parseFloat(const CharString s, F32 *result);
 Bool CharString_parseOct(CharString s, U64 *result);
@@ -178,7 +186,8 @@ static inline Bool CharString_isUnsignedNumber(const CharString s) {
 
 #undef CharString_matchesPattern
 
-Bool CharString_isFloat(const CharString s);            //Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+//Checks decimal parser syntax without restricting its numeric range.
+Bool CharString_isFloat(const CharString s);
 
 //Cut will return a reference into the current string to avoid copies
 

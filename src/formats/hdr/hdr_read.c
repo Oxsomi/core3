@@ -60,22 +60,29 @@ static F32 HDR_scale(U8 ex) {
 
 	const I32 n = (I32) ex - (128 + 8);
 
-	return n >= -126 ? F32_fromU32Bits((U32)(n + 127) << 23) : F32_fromU32Bits(1u << (U32)(n + 149));
+	return n >= -126 ? F32_fromU32Bits((U32) (n + 127) << 23) : F32_fromU32Bits(1u << (U32) (n + 149));
 }
 
 //RGBE to float, Radiance's own convention: the mantissa is biased by half a step because the encoder truncated rather than
 // rounded, and exponent 0 is the exact zero rather than a denormal (its scale is zero, so it needs no branch of its own).
+//Each texel is copied into row as bytes, so row needs no alignment.
 
-static void HDR_widen(const U8 *raw, U32 w, F32 *row) {
+static void HDR_widen(const U8 *raw, U32 w, U8 *row) {
 
 	for (U32 x = 0; x < w; ++x) {
 
-		const F32 scale = HDR_scale(raw[(U64)x * 4 + 3]);
+		const F32 scale = HDR_scale(raw[(U64) x * 4 + 3]);
 
-		row[(U64)x * 4 + 0] = ((F32) raw[(U64)x * 4 + 0] + 0.5f) * scale;
-		row[(U64)x * 4 + 1] = ((F32) raw[(U64)x * 4 + 1] + 0.5f) * scale;
-		row[(U64)x * 4 + 2] = ((F32) raw[(U64)x * 4 + 2] + 0.5f) * scale;
-		row[(U64)x * 4 + 3] = 1;
+		const F32 texel[4] = {
+			((F32) raw[(U64) x * 4 + 0] + 0.5f) * scale,
+			((F32) raw[(U64) x * 4 + 1] + 0.5f) * scale,
+			((F32) raw[(U64) x * 4 + 2] + 0.5f) * scale,
+			1
+		};
+
+		Buffer_memcpy(
+			Buffer_createRef(row + (U64) x * sizeof(texel), sizeof(texel)), Buffer_createRefConst(texel, sizeof(texel))
+		);
 	}
 }
 
@@ -121,7 +128,7 @@ static Bool HDR_decodeAdaptive(const U8 *src, U64 avail, U32 w, U8 *raw, U64 *co
 
 				if(raw)
 					for(U32 i = 0; i < run; ++i)
-						raw[(U64)(x + i) * 4 + ch] = value;
+						raw[(U64) (x + i) * 4 + ch] = value;
 
 				x += run;
 			}
@@ -136,7 +143,7 @@ static Bool HDR_decodeAdaptive(const U8 *src, U64 avail, U32 w, U8 *raw, U64 *co
 
 				if(raw)
 					for(U32 i = 0; i < count; ++i)
-						raw[(U64)(x + i) * 4 + ch] = src[p + i];
+						raw[(U64) (x + i) * 4 + ch] = src[p + i];
 
 				p += count;
 				x += count;
@@ -214,8 +221,30 @@ static Bool HDR_readLine(HDRCursor *c, C8 *line, U64 lineCap, U64 *length, Error
 		line[n++] = (C8) ch;
 	}
 
+	//A CRLF header ends its lines with \r too, which would keep the blank line that closes the header from being blank
+
+	if(n && line[n - 1] == '\r')
+		--n;
+
 	line[n] = '\0';
 	*length = n;
+
+clean:
+	return s_uccess;
+}
+
+//Every scanline takes at least four bytes (a flat one texel row is the shortest), so a header declaring more rows than
+// the bytes after it divided by four is lying. Checked before anything is sized from the header, since the dimensions
+// alone allow a 64 GiB output from a 53 byte file.
+
+static Bool HDR_checkRows(U32 h, U64 left, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(h > left / 4)
+		retError(clean, Error_outOfBounds(
+			0, h, left / 4, "HDR_read() the header declares more scanlines than the data holds"
+		));
 
 clean:
 	return s_uccess;
@@ -249,7 +278,7 @@ static Bool HDR_parseDim(const C8 **it, U32 *result, Error *e_rr) {
 
 	while (*p >= '0' && *p <= '9') {
 
-		v = v * 10 + (U64)(*p - '0');
+		v = v * 10 + (U64) (*p - '0');
 		++digits; ++p;
 
 		if(v > HDR_MAX_DIM)
@@ -472,6 +501,8 @@ Bool HDR_read(
 	const Bool keepRGBE = (flags & EHDRReadFlags_KeepRGBE) != 0;
 	const U64 rowBytes = (U64) w * 4 * (keepRGBE ? 1 : sizeof(F32));
 
+	gotoIfError3(clean, HDR_checkRows(h, stream->size - (cursor->base + cursor->pos), e_rr));
+
 	//The output size is known exactly here, unlike the encoder's, so a resizable sink grows once rather than once a scanline
 	// and ends up holding no slack.
 
@@ -527,7 +558,7 @@ Bool HDR_read(
 						gotoIfError3(clean, HDRCursor_next(cursor, &value, e_rr));
 
 						for(U32 i = 0; i < run; ++i)
-							raw[(U64)(x + i) * 4 + ch] = value;
+							raw[(U64) (x + i) * 4 + ch] = value;
 
 						x += run;
 					}
@@ -541,7 +572,7 @@ Bool HDR_read(
 
 							U8 value = 0;
 							gotoIfError3(clean, HDRCursor_next(cursor, &value, e_rr));
-							raw[(U64)(x + i) * 4 + ch] = value;
+							raw[(U64) (x + i) * 4 + ch] = value;
 						}
 
 						x += count;
@@ -587,10 +618,10 @@ Bool HDR_read(
 						retError(clean, Error_outOfBounds(0, x + run, w, "HDR_read() repeat past scanline"));
 
 					for (U32 i = 0; i < run; ++i) {
-						raw[(U64)(x + i) * 4 + 0] = raw[(U64)(x - 1) * 4 + 0];
-						raw[(U64)(x + i) * 4 + 1] = raw[(U64)(x - 1) * 4 + 1];
-						raw[(U64)(x + i) * 4 + 2] = raw[(U64)(x - 1) * 4 + 2];
-						raw[(U64)(x + i) * 4 + 3] = raw[(U64)(x - 1) * 4 + 3];
+						raw[(U64) (x + i) * 4 + 0] = raw[(U64) (x - 1) * 4 + 0];
+						raw[(U64) (x + i) * 4 + 1] = raw[(U64) (x - 1) * 4 + 1];
+						raw[(U64) (x + i) * 4 + 2] = raw[(U64) (x - 1) * 4 + 2];
+						raw[(U64) (x + i) * 4 + 3] = raw[(U64) (x - 1) * 4 + 3];
 					}
 
 					x += run;
@@ -598,10 +629,10 @@ Bool HDR_read(
 				}
 
 				else {
-					raw[(U64)x * 4 + 0] = v[0];
-					raw[(U64)x * 4 + 1] = v[1];
-					raw[(U64)x * 4 + 2] = v[2];
-					raw[(U64)x * 4 + 3] = v[3];
+					raw[(U64) x * 4 + 0] = v[0];
+					raw[(U64) x * 4 + 1] = v[1];
+					raw[(U64) x * 4 + 2] = v[2];
+					raw[(U64) x * 4 + 3] = v[3];
 					++x;
 					shift = 0;
 				}
@@ -618,12 +649,11 @@ Bool HDR_read(
 			continue;
 		}
 
-		F32 *row = rowF32.ptrNonConst;
-		HDR_widen(raw, w, row);
+		HDR_widen(raw, w, (U8*) rowF32.ptrNonConst);
 
 		gotoIfError3(clean, outputStream->write(
 			outputStream, outputOffset + (U64) y * rowBytes, rowBytes,
-			Buffer_createRefConst(row, rowBytes), alloc, e_rr
+			Buffer_createRefConst(rowF32.ptr, rowBytes), alloc, e_rr
 		));
 	}
 
@@ -693,8 +723,10 @@ static Bool HDR_decodeLines(const HDRReadPending *p, U32 y0, U32 y1, Error *e_rr
 			p->encoded.ptr + start, p->lineStart.ptr[y + 1] - start, p->w, raw, &consumed, e_rr
 		));
 
+		//The caller's buffer has no alignment promise, which HDR_widen doesn't need
+
 		if(!p->keepRGBE)
-			HDR_widen(raw, p->w, (F32*) row);
+			HDR_widen(raw, p->w, row);
 	}
 
 clean:
@@ -897,6 +929,8 @@ Bool HDR_readBegin(
 			3, rowBytes * head.h, Buffer_length(output), "HDR_readBegin()::output is smaller than the image"
 		));
 
+	gotoIfError3(clean, HDR_checkRows(head.h, Buffer_length(encoded) - dataStart, e_rr));
+
 	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(HDRReadPending), alloc, &pendingBuf, e_rr));
 	p = (HDRReadPending*) pendingBuf.ptrNonConst;
 
@@ -1015,7 +1049,7 @@ Bool HDR_readParallel(
 			"HDR_readParallel()::stream, off, info and outputStream are required"
 		));
 
-	if(
+	if (
 		streamRef->refPtrType->typeId != (TypeId) EContainerTypeId_Stream ||
 		outputStreamRef->refPtrType->typeId != (TypeId) EContainerTypeId_Stream
 	)
@@ -1035,6 +1069,8 @@ Bool HDR_readParallel(
 
 	const U64 rowBytes = (U64) head.w * 4 * (flags & EHDRReadFlags_KeepRGBE ? 1 : sizeof(F32));
 	const U64 bodyLen = stream->size - *off;
+
+	gotoIfError3(clean, HDR_checkRows(head.h, stream->size - dataStart, e_rr));
 
 	gotoIfError3(clean, Buffer_createUninitializedBytes(bodyLen, alloc, &body, e_rr));
 	gotoIfError3(clean, Stream_read(stream, *off, bodyLen, body, alloc, e_rr));

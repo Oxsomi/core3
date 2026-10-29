@@ -87,6 +87,7 @@ Bool CLI_audioConvertFind(const FileInfo *info, void *dataGeneric, const Allocat
 	if (info->type == EFileType_File && CharString_endsWithStringInsensitive(&info->path, &wav, 0)) {
 
 		CharString cut = CharString_createNull();
+
 		if (!CharString_cut(&info->path, CharString_length(data->inputDir), 0, &cut))
 			retError(clean, Error_invalidState(0, "CLI_audioConvertFind() cut failed"));
 
@@ -127,6 +128,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 	if (args->parameters & EOperationHasParameter_SplitBy) {
 
 		CharString str = CharString_createNull();
+
 		if (!ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &str, NULL) || CharString_length(str) <= 2) {
 			Log_debugLnx("CLI_audioConvert() invalid -split argument. Expected left, right or average");
 			success = false;
@@ -152,6 +154,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 	if (args->parameters & EOperationHasParameter_Bit) {
 
 		CharString str = CharString_createNull();
+
 		if (!ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str, NULL) || !CharString_length(str)) {
 			Log_debugLnx("CLI_audioConvert() invalid -bits argument. Expected 8, 16, 24, 32 or 64 or a combo split by ,");
 			success = false;
@@ -208,6 +211,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 		CharString resolved1 = CharString_createNull();
 
 		Bool isVirtual = false;
+
 		if(!File_resolve(&outputStr, &isVirtual, 0, &Platform_instance->defaultDir, alloc, &resolved, NULL)) {
 			Log_debugLnx("CLI_audioConvert() invalid -output argument. Couldn't be resolved");
 			success = false;

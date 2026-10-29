@@ -75,7 +75,7 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_setAllBits", Buffer_setAllBits(buf1, &test->err));
 
 	for (i = 0; i < 256 / 8; ++i)
-		if (dat1[i] != (U64)-1)
+		if (dat1[i] != (U64) -1)
 			break;
 
 	Test_assert(test, "Buffer_setAllBits", i == 256 / 8);
@@ -87,6 +87,32 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_eq (1)", Buffer_eq(buf, buf2));
 	Test_assert(test, "Buffer_neq (1)", !Buffer_neq(buf, buf2));
 
+	//All zero: the first and the last byte are the edges of the shifted compare
+
+	{
+		U8 zero[257] = { 0 };
+
+		Test_assert(test, "Buffer_isZero empty", Buffer_isZero(Buffer_createNull()));
+		Test_assert(test, "Buffer_isZero one byte", Buffer_isZero(Buffer_createRefConst(zero, 1)));
+		Test_assert(test, "Buffer_isZero", Buffer_isZero(Buffer_createRefConst(zero, sizeof(zero))));
+
+		zero[0] = 1;
+		Test_assert(test, "Buffer_isZero first byte set", !Buffer_isZero(Buffer_createRefConst(zero, sizeof(zero))));
+		Test_assert(test, "Buffer_isZero one set byte", !Buffer_isZero(Buffer_createRefConst(zero, 1)));
+
+		zero[0] = 0;
+		zero[sizeof(zero) - 1] = 0x80;
+		Test_assert(test, "Buffer_isZero last byte set", !Buffer_isZero(Buffer_createRefConst(zero, sizeof(zero))));
+
+		zero[sizeof(zero) - 1] = 0;
+		zero[128] = 1;
+		Test_assert(test, "Buffer_isZero middle byte set", !Buffer_isZero(Buffer_createRefConst(zero, sizeof(zero))));
+
+		Test_assert(test, "Buffer_isZero around a set byte", Buffer_isZero(
+			Buffer_createRefConst(zero, 128)
+		) && Buffer_isZero(Buffer_createRefConst(zero + 129, sizeof(zero) - 129)));
+	}
+
 	//Bitwise
 
 	Test_assert(test, "Buffer_bitwiseNot", Buffer_bitwiseNot(buf1, &test->err));
@@ -97,7 +123,7 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_bitwiseOr", Buffer_bitwiseOr(buf, buf1, &test->err));
 
 	for (i = 0; i < 256 / 8; ++i)
-		if (dat[i] != (U64)-1)
+		if (dat[i] != (U64) -1)
 			break;
 
 	Test_assert(test, "Buffer_bitwiseOr", i == 256 / 8);
@@ -120,6 +146,43 @@ void Test_buffer(Test *test) {
 			break;
 
 	Test_assert(test, "Buffer_bitwiseAnd", i == 256 / 8);
+
+	U8 andDst[2] = { 0xFF, 0xFF };
+	const U8 andSrc = 0x0F;
+
+	Test_assert(test, "Buffer_bitwiseAnd clears unmatched tail", Buffer_bitwiseAnd(
+		Buffer_createRef(andDst, sizeof(andDst)), Buffer_createRefConst(&andSrc, sizeof(andSrc)), &test->err
+	));
+
+	Test_assert(test, "Buffer_bitwiseAnd shorter source value", andDst[0] == 0x0F && !andDst[1]);
+
+	U64 unalignedData[34] = { 0 }, unalignedOther[34] = { 0 };
+	Buffer unalignedDst = Buffer_createRef((U8*) unalignedData + 1, 257);
+	Buffer unalignedSrc = Buffer_createRef((U8*) unalignedOther + 1, 257);
+
+	Test_assert(test, "Buffer_bitwise unaligned setup", Buffer_setAllToU8(unalignedDst, 0xA5, &test->err));
+	Test_assert(test, "Buffer_bitwise unaligned source", Buffer_setAllToU8(unalignedSrc, 0x0F, &test->err));
+	Test_assert(test, "Buffer_bitwiseOr unaligned 257 bytes", Buffer_bitwiseOr(unalignedDst, unalignedSrc, &test->err));
+
+	for(i = 0; i < 257 && unalignedDst.ptr[i] == 0xAF; ++i) {}
+
+	Test_assert(test, "Buffer_bitwiseOr unaligned value", i == 257);
+	Test_assert(test, "Buffer_bitwiseXor unaligned 257 bytes", Buffer_bitwiseXor(unalignedDst, unalignedSrc, &test->err));
+
+	for(i = 0; i < 257 && unalignedDst.ptr[i] == 0xA0; ++i) {}
+
+	Test_assert(test, "Buffer_bitwiseXor unaligned value", i == 257);
+	Test_assert(test, "Buffer_bitwiseAnd unaligned 257 bytes", Buffer_bitwiseAnd(unalignedDst, unalignedSrc, &test->err));
+
+	for(i = 0; i < 257 && !unalignedDst.ptr[i]; ++i) {}
+
+	Test_assert(test, "Buffer_bitwiseAnd unaligned value", i == 257);
+	Test_assert(test, "Buffer_bitwiseNot unaligned 257 bytes", Buffer_bitwiseNot(unalignedDst, &test->err));
+
+	for(i = 0; i < 257 && unalignedDst.ptr[i] == 0xFF; ++i) {}
+
+	Test_assert(test, "Buffer_bitwiseNot unaligned value", i == 257);
+	Test_assert(test, "Buffer_bitwise unaligned guards", !((U8*) unalignedData)[0] && !((U8*) unalignedData)[258]);
 
 	//Memcpy
 
@@ -238,6 +301,16 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_unsetBitRange", Buffer_bitwiseNot(buf1, &test->err));
 	Test_assert(test, "Buffer_setBitRange, Buffer_unsetBitRange", Buffer_eq(buf, buf1));
 
+	U8 rangeByte = 0x5A;
+	Buffer rangeBuf = Buffer_createRef(&rangeByte, 1);
+
+	Test_assert(test, "Buffer_setBitRange length overflow", !Buffer_setBitRange(rangeBuf, 1, U64_MAX, NULL));
+	Test_assert(test, "Buffer_unsetBitRange length overflow", !Buffer_unsetBitRange(rangeBuf, 1, U64_MAX, NULL));
+	Test_assert(test, "Buffer_setBitRange offset overflow", !Buffer_setBitRange(rangeBuf, U64_MAX, 2, &err));
+	Test_assert(test, "Buffer_setBitRange bounds error", err.genericError == EGenericError_OutOfBounds);
+	Test_assert(test, "Buffer_unsetBitRange offset overflow", !Buffer_unsetBitRange(rangeBuf, U64_MAX, 2, &err));
+	Test_assert(test, "Buffer_bitRange failure preserves contents", rangeByte == 0x5A);
+
 	//Individual bits
 
 	Test_assert(test, "Buffer_setBit", Buffer_unsetAllBits(buf, &test->err));
@@ -277,6 +350,10 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_consume (value)", val == 1);
 
 	//Append
+
+	Test_assert(test, "Buffer_appendBuffer null destination", !Buffer_appendBuffer(NULL, buf, &err));
+	Test_assert(test, "Buffer_appendBuffer null error", err.genericError == EGenericError_NullPointer);
+	Test_assert(test, "Buffer_appendBuffer null destination no error", !Buffer_appendBuffer(NULL, buf, NULL));
 
 	val = 0xDEADBEEFCAFEBABE;
 	Test_assert(test, "Buffer_append", Buffer_append(&appendBuf, &val, sizeof(val), &test->err));

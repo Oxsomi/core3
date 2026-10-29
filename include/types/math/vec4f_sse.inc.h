@@ -66,11 +66,11 @@ static inline F32x4 F32x4_sub(F32x4 a, F32x4 b) { return _mm_sub_ps(a, b); }
 static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { return _mm_div_ps(a, b); }
 
-static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_trunc2(b), 0xFF)); }
-static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_trunc3(b), 0xFF)); }
+static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, b, 0x3F)); }
+static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, b, 0x7F)); }
 static inline F32 F32x4_dot4(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, b, 0xFF)); }
 
-static inline F32x4 F32x4_negate(F32x4 a) { return F32x4_sub(F32x4_zero(), a); }
+static inline F32x4 F32x4_negate(F32x4 a) { return _mm_xor_ps(a, _mm_set1_ps(-0.0f)); }
 
 //Clamps
 

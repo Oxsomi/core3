@@ -48,7 +48,7 @@ typedef struct SBFile {
 	ListSBVar vars;
 	ListListU32 arrays;
 
-	ESBSettingsFlags flags;      //flags and bufferSize are assumed to be a single U64 combined (need 8-byte alignment)
+	ESBSettingsFlags flags;
 	U32 bufferSize;
 
 	U64 hash;                    //Appending to the SBFile will automatically refresh this
@@ -73,6 +73,12 @@ Bool SBFile_createCopy(
 );
 
 void SBFile_free(SBFile *shFile, const Allocator *alloc);
+
+//Internal hash steps shared by sb_variable.c and sb_combine.c (see docs/file/oiSB.md).
+
+void SBStruct_applyHash(U64 *hashRes, SBStruct strct, CharString name, U64 index);
+void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name, U64 index);
+void ListU32_applyHash(U64 *hashRes, ListU32 array, U64 index);
 
 Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const Allocator *alloc, Error *e_rr);
 

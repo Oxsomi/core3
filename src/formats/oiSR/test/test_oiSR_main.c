@@ -210,28 +210,33 @@ static void assertSampleContent(Test *t, const SRFile *r) {
 
 		Test_assert(t, "type keys node 2", r->types.ptr[0].nodeId == 2);
 		Test_assert(t, "type is vector 1x3",
-			r->types.ptr[0].typeClass == ESRTypeClass_Vector && r->types.ptr[0].rows == 1 && r->types.ptr[0].cols == 3);
+			r->types.ptr[0].typeClass == ESRTypeClass_Vector && r->types.ptr[0].rows == 1 && r->types.ptr[0].cols == 3
+		);
 
 		CharString f3 = CharString_createRefCStrConst("float3");
 		Test_assert(t, "underlying type name resolves to float3",
 			r->types.ptr[0].typeNameId < r->names.entryStrings.length &&
-			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].typeNameId], &f3));
+			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].typeNameId], &f3)
+		);
 
 		CharString v3 = CharString_createRefCStrConst("vec3");
 		Test_assert(t, "display type name resolves to vec3",
 			r->types.ptr[0].displayNameId < r->names.entryStrings.length &&
-			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].displayNameId], &v3));
+			CharString_equalsStringSensitive(&r->names.entryStrings.ptr[r->types.ptr[0].displayNameId], &v3)
+		);
 
 		//Go-to-definition points at the Light struct (node 1)
 
 		Test_assert(t, "type def node is the struct", r->types.ptr[0].defNodeId == 1 &&
-			r->nodes.ptr[r->types.ptr[0].defNodeId].type == ESRNodeType_Struct);
+			r->nodes.ptr[r->types.ptr[0].defNodeId].type == ESRNodeType_Struct
+		);
 
 		//Multi-dimensional array [2][3] round-tripped through the shared pool
 
 		Test_assert(t, "type has 2 array dims", r->types.ptr[0].arrayDimCount == 2 && r->types.ptr[0].arrayDimStart == 0);
 		Test_assert(t, "array dims are [2][3]",
-			r->arrayDims.length == 2 && r->arrayDims.ptr[0] == 2 && r->arrayDims.ptr[1] == 3);
+			r->arrayDims.length == 2 && r->arrayDims.ptr[0] == 2 && r->arrayDims.ptr[1] == 3
+		);
 	}
 }
 
@@ -399,6 +404,8 @@ OXC3_TEST_MAIN(formats_oiSR) {
 	Test_SRFileStructuralRoundTrips(&t);
 	Test_SRFileHashAndName(&t);
 	Test_SRFileCreateAndWriteGuards(&t);
+	Test_SRReadHugeCounts(&t);
+	Test_SRWriteFailures(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

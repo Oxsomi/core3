@@ -63,7 +63,7 @@ void Test_SBFileRoundTripInlineArray(Test *t) {
 			//Inline: bit15 must NOT be set, value == dim
 			U16 arrayField = result.vars.ptr[0].arrayDimOrArrayId;
 			Test_assert(t, "inline bit15 clear", !(arrayField >> 15));
-			Test_assert(t, "inline dim == 4",    (arrayField & (U16)I16_MAX) == 4);
+			Test_assert(t, "inline dim == 4",    (arrayField & (U16) I16_MAX) == 4);
 			Test_assert(t, "var type",           result.vars.ptr[0].type == ESBType_F32x4);
 		}
 
@@ -114,7 +114,7 @@ void Test_SBFileInlineArrayBoundary32767(Test *t) {
 		if (result.vars.length == 1) {
 			U16 arrayField = result.vars.ptr[0].arrayDimOrArrayId;
 			Test_assert(t, "rt bit15 clear",  !(arrayField >> 15));
-			Test_assert(t, "rt dim == 32767", (arrayField & (U16)I16_MAX) == 32767);
+			Test_assert(t, "rt dim == 32767", (arrayField & (U16) I16_MAX) == 32767);
 		}
 
 	done32767:
@@ -157,7 +157,7 @@ void Test_SBFileRoundTripArrayDim32768(Test *t) {
 		if (sb.vars.length == 1) {
 			U16 arrayField = sb.vars.ptr[0].arrayDimOrArrayId;
 			Test_assert(t, "bit15 set for 32768", arrayField >> 15);
-			Test_assert(t, "arrayIdx is 0",       (arrayField & (U16)I16_MAX) == 0);
+			Test_assert(t, "arrayIdx is 0",       (arrayField & (U16) I16_MAX) == 0);
 		}
 
 		Test_assert(t, "dim32768 round-trip", sbRoundTrip(t, &sb, &archiveSr, &result, &type));
@@ -168,7 +168,7 @@ void Test_SBFileRoundTripArrayDim32768(Test *t) {
 		if (result.vars.length == 1 && result.arrays.length >= 1) {
 			U16 arrayField = result.vars.ptr[0].arrayDimOrArrayId;
 			Test_assert(t, "rt bit15 set", arrayField >> 15);
-			U16 arrayIdx = arrayField & (U16)I16_MAX;
+			U16 arrayIdx = arrayField & (U16) I16_MAX;
 			Test_assert(t, "rt arrayIdx ok", arrayIdx < result.arrays.length);
 			if (arrayIdx < result.arrays.length) {
 				Test_assert(t, "rt array length 1", result.arrays.ptr[arrayIdx].length == 1);
@@ -220,7 +220,7 @@ void Test_SBFileRoundTripNDArray(Test *t) {
 			U16 arrayField = result.vars.ptr[0].arrayDimOrArrayId;
 			Test_assert(t, "ND bit15 set", arrayField >> 15);
 
-			U16 arrayIdx = arrayField & (U16)I16_MAX;
+			U16 arrayIdx = arrayField & (U16) I16_MAX;
 			Test_assert(t, "arrayIdx in bounds", arrayIdx < result.arrays.length);
 
 			if (arrayIdx < result.arrays.length) {
@@ -277,8 +277,8 @@ void Test_SBFileArrayDeduplication(Test *t) {
 		Test_assert(t, "arrays deduped to 1", sb.arrays.length == 1);
 
 		if (sb.vars.length == 2) {
-			U16 idxA = sb.vars.ptr[0].arrayDimOrArrayId & (U16)I16_MAX;
-			U16 idxB = sb.vars.ptr[1].arrayDimOrArrayId & (U16)I16_MAX;
+			U16 idxA = sb.vars.ptr[0].arrayDimOrArrayId & (U16) I16_MAX;
+			U16 idxB = sb.vars.ptr[1].arrayDimOrArrayId & (U16) I16_MAX;
 			Test_assert(t, "both point to same entry", idxA == idxB);
 		}
 

@@ -77,9 +77,17 @@ void Test_vec2i(Test *test) {
 
 	a = I32x2_create2(1, -8);
 	Test_assert(test, "I32x2_lsh32",      !I32x2_neq2(I32x2_lsh32(a, 2), I32x2_create2(4, -32)));
-	Test_assert(test, "I32x2_rsh32",      !I32x2_neq2(I32x2_rsh32(a, 1), I32x2_create2(0, (U32)(I32)-8 >> 1)));
+	Test_assert(test, "I32x2_rsh32",      !I32x2_neq2(I32x2_rsh32(a, 1), I32x2_create2(0, (U32) (I32) -8 >> 1)));
 
 	Test_assert(test, "I32x2_mod",        !I32x2_neq2(I32x2_mod(I32x2_create2(13, -13), I32x2_xx2(5)), I32x2_create2(3, 2)));
+	Test_assert(test, "I32x2_mod negative divisors", I32x2_eq2(
+		I32x2_mod(I32x2_create2(13, -13), I32x2_xx2(-5)), I32x2_create2(-2, -3)
+	));
+
+	Test_assert(test, "I32x2_mod integer limits", I32x2_eq2(
+		I32x2_mod(I32x2_create2(I32_MIN, -1), I32x2_create2(-1, I32_MIN)), I32x2_create2(0, -1)
+	));
+
 	Test_assert(test, "I32x2_pow2",       !I32x2_neq2(I32x2_pow2(I32x2_create2(3, 5)),  I32x2_create2(9, 25)));
 
 	//min/max/clamp/sign/abs

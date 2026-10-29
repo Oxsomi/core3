@@ -44,6 +44,7 @@ typedef struct Date {
 	U8 padding;
 } Date;
 
+//Returns U64_MAX for invalid dates or timestamps outside the representable nanosecond range.
 Ns Time_date(const Date *date, Bool isLocalTime);
 Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime);
 
@@ -52,13 +53,16 @@ static inline DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
 }
 
 static inline F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
-	return (F64)Time_dns(timeStamp0, timeStamp1) / SECOND;
+	return (F64) Time_dns(timeStamp0, timeStamp1) / SECOND;
 }
 
 static inline I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks()); }
 static inline DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
+//Formats YYYY-MM-DDThh:mm:ss.fffffffff with a Z suffix only for UTC; local time has no timezone suffix.
 void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime);
+//Parses one to nine fractional digits, requiring a Z suffix for UTC and no suffix for local time.
+//Local timestamps use the system timezone and its daylight saving rules; repeated local times are ambiguous.
 Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime);
 
 #ifdef __cplusplus

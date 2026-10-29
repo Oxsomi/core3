@@ -612,7 +612,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 	DescriptorHeap pushHeap;
 	c::Error *e_rr = &t->err;
 
-	if(
+	if (
 		!c::Test_assert(t, "srcCreate", dev.createRenderTexture(
 			8, 8, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRead, "Push class src", src,
 			c::EMSAASamples_Off, nullptr, e_rr
@@ -718,7 +718,7 @@ extern "C" void Test_graphicsBindfulPushClass(oxc::c::Test *t, oxc::c::GraphicsD
 
 	c::Buffer texelRef = c::Buffer_createRefConst(texels, sizeof(texels));
 
-	if(
+	if (
 		!c::Test_assert(t, "patternCreate", dev.createTexture(
 			c::ETextureType_2D, c::ETextureFormatId_RGBA8, c::EGraphicsResourceFlag_ShaderRead, 8, 8, 1,
 			"Push class pattern", &texelRef, pattern, nullptr, e_rr

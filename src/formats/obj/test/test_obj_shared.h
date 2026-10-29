@@ -44,3 +44,5 @@ void Test_objMaterialLimit(Test *t);
 void Test_objWriteRoundTrip(Test *t);
 void Test_objWriteQuantized(Test *t);
 void Test_objWriteGeometryOnly(Test *t);
+void Test_objWriteLocale(Test *t);
+void Test_objWriteNonFinite(Test *t);

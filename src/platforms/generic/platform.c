@@ -282,7 +282,7 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ELockAcquire acq = ELockAcquire_Invalid;
-	(void)ptr; (void) e_rr;
+	(void) ptr; (void) e_rr;
 
 	AtomicI64_add(&Allocator_memoryAllocationCount, 1);
 	AtomicI64_add(&Allocator_memoryAllocationSize, length);
@@ -368,7 +368,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 	Error *e_rr = NULL;
 	Bool s_uccess = true;
 
-	(void)e_rr;
+	(void) e_rr;
 
 	#ifndef NDEBUG
 
@@ -458,7 +458,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool s_uccess = true;
 	Error *e_rr = NULL;
-	(void) s_uccess; (void)e_rr;
+	(void) s_uccess; (void) e_rr;
 
 	#ifndef NDEBUG
 
@@ -511,13 +511,13 @@ clean:
 
 U64 Platform_getActiveAllocations(U64 minAllocationSize) {
 	
-	(void)minAllocationSize;
+	(void) minAllocationSize;
 
 	U64 active = 0;
 
 	Bool s_uccess = true;
 	Error *e_rr = NULL;
-	(void) s_uccess; (void)e_rr;
+	(void) s_uccess; (void) e_rr;
 
 	ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 

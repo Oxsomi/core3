@@ -172,6 +172,7 @@ static Bool Ply_parseHeader(
 
 	Bool sawFormat = false, sawEnd = false;
 	Bool sawU = false, sawV = false;
+	U32 sawSemantics = 0;         //Bit per EPlySemantic the current element has named
 	PlyElement *current = NULL;
 
 	for(;;) {
@@ -233,6 +234,7 @@ static Bool Ply_parseHeader(
 			}, alloc, e_rr));
 
 			current = header->elements.ptrNonConst + header->elements.length - 1;
+			sawSemantics = 0;
 
 			if(Ply_tokenIs(a, "vertex")) {
 				current->isVertex = true;
@@ -307,6 +309,19 @@ static Bool Ply_parseHeader(
 
 				if(current->isVertex)
 					prop.semantic = Ply_vertexSemantic(a, &sawU, &sawV);
+
+				//One property per meaning: a second x would be decoded differently by the paths that pick the
+				// first, the last or the eighth of them, so a header that repeats one is rejected.
+
+				if(prop.semantic != EPlySemantic_None) {
+
+					if(sawSemantics & (1U << prop.semantic))
+						retError(clean, Error_invalidParameter(
+							0, 20, "Ply_read() a vertex element names the same property twice"
+						));
+
+					sawSemantics |= 1U << prop.semantic;
+				}
 			}
 
 			gotoIfError3(clean, ListPlyProperty_pushBack(&header->properties, prop, alloc, e_rr));
@@ -337,6 +352,12 @@ static Bool Ply_parseHeader(
 
 		if(el->isFace && !(saw & sawVertex))
 			retError(clean, Error_invalidParameter(0, 13, "Ply_read() the face element comes before the vertex element"));
+
+		//A record without a property is zero bytes wide, so a count of them would be nothing to read and
+		// everything to loop over.
+
+		if(el->count && !el->propertyCount)
+			retError(clean, Error_invalidParameter(0, 21, "Ply_read() an element declares records but no properties"));
 
 		if(!el->isVertex)
 			continue;
@@ -445,6 +466,18 @@ static F64 Ply_decodeScalar(const U8 *bytes, U8 type, U8 format) {
 		case EPlyType_Float: return (F64) F32_fromU32Bits((U32) raw);
 		default: return F64_fromU64Bits(raw);
 	}
+}
+
+//A decoded scalar as a count or an index. Converting a negative, NaN or out of range double to an unsigned type
+// is undefined, so the value is range checked in F64 first: negative and NaN come out as 0, which every
+// caller rejects as "fewer than three corners" or "no such vertex", and a value past the type clamps.
+
+static U64 Ply_toCount(F64 v) {
+
+	if(!(v > 0))
+		return 0;
+
+	return v >= 18446744073709551615.0 ? U64_MAX : (U64) v;
 }
 
 static Bool Ply_readScalar(MeshSource *src, U8 type, U8 format, F64 *result, Error *e_rr) {
@@ -629,12 +662,16 @@ static Bool Ply_fillMeshHeader(const PlyHeader *header, U64 bodyOffset, MeshHead
 
 		out->vertexCount = el->count;
 
-		//Ascii has no record to seek to, whatever the properties say, so the stride stays zero there.
+		//Ascii has no record to seek to, whatever the properties say, so the stride stays zero there. The same
+		// goes for a vertex element behind one of unknown width (a list or a text element): its first record
+		// cannot be addressed, so the stride is zero and a consumer reads the body in order.
 
-		out->vertexStride = header->format == EPlyFormat_Ascii ? 0 : el->stride;
+		out->vertexStride = offsetKnown && header->format != EPlyFormat_Ascii ? el->stride : 0;
 
-		if(out->vertexStride)
+		if(out->vertexStride) {
+			out->bodyOffset = at;
 			at += (U64) el->count * out->vertexStride;
+		}
 
 		else offsetKnown = false;
 
@@ -717,7 +754,7 @@ Bool Ply_readHeader(
 	info->allNormals = info->hasNormals;
 	info->allUvs = info->hasUvs;
 
-	*off = header->bodyOffset;
+	*off = MeshSource_offset(&src);
 
 clean:
 	ListPlyElement_free(&headerData.elements, alloc);
@@ -918,7 +955,7 @@ static Bool Ply_decodeFaceFast(
 		if(avail >= countSize) {
 
 			rec = MeshSource_ptr(src);
-			corners = (U64) Ply_decodeScalar(rec, countType, format);
+			corners = Ply_toCount(Ply_decodeScalar(rec, countType, format));
 
 			if(corners > PLY_FAN_CAP || avail < (U64) countSize + corners * valueSize)
 				rec = NULL;
@@ -930,7 +967,7 @@ static Bool Ply_decodeFaceFast(
 			//general path uses takes both, and neither is common enough to be worth more than this.
 
 			gotoIfError3(clean, MeshSource_readBytes(src, recBuf, countSize, e_rr));
-			corners = (U64) Ply_decodeScalar(recBuf, countType, format);
+			corners = Ply_toCount(Ply_decodeScalar(recBuf, countType, format));
 
 			if(corners < 3)
 				retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
@@ -944,9 +981,9 @@ static Bool Ply_decodeFaceFast(
 
 				const F64 v = Ply_decodeScalar(one, indexType, format);
 
-				if(v < 0 || v >= (F64) verticesRead)
+				if(!(v >= 0 && v < (F64) verticesRead))
 					retError(clean, Error_outOfBounds(
-						0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+						0, Ply_toCount(v), verticesRead, "Ply_read() a face names a vertex that doesn't exist"
 					));
 
 				gotoIfError3(clean, ListU32_pushBack(&face, (U32) v, alloc, e_rr));
@@ -962,9 +999,9 @@ static Bool Ply_decodeFaceFast(
 
 				const F64 v = Ply_decodeScalar(rec + countSize + i * valueSize, indexType, format);
 
-				if(v < 0 || v >= (F64) verticesRead)
+				if(!(v >= 0 && v < (F64) verticesRead))
 					retError(clean, Error_outOfBounds(
-						0, (U64) v, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+						0, Ply_toCount(v), verticesRead, "Ply_read() a face names a vertex that doesn't exist"
 					));
 
 				idx[i] = (U32) v;
@@ -1111,7 +1148,7 @@ Bool Ply_read(
 					default: break;
 				}
 
-				if(dst && planCount < (U8)(sizeof(plan) / sizeof(plan[0])))
+				if(dst && planCount < (U8) (sizeof(plan) / sizeof(plan[0])))
 					plan[planCount++] = (PlyPlanEntry) { .offset = at, .type = prop->type, .dst = dst };
 
 				at = (U16) (at + Ply_typeSize[prop->type]);
@@ -1228,7 +1265,12 @@ Bool Ply_read(
 				F64 countValue = 0;
 				gotoIfError3(clean, PlyCursor_value(&cursor, prop->countType, &countValue, e_rr));
 
-				const U64 count = (U64) countValue;
+				//A negative count is a malformed file whichever way it is used, a dropped list included.
+
+				if(!(countValue >= 0))
+					retError(clean, Error_invalidParameter(0, 19, "Ply_read() a list declares a negative count"));
+
+				const U64 count = Ply_toCount(countValue);
 
 				if(prop->semantic != EPlySemantic_Indices) {
 
@@ -1267,9 +1309,9 @@ Bool Ply_read(
 
 					else gotoIfError3(clean, PlyCursor_value(&cursor, prop->type, &indexValue, e_rr));
 
-					if(indexValue < 0 || indexValue >= (F64) verticesRead)
+					if(!(indexValue >= 0 && indexValue < (F64) verticesRead))
 						retError(clean, Error_outOfBounds(
-							0, (U64) indexValue, verticesRead, "Ply_read() a face names a vertex that doesn't exist"
+							0, Ply_toCount(indexValue), verticesRead, "Ply_read() a face names a vertex that doesn't exist"
 						));
 
 					gotoIfError3(clean, ListU32_pushBack(&face, (U32) indexValue, alloc, e_rr));
@@ -1548,7 +1590,7 @@ static Bool Ply_buildFaceLayoutTable(
 		U8 countBuf[8];
 		gotoIfError3(clean, MeshSource_readBytes(&src, countBuf, countSize, e_rr));
 
-		const U64 corners = (U64) Ply_decodeScalar(countBuf, countType, format);
+		const U64 corners = Ply_toCount(Ply_decodeScalar(countBuf, countType, format));
 
 		if(corners < 3)
 			retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));
@@ -1615,7 +1657,7 @@ static Bool Ply_uniformCheckJob(void *data, U64 threadId, JobQueue *queue) {
 		if(!ok)
 			break;
 
-		if((U64) Ply_decodeScalar(countBuf, job->countType, job->format) != job->corners0) {
+		if(Ply_toCount(Ply_decodeScalar(countBuf, job->countType, job->format)) != job->corners0) {
 			job->uniform = false;
 			break;
 		}
@@ -1663,7 +1705,7 @@ static Bool Ply_buildFaceLayout(
 	gotoIfError3(clean, MeshSource_readBytes(&first, countBuf, countSize, e_rr));
 	MeshSource_free(&first);
 
-	const U64 corners0 = (U64) Ply_decodeScalar(countBuf, countType, format);
+	const U64 corners0 = Ply_toCount(Ply_decodeScalar(countBuf, countType, format));
 
 	if(corners0 < 3)
 		retError(clean, Error_invalidParameter(0, 18, "Ply_read() a face has fewer than three corners"));

@@ -100,7 +100,7 @@ Bool CLI_cpuDevices(const ParsedArgs *args) {
 			info->efficiency.physicalCores, info->efficiency.logicalCores
 		);
 
-		if(
+		if (
 			!CLI_logCpus("Performance", info->performance.cpus, NULL) ||
 			!CLI_logCpus("Efficiency", info->efficiency.cpus, NULL)
 		)

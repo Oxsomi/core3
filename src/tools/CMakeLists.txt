@@ -20,28 +20,36 @@
 find_package(Python3)
 
 add_custom_target(check_style ALL
-    COMMAND ${CMAKE_COMMAND} -E echo "-- Running OxC3 style check..."
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_style.py ${CMAKE_SOURCE_DIR} --no-todo-report
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "OxC3 style check"
-    VERBATIM
+	COMMAND ${CMAKE_COMMAND} -E echo "-- Running OxC3 style check..."
+	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_check_style.py
+	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_style.py ${CMAKE_SOURCE_DIR} --no-todo-report
+	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+	COMMENT "OxC3 style check"
+	VERBATIM
 )
 
 set_target_properties(check_style PROPERTIES FOLDER Oxsomi/tools)
+
+if(EnableTests AND Python3_Interpreter_FOUND)
+	add_test(
+		NAME OxC3_style_test
+		COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_check_style.py"
+	)
+endif()
 
 # The generated oxc:: wrappers are committed, so nobody needs the generator to read them.
 # This catches the case where the C header they're derived from changed and they weren't regenerated.
 
 add_custom_target(check_generated_hpp ALL
-    COMMAND ${CMAKE_COMMAND} -E echo "-- Checking generated C++ wrappers are up to date..."
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generate_hpp.py --check
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "OxC3 generated header check"
-    VERBATIM
+	COMMAND ${CMAKE_COMMAND} -E echo "-- Checking generated C++ wrappers are up to date..."
+	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/generate_hpp.py --check
+	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+	COMMENT "OxC3 generated header check"
+	VERBATIM
 )
 
 set_target_properties(check_generated_hpp PROPERTIES FOLDER Oxsomi/tools)
 
 if(EnableOxC3CLI)
-    add_subdirectory(oxc3_cli)
+	add_subdirectory(oxc3_cli)
 endif()

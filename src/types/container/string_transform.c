@@ -62,7 +62,7 @@ Bool CharString_appendString(CharString *s, const CharString *other, const Alloc
 
 	gotoIfError3(clean, CharString_resize(s, oldLen + otherl, other->ptr[0], allocator, e_rr));
 
-	Buffer_memcpy(Buffer_createRef((U8*)s->ptrNonConst + oldLen, otherl), CharString_bufferConst(*other));
+	Buffer_memcpy(Buffer_createRef((U8*) s->ptrNonConst + oldLen, otherl), CharString_bufferConst(*other));
 
 clean:
 	return s_uccess;
@@ -123,10 +123,16 @@ Bool CharString_insertString(CharString *s, const CharString *other, U64 i, cons
 
 	const U64 oldLen = CharString_length(*s);
 
+	if(i > oldLen)
+		retError(clean, Error_outOfBounds(2, i, oldLen, "CharString_insertString()::i out of bounds"));
+
 	if (CharString_isRef(*s) && oldLen)
 		retError(clean, Error_invalidParameter(0, 0, "CharString_insertString()::s should be managed memory"));
 
 	const U64 otherl = !other ? 0 : CharString_length(*other);
+
+	if(otherl > U64_MAX - oldLen)
+		retError(clean, Error_overflow(0, otherl, U64_MAX - oldLen, "CharString_insertString()::length overflow"));
 
 	if (!otherl)
 		goto clean;

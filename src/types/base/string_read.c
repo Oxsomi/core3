@@ -24,6 +24,7 @@
 #include "types/base/algorithm.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
+#include <stdlib.h>
 
 Bool CharString_isValidFileName(const CharString str) {
 
@@ -54,7 +55,7 @@ Bool CharString_isValidFileName(const CharString str) {
 
 	if (strl >= 3) {
 
-		if(
+		if (
 			CharString_startsWithStringInsensitive(&str, &CON, 0) ||
 			CharString_startsWithStringInsensitive(&str, &AUX, 0) ||
 			CharString_startsWithStringInsensitive(&str, &NUL, 0) ||
@@ -64,7 +65,8 @@ Bool CharString_isValidFileName(const CharString str) {
 
 		else if (strl >= 4) {
 
-			if((CharString_startsWithStringInsensitive(&str, &COM, 0) || CharString_startsWithStringInsensitive(&str, &LPT, 0))
+			if (
+				(CharString_startsWithStringInsensitive(&str, &COM, 0) || CharString_startsWithStringInsensitive(&str, &LPT, 0))
 				&& C8_isDec(str.ptr[3])
 			)
 				illegalStart = 4;
@@ -118,29 +120,21 @@ Bool CharString_isValidFilePath(CharString str) {
 			return true;
 	}
 
-	//myTest/ <-- or myTest\ to myTest
-
-	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
-		str.lenAndNullTerminated = CharString_length(str) - 1;
-
-	//On Windows, it's possible to change drive but keep same relative path.
-	//We don't support it.
-	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
-	//We also obviously don't support 0:\ and such or A:/ on unix
-
+	//Drive relative paths are unsupported; a drive prefix must include its root separator.
 	Bool hasPrefix = false;
 
 	#ifdef _WIN32
 
-		if(
-			CharString_length(str) >= 3 &&
-			str.ptr[1] == ':' && ((str.ptr[2] != '/' && str.ptr[2] != '\\') || !C8_isAlpha(str.ptr[0]))
-		)
-			return false;
-
-		//Absolute
-
 		if(CharString_length(str) >= 2 && str.ptr[1] == ':') {
+			if (
+				CharString_length(str) < 3 || !C8_isAlpha(str.ptr[0]) ||
+				(str.ptr[2] != '/' && str.ptr[2] != '\\')
+			)
+				return false;
+
+			if(CharString_length(str) == 3)
+				return true;
+
 			str.ptr += 3;
 			str.lenAndNullTerminated -= 3;
 			hasPrefix = true;
@@ -152,6 +146,12 @@ Bool CharString_isValidFilePath(CharString str) {
 			return false;
 
 	#endif
+
+	if (
+		CharString_getAt(str, CharString_length(str) - 1) == '/' ||
+		CharString_getAt(str, CharString_length(str) - 1) == '\\'
+	)
+		str.lenAndNullTerminated = CharString_length(str) - 1;
 
 	//Virtual files
 
@@ -236,8 +236,8 @@ ECompareResult CharString_compare(const CharString *a, const CharString *b, EStr
 
 		//TODO: sensitivity for unicode?
 
-		const C8 ai = C8_transform(a->ptr[i], (EStringTransform) caseSensitive);
-		const C8 bi = C8_transform(b->ptr[i], (EStringTransform) caseSensitive);
+		const U8 ai = (U8) C8_transform(a->ptr[i], (EStringTransform) caseSensitive);
+		const U8 bi = (U8) C8_transform(b->ptr[i], (EStringTransform) caseSensitive);
 
 		if (ai < bi)
 			return ECompareResult_Lt;
@@ -388,7 +388,7 @@ U64 CharString_findFirst(const CharStringSensOffLen *strSensOffLen, C8 c) {
 
 	c = C8_transform(c, transform);
 
-	if(off >= strl || off + len > strl)
+	if(off >= strl || len > strl - off)
 		return U64_MAX;
 
 	if(!len)
@@ -415,7 +415,7 @@ U64 CharString_findLast(const CharStringSensOffLen *strSensOffLen, C8 c) {
 
 	c = C8_transform(c, transform);
 
-	if(off >= strl || off + len > strl)
+	if(off >= strl || len > strl - off)
 		return U64_MAX;
 
 	if(!len)
@@ -445,7 +445,7 @@ U64 CharString_findFirstString(const CharStringSensOffLen *strSensOffLen, const 
 	if(!otherl || strl < otherl)
 		return U64_MAX;
 
-	if(off >= strl || off + len > strl)
+	if(off >= strl || len > strl - off)
 		return U64_MAX;
 
 	if(len)
@@ -488,31 +488,33 @@ U64 CharString_findLastString(const CharStringSensOffLen *strSensOffLen, const C
 	if(!otherl || strl < otherl)
 		return U64_MAX;
 
-	if(off >= strl || off + len > strl)
+	if(off >= strl || len > strl - off)
 		return U64_MAX;
 
 	if(len)
 		strl = off + len;
 
-	U64 i = strl - 1;
+	if(otherl > strl - off)
+		return U64_MAX;
 
-	for (; i != U64_MAX && i >= off; --i) {
+	for (U64 i = strl - otherl; ; --i) {
 
 		Bool match = true;
 
-		for (U64 j = i, k = otherl - 1; j != U64_MAX && k != U64_MAX; --j, --k)
-			if (C8_transform(sPtr[j], transform) != C8_transform(other->ptr[k], transform)) {
+		for (U64 k = 0; k < otherl; ++k)
+			if (C8_transform(sPtr[i + k], transform) != C8_transform(other->ptr[k], transform)) {
 				match = false;
 				break;
 			}
 
-		if (match) {
-			i -= otherl - 1;
+		if (match)
+			return i;
+
+		if (i == off)
 			break;
-		}
 	}
 
-	return i;
+	return U64_MAX;
 }
 
 Bool CharString_equalsString(const CharString *s, const CharString *other, EStringCase caseSensitive) {
@@ -599,7 +601,7 @@ static inline Bool CharString_offsetAsRef(CharString s, U64 off, CharString *res
 
 	*result = (CharString) {
 		.ptr = s.ptr + off,
-		.lenAndNullTerminated = (strl - off) | ((U64)CharString_isNullTerminated(s) << 63),
+		.lenAndNullTerminated = (strl - off) | ((U64) CharString_isNullTerminated(s) << 63),
 		.capacityAndRefInfo = CharString_isConstRef(s) ? U64_MAX : 0
 	};
 
@@ -621,7 +623,7 @@ Bool CharString_parseNyto(CharString s, U64 *result) {
 	if (!result || !s.ptr || strl > 11)
 		return false;
 
-	*result = 0;
+	U64 value = 0;
 
 	for (U64 i = strl - 1, j = 1; i != U64_MAX; --i, j <<= 6) {
 
@@ -630,12 +632,13 @@ Bool CharString_parseNyto(CharString s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		if(j == ((U64)1 << (10 * 6)) && v >= (1 << 4))        //We have 4 bits left
+		if(j == ((U64) 1 << (10 * 6)) && v >= (1 << 4))        //We have 4 bits left
 			return false;
 
-		*result |= j * v;
+		value |= j * v;
 	}
 
+	*result = value;
 	return true;
 }
 
@@ -652,7 +655,7 @@ Bool CharString_parseHex(CharString s, U64 *result) {
 	if (!result || !s.ptr || strl > 16)
 		return false;
 
-	*result = 0;
+	U64 value = 0;
 
 	for (U64 i = strl - 1, j = 0; i != U64_MAX; --i, j += 4) {
 
@@ -661,9 +664,10 @@ Bool CharString_parseHex(CharString s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		*result |= (U64)v << j;
+		value |= (U64) v << j;
 	}
 
+	*result = value;
 	return true;
 }
 
@@ -678,7 +682,7 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 	if (!result || !s.ptr || CharString_length(s) > 22)
 		return false;
 
-	*result = 0;
+	U64 value = 0;
 
 	for (U64 i = CharString_length(s) - 1, j = 0; i != U64_MAX; --i, j += 3) {
 
@@ -687,12 +691,13 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		if(j == ((U64)1 << (21 * 3)) && v > 1)        //Out of value
+		if(j == 63 && v > 1)
 			return false;
 
-		*result |= (U64)v << j;
+		value |= (U64) v << j;
 	}
 
+	*result = value;
 	return true;
 }
 
@@ -707,7 +712,7 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 	if (!result || !s.ptr || CharString_length(s) > 64)
 		return false;
 
-	*result = 0;
+	U64 value = 0;
 
 	for (U64 i = CharString_length(s) - 1, j = 1; i != U64_MAX; --i, j <<= 1) {
 
@@ -717,9 +722,10 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 			return false;
 
 		if(v)
-			*result |= j;
+			value |= j;
 	}
 
+	*result = value;
 	return true;
 }
 
@@ -727,250 +733,226 @@ Bool CharString_parseDec(const CharString s, U64 *result) {
 
 	const U64 strl = CharString_length(s);
 
-	if (!result || !s.ptr || strl > 20)
+	if (!result || !s.ptr || !strl || strl > 20)
 		return false;
 
-	*result = 0;
+	U64 value = 0;
 
-	for (U64 i = strl - 1, j = 1; i != U64_MAX; --i, j *= 10) {
+	for (U64 i = 0; i < strl; ++i) {
 
 		const U8 v = C8_dec(s.ptr[i]);
 
-		if (v == U8_MAX)
+		if (v == U8_MAX || value > (U64_MAX - v) / 10)
 			return false;
 
-		if(j == (U64) 1e19 && v > 1)        //Out of value
-			return false;
-
-		*result += j * v;
+		value = value * 10 + v;
 	}
 
+	*result = value;
 	return true;
 }
 
 Bool CharString_parseDecSigned(CharString s, I64 *result) {
 
+	if(!result)
+		return false;
+
 	const Bool neg = CharString_startsWithSensitive(s, '-', 0);
 
-	if (!CharString_offsetAsRef(s, neg, &s, NULL))
+	if (!CharString_offsetAsRef(s, neg || CharString_startsWithSensitive(s, '+', 0), &s, NULL))
 		return false;
 
-	const Bool b = CharString_parseDec(s, (U64*) result);
+	U64 value = 0;
 
-	if(!b)
+	if(!CharString_parseDec(s, &value))
 		return false;
 
-	if (!neg && *result == I64_MIN)            //Int min is the same as 63 bit max + 1
-		return true;
-
-	if (*(U64*)result >> 63)                //Guard against int overflow
+	if(value > (U64) I64_MAX + neg)
 		return false;
 
-	if(neg)
-		*result *= -1;
-
+	*result = neg ? (value == (U64) I64_MAX + 1 ? I64_MIN : -(I64) value) : (I64) value;
 	return true;
 }
 
-//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+//Normalize decimal syntax to a signed integer significand and exponent, without a locale decimal separator.
+//A binary64 rounding boundary is k * 2^q with k < 2^54 and q >= -1075.
+//Its exact decimal has at most 768 significant digits, and its last nonzero digit is 5 unless it is an integer.
+//At 768 digits every boundary ends in 0 or 5, since integer boundaries have at most 309 digits.
+//A discarded nonzero tail can change rounding only when the retained prefix equals a boundary.
+//Increasing a final 0 or 5 by one selects the same side without crossing another boundary.
+//This keeps the conversion within runtimes that retain at most 768 decimal digits.
 
-Bool CharString_parseDouble(CharString s, F64 *result) {
+#define _CHARSTRING_DECIMAL_DIGITS 768
 
-	//TODO: Replace with a standard function because they probably do something fancier.
+//Allow two signs, the exponent marker, five exponent digits and the null terminator.
 
-	if (!result)
+#define _CHARSTRING_DECIMAL_TEXT_SIZE (_CHARSTRING_DECIMAL_DIGITS + 9)
+
+static Bool CharString_decimalText(CharString s, C8 *text) {
+
+	const U64 length = CharString_length(s);
+
+	if(!s.ptr || !length)
 		return false;
 
-	//Parse sign
+	U64 i = 0;
+	const Bool negative = s.ptr[0] == '-';
 
-	Bool sign = false;
+	if(negative || s.ptr[0] == '+')
+		++i;
 
-	if (CharString_startsWithSensitive(s, '-', 0)) {
+	U64 significant = 0, fractional = 0;
+	U16 stored = 0;
+	Bool hasDigit = false, fraction = false, sticky = false;
 
-		sign = true;
+	for(; i < length; ++i) {
 
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			return false;
-	}
+		const C8 c = s.ptr[i];
 
-	else if (CharString_startsWithSensitive(s, '+', 0)) {
-		
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			return false;
-	}
-
-	//Parse integer part
-
-	F64 intPart = 0;
-	Bool hasDigit = false;
-
-	while(
-		!CharString_startsWithSensitive(s, '.', 0) &&
-		!CharString_startsWithInsensitive(s, 'e', 0)
-	) {
-
-		const U8 v = C8_dec(s.ptr[0]);
-
-		if (v == U8_MAX) {
-
-			if((s.ptr[0] == 'f' || s.ptr[0] == 'F') && hasDigit && CharString_length(s) == 1) {
-				*result = sign ? -intPart : intPart;
-				return true;
-			}
-
-			return false;
+		if(c == '.' && !fraction) {
+			fraction = true;
+			continue;
 		}
+
+		if(!C8_isDec(c))
+			break;
 
 		hasDigit = true;
-		intPart = intPart * 10 + v;
+		fractional += fraction;
 
-		if(!F64_isValid(intPart))
-			return false;
+		if(c != '0' || significant) {
 
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			s = CharString_createNull();
+			++significant;
 
-		if (!CharString_length(s)) {
-			*result = sign ? -intPart : intPart;
-			return true;
+			if(stored < _CHARSTRING_DECIMAL_DIGITS) {
+
+				if(text)
+					text[negative + stored] = c;
+
+				++stored;
+			}
+
+			else sticky |= c != '0';
 		}
 	}
 
-	//Parse fraction
+	if(!hasDigit)
+		return false;
 
-	if (CharString_startsWithSensitive(s, '.', 0) && CharString_length(s) == 1) {
-		*result = sign ? -intPart : intPart;
+	U64 exponent = 0;
+	Bool exponentNegative = false;
+
+	if(i < length && (s.ptr[i] == 'e' || s.ptr[i] == 'E')) {
+
+		++i;
+
+		if(i < length && (s.ptr[i] == '-' || s.ptr[i] == '+'))
+			exponentNegative = s.ptr[i++] == '-';
+
+		const U64 begin = i;
+
+		for(; i < length && C8_isDec(s.ptr[i]); ++i) {
+			const U8 digit = C8_dec(s.ptr[i]);
+
+			exponent = exponent > (U64_MAX - digit) / 10 ? U64_MAX : exponent * 10 + digit;
+		}
+
+		if(i == begin)
+			return false;
+	}
+
+	if(i < length && (s.ptr[i] == 'f' || s.ptr[i] == 'F'))
+		++i;
+
+	if(i != length)
+		return false;
+
+	if(!text)
+		return true;
+
+	if(negative)
+		text[0] = '-';
+
+	if(!significant) {
+
+		text[negative] = '0';
+		text[negative + 1] = 0;
 		return true;
 	}
 
-	if(CharString_startsWithSensitive(s, '.', 0))
-		CharString_offsetAsRef(s, 1, &s, NULL);
+	if(sticky && (text[negative + stored - 1] == '0' || text[negative + stored - 1] == '5'))
+		++text[negative + stored - 1];
 
-	F64 fraction = 0, multiplier = 0.1;
+	const I64 shift = (I64) (significant - stored) - (I64) fractional;
+	const Bool shiftNegative = shift < 0;
+	const U64 magnitude = (U64) (shiftNegative ? -shift : shift);
 
-	while(!CharString_startsWithInsensitive(s, 'e', 0)) {
+	if(shiftNegative == exponentNegative)
+		exponent = magnitude > 10000 || exponent > 10000 ? 10000 : magnitude + exponent;
 
-		const U8 v = C8_dec(s.ptr[0]);
-
-		if (v == U8_MAX) {
-
-			if((s.ptr[0] == 'f' || s.ptr[0] == 'F') && hasDigit && CharString_length(s) == 1)  {
-				*result = sign ? -(intPart + fraction) : intPart + fraction;
-				return F64_isValid(*result);
-			}
-
-			return false;
-		}
-
-		hasDigit = true;
-		fraction += v * multiplier;
-
-		if(!F64_isValid(fraction))
-			return false;
-
-		multiplier *= 0.1;
-
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			s = CharString_createNull();
-
-		if (!CharString_length(s)) {
-			*result = sign ? -(intPart + fraction) : intPart + fraction;
-			return F64_isValid(*result);
-		}
+	else if(magnitude > exponent) {
+		exponent = magnitude - exponent;
+		exponentNegative = shiftNegative;
 	}
 
-	//Parse exponent sign
+	else exponent -= magnitude;
 
-	Bool nextE = CharString_startsWithInsensitive(s, 'e', 0);
+	//Exponents beyond this range cannot represent a nonzero finite binary64 with this bounded significand.
 
-	if (!CharString_offsetAsRef(s, 1, &s, NULL)) {
+	if(exponent > 10000)
+		exponent = 10000;
 
-		if (!nextE) {
-			*result = sign ? -(intPart + fraction) : intPart + fraction;
-			return F64_isValid(*result);
-		}
+	U16 at = negative + stored;
 
-		return false;
-	}
+	text[at++] = 'e';
 
-	Bool esign = false;
+	if(exponentNegative)
+		text[at++] = '-';
 
-	if (CharString_startsWithSensitive(s, '-', 0)) {
+	C8 digits[5];
+	U8 count = 0;
 
-		esign = true;
+	do {
+		digits[count++] = (C8) ('0' + exponent % 10);
+		exponent /= 10;
+	} while(exponent);
 
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			return false;
-	}
+	while(count)
+		text[at++] = digits[--count];
 
-	else if (CharString_startsWithSensitive(s, '+', 0)) {
+	text[at] = 0;
+	return true;
+}
 
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			return false;
-	}
+Bool CharString_parseDouble(CharString s, F64 *result) {
 
-	//Parse exponent (must be int)
+	C8 text[_CHARSTRING_DECIMAL_TEXT_SIZE];
 
-	F64 exponent = 0;
-
-	while(CharString_length(s)) {
-
-		const U8 v = C8_dec(s.ptr[0]);
-
-		if (v == U8_MAX) {
-
-			if(s.ptr[0] == 'f' || s.ptr[0] == 'F') {
-
-				exponent = F64_exp10(esign ? -exponent : exponent);
-
-				if (!F64_isValid(exponent))
-					return false;
-
-				const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
-
-				if(!F64_isValid(res))
-					return false;
-
-				*result = res;
-				return hasDigit && CharString_length(s) == 1;
-			}
-
-			return false;
-		}
-
-		exponent = exponent * 10 + v;
-
-		if(!F64_isValid(fraction))
-			return false;
-
-		if (!CharString_offsetAsRef(s, 1, &s, NULL))
-			break;
-	}
-
-	exponent = F64_exp10(esign ? -exponent : exponent);
-
-	if (!F64_isValid(exponent))
+	if(!result || !CharString_decimalText(s, text))
 		return false;
 
-	const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
+	const F64 value = strtod(text, NULL);
 
-	if(!F64_isValid(res))
+	if(!F64_isValid(value))
 		return false;
 
-	*result = res;
+	*result = value;
 	return true;
 }
 
 Bool CharString_parseFloat(const CharString s, F32 *result) {
 
-	F64 dub = 0;
-	if(!CharString_parseDouble(s, &dub))
+	C8 text[_CHARSTRING_DECIMAL_TEXT_SIZE];
+
+	if(!result || !CharString_decimalText(s, text))
 		return false;
 
-	if(!F32_isValid((F32)dub))
+	const F32 value = strtof(text, NULL);
+
+	if(!F32_isValid(value))
 		return false;
 
-	*result = (F32)dub;
+	*result = value;
 	return true;
 }
 
@@ -997,81 +979,7 @@ Bool CharString_parseU64(const CharString s, U64 *result) {
 }
 
 Bool CharString_isFloat(const CharString s) {
-
-	U64 strl = CharString_length(s);
-
-	if(!strl || !s.ptr)
-		return false;
-
-	//Validate sign
-
-	U64 i = 0;
-
-	if (s.ptr[0] == '-' || s.ptr[0] == '+') {
-
-		if (++i >= strl)
-			return false;
-	}
-
-	//Validate first int
-
-	for(; i < strl; ++i)
-
-		if (s.ptr[i] == '.' || s.ptr[i] == 'e' || s.ptr[i] == 'E')
-			break;
-
-		else if(!C8_isDec(s.ptr[i]))
-			return false;
-
-	if (i == strl)                //It's just an int
-		return true;
-
-	//Validate fraction
-
-	if (s.ptr[i] == '.') {
-
-		if (++i == strl)        //It's just an int
-			return true;
-
-		//Check for int until e/E
-
-		for(; i < strl; ++i)
-
-			if (s.ptr[i] == 'e' || s.ptr[i] == 'E')
-				break;
-
-			else if(!C8_isDec(s.ptr[i]))
-				return false;
-	}
-
-	if (i == strl)                //It's just [-+]?[0-9]*[.]?[0-9]*
-		return true;
-
-	//Validate exponent
-
-	if (s.ptr[i] == 'E' || s.ptr[i] == 'e') {
-
-		if (++i == strl)
-			return false;
-
-		//e-NNN, e+NNN
-
-		if (s.ptr[i] == '-' || s.ptr[i] == '+') {
-
-			if (++i == strl)
-				return false;
-		}
-
-		for(; i < strl; ++i)
-			if(!C8_isDec(s.ptr[i]))
-				return false;
-	}
-
-	//It's just [-+]?[0-9]*[.]?[0-9]*[fF]
-	if (i == strl || (i + 1 == strl && (s.ptr[i] == 'f' || s.ptr[i] == 'F')))
-		return true;
-
-	return false;
+	return CharString_decimalText(s, NULL);
 }
 
 Bool CharString_cut(const CharString *s, U64 offset, U64 length, CharString *result) {
@@ -1092,7 +1000,7 @@ Bool CharString_cut(const CharString *s, U64 offset, U64 length, CharString *res
 	if(!length)
 		length = strl - offset;
 
-	if (offset + length > strl)
+	if (length > strl - offset)
 		return false;
 
 	if (offset == strl) {
@@ -1110,7 +1018,7 @@ Bool CharString_cut(const CharString *s, U64 offset, U64 length, CharString *res
 
 Bool CharString_cutAfter(const CharStringCut *cut, C8 c, Bool isFirst) {
 
-	if (!cut || !cut->s)
+	if (!cut || !cut->s || !cut->result || (cut->result->ptr && !CharString_isRef(*cut->result)))
 		return false;
 
 	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
@@ -1119,12 +1027,17 @@ Bool CharString_cutAfter(const CharStringCut *cut, C8 c, Bool isFirst) {
 	if (found == U64_MAX)
 		return false;
 
+	if(!found) {
+		*cut->result = CharString_createNull();
+		return true;
+	}
+
 	return CharString_cut(cut->s, 0, found, cut->result);
 }
 
 Bool CharString_cutAfterString(const CharStringCut *cut, const CharString *other, Bool isFirst) {
 
-	if (!cut || !cut->s)
+	if (!cut || !cut->s || !cut->result || (cut->result->ptr && !CharString_isRef(*cut->result)))
 		return false;
 
 	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
@@ -1133,6 +1046,11 @@ Bool CharString_cutAfterString(const CharStringCut *cut, const CharString *other
 
 	if (found == U64_MAX)
 		return false;
+
+	if(!found) {
+		*cut->result = CharString_createNull();
+		return true;
+	}
 
 	return CharString_cut(cut->s, 0, found, cut->result);
 }

@@ -26,6 +26,7 @@
 #include "audio/audio_source.h"
 #include "types/container/test/basic_alloc.h"
 #include "types/container/memory_stream.h"
+#include "formats/wav/wav_file.h"
 #include "types/container/log.h"
 #include "types/test/test.h"
 
@@ -208,7 +209,8 @@ void Test_audioInterfaceGetPreferredDeviceNullOut(Test *t) {
  
 	Test_assert(t, "fails on NULL out",
 		!AudioInterface_getPreferredDevice(AudioInterfaceRef_ptr(interf), EAudioDeviceFlags_None,
-			t->alloc, NULL, &err)
+			t->alloc, NULL, &err
+		)
 	);
  
 	RefPtr_dec(&interf);
@@ -440,6 +442,70 @@ void Test_audioSourceStereoSpatialRejected(Test *t) {
 	AudioIfCtx_free(&ctx);
 }
 
+//A WAV inside a larger stream, as in an archive, is parsed where it starts and its samples are found there
+
+void Test_audioDeviceFromFileAtOffset(Test *t) {
+
+	Test_setModule(t, "AudioDevice_createFromFile at an offset");
+
+	Error err = Error_none();
+	AudioIfCtx ctx = (AudioIfCtx) { 0 };
+	MemoryStreamRef *samples = NULL, *file = NULL;
+	AudioStreamRef *audioStream = NULL;
+	WAVFile wav = (WAVFile) { 0 };
+
+	static const U8 silence[4096] = { 0 };
+	const U64 padding = 100;
+
+	RefPtrType ifType = AudioInterface_makeType(t->alloc);
+	RefPtrType devType = AudioDevice_makeType(t->alloc);
+	RefPtrType memType = MemoryStream_makeType(t->alloc);
+	RefPtrType streamType = AudioStream_makeType(t->alloc);
+
+	if (
+		Test_assert(t, "create ctx", AudioIfCtx_create(&ctx, t->alloc, &ifType, &devType, &err)) &&
+		Test_assert(t, "samples", MemoryStream_createFromBufferRegion(
+			Buffer_createRefConst(silence, sizeof(silence)), 0, 0, EMemoryStreamFlags_None, &memType, &samples, &err
+		)) &&
+		Test_assert(t, "padding", MemoryStream_create(padding, EMemoryStreamFlags_WriteResize, &memType, &file, &err)) &&
+		Test_assert(t, "write wav after padding", WAV_write(
+			file, samples, padding, 0, sizeof(silence), false, 44100, 16, true, NULL, t->alloc, &err
+		)) &&
+		Test_assert(t, "read wav after padding", WAV_read(file, padding, 0, t->alloc, &wav, &err))
+	) {
+
+		if(Test_assert(t, "createFromFile at offset", AudioDeviceRef_createFromFile(
+			ctx.device, file, padding, 1, 0, 1, false, t->alloc, &streamType, &audioStream, &err
+		))) {
+			const AudioStreamInfo *info = &AudioStreamRef_ptr(audioStream)->info;
+			Test_assert(t, "dataStart is absolute", info->dataStart == wav.dataStart && wav.dataStart > padding);
+			Test_assert(t, "data length", info->dataLengthLo32 == sizeof(silence) && info->sampleRate == 44100);
+			Test_assert(t, "the audio stream holds its own reference", AtomicI64_load(&file->refCount) == 2);
+		}
+
+		//A failure, early or late, leaves the caller's reference alone
+
+		AudioStreamRef *refused = NULL;
+
+		Test_assert(t, "negative pitch refused", !AudioDeviceRef_createFromFile(
+			ctx.device, file, padding, 1, 0, -1, false, t->alloc, &streamType, &refused, NULL
+		));
+
+		Test_assert(t, "WAV at the wrong offset refused", !AudioDeviceRef_createFromFile(
+			ctx.device, file, 0, 1, 0, 1, false, t->alloc, &streamType, &refused, NULL
+		));
+
+		Test_assert(
+			t, "failures keep the caller's reference", !refused && AtomicI64_load(&file->refCount) == 1 + !!audioStream
+		);
+	}
+
+	RefPtr_dec(&audioStream);
+	RefPtr_dec(&file);
+	RefPtr_dec(&samples);
+	AudioIfCtx_free(&ctx);
+}
+
 //Listener position steps (verify dirty mask fires correctly each interval)
  
 void Test_audioDeviceListenerPositionSteps(Test *t) {
@@ -524,6 +590,7 @@ OXC3_TEST_MAIN(audio_interface) {
 		Test_audioDeviceListenerTransform(&t);
 		Test_audioDeviceListenerPositionSteps(&t);
 		Test_audioSourceStereoSpatialRejected(&t);
+		Test_audioDeviceFromFileAtOffset(&t);
 	}
 
 	BasicAllocator_checkLeakedMem(&t);

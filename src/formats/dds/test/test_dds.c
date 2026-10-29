@@ -220,7 +220,7 @@ void Test_DDSRoundTripMipChain(Test *t) {
 
 		U32 mw = W, mh = H;
 
-		for (U32 m = 0; m < numMips && m < (U32)result.length; ++m) {
+		for (U32 m = 0; m < numMips && m < (U32) result.length; ++m) {
 			Test_assert(t, "mip mipId",   result.ptr[m].mipId    == m);
 			Test_assert(t, "mip layerId", result.ptr[m].layerId  == 0);
 			Test_assert(t, "mip streamLen", result.ptr[m].streamLen == ETextureFormat_getSize(fmt, mw, mh, 1));
@@ -272,7 +272,7 @@ void Test_DDSRoundTripCubemap(Test *t) {
 
 		const U64 faceLen = ETextureFormat_getSize(fmt, 4, 4, 1);
 
-		for (U32 f = 0; f < 6 && f < (U32)result.length; ++f) {
+		for (U32 f = 0; f < 6 && f < (U32) result.length; ++f) {
 			Test_assert(t, "cube face layerId",   result.ptr[f].layerId  == f);
 			Test_assert(t, "cube face mipId",     result.ptr[f].mipId    == 0);
 			Test_assert(t, "cube face streamLen", result.ptr[f].streamLen == faceLen);
@@ -362,7 +362,7 @@ void Test_DDSRoundTrip3D(Test *t) {
 
 		const U64 sliceLen = ETextureFormat_getSize(fmt, W, H, 1);
 
-		for (U32 z = 0; z < L && z < (U32)result.length; ++z) {
+		for (U32 z = 0; z < L && z < (U32) result.length; ++z) {
 			Test_assert(t, "3D slice z",         result.ptr[z].z         == z);
 			Test_assert(t, "3D slice mipId",     result.ptr[z].mipId     == 0);
 			Test_assert(t, "3D slice streamLen", result.ptr[z].streamLen == sliceLen);
@@ -423,7 +423,7 @@ void Test_DDSRoundTrip3DMipChain(Test *t) {
 
 			for (U32 z = 0; z < ml; ++z) {
 
-				if (idx >= (U32)result.length)
+				if (idx >= (U32) result.length)
 					break;
 
 				Test_assert(t, "3D mip chain mipId",     result.ptr[idx].mipId     == m);

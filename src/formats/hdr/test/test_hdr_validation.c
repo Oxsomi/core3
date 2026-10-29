@@ -35,7 +35,7 @@ static void expectWriteRefused(Test *t, const C8 *name, U32 w, U32 h, U64 srcTex
 	StreamRef *src = NULL, *sink = NULL;
 	U64 off = 0;
 
-	if(
+	if (
 		!MemoryStream_create(
 			srcTexels * 4 * sizeof(F32) + 1, EMemoryStreamFlags_IsWritable, &type,
 			(MemoryStreamRef**) &src, &t->err
@@ -85,7 +85,7 @@ static void expectReadRefused(Test *t, const C8 *name, const C8 *bytes, U64 len)
 	HDRInfo info = { 0 };
 	U64 off = 0;
 
-	if(
+	if (
 		!MemoryStream_createFromBufferRegion(
 			Buffer_createRefConst(bytes, len), 0, len, EMemoryStreamFlags_None, &type,
 			(MemoryStreamRef**) &src, &t->err
@@ -100,7 +100,7 @@ static void expectReadRefused(Test *t, const C8 *name, const C8 *bytes, U64 len)
 
 	//Refused by HDR_readBegin as well, or by HDR_readEnd once the jobs found it, with and without a queue
 
-	if(
+	if (
 		!Buffer_createEmptyBytes(4096, t->alloc, &output, &t->err) ||
 		!JobQueue_create(HDR_TEST_THREADS, t->alloc, &jobs, &t->err)
 	) {
@@ -209,7 +209,7 @@ void Test_HDRReadUnwritableSink(Test *t) {
 	HDRInfo info = { 0 };
 	U64 off = 0;
 
-	if(
+	if (
 		!MemoryStream_createFromBufferRegion(
 			Buffer_createRefConst(hdr, sizeof(hdr) - 1), 0, sizeof(hdr) - 1,
 			EMemoryStreamFlags_None, &type, (MemoryStreamRef**) &src, &t->err

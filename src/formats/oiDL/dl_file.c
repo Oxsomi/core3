@@ -108,6 +108,28 @@ void DLFile_free(DLFile *dlFile, const Allocator *alloc) {
 
 	ListDLEntryStream_free(&dlFile->entryStreams, alloc);
 
+	//An encrypted file's entries are decrypted plaintext, which doesn't go back to the allocator readable.
+	//Only what the file owns is wiped: a ref points at the caller's memory (or into the cache, wiped below).
+
+	const Bool wipe = dlFile->settings.encryptionType != 0;
+
+	if (wipe) {
+
+		if (dlFile->settings.dataType == EDLDataType_Data) {
+
+			for (U64 i = 0; i < dlFile->entryBuffers.length; ++i)
+				if (!Buffer_isRef(dlFile->entryBuffers.ptr[i]))
+					Buffer_clearAllSecure(dlFile->entryBuffers.ptrNonConst[i]);
+		}
+
+		else for (U64 i = 0; i < dlFile->entryStrings.length; ++i)
+			if (!CharString_isRef(dlFile->entryStrings.ptr[i]))
+				Buffer_clearAllSecure(CharString_buffer(dlFile->entryStrings.ptrNonConst[i]));
+
+		if (!Buffer_isRef(dlFile->cache))
+			Buffer_clearAllSecure(dlFile->cache);
+	}
+
 	if (dlFile->settings.dataType == EDLDataType_Data)
 		ListBuffer_freeUnderlying(&dlFile->entryBuffers, alloc);
 
@@ -204,8 +226,8 @@ Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *cop
 
 			if (
 				!Buffer_length(dlFile->cache) ||
-				(const U8*)str.ptr < dlFile->cache.ptr ||
-				(const U8*)str.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)
+				(const U8*) str.ptr < dlFile->cache.ptr ||
+				(const U8*) str.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)
 			) {
 				copy->entryStrings.ptrNonConst[i] = str;
 				continue;
@@ -213,12 +235,12 @@ Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *cop
 
 			if(CharString_isConstRef(str))
 				str = CharString_createRefSizedConst(
-					(const C8*)copy->cache.ptr + ((const U8*)str.ptr - dlFile->cache.ptr),
+					(const C8*) copy->cache.ptr + ((const U8*) str.ptr - dlFile->cache.ptr),
 					CharString_length(str), CharString_isNullTerminated(str)
 				);
 
 			else str = CharString_createRefSized(
-				(C8*)copy->cache.ptrNonConst + ((const U8*)str.ptr - dlFile->cache.ptr),
+				(C8*) copy->cache.ptrNonConst + ((const U8*) str.ptr - dlFile->cache.ptr),
 				CharString_length(str), CharString_isNullTerminated(str)
 			);
 

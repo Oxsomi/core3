@@ -83,14 +83,14 @@ static Bool FileStream_read(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
 	FileStream *fs = (FileStream *)stream;
 
 	if (offset + length > stream->size)
 		retError(clean, Error_outOfBounds(0, offset + length, stream->size, "FileStream_read() out of bounds"));
 
-	if (fseek(fs->f, (long)offset, SEEK_SET) != 0)
+	if (fseek(fs->f, (long) offset, SEEK_SET) != 0)
 		retError(clean, Error_invalidState(0, "FileStream_read() fseek failed"));
 
 	if (fread(buf.ptrNonConst, 1, length, fs->f) != length)
@@ -101,8 +101,9 @@ clean:
 }
 
 static void FileStream_close(OxStream *stream, const Allocator *alloc) {
-	(void)alloc;
+	(void) alloc;
 	FileStream *fs = (FileStream *)stream;
+
 	if (fs->f) {
 		fclose(fs->f);
 		fs->f = NULL;
@@ -123,7 +124,7 @@ static Bool FileStream_open(
 		retError(clean, Error_invalidState(0, "FileStream_open() fopen failed"));
 
 	fseek(f, 0, SEEK_END);
-	U64 size = (U64)ftell(f);
+	U64 size = (U64) ftell(f);
 	fseek(f, 0, SEEK_SET);
 
 	gotoIfError3(clean, Stream_create(
@@ -292,8 +293,6 @@ static Bool openWav(
 		e_rr
 	));
 
-	*fileStream = NULL;
-
 	if (source) {
 		AudioModifier modifier = (AudioModifier){ .gain = 1 };
 		gotoIfError3(clean, AudioDeviceRef_createSource(
@@ -380,7 +379,7 @@ clean:
 
 void Test_audioPlayLoop(AudioFuncCtx *ctx, const C8 *path, U16 targetLoops) {
 
-	Log_debugLn(ctx->alloc, "TEST: %s, loop %u times", path, (U32)targetLoops);
+	Log_debugLn(ctx->alloc, "TEST: %s, loop %u times", path, (U32) targetLoops);
 
 	Error err = Error_none();
 	FileStreamRef *fs = NULL;
@@ -421,6 +420,7 @@ void Test_audioSeekMidTrack(AudioFuncCtx *ctx) {
 		goto fail;
 
 	Ns midPoint = AudioStreamRef_ptr(as)->info.duration / 2;
+
 	if (!AudioStreamRef_seekTime(as, midPoint, &err))
 		goto fail;
 
@@ -513,6 +513,7 @@ void Test_audioGainZero(AudioFuncCtx *ctx) {
 		goto fail;
 
 	AudioModifier modifier = (AudioModifier) { .gain = 0 };
+
 	if (!AudioDeviceRef_createSource(ctx->device, as, modifier, ctx->alloc, &ctx->types->sourceType, &source, &err))
 		goto fail;
 
@@ -572,7 +573,7 @@ void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx, Bool stereo) {
 		goto fail;
 
 	for (I32 i = -20; i <= 20; ++i) {
-		if (!AudioSourceRef_updatePosition3D(source, F32x4_create3((F32)i, 0, 0), ctx->alloc, &err))
+		if (!AudioSourceRef_updatePosition3D(source, F32x4_create3((F32) i, 0, 0), ctx->alloc, &err))
 			goto fail;
 		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err))
 			goto fail;
@@ -619,6 +620,7 @@ void Test_audioListenerPositionSweep(AudioFuncCtx *ctx) {
 		goto fail;
 
 	F32 positions[] = { 0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0 };
+
 	for (U64 i = 0; i < 11; ++i) {
 		if (!AudioDeviceRef_updateListenerPosition(ctx->device, F32x4_create3(positions[i], 0, 0), &err))
 			goto fail;
@@ -672,7 +674,7 @@ void Test_audioListenerOrientationSweep(AudioFuncCtx *ctx) {
 
 	//Rotate forward from (0,0,-1) through (1,0,0) to (0,0,1)
 	for (I32 i = -20; i <= 20; ++i) {
-		F32 t = (F32)i / 10.0f;
+		F32 t = (F32) i / 10.0f;
 		F32 angle = t * 3.14159265f / 2.0f;
 		F32x4 fwd = F32x4_create3(F32_sin(angle), 0, -F32_cos(angle));
 

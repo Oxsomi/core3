@@ -48,6 +48,7 @@ OXC3_TEST_MAIN(formats_oiDL) {
 	Test_DLStress(&t);
 	Test_DLWriteSizeConsistency(&t);
 	Test_DLWriteSizeConsistencyEncrypted(&t);
+	Test_DLReview(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

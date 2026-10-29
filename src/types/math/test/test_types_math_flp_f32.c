@@ -52,10 +52,11 @@ void Test_flpF32(Test *test) {
 		for (U64 j = 0; j < 2; ++j) {
 
 			U32 bits = expansionTests[i];
-			if (j) bits |= (U32)1 << 31;
+
+			if (j) bits |= (U32) 1 << 31;
 
 			const F32 fi       = F32_fromU32Bits(bits);
-			const U64 expected = U64_fromF64Bits((F64)fi);
+			const U64 expected = U64_fromF64Bits((F64) fi);
 			const U64 got      = U64_fromF64Bits(F32_castF64(fi));
 
 			Test_assert(test, "F32_castF64", got == expected);

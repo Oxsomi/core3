@@ -84,6 +84,7 @@ void Log_printCapturedStackTraceCustom(
 		return;
 
 	const CharString outOfStackSize = CharString_createRefCStrConst("DEV ERROR: Maximum stackSize exceeded, truncating!");
+
 	if(stackSize > STACKTRACE_SIZE)
 		Log_log(alloc, lvl, opt, &outOfStackSize);
 
@@ -94,15 +95,13 @@ void Log_printCapturedStackTraceCustom(
 	HANDLE process = GetCurrentProcess();
 
 	ELockAcquire acq = SpinLock_lock(&LogInitLock, 1 * MS);
+
 	if(acq >= ELockAcquire_Success) {
 
 		if(LogInitStatus < 0)
-			LogInitStatus = (I8)SymInitialize(process, NULL, TRUE);
+			LogInitStatus = (I8) SymInitialize(process, NULL, TRUE);
 
 		hasSymbols = LogInitStatus;
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&LogInitLock);
 	}
 
 	CharString tmp = CharString_createNull();
@@ -113,10 +112,10 @@ void Log_printCapturedStackTraceCustom(
 		for(
 			U64 i = 0;
 			i < stackSize && i < STACKTRACE_SIZE &&
-			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC;
+			stackTrace[i] && stackTrace[i] != (void*) 0xCCCCCCCCCCCCCCCC;
 			++i
 		) {
-			const U64 addr = (U64)stackTrace[i];
+			const U64 addr = (U64) stackTrace[i];
 
 			//Get module name
 			const U64 moduleBase = SymGetModuleBase64(process, addr);
@@ -154,13 +153,13 @@ void Log_printCapturedStackTraceCustom(
 			//Copy module & file path, UTF-16 to UTF-8
 
 			if(modulePath[0])
-				if(!CharString_createFromUTF16((const U16*)modulePath, MAX_OXC_PATH, alloc, &capture->mod, NULL)) {
+				if(!CharString_createFromUTF16((const U16*) modulePath, MAX_OXC_PATH, alloc, &capture->mod, NULL)) {
 					allocFailed = true;
 					break;
 				}
 
 			if(line.FileName)
-				if(!CharString_createFromUTF16((const U16*)line.FileName, MAX_OXC_PATH, alloc, &capture->fil, NULL)) {
+				if(!CharString_createFromUTF16((const U16*) line.FileName, MAX_OXC_PATH, alloc, &capture->fil, NULL)) {
 					allocFailed = true;
 					break;
 				}
@@ -170,10 +169,14 @@ void Log_printCapturedStackTraceCustom(
 		}
 	}
 
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&LogInitLock);
+
 	if(allocFailed) {
 
 		//Free whatever we managed to capture
-		for(U64 j = 0; j < captureCount; ++j) {
+		for(U64 j = 0; j <= captureCount && j < STACKTRACE_SIZE; ++j) {
+
 			CharString_free(&captured[j].fil, alloc);
 			CharString_free(&captured[j].sym, alloc);
 			CharString_free(&captured[j].mod, alloc);
@@ -205,9 +208,9 @@ void Log_printCapturedStackTraceCustom(
 			CharString_format(alloc, &tmp, &formatErr,
 				"%p: %.*s!%.*s (%.*s, Line %"PRIu32")\n",
 				stackTrace[i],
-				(int)CharString_length(capture.mod), capture.mod.ptr,
-				(int)CharString_length(capture.sym), capture.sym.ptr,
-				(int)CharString_length(capture.fil), capture.fil.ptr,
+				(int) CharString_length(capture.mod), capture.mod.ptr,
+				(int) CharString_length(capture.sym), capture.sym.ptr,
+				(int) CharString_length(capture.fil), capture.fil.ptr,
 				capture.lin
 			);
 
@@ -215,8 +218,8 @@ void Log_printCapturedStackTraceCustom(
 			CharString_format(alloc, &tmp, &formatErr,
 				"%p: %.*s!%.*s\n",
 				stackTrace[i],
-				(int)CharString_length(capture.mod), capture.mod.ptr,
-				(int)CharString_length(capture.sym), capture.sym.ptr
+				(int) CharString_length(capture.mod), capture.mod.ptr,
+				(int) CharString_length(capture.sym), capture.sym.ptr
 			);
 
 		if(formatErr.genericError)
@@ -358,8 +361,11 @@ void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C
 
 	//Remember old to ensure we can reset
 
-	CONSOLE_SCREEN_BUFFER_INFO info;
-	GetConsoleScreenBufferInfo(stdOut, &info);
+	CONSOLE_SCREEN_BUFFER_INFO info = { 0 };
+
+	if(hasConsole)
+		GetConsoleScreenBufferInfo(stdOut, &info);
+
 	const WORD oldColor = info.wAttributes;
 
 	//Prepare for message
@@ -370,17 +376,19 @@ void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C
 
 	if (!panic) {
 
-		SetConsoleTextAttribute(stdOut, COLORS[lvl]);
+		if(hasConsole)
+			SetConsoleTextAttribute(stdOut, COLORS[lvl]);
 		
 		if(hasConsole)
-			WriteConsoleW(stdOut, (const wchar_t*) tmp.ptr, (int) tmp.length, NULL, NULL);
+			panic = !WriteConsoleW(stdOut, (const wchar_t*) tmp.ptr, (DWORD) (tmp.length ? tmp.length - 1 : 0), NULL, NULL);
 
 		else if(!WriteFile(stdOut, copy.ptr, (DWORD) CharString_length(copy), NULL, NULL)) {
 			panic = true;
 			goto skipConsole;
 		}
 
-		SetConsoleTextAttribute(stdOut, oldColor);
+		if(hasConsole)
+			SetConsoleTextAttribute(stdOut, oldColor);
 	}
 
 skipConsole:
@@ -421,7 +429,7 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 		return CharString_createNull();
 
 	CharString res = CharString_createNull();
-	CharString_createFromUTF16((const U16*)lpBuffer, U64_MAX, alloc, &res, NULL);
+	CharString_createFromUTF16((const U16*) lpBuffer, U64_MAX, alloc, &res, NULL);
 
 	LocalFree(lpBuffer);
 	return res;

@@ -31,10 +31,23 @@ void Chimera_swapF32(F32 *a, F32 *b) {
 	*b = tmp;
 }
 
-void Chimera_cmp(Chimera *chim, const F32 v) {
-	const ECompareResult res = v < 0 ? ECompareResult_Lt : (v > 0 ? ECompareResult_Gt : ECompareResult_Eq);
+static void Chimera_setCompare(Chimera *chim, const ECompareResult res) {
 	chim->effects &=~ 3;
-	chim->effects |= res;
+	chim->effects |= (U64) res;
+}
+
+void Chimera_cmp(Chimera *chim, const F32 v) {
+	Chimera_setCompare(chim, F32_isNaN(v) ? ECompareResult_Unordered : (
+		v < 0 ? ECompareResult_Lt : (v > 0 ? ECompareResult_Gt : ECompareResult_Eq)
+	));
+}
+
+//Direct comparison keeps equal infinities equal; subtracting them would produce NaN.
+
+static void Chimera_cmpF32(Chimera *chim, const F32 a, const F32 b) {
+	Chimera_setCompare(chim, F32_isNaN(a) || F32_isNaN(b) ? ECompareResult_Unordered : (
+		a < b ? ECompareResult_Lt : (a > b ? ECompareResult_Gt : ECompareResult_Eq)
+	));
 }
 
 ECompareResult Chimera_getLastCompare(const Chimera *chim) {
@@ -76,7 +89,7 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 			return;
 
 		case EFidiA_cmp_f0: case EFidiA_cmp_f1: case EFidiA_cmp_f2: case EFidiA_cmp_f3:
-			Chimera_cmp(chim, chim->f[4] - chim->f[reg]);
+			Chimera_cmpF32(chim, chim->f[4], chim->f[reg]);
 			return;
 
 		case EFidiA_load_f0: case EFidiA_load_f1: case EFidiA_load_f2: case EFidiA_load_f3:

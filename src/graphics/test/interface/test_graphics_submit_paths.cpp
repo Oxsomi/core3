@@ -416,7 +416,7 @@ extern "C" void Test_graphicsSubmitFailure(oxc::c::Test *t, oxc::c::GraphicsDevi
 	{
 		DeviceBuffer buffer;
 
-		if(
+		if (
 			!c::Test_assert(t, "sourceStream", c::MemoryStream_createFromBufferRegion(
 				c::Buffer_createRefConst(source, sizeof(source)), 0, sizeof(source),
 				c::EMemoryStreamFlags_None, &streamType, &stream, &t->err

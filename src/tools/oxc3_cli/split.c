@@ -53,7 +53,7 @@ static Bool CLI_splitTypes(const ParsedArgs *args, U8 *mask, Bool *explicitTypes
 	ListCharString splits = (ListCharString) { 0 };
 	CharString arg = (CharString) { 0 };
 
-	*mask = (U8)((1 << EGfxBinaryType_Count) - 1);
+	*mask = (U8) ((1 << EGfxBinaryType_Count) - 1);
 	*explicitTypes = false;
 
 	if(!(args->parameters & EOperationHasParameter_ShaderOutputMode))
@@ -70,7 +70,7 @@ static Bool CLI_splitTypes(const ParsedArgs *args, U8 *mask, Bool *explicitTypes
 	for (U64 i = 0; i < splits.length; ++i) {
 
 		if (CharString_equalsCStringInsensitive(&splits.ptr[i], "all")) {
-			*mask = (U8)((1 << EGfxBinaryType_Count) - 1);
+			*mask = (U8) ((1 << EGfxBinaryType_Count) - 1);
 			*explicitTypes = false;
 			break;
 		}
@@ -86,7 +86,7 @@ static Bool CLI_splitTypes(const ParsedArgs *args, U8 *mask, Bool *explicitTypes
 				0, 0, "CLI_fileSplit() expected -compile-output <spv/dxil/all> (or for example spv,dxil)"
 			));
 
-		*mask |= (U8)(1 << j);
+		*mask |= (U8) (1 << j);
 	}
 
 clean:

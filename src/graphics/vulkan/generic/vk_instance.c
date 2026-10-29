@@ -216,11 +216,11 @@ VkBool32 onDebugReport(
 	void *userData
 ) {
 
-	(void)messageCode;
-	(void)object;
-	(void)location;
-	(void)objectType;
-	(void)layerPrefix;
+	(void) messageCode;
+	(void) object;
+	(void) location;
+	(void) objectType;
+	(void) layerPrefix;
 
 	GraphicsInstance *instance = (GraphicsInstance*) userData;
 
@@ -243,7 +243,7 @@ VkBool32 onDebugReport(
 		const CharString adjusting = CharString_createRefCStrConst("validation is adjusting settings");
 		const CharString multiEntry = CharString_createRefCStrConst("can't determine which entrypoint");
 
-		if(
+		if (
 			instance &&
 			!CharString_containsStringInsensitive(&messageStr, &adjusting, 0, 0) &&
 			!CharString_containsStringInsensitive(&messageStr, &multiEntry, 0, 0)
@@ -747,7 +747,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 			.pUserData = instance
 		};
 
-		if(
+		if (
 			!createMessenger || !instanceExt->destroyMessenger ||
 			createMessenger(instanceExt->instance, &messengerInfo, NULL, &instanceExt->bindingMessenger) != VK_SUCCESS
 		)
@@ -777,7 +777,7 @@ clean:
 
 void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 
@@ -1245,7 +1245,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//This hack is because BAR aperture is 256 MiB, this is used to distinguish AMD APUs
 
-		if(
+		if (
 			optExtensions[EOptExtensions_Maintenance4] && (
 				maxBufferSize.maxBufferSize < 256 * MIBI || memorySizeAndDescriptorSets.maxMemoryAllocationSize < 256 * MIBI
 			)
@@ -1751,13 +1751,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(optExtensions[EOptExtensions_MemoryPriority] && memPriorityFeat.memoryPriority)
 			capabilities.flags.featuresExt |= EVkGraphicsFeatures_MemoryPriority;
 
-		if(
+		if (
 			(capabilities.flags.featuresExt & EVkGraphicsFeatures_MemoryPriority) &&
 			optExtensions[EOptExtensions_PageableMemory] && pageableFeat.pageableDeviceLocalMemory
 		)
 			capabilities.flags.featuresExt |= EVkGraphicsFeatures_PageableMemory;
 
-		if(
+		if (
 			optExtensions[EOptExtensions_DeviceAddressBindingReport] && bindingReportFeat.reportAddressBinding &&
 			instanceExt->bindingMessenger
 		)
@@ -1900,7 +1900,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			capabilities.waveSizeMin = capabilities.waveSizeMax = (U8) subgroup.subgroupSize;
 			capabilities.waveSizeDefault = (U8) subgroup.subgroupSize;
 
-			if(
+			if (
 				optExtensions[EOptExtensions_SubgroupSizeControl] && subgroupSizeFeat.subgroupSizeControl &&
 				(subgroupSizeProp.requiredSubgroupSizeStages & VK_SHADER_STAGE_COMPUTE_BIT) &&
 				subgroupSizeProp.minSubgroupSize <= subgroupSizeProp.maxSubgroupSize
@@ -1922,7 +1922,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Multi view
 
-		if(
+		if (
 			multiViewFeat.multiview &&
 			multiViewProp.maxMultiviewViewCount >= 6 && multiViewProp.maxMultiviewInstanceIndex >= 134217727
 		)
@@ -1930,7 +1930,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//VRS
 
-		if(
+		if (
 			optExtensions[EOptExtensions_VariableRateShading] &&
 			optExtensions[EOptExtensions_CreateRenderpass2] &&
 			vrsFeat.pipelineFragmentShadingRate &&
@@ -1944,7 +1944,8 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Mesh shaders
 
-		if(optExtensions[EOptExtensions_MeshShader] && !(
+		if (
+			optExtensions[EOptExtensions_MeshShader] && !(
 			!meshShader.taskShader ||
 			meshShaderProp.maxMeshOutputComponents < 127 ||
 			meshShaderProp.maxMeshOutputLayers < 8 ||
@@ -2030,7 +2031,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(!rtasFeat.descriptorBindingAccelerationStructureUpdateAfterBind)
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
-		if(
+		if (
 			optExtensions[EOptExtensions_RayAcceleration] && optExtensions[EOptExtensions_DriverProperties] &&
 			VkDriver_hasBrokenASBuild(&driver, subgroup.subgroupSize)
 		)
@@ -2042,7 +2043,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			if(rtasFeat.accelerationStructure) {
 
-				if(
+				if (
 					!(
 						U64_min(
 							U64_min(
@@ -2069,7 +2070,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 				if(optExtensions[EOptExtensions_RayPipeline]) {
 
-					if(
+					if (
 						!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling ||
 						!rtpFeat.rayTracingPipelineTraceRaysIndirect
 					)
@@ -2152,13 +2153,13 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 						}
 					#endif
 
-					if(
+					if (
 						rayOpacityMicroFeat.micromap && deviceAddressCommandsFeat.deviceAddressCommands &&
 						indexTypeUint8Feat.indexTypeUint8
 					)
 						capabilities.flags.features |= EGraphicsFeatures_RayMicromapOpacity;
 
-					if(
+					if (
 						rayPositionFetchFeat.rayTracingPositionFetch &&
 						!(optExtensions[EOptExtensions_DriverProperties] && VkDriver_hasBrokenPositionFetch(&driver))
 					)
@@ -2240,7 +2241,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Hopefully enable bindless
 
-		if(
+		if (
 			optExtensions[EOptExtensions_Bindless] &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindInputAttachments >= 8 &&
 			bindlessProp.maxDescriptorSetUpdateAfterBindSampledImages >= 1000000 &&
@@ -2274,7 +2275,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//VK_EXT_descriptor_heap requires VK_KHR_maintenance5 in the enabled list, so a device that doesn't
 		// advertise the dependency simply doesn't get the feature.
 
-		if(
+		if (
 			(capabilities.flags.features & EGraphicsFeatures_Bindless) &&
 			optExtensions[EOptExtensions_DescriptorHeap] &&
 			optExtensions[EOptExtensions_Maintenance5] &&
@@ -2292,7 +2293,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		// most OXC3_MAX_PUSH_DESCRIPTORS descriptors, one per binding with arrays refused at creation, so a
 		// driver offering that many serves every layout the engine builds and the native path beats emulating it.
 
-		if(
+		if (
 			optExtensions[EOptExtensions_PushDescriptor] &&
 			pushDescriptor.maxPushDescriptors >= OXC3_MAX_PUSH_DESCRIPTORS
 		)
@@ -2594,8 +2595,8 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			.vendor = vendor,
 			.id = i,
 			.capabilities = capabilities,
-			.luid = *(const U64*)id.deviceLUID,
-			.uuid = { ((const U64*)id.deviceUUID)[0], ((const U64*)id.deviceUUID)[1] },
+			.luid = *(const U64*) id.deviceLUID,
+			.uuid = { ((const U64*) id.deviceUUID)[0], ((const U64*) id.deviceUUID)[1] },
 			.ext = dev
 		};
 

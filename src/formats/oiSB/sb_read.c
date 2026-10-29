@@ -73,12 +73,25 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if (header.version != ESBVersion_V1_2 || (header.flags & ESBFlag_Unsupported) || !header.vars || !header.bufferSize)
 		retError(clean, Error_invalidState(0, "SBFile_read()::file didn't have right version, flags or was empty"));
 
-	if(header.arrays > (U16)I16_MAX)
+	if(header.arrays > (U16) I16_MAX)
 		retError(clean, Error_invalidState(0, "SBFile_read()::header.arrays out of bounds"));
 
 	ESBSettingsFlags flags =
 		(isSubFile ? ESBSettingsFlags_HideMagicNumber : ESBSettingsFlags_None) |
 		((header.flags & ESBFlag_IsTightlyPacked) ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None);
+
+	//The counts come from the file, so the stream has to hold what they ask for before anything is allocated
+
+	U64 left = *offset > stream->size ? 0 : stream->size - *offset;
+
+	if (
+		left < (U64) header.structs * sizeof(SBStruct) ||
+		left - (U64) header.structs * sizeof(SBStruct) < (U64) header.vars * sizeof(SBVar) ||
+		left - (U64) header.structs * sizeof(SBStruct) - (U64) header.vars * sizeof(SBVar) < header.arrays
+	)
+		retError(clean, Error_outOfBounds(
+			0, *offset, stream->size, "SBFile_read()::header structs, vars and arrays are larger than the stream"
+		));
 
 	gotoIfError3(clean, SBFile_create(flags, header.bufferSize, alloc, sbFile, e_rr));
 	didAllocate = true;
@@ -102,6 +115,13 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		total += arraySizes.ptr[i];
 	}
 
+	left = *offset > stream->size ? 0 : stream->size - *offset;
+
+	if (left / sizeof(U32) < total)
+		retError(clean, Error_outOfBounds(
+			0, *offset, stream->size, "SBFile_read()::array dimensions are larger than the stream"
+		));
+
 	gotoIfError3(clean, ListU32_resize(&arrays, total, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListU32_buffer(arrays), alloc, e_rr));
 
@@ -109,7 +129,7 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &dlFile, e_rr));
 
-	U64 stringCount = (U64)header.structs + header.vars;
+	U64 stringCount = (U64) header.structs + header.vars;
 
 	if (
 		dlFile.entryStrings.length != stringCount ||
@@ -131,7 +151,7 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	for(U64 i = 0; i < header.vars; ++i) {
 
 		SBVar vari = vars.ptr[i];
-		U16 arrayIdAssumed = vari.arrayDimOrArrayId & (U16)I16_MAX;
+		U16 arrayIdAssumed = vari.arrayDimOrArrayId & (U16) I16_MAX;
 
 		if ((vari.arrayDimOrArrayId >> 15) && arrayIdAssumed >= header.arrays)
 			retError(clean, Error_outOfBounds(

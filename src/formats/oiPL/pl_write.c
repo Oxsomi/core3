@@ -25,16 +25,34 @@
 #include "types/math/vec4i.h"
 #include "types/base/error.h"
 
-Bool PLFile_write(const PLFile *plFile, const Allocator *alloc, StreamRef *streamRef, U64 *offset, Error *e_rr) {
+Bool PLFile_write(const PLFile *plFile, const Allocator *alloc, StreamRef *streamRef, U64 *startOffset, Error *e_rr) {
 
 	Bool s_uccess = true;
+	U64 offset = 0;
 	StreamCursor cursor = (StreamCursor) { 0 };
 
-	if(!plFile || !offset)
+	if(!plFile || !startOffset)
 		retError(clean, Error_nullPointer(!plFile ? 0 : 3, "PLFile_write()::plFile and offset are required"));
+
+	offset = *startOffset;
 
 	if(plFile->bindings.length > 255 || plFile->samplers.length > 255)
 		retError(clean, Error_invalidOperation(0, "PLFile_write()::a layout is limited to 255 bindings and samplers"));
+
+	for(U64 i = 0; i < plFile->bindings.length; ++i)
+		gotoIfError3(clean, PLDescriptorBinding_validate(
+			&plFile->bindings.ptr[i], plFile->names.entryStrings.length, plFile->samplers.length, false, e_rr
+		));
+
+	if(plFile->hasPushConstant)
+		gotoIfError3(clean, PLDescriptorBinding_validate(
+			&plFile->pushConstant, plFile->names.entryStrings.length, plFile->samplers.length, false, e_rr
+		));
+
+	for(U64 i = 0; i < plFile->samplers.length; ++i)
+		gotoIfError3(clean, PLSamplerInfo_validate(&plFile->samplers.ptr[i], e_rr));
+
+	gotoIfError3(clean, PLFile_validateStructure(plFile, e_rr));
 
 	OxStream *stream = streamRef ? RefPtr_data(streamRef, OxStream) : NULL;
 
@@ -48,16 +66,16 @@ Bool PLFile_write(const PLFile *plFile, const Allocator *alloc, StreamRef *strea
 	headerSize += ListPLSamplerInfo_bytes(plFile->samplers);
 
 	if (!stream) {
-		*offset += headerSize;
-		*offset = (*offset + 15) & ~(U64)15;
-		gotoIfError3(clean, DLFile_write(&plFile->names, alloc, NULL, NULL, I32x4_zero(), offset, e_rr));
+		offset += headerSize;
+		offset = (offset + 15) & ~(U64) 15;
+		gotoIfError3(clean, DLFile_write(&plFile->names, alloc, NULL, NULL, I32x4_zero(), &offset, e_rr));
 		goto clean;
 	}
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	if(stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize + 15, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, offset + headerSize + 15, alloc, e_rr));
 
 	const PLHeader header = (PLHeader) {
 		.version = EPLVersion_V1_1,
@@ -67,36 +85,42 @@ Bool PLFile_write(const PLFile *plFile, const Allocator *alloc, StreamRef *strea
 	};
 
 	if(!(plFile->flags & EPLSettingsFlags_HideMagicNumber))
-		gotoIfError3(clean, StreamCursor_appendU32(&cursor, offset, PLHeader_MAGIC, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, &offset, PLHeader_MAGIC, alloc, e_rr));
 
-	gotoIfError3(clean, StreamCursor_append(&cursor, offset, &header, sizeof(header), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &header, sizeof(header), alloc, e_rr));
 
 	gotoIfError3(clean, StreamCursor_appendBuffer(
-		&cursor, offset, ListPLDescriptorBinding_bufferConst(plFile->bindings), alloc, e_rr
+		&cursor, &offset, ListPLDescriptorBinding_bufferConst(plFile->bindings), alloc, e_rr
 	));
 
 	if(plFile->hasPushConstant)
 		gotoIfError3(clean, StreamCursor_append(
-			&cursor, offset, &plFile->pushConstant, sizeof(plFile->pushConstant), alloc, e_rr
+			&cursor, &offset, &plFile->pushConstant, sizeof(plFile->pushConstant), alloc, e_rr
 		));
 
 	gotoIfError3(clean, StreamCursor_appendBuffer(
-		&cursor, offset, ListPLSamplerInfo_bufferConst(plFile->samplers), alloc, e_rr
+		&cursor, &offset, ListPLSamplerInfo_bufferConst(plFile->samplers), alloc, e_rr
 	));
 
 	//The names oiDL starts 16-byte aligned
 
 	U8 pad[16] = { 0 };
-	const U64 utilized = *offset & 15;
+	const U64 utilized = offset & 15;
 
 	if(utilized)
-		gotoIfError3(clean, StreamCursor_append(&cursor, offset, pad, 16 - utilized, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, pad, 16 - utilized, alloc, e_rr));
 
+	//Flushed rather than just closed, since closing drops what a failed write left staged.
+
+	gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
 	StreamCursor_close(&cursor, alloc);
 
-	gotoIfError3(clean, DLFile_write(&plFile->names, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
+	gotoIfError3(clean, DLFile_write(&plFile->names, alloc, streamRef, NULL, I32x4_zero(), &offset, e_rr));
 
 clean:
+	if(s_uccess)
+		*startOffset = offset;
+
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

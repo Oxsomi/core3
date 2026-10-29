@@ -71,21 +71,31 @@ static const U8 *Test_allocFromAllocBuffer(
 
 	//Verify the returned pointer is inside the buffer and correctly aligned
 
-	const U64 off = (U64)(result - ab->buffer.ptr);
+	const U64 off = (U64) (result - ab->buffer.ptr);
 	Test_assert(t, label, off + size <= Buffer_length(ab->buffer));
 	Test_assert(t, label, !(off % alignment));
 	return result;
 }
 
 static inline U64 Block_start(AllocationBufferBlock b) { return b.startAndNonLinearAndFree << 2 >> 2; }
-static inline Bool Block_isFree(AllocationBufferBlock b) { return (Bool)(b.startAndNonLinearAndFree >> 63); }
-static inline Bool Block_isNonLinear(AllocationBufferBlock b) { return (Bool)((b.startAndNonLinearAndFree >> 62) & 1); }
+static inline Bool Block_isFree(AllocationBufferBlock b) { return (Bool) (b.startAndNonLinearAndFree >> 63); }
+static inline Bool Block_isNonLinear(AllocationBufferBlock b) { return (Bool) ((b.startAndNonLinearAndFree >> 62) & 1); }
 
 void Test_allocationBufferCreate(Test *t) {
 
 	Test_setModule(t, "AllocationBuffer create/free");
 
 	AllocationBuffer ab = { 0 };
+	Error err = Error_none();
+
+	Test_assert(t, "Null region create rejected", !AllocationBuffer_createRefFromRegion(
+		NULL, Buffer_createNull(), 0, &err
+	));
+
+	Test_assert(t, "Null region create reports null pointer", err.genericError == EGenericError_NullPointer);
+	Test_assert(t, "Null region create permits null error output", !AllocationBuffer_createRefFromRegion(
+		NULL, Buffer_createNull(), 0, NULL
+	));
 
 	Test_assert(t, "Create 1 KiB", Test_createAllocBuffer(t, 1024, 0, &ab));
 	Test_assert(t, "Buffer non-null", ab.buffer.ptr);
@@ -135,7 +145,7 @@ void Test_allocationBufferMultipleAllocs(Test *t) {
 
 	Test_assert(t, "a/b no overlap", a + 128 <= b || b + 128 <= a);
 	Test_assert(t, "b/c no overlap", b + 128 <= c || c + 256 <= b);
-	Test_assert(t, "c alignment", !((U64)(c - ab.buffer.ptr) % 256));
+	Test_assert(t, "c alignment", !((U64) (c - ab.buffer.ptr) % 256));
 
 	Test_assert(t, "Block count", ab.allocations.length == 3);
 
@@ -293,7 +303,7 @@ void Test_allocationBufferFragmentedOOM(Test *t) {
 	U64 mask = 0;
 
 	for (U64 i = 0; i < ab.allocations.length; ++i)
-		mask |= (U64)!Block_isFree(ab.allocations.ptr[i]) << i;
+		mask |= (U64) !Block_isFree(ab.allocations.ptr[i]) << i;
 
 	Test_assert(t, "Fragmented state", ab.allocations.ptr[0].startAndNonLinearAndFree == 0x40);        //First block got popped
 	Test_assert(t, "Fragmented state", mask == 0b1010101);
@@ -340,7 +350,7 @@ void Test_allocationBufferAlignmentPadding(Test *t) {
 	const U8 *aligned = Test_allocFromAllocBuffer(t, "Aligned", &ab, 64, 256, false);
 
 	if (aligned)
-		Test_assert(t, "256-aligned", !((U64)(aligned - ab.buffer.ptr) % 256));
+		Test_assert(t, "256-aligned", !((U64) (aligned - ab.buffer.ptr) % 256));
 
 	//The first block covers [0,1) and the second starts at 1 despite alignment.
 	//The real placed allocation starts at block[1].start alignas alignment.
@@ -371,8 +381,8 @@ void Test_allocationBufferNonLinear(Test *t) {
 	const U8 *nonlin = Test_allocFromAllocBuffer(t, "Non-linear", &ab, 128, 1, true);
 
 	if (lin && nonlin) {
-		const U64 linEnd  = (U64)(lin    - ab.buffer.ptr) + 128;
-		const U64 nlStart = (U64)(nonlin - ab.buffer.ptr);
+		const U64 linEnd  = (U64) (lin    - ab.buffer.ptr) + 128;
+		const U64 nlStart = (U64) (nonlin - ab.buffer.ptr);
 		Test_assert(t, "Non-linear gap aligned",           !(nlStart % 256));
 		Test_assert(t, "Non-linear starts after linear end", nlStart >= linEnd);
 	}
@@ -434,7 +444,7 @@ void Test_allocationBufferVirtual(Test *t) {
 
 	const U8 *q = NULL;
 	Test_assert(t, "Virtual second allocateBlock", AllocationBuffer_allocateBlock(&spec, 512, &q, &t->err));
-	Test_assert(t, "Virtual second offset", (U64)(const void*) q == 256);
+	Test_assert(t, "Virtual second offset", (U64) (const void*) q == 256);
 	Test_assert(t, "Virtual block count after second", ab.allocations.length == 2);
 
 	//Freeing out of order exercises the block search, the merge and the front pop, which are the paths that
@@ -452,7 +462,7 @@ void Test_allocationBufferVirtual(Test *t) {
 	const U8 *r = NULL;
 	Test_assert(t, "Virtual realloc after free", AllocationBuffer_allocateBlock(&spec, 128, &r, &t->err));
 
-	AllocationBuffer_freeBlock(&ab, (const U8*)(U64)70000);
+	AllocationBuffer_freeBlock(&ab, (const U8*) (U64) 70000);
 	Test_assert(t, "Virtual free past end is a no-op", ab.allocations.length == 1);
 
 	AllocationBuffer_freeBlock(&ab, r);
@@ -781,6 +791,7 @@ static const C8 *Test_allocationBufferInvariant(const AllocationBuffer *ab, cons
 
 		while (lo < hi) {
 			const U64 mid = (lo + hi) / 2;
+
 			if (Block_start(e->ptr[mid]) <= live[i].off) lo = mid + 1;
 			else hi = mid;
 		}
@@ -866,7 +877,7 @@ static void Test_allocationBufferFuzzMixedSeed(Test *t, U32 seed, U64 granularit
 			continue;        //Full or fragmented: fine, only placement is under test
 
 		const TestAllocation a = (TestAllocation) {
-			.off = (U64)(result - ab.buffer.ptr), .size = bytes, .nonLinear = nonLinear
+			.off = (U64) (result - ab.buffer.ptr), .size = bytes, .nonLinear = nonLinear
 		};
 
 		ok &= !(a.off % alignment) && a.off + a.size <= size;

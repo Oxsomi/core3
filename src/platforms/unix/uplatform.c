@@ -60,16 +60,16 @@ void Platform_freePages(void *ptr, U64 size) {
 #if _PLATFORM_TYPE == PLATFORM_WEB
 
 	void *Platform_allocate(void *allocator, U64 length) {
-		(void)allocator;
+		(void) allocator;
 		//aligned_alloc wants a size that's a multiple of the alignment (C11 7.22.3.1)
-		return aligned_alloc(16, length ? (length + 15) &~ (U64)15 : 16);
+		return aligned_alloc(16, length ? (length + 15) &~ (U64) 15 : 16);
 	}
 
 #else
-	void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
+	void *Platform_allocate(void *allocator, U64 length) { (void) allocator; return malloc(length); }
 #endif
 
-void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
+void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void) length; free(ptr); }
 
 impl Bool Platform_initUnixExt(Error *e_rr);
 impl void Platform_cleanupUnixExt();
@@ -481,6 +481,7 @@ Bool Platform_initExt(Error *e_rr) {
 	#if _PLATFORM_TYPE != PLATFORM_ANDROID
 
 		C8 cwd[MAX_OXC_PATH + 1];
+
 		if (!getcwd(cwd, sizeof(cwd)))
 			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"));
 

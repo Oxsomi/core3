@@ -136,6 +136,8 @@ Curly braces align to the end of a line.
 
 Pointers align to the right (unfortunately C declares they belong to the variable to the right, not the type itself). The only exception being casts, where it does belong to the type.
 
+C casts have a space after the type: `(U64) value`, `(MyType*) ptr` and `(MyType) { 0 }`.
+
 There should be spaces between operators. E.g. `x + y` and not `x+y`.
 
 Use brackets around operators that aren't in PEMDAS such as bitwise operators.
@@ -146,8 +148,29 @@ Using tabs instead of space; spaces are only for formatting if the alignment is 
 
 Using LF instead of CRLF.
 
-When a call doesn't fit on one line, the closing `)` goes on its own line at the indent of the line that
-OPENED it, and never trails the last argument. The arguments sit one level deeper.
+Separate a group of local declarations from a following `if`, `for` or `while` in the same block with a blank line.
+Related declarations can stay together:
+
+```c
+const U64 count = List_length(values);
+const U64 capacity = List_capacity(values);
+
+if(count == capacity)
+	return false;
+```
+
+Blank lines between logical steps depend on the surrounding code. Short bodies can stay compact; braces do not
+require blank lines immediately inside them:
+
+```c
+do {
+	digits[count++] = (C8) ('0' + exponent % 10);
+	exponent /= 10;
+} while(exponent);
+```
+
+When a call's arguments wrap, the closing `)` starts a line at the indent of the line that opened it.
+The arguments sit one level deeper. Nested closing parentheses can share that line:
 
 ```c
 gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
@@ -156,9 +179,33 @@ gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 ));
 ```
 
-A condition that spans lines puts `if (` alone on its line, each operand one level deeper, and the `)` back
-at the `if`'s indent, so the operands read as a list and the body keeps its own indentation. A call nested
-in an operand closes on its own line as well, which is what keeps the operand and its `&&` on one line.
+A nested call's closing line can also finish the surrounding expression or carry the remaining outer
+arguments and closing parentheses:
+
+```c
+Test_assert(test, "mat ortho near maps to 1", F32_abs(
+	F32x4_z(F32x4x4_transformPoint(ortho, F32x4_create4(0, 0, 0, 1))) - 1
+) < 1e-5f);
+
+gotoIfError3(clean, dxCheck(deviceExt->residencyFence->lpVtbl->SetEventOnCompletion(
+	deviceExt->residencyFence, value, NULL
+), e_rr));
+```
+
+When only a nested call's arguments wrap, keep the condition on the call's opening line and group the
+closing parentheses. This also applies when the opening line includes a logical prefix:
+
+```c
+if(Buffer_length(r->attributes) && !MemoryStream_createFromBufferRegion(
+	Buffer_createRefConst(r->attributes.ptr, Buffer_length(r->attributes)), 0, Buffer_length(r->attributes),
+	EMemoryStreamFlags_None, &type, &attributes, &t->err
+))
+	goto clean;
+```
+
+When the condition itself wraps across operands, put `if (` alone on its line, each operand one level
+deeper, and the `)` back at the `if`'s indent. A call nested in an operand closes on its own line as well,
+which keeps the operand and its `&&` on one line.
 
 ```c
 if (
@@ -169,6 +216,11 @@ if (
 )
 	return false;
 ```
+
+`src/tools/check_style.py` checks cast spacing for recognized types, declaration/control-flow separation and wrapped
+call/condition layout. These checks ignore comments, strings and preprocessor directives, including continued macros,
+and leave ambiguous syntax for review. They do not choose logical groups or add padding inside braces. The accepted
+and rejected examples in `src/tools/test_check_style.py` run with the style build target and as `OxC3_style_test` in CTest.
 
 ## Defines & Macros
 

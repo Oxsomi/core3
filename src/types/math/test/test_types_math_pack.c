@@ -263,6 +263,30 @@ void Test_pack(Test *test) {
 	Test_pack20x3u4(test);
 	Test_packBit(test);
 	Test_packQuat(test);
+
+	const QuatF32 nearHalfTurn = QuatF32_normalize(QuatF32_create(0, 1, 0, 0.0005f));
+
+	Test_assert(test, "packed quaternion preserves near half turn", F32x4_eqApproxAdv4(
+		QuatS16_unpack(QuatF32_pack(nearHalfTurn)), nearHalfTurn, 3e-6f, 3e-6f
+	));
+
 	Test_packRGB10A2(test);
 	Test_tonemap(test);
+
+	Test_setModule(test, "packing parity");
+
+	Test_assert(test, "Oct18 ties round to even", U32_packOct18(F32x4_create3(1, 509, 0)) == (256 | (510u << 9)));
+	Test_assert(test, "Oct32 ties round to even", U32_packOct32(F32x4_create3(1, 65533, 0)) == (32768 | (65534u << 16)));
+
+	const U32 floatBits[] = { 0, 0x80000000, 0x2B000000, 0x30800000, 0x3F800000, 0x4F800000, 0x7F800000, 0x7FC00000 };
+	const U32 uf21Bits[] = { 0, 0, 16, 0x8000, 0xF8000, 0x1F8000, 0x1F8000, 0x1FC000 };
+
+	for(U8 i = 0; i < sizeof(floatBits) / sizeof(floatBits[0]); ++i) {
+
+		const F32 input = F32_fromU32Bits(floatBits[i]);
+		const U64 packed = U64_packF21x3(F32x4_create3(input, input, input));
+		const U64 expected = uf21Bits[i] | ((U64) uf21Bits[i] << 21) | ((U64) uf21Bits[i] << 42);
+
+		Test_assert(test, "UF21 shared wire pattern", packed == expected);
+	}
 }

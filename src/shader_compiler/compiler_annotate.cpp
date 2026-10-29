@@ -113,7 +113,7 @@ EGfxPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('a', 'm', 'p', 'l'):
 
-			if(
+			if (
 				stageNameLen == 13 &&
 				Buffer_readU64(buf, 4, NULL, NULL) == C8x8('i', 'f', 'i', 'c', 'a', 't', 'i', 'o') &&
 				stageName.ptr[12] == 'n'
@@ -155,7 +155,7 @@ EGfxPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('r', 'a', 'y', 'g'):        //raygeneration
 
-			if(
+			if (
 				stageNameLen == 13 &&
 				Buffer_readU64(buf, 4, NULL, NULL) == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
 				stageName.ptr[12] == 'n'
@@ -247,7 +247,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 		case C8x2('C', 'o'):    //ComputeDeriv, CoopVec, CoopMat
 
-			if(
+			if (
 				stageNameLen == 12 &&
 				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
 				Buffer_readU16(buf, 10, NULL, NULL) == C8x2('i', 'v')
@@ -269,7 +269,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			}
 
 			//CoopVecTraining (len 15): "CoopVecTraining"
-			if(
+			if (
 				stageNameLen == 15 &&
 				Buffer_readU32(buf, 3, NULL, NULL) == C8x4('p', 'V', 'e', 'c') &&
 				Buffer_readU64(buf, 7, NULL, NULL) == C8x8('T', 'r', 'a', 'i', 'n', 'i', 'n', 'g')
@@ -346,7 +346,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 		case C8x2('B', 'a'):    //Barycentrics
 
-			if(
+			if (
 				stageNameLen == 12 &&
 				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('r', 'y', 'c', 'e', 'n', 't', 'r', 'i') &&
 				Buffer_readU16(buf, 10, NULL, NULL) == C8x2('c', 's')
@@ -369,7 +369,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 		case C8x2('S', 'u'):    //SubgroupArithmetic, SubgroupShuffle, SubgroupQuad, SubgroupOperations
 
 			if(stageNameLen == 12) {            //SubgroupQuad
-				if(
+				if (
 					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
 					Buffer_readU64(buf, 4, NULL, NULL) == C8x8('r', 'o', 'u', 'p', 'Q', 'u', 'a', 'd')
 				)
@@ -377,7 +377,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			}
 
 			else if(stageNameLen == 15) {       //SubgroupShuffle
-				if(
+				if (
 					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
 					Buffer_readU64(buf, 7, NULL, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
 				)
@@ -386,13 +386,13 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			else if (stageNameLen == 18) {        //SubgroupArithmetic, SubgroupOperations
 
-				if(
+				if (
 					Buffer_readU64(buf,  2, NULL, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
 					Buffer_readU64(buf, 10, NULL, NULL) == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
 				)
 					return ESHExtension_SubgroupArithmetic;
 					
-				else if(
+				else if (
 					Buffer_readU64(buf,  2, NULL, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
 					Buffer_readU64(buf, 10, NULL, NULL) == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
 				)
@@ -412,11 +412,9 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):        //RayMicromapOpacity
 
-						if(
-							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8(
-								'p', 'O', 'p', 'a', 'c', 'i', 't', 'y'
-							)
-						)
+						if (stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8(
+							'p', 'O', 'p', 'a', 'c', 'i', 't', 'y'
+						))
 							return ESHExtension_RayMicromapOpacity;
 
 						break;
@@ -448,7 +446,7 @@ ESHExtension2 Compiler_parseExtension2(CharString extensionName) {
 
 	const Buffer buf = CharString_bufferConst(extensionName);
 
-	if(
+	if (
 		CharString_length(extensionName) == 15 &&
 		Buffer_readU64(buf, 0, NULL, NULL) == C8x8('E', 'x', 'p', 'e', 'r', 'i', 'm', 'e')
 	)
@@ -457,7 +455,7 @@ ESHExtension2 Compiler_parseExtension2(CharString extensionName) {
 			case C8x8('e', 'n', 't', 'T', 'i', 'e', 'r', '2'):        return ESHExtension2_ExperimentTier2;
 		}
 
-	else if(
+	else if (
 		CharString_length(extensionName) == 13 &&
 		Buffer_readU64(buf, 0, NULL, NULL) == C8x8('I', 'n', 't', 'e', 'g', 'e', 'r', 'D') &&
 		Buffer_readU64(buf, 5, NULL, NULL) == C8x8('e', 'r', 'D', 'o', 't', '4', 'x', '8')
@@ -529,7 +527,7 @@ Bool Compiler_registerVendor(U16 *vendors, CharString vendorName, Error *e_rr) {
 			0, 2, "Compiler_registerVendor() duplicate vendor found"
 		));
 
-	*vendors |= (U16)(1 << vendor);
+	*vendors |= (U16) (1 << vendor);
 
 clean:
 	return s_uccess;
@@ -767,12 +765,12 @@ Bool Compiler_parseShaderStageAnnot(
 
 	//isRt = RT stage; containsGfxOrComp = not RT (folded into runtimeFlags)
 
-	entry.runtimeFlags &= (U8)~(ESHEntryRuntimeFlag_IsRt | ESHEntryRuntimeFlag_ContainsGfxOrComp);
+	entry.runtimeFlags &= (U8) ~(ESHEntryRuntimeFlag_IsRt | ESHEntryRuntimeFlag_ContainsGfxOrComp);
 
 	if (stage >= EGfxPipelineStage_RtStartExt && stage <= EGfxPipelineStage_RtEndExt)
-		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_IsRt;
+		entry.runtimeFlags |= (U8) ESHEntryRuntimeFlag_IsRt;
 
-	else entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
+	else entry.runtimeFlags |= (U8) ESHEntryRuntimeFlag_ContainsGfxOrComp;
 
 clean:
 	return s_uccess;
@@ -1013,7 +1011,7 @@ Bool Compiler_registerBinaryType(U8 *binaryTypes, CharString name, Error *e_rr) 
 			0, 2, "Compiler_registerBinaryType() duplicate binary type found"
 		));
 
-	*binaryTypes |= (U8)(1 << type);
+	*binaryTypes |= (U8) (1 << type);
 
 clean:
 	return s_uccess;

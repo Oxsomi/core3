@@ -71,7 +71,7 @@ static inline U32 RefPtrType_pack(U64 length, U64 alignment) {
 
 	U32 log2Alignment = 0;
 
-	while(((U64)1 << log2Alignment) < alignment)
+	while(((U64) 1 << log2Alignment) < alignment)
 		++log2Alignment;
 
 	return (U32) length | ((U32) log2Alignment << 24);
@@ -80,7 +80,7 @@ static inline U32 RefPtrType_pack(U64 length, U64 alignment) {
 static inline U32 RefPtrType_length(const RefPtrType *type) { return type->lengthAndAlignment & 0xFFFFFF; }
 
 static inline U64 RefPtrType_alignment(const RefPtrType *type) {
-	return (U64)1 << (type->lengthAndAlignment >> 24);
+	return (U64) 1 << (type->lengthAndAlignment >> 24);
 }
 
 typedef struct RefPtr {

@@ -320,7 +320,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		DeviceMemoryBlock *blocki = &allocator->blocks.ptrNonConst[i];
 
-		if(
+		if (
 			!blocki->ext ||
 			blocki->isDedicated ||
 			!!(blocki->allocationTypeExt & 1) != !cpuSided ||
@@ -385,7 +385,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	const Bool known = usedMem != U64_MAX && budget != U64_MAX;
 
-	while(
+	while (
 		known && !isDedicated &&
 		usedMem + realBlockSize > budget && (realBlockSize >> 1) >= req.length &&
 		(realBlockSize >> 1) >= heapAlignment
@@ -404,7 +404,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		heapDesc.Flags |= D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT;
 	}
 
-	if(
+	if (
 		known && usedMem + realBlockSize > budget &&
 		GraphicsDevice_logOnce(allocator->device, EGraphicsDeviceMessage_OverBudget)
 	)
@@ -464,7 +464,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	gotoIfError3(clean, AllocationBuffer_create(&allocationCreate, true, e_rr));
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
-		Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
+		Error_captureStackTrace(block.stackTrace, (U8) (sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 	//Find a spot in the blocks list
 
@@ -590,7 +590,7 @@ clean:
 
 Bool DX_WRAP_FUNC(DeviceMemoryAllocator_freeAllocation)(GraphicsDevice *device, void *ext) {
 
-	(void)device;
+	(void) device;
 
 	if(!ext)
 		return true;

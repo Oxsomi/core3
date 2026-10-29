@@ -84,51 +84,51 @@ static_assert(EOperationHasParameter_CountEnum <= 64, "A parameter mask is a U64
 //As mask: U64 constants, since an enum constant is an int and cannot hold bit 31 and up.
 
 static const U64 EOperationHasParameter_None              = 0;
-static const U64 EOperationHasParameter_FileFormat        = (U64)1 << EOperationHasParameter_FileFormatShift;
-static const U64 EOperationHasParameter_Input             = (U64)1 << EOperationHasParameter_InputShift;
-static const U64 EOperationHasParameter_Output            = (U64)1 << EOperationHasParameter_OutputShift;
-static const U64 EOperationHasParameter_AES               = (U64)1 << EOperationHasParameter_AESShift;
+static const U64 EOperationHasParameter_FileFormat        = (U64) 1 << EOperationHasParameter_FileFormatShift;
+static const U64 EOperationHasParameter_Input             = (U64) 1 << EOperationHasParameter_InputShift;
+static const U64 EOperationHasParameter_Output            = (U64) 1 << EOperationHasParameter_OutputShift;
+static const U64 EOperationHasParameter_AES               = (U64) 1 << EOperationHasParameter_AESShift;
 
-static const U64 EOperationHasParameter_SplitBy           = (U64)1 << EOperationHasParameter_SplitByShift;
+static const U64 EOperationHasParameter_SplitBy           = (U64) 1 << EOperationHasParameter_SplitByShift;
 
-static const U64 EOperationHasParameter_CountArg          = (U64)1 << EOperationHasParameter_CountShift;
-static const U64 EOperationHasParameter_Length            = (U64)1 << EOperationHasParameter_LengthShift;
+static const U64 EOperationHasParameter_CountArg          = (U64) 1 << EOperationHasParameter_CountShift;
+static const U64 EOperationHasParameter_Length            = (U64) 1 << EOperationHasParameter_LengthShift;
 
-static const U64 EOperationHasParameter_Character         = (U64)1 << EOperationHasParameter_CharacterShift;
+static const U64 EOperationHasParameter_Character         = (U64) 1 << EOperationHasParameter_CharacterShift;
 
-static const U64 EOperationHasParameter_Bit               = (U64)1 << EOperationHasParameter_BitShift;
+static const U64 EOperationHasParameter_Bit               = (U64) 1 << EOperationHasParameter_BitShift;
 
-static const U64 EOperationHasParameter_Entry             = (U64)1 << EOperationHasParameter_EntryShift;
-static const U64 EOperationHasParameter_StartOffset       = (U64)1 << EOperationHasParameter_StartOffsetShift;
+static const U64 EOperationHasParameter_Entry             = (U64) 1 << EOperationHasParameter_EntryShift;
+static const U64 EOperationHasParameter_StartOffset       = (U64) 1 << EOperationHasParameter_StartOffsetShift;
 
-static const U64 EOperationHasParameter_ShaderOutputMode  = (U64)1 << EOperationHasParameter_ShaderOutputModeShift;
-static const U64 EOperationHasParameter_ThreadCount       = (U64)1 << EOperationHasParameter_ThreadCountShift;
-static const U64 EOperationHasParameter_ShaderCompileMode = (U64)1 << EOperationHasParameter_ShaderCompileModeShift;
-static const U64 EOperationHasParameter_IncludeDir        = (U64)1 << EOperationHasParameter_IncludeDirShift;
+static const U64 EOperationHasParameter_ShaderOutputMode  = (U64) 1 << EOperationHasParameter_ShaderOutputModeShift;
+static const U64 EOperationHasParameter_ThreadCount       = (U64) 1 << EOperationHasParameter_ThreadCountShift;
+static const U64 EOperationHasParameter_ShaderCompileMode = (U64) 1 << EOperationHasParameter_ShaderCompileModeShift;
+static const U64 EOperationHasParameter_IncludeDir        = (U64) 1 << EOperationHasParameter_IncludeDirShift;
 
-static const U64 EOperationHasParameter_Input2            = (U64)1 << EOperationHasParameter_Input2Shift;
+static const U64 EOperationHasParameter_Input2            = (U64) 1 << EOperationHasParameter_Input2Shift;
 
-static const U64 EOperationHasParameter_GraphicsApi       = (U64)1 << EOperationHasParameter_GraphicsApiShift;
+static const U64 EOperationHasParameter_GraphicsApi       = (U64) 1 << EOperationHasParameter_GraphicsApiShift;
 
-static const U64 EOperationHasParameter_Type              = (U64)1 << EOperationHasParameter_TypeShift;
+static const U64 EOperationHasParameter_Type              = (U64) 1 << EOperationHasParameter_TypeShift;
 
-static const U64 EOperationHasParameter_oiCA              = (U64)1 << EOperationHasParameter_oiCAShift;
+static const U64 EOperationHasParameter_oiCA              = (U64) 1 << EOperationHasParameter_oiCAShift;
 
-static const U64 EOperationHasParameter_AESFile           = (U64)1 << EOperationHasParameter_AESFileShift;
+static const U64 EOperationHasParameter_AESFile           = (U64) 1 << EOperationHasParameter_AESFileShift;
 
-static const U64 EOperationHasParameter_ISAAsic           = (U64)1 << EOperationHasParameter_ISAAsicShift;
-static const U64 EOperationHasParameter_PipelineOutput    = (U64)1 << EOperationHasParameter_PipelineOutputShift;
-static const U64 EOperationHasParameter_PipelineSet       = (U64)1 << EOperationHasParameter_PipelineSetShift;
-static const U64 EOperationHasParameter_PipelineInput     = (U64)1 << EOperationHasParameter_PipelineInputShift;
-static const U64 EOperationHasParameter_Tonemap           = (U64)1 << EOperationHasParameter_TonemapShift;
-static const U64 EOperationHasParameter_Exposure          = (U64)1 << EOperationHasParameter_ExposureShift;
+static const U64 EOperationHasParameter_ISAAsic           = (U64) 1 << EOperationHasParameter_ISAAsicShift;
+static const U64 EOperationHasParameter_PipelineOutput    = (U64) 1 << EOperationHasParameter_PipelineOutputShift;
+static const U64 EOperationHasParameter_PipelineSet       = (U64) 1 << EOperationHasParameter_PipelineSetShift;
+static const U64 EOperationHasParameter_PipelineInput     = (U64) 1 << EOperationHasParameter_PipelineInputShift;
+static const U64 EOperationHasParameter_Tonemap           = (U64) 1 << EOperationHasParameter_TonemapShift;
+static const U64 EOperationHasParameter_Exposure          = (U64) 1 << EOperationHasParameter_ExposureShift;
 
 //The two parameter key sources (-aes / -aes-file); --aes-stdin is a flag (EOperationFlags_AESStdin), so a
 // "any key source present" test must also check that flag separately.
 //Built from the shifts, since in C a static const can't initialize another.
 
 static const U64 EOperationHasParameter_AnyAES =
-	((U64)1 << EOperationHasParameter_AESShift) | ((U64)1 << EOperationHasParameter_AESFileShift);
+	((U64) 1 << EOperationHasParameter_AESShift) | ((U64) 1 << EOperationHasParameter_AESFileShift);
 
 //One entry per shift, unsized so that operations.c's static_asserts against EOperationHasParameter_CountEnum catch a
 // short list.

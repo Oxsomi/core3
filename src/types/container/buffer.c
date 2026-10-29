@@ -178,7 +178,7 @@ static Bool Buffer_createBytesAlignedInternal(
 
 	U8 *const start = base.ptrNonConst;
 
-	const U64 misaligned = (U64)(start + 1 + headerOffset) & (alignment - 1);
+	const U64 misaligned = (U64) (start + 1 + headerOffset) & (alignment - 1);
 	U8 *const aligned = start + 1 + (misaligned ? alignment - misaligned : 0);
 
 	aligned[-1] = (U8) (aligned - start);
@@ -357,7 +357,7 @@ Bool Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint, Error
 	if(!codepoint)
 		retError(clean, Error_nullPointer(3, "Buffer_readAsUTF8()::codepoint is required"));
 
-	if(i >= U64_MAX - 4 || i + 1 > Buffer_length(buf))
+	if(i >= Buffer_length(buf))
 		retError(clean, Error_outOfBounds(0, i, Buffer_length(buf), "Buffer_readAsUTF8() out of bounds"));
 
 	//Ascii
@@ -366,14 +366,14 @@ Bool Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint, Error
 
 	if (!(v0 >> 7)) {
 
-		if(!C8_isValidAscii((C8)v0))
+		if(!C8_isValidAscii((C8) v0))
 			retError(clean, Error_invalidParameter(0, 0, "Buffer_readAsUTF8()::buf[i] didn't contain valid ascii"));
 
 		*codepoint = (UnicodeCodePointInfo) { .chars = 1, .bytes = 1, .index = v0 };
 		goto clean;
 	}
 
-	if(v0 < 0xC0)
+	if(v0 < 0xC2 || v0 > 0xF4)
 		retError(clean, Error_invalidParameter(0, 1, "Buffer_readAsUTF8()::buf[i] didn't contain valid UTF8"));
 
 	//2-4 bytes
@@ -386,10 +386,16 @@ Bool Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint, Error
 	if(v1 < 0x80 || v1 >= 0xC0)
 		retError(clean, Error_invalidParameter(0, 2, "Buffer_readAsUTF8()::buf[i + 1] had invalid encoding"));
 
+	if (
+		(v0 == 0xE0 && v1 < 0xA0) || (v0 == 0xED && v1 >= 0xA0) ||
+		(v0 == 0xF0 && v1 < 0x90) || (v0 == 0xF4 && v1 >= 0x90)
+	)
+		retError(clean, Error_invalidParameter(0, 2, "Buffer_readAsUTF8()::buf contains an invalid Unicode scalar"));
+
 	//2 bytes
 
 	if (v0 < 0xE0) {
-		*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 2, .index = (((U16)v0 & 0x1F) << 6) | (v1 & 0x3F) };
+		*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 2, .index = (((U16) v0 & 0x1F) << 6) | (v1 & 0x3F) };
 		goto clean;
 	}
 
@@ -406,7 +412,7 @@ Bool Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint, Error
 	if (v0 < 0xF0) {
 
 		*codepoint = (UnicodeCodePointInfo) {
-			.chars = 3, .bytes = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F)
+			.chars = 3, .bytes = 3, .index = (((U32) v0 & 0xF) << 12) | (((U32) v1 & 0x3F) << 6) | (v2 & 0x3F)
 		};
 
 		goto clean;
@@ -425,7 +431,7 @@ Bool Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint, Error
 	*codepoint = (UnicodeCodePointInfo) {
 		.chars = 4,
 		.bytes = 4,
-		.index = (((U32)v0 & 0x7) << 18) | (((U32)v1 & 0x3F) << 12) | (((U32)v2 & 0x3F) << 6) | (v3 & 0x3F)
+		.index = (((U32) v0 & 0x7) << 18) | (((U32) v1 & 0x3F) << 12) | (((U32) v2 & 0x3F) << 6) | (v3 & 0x3F)
 	};
 
 clean:
@@ -439,9 +445,12 @@ Bool Buffer_writeAsUTF8(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 
 	if(Buffer_isConstRef(buf))
 		retError(clean, Error_constData(0, 0, "Buffer_writeAsUTF8()::buf should be writable"));
 
+	if(codepoint >= 0xD800 && codepoint <= 0xDFFF)
+		retError(clean, Error_invalidParameter(2, 0, "Buffer_writeAsUTF8()::codepoint is a surrogate"));
+
 	if ((codepoint & 0x7F) == codepoint) {
 
-		if(i + 1 > Buffer_length(buf))
+		if(i >= Buffer_length(buf))
 			retError(clean, Error_outOfBounds(0, i + 1, Buffer_length(buf), "Buffer_writeAsUTF8()::i out of bounds"));
 
 		if(bytes)
@@ -453,43 +462,43 @@ Bool Buffer_writeAsUTF8(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 
 
 	if ((codepoint & 0x7FF) == codepoint) {
 
-		if(i + 2 > Buffer_length(buf))
+		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 2)
 			retError(clean, Error_outOfBounds(0, i + 2, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 1 out of bounds"));
 
 		if(bytes)
 			*bytes = 2;
 
-		buf.ptrNonConst[i]        = 0xC0 | (U8)(codepoint >> 6);
-		buf.ptrNonConst[i + 1]    = 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]        = 0xC0 | (U8) (codepoint >> 6);
+		buf.ptrNonConst[i + 1]    = 0x80 | (U8) (codepoint & 0x3F);
 		goto clean;
 	}
 
 	if ((codepoint & 0xFFFF) == codepoint) {
 
-		if(i + 3 > Buffer_length(buf))
+		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 3)
 			retError(clean, Error_outOfBounds(0, i + 3, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 2 out of bounds"));
 
 		if(bytes)
 			*bytes = 3;
 
-		buf.ptrNonConst[i]        = 0xE0 | (U8)(codepoint >> 12);
-		buf.ptrNonConst[i + 1]    = 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		buf.ptrNonConst[i + 2]    = 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]        = 0xE0 | (U8) (codepoint >> 12);
+		buf.ptrNonConst[i + 1]    = 0x80 | (U8) ((codepoint >> 6) & 0x3F);
+		buf.ptrNonConst[i + 2]    = 0x80 | (U8) (codepoint & 0x3F);
 		goto clean;
 	}
 
 	if (codepoint <= 0x10FFFF) {
 
-		if(i + 4 > Buffer_length(buf))
+		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 4)
 			retError(clean, Error_outOfBounds(0, i + 4, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 3 out of bounds"));
 
 		if(bytes)
 			*bytes = 4;
 
-		buf.ptrNonConst[i]        = 0xF0 | (U8)(codepoint >> 18);
-		buf.ptrNonConst[i + 1]    = 0x80 | (U8)((codepoint >> 12) & 0x3F);
-		buf.ptrNonConst[i + 2]    = 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		buf.ptrNonConst[i + 3]    = 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]        = 0xF0 | (U8) (codepoint >> 18);
+		buf.ptrNonConst[i + 1]    = 0x80 | (U8) ((codepoint >> 12) & 0x3F);
+		buf.ptrNonConst[i + 2]    = 0x80 | (U8) ((codepoint >> 6) & 0x3F);
+		buf.ptrNonConst[i + 3]    = 0x80 | (U8) (codepoint & 0x3F);
 		goto clean;
 	}
 
@@ -508,7 +517,7 @@ Bool Buffer_readAsUTF16(const Buffer buf, U64 i, UnicodeCodePointInfo *codepoint
 	if(!codepoint)
 		retError(clean, Error_nullPointer(3, "Buffer_readAsUTF16()::codepoint is required"));
 
-	if(i >= U64_MAX - 2 || i + 2 > Buffer_length(buf))
+	if(i > Buffer_length(buf) || Buffer_length(buf) - i < 2)
 		retError(clean, Error_outOfBounds(0, i, Buffer_length(buf), "Buffer_readAsUTF16() out of bounds"));
 
 	//1 U16
@@ -516,9 +525,9 @@ Bool Buffer_readAsUTF16(const Buffer buf, U64 i, UnicodeCodePointInfo *codepoint
 	const U16 v0 = Buffer_readU16(buf, i, NULL, NULL);
 	i += 2;
 
-	if (v0 <= 0xD7FF) {
+	if (v0 < 0xD800 || v0 > 0xDFFF) {
 
-		if(v0 <= 0x7F && !C8_isValidAscii((C8)v0))
+		if(v0 <= 0x7F && !C8_isValidAscii((C8) v0))
 			retError(clean, Error_invalidParameter(0, 0, "Buffer_readAsUTF16()::buf[i] didn't contain valid ascii"));
 
 		*codepoint = (UnicodeCodePointInfo) { .chars = 1, .bytes = 2, .index = v0 };
@@ -538,7 +547,9 @@ Bool Buffer_readAsUTF16(const Buffer buf, U64 i, UnicodeCodePointInfo *codepoint
 	if(v1 < 0xDC00 || (v1 - 0xDC00) >= (1 << 10))
 		retError(clean, Error_invalidParameter(0, 2, "Buffer_readAsUTF16()::buf[i + 1] had invalid encoding"));
 
-	*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 4, .index = ((v0 - 0xD800) << 10) | (v1 - 0xDC00) | 0x10000 };
+	*codepoint = (UnicodeCodePointInfo) {
+		.chars = 2, .bytes = 4, .index = (((U32) v0 - 0xD800) << 10) + (v1 - 0xDC00) + 0x10000
+	};
 	
 clean:
 	return s_uccess;
@@ -551,9 +562,12 @@ Bool Buffer_writeAsUTF16(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8
 	if(Buffer_isConstRef(buf))
 		retError(clean, Error_constData(0, 0, "Buffer_writeAsUTF16()::buf should be writable"));
 
-	if (codepoint <= 0xD7FF) {
+	if(codepoint >= 0xD800 && codepoint <= 0xDFFF)
+		retError(clean, Error_invalidParameter(2, 0, "Buffer_writeAsUTF16()::codepoint is a surrogate"));
 
-		if(i + 2 > Buffer_length(buf))
+	if (codepoint <= 0xFFFF) {
+
+		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 2)
 			retError(clean, Error_outOfBounds(0, i + 2, Buffer_length(buf), "Buffer_writeAsUTF16()::i out of bounds"));
 
 		if(bytes)
@@ -565,14 +579,16 @@ Bool Buffer_writeAsUTF16(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8
 
 	if (codepoint <= 0x10FFFF) {
 
-		if(i + 4 > Buffer_length(buf))
+		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 4)
 			retError(clean, Error_outOfBounds(0, i + 4, Buffer_length(buf), "Buffer_writeAsUTF16()::i + 4 out of bounds"));
 
 		if(bytes)
 			*bytes = 4;
 
-		Buffer_writeU16(buf, i,     0xD800 | (U16)(codepoint >> 10), NULL);
-		Buffer_writeU16(buf, i + 2, 0xDC00 | (U16)(codepoint & 1023), NULL);
+		const U32 pair = codepoint - 0x10000;
+
+		Buffer_writeU16(buf, i,     0xD800 | (U16) (pair >> 10), NULL);
+		Buffer_writeU16(buf, i + 2, 0xDC00 | (U16) (pair & 1023), NULL);
 		goto clean;
 	}
 
@@ -593,7 +609,7 @@ Bool Buffer_isUnicode(const Buffer buf, F32 threshold, Bool isUTF16) {
 
 	U64 i = 0;
 	F64 counter = 0;
-	const F64 invLen = 1.0 / (F64)Buffer_length(buf);
+	const F64 invLen = 1.0 / (F64) Buffer_length(buf);
 	const U64 minWidth = isUTF16 ? 2 : 1;
 
 	if(Buffer_length(buf) & (minWidth - 1))
@@ -603,7 +619,7 @@ Bool Buffer_isUnicode(const Buffer buf, F32 threshold, Bool isUTF16) {
 
 		UnicodeCodePointInfo info = (UnicodeCodePointInfo) { 0 };
 
-		if(
+		if (
 			(!isUTF16 && !Buffer_readAsUTF8(buf, i, &info, NULL)) ||
 			(isUTF16 && !Buffer_readAsUTF16(buf, i, &info, NULL))
 		) {

@@ -71,7 +71,7 @@ clean:
 - `gotoIfError3(label, call)` jumps on a `false` return from another gen-3 function (the callee already filled `e_rr`).
 - Passing `e_rr = NULL` is allowed everywhere: you get the Bool, not the details.
 - **Every fallible function validates all inputs** (null, bounds, enum ranges, overflow via `types/math/type_cast_safe.h`) and reports through `Error` constructors with a `"Function()::param reason"` string.
-- The `Error` struct embeds a stacktrace: full depth in debug, 1 frame in release (`ERROR_STACKTRACE`). **FFI note:** this means `sizeof(Error)` differs between debug and release builds, bindings must match the build configuration.
+- The `Error` struct embeds a stacktrace of `_OXC3_ERROR_STACKTRACE` frames: full depth in debug libraries, 1 frame in release libraries. CMake and Conan export it with the library's frame count, so a consumer's `NDEBUG` cannot change its layout. **FFI note:** bindings and manual builds must use that same frame count; without the exported definition the header defaults to the local debug/release configuration.
 
 ## Ownership & lifetime conventions
 

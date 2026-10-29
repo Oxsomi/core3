@@ -450,7 +450,8 @@ static void Test_buildCapabilityTlas(
 
 	gfx::CommandList buildList;
 
-	if(!(
+	if (
+		!(
 		Test_assert(t, "capAsList", dev.createCommandList(2 * c::KIBI, 64, 16, buildList, true, e_rr)) &&
 		Test_assert(t, "capAsBegin", buildList.begin(true, e_rr))
 	)) {
@@ -472,7 +473,8 @@ static void Test_buildCapabilityTlas(
 		Test_assert(t, "capAsTlasScopeEnd", scope.end(e_rr));
 	}
 
-	if(!(
+	if (
+		!(
 		Test_assert(t, "capAsEnd", buildList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, buildList) &&
 		Test_assert(t, "capTlasHandle", tlas.bindlessHandle() != c::BindlessDescriptor_None)
@@ -755,7 +757,8 @@ static void Test_capabilityRayTriPositionGuard(c::Test *t, gfx::Device &dev) {
 
 	gfx::CommandScope scope = commandList.scope({ transitions[0], transitions[1] }, 1, {}, e_rr);
 
-	if(!(
+	if (
+		!(
 		Test_assert(t, "rtpGuardScope", (c::Bool) scope) &&
 		Test_assert(t, "rtpGuardBind", scope.setComputePipeline(pipeline, e_rr))
 	))
@@ -785,7 +788,8 @@ extern "C" void Test_graphicsCapabilityExecution(oxc::c::Test *t, oxc::c::Graphi
 		return;
 	}
 
-	if(!(
+	if (
+		!(
 		Test_assert(t, "createEmptyList", dev.createCommandList(2 * c::KIBI, 64, 16, emptyList, true, e_rr)) &&
 		Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr)) &&
 		Test_assert(t, "endEmptyList", emptyList.end(e_rr))

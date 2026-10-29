@@ -32,6 +32,11 @@
 
 BUFFER_OP_IMPL(F32x4);
 
+//All backends use fused fma and adjacent-pair dot4/reduce rounding: (x + y) + (z + w).
+//min/max select the second operand for unordered or equal inputs, including NaNs and signed zeros.
+//negate flips the sign of every lane, including zeros.
+//dot2/dot3 sum the unused lanes as +0 in the same pairs, so their values are ignored and a zero result is +0.
+
 #if _SIMD == SIMD_SSE
 	#define VEC4F_SSE_GUARD
 	#include "types/math/vec4f_sse.inc.h"
@@ -122,7 +127,9 @@ static inline F32x4 F32x4_negTwo() { return F32x4_xxxx4(-2); }
 //Clamp (standardized)
 
 static inline F32x4 F32x4_clamp(F32x4 a, F32x4 mi, F32x4 ma) { return F32x4_max(mi, F32x4_min(ma, a)); }
-static inline F32x4 F32x4_saturate(F32x4 a) { return F32x4_clamp(a, F32x4_zero(), F32x4_one()); }
+
+//Saturate maps NaN and negative zero to positive zero.
+static inline F32x4 F32x4_saturate(F32x4 a) { return F32x4_min(F32x4_max(a, F32x4_zero()), F32x4_one()); }
 
 //Math (standardized)
 
@@ -131,10 +138,6 @@ static inline F32x4 F32x4_mod(F32x4 v, F32x4 d) { return F32x4_mul(F32x4_fract(F
 
 static inline F32x4 F32x4_complement(F32x4 a) { return F32x4_sub(F32x4_one(), a); }
 static inline F32x4 F32x4_inverse(F32x4 a) { return F32x4_div(F32x4_one(), a); }
-
-#if _SIMD != SIMD_SSE && _SIMD != SIMD_WASM
-	static inline F32x4 F32x4_negate(F32x4 a) { return F32x4_sub(F32x4_zero(), a); }
-#endif
 
 static inline F32x4 F32x4_pow2(F32x4 a) { return F32x4_mul(a, a); }
 
@@ -196,20 +199,23 @@ static inline F32 F32x4_satDot3(F32x4 x, F32x4 y) { return F32_saturate(F32x4_do
 static inline F32 F32x4_satDot4(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot4(x, y)); }
 
 static inline F32x4 F32x4_lerp(F32x4 a, F32x4 b, F32 perc) {
-	return F32x4_fma(F32x4_sub(b, a), F32x4_xxxx4(perc), a);
+	return perc == 0 ? a : (perc == 1 ? b : F32x4_fma(F32x4_sub(b, a), F32x4_xxxx4(perc), a));
 }
 
 //Texture packing
 
 static inline F32x4 F32x4_rgb8Unpack(U32 v) {
-	const F32x4 rgb8 = F32x4_floor(F32x4_div(F32x4_trunc3(F32x4_xxxx4((F32)v)), F32x4_create4(0x10000, 0x100, 0x1, 0x1)));
+	const F32x4 rgb8 = F32x4_floor(F32x4_div(F32x4_trunc3(F32x4_xxxx4((F32) v)), F32x4_create4(0x10000, 0x100, 0x1, 0x1)));
 	return F32x4_div(F32x4_floor(F32x4_mod(rgb8, F32x4_xxxx4(0x100))), F32x4_xxxx4(0xFF));
 }
 
 static inline U32 F32x4_rgb8Pack(F32x4 v) {
+
+	v = F32x4_saturate(v);
+
 	const F32x4 v8 = F32x4_floor(F32x4_mul(v, F32x4_xxxx4(0xFF)));
 	const F32x4 preShift = F32x4_mul(v8, F32x4_create3(0x10000, 0x100, 0x1));
-	return (U32)F32x4_reduce(preShift);
+	return (U32) F32x4_reduce(preShift);
 }
 
 //https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
@@ -242,7 +248,10 @@ static inline F32x4 F32x4_linearToSrgb(F32x4 x) {
 	return F32x4_add(F32x4_add(S1, S2), F32x4_add(S3, x));
 }
 
-static inline U32 F32x4_srgb8Pack(F32x4 v) { return F32x4_rgb8Pack(F32x4_linearToSrgb(v)); }
+static inline U32 F32x4_srgb8Pack(F32x4 v) {
+	v = F32x4_saturate(v);
+	return F32x4_rgb8Pack(F32x4_linearToSrgb(v));
+}
 
 //Reflect incident direction around normal
 //https://registry.khronos.org/OpenGL-Refpages/gl4/html/reflect.xhtml
@@ -331,18 +340,21 @@ static inline Bool F32x4_neqApproxAdv2(F32x4 a, F32x4 b, F32 relEpsilon, F32 abs
 //Construction
 static inline F32x4 F32x4_load1(const void *arr) {
 	F32x4 result = F32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
 	return result;
 }
 
 static inline F32x4 F32x4_load2(const void *arr) {
 	F32x4 result = F32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
 	return result;
 }
 
 static inline F32x4 F32x4_load3(const void *arr) {
 	F32x4 result = F32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 3), Buffer_createRefConst(arr, sizeof(F32) * 3));
 	return result;
 }
@@ -351,6 +363,7 @@ static inline F32x4 F32x4_load3(const void *arr) {
 
 	static inline F32x4 F32x4_load4(const void *arr) {
 		F32x4 result = F32x4_zero();
+
 		if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
 		return result;
 	}

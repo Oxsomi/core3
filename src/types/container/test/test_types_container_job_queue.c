@@ -41,6 +41,8 @@
 #include "types/container/job_queue.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/atomic.h"
+#include "types/base/thread.h"
+#include "types/container/buffer.h"
 
 //--- Job payloads & callbacks -------------------------------------------------
 
@@ -82,6 +84,7 @@ typedef struct FanoutPayload {
 static Bool jobParentFanout(void *data, U64 threadId, JobQueue *queue) {
 	(void) threadId;
 	FanoutPayload *p = (FanoutPayload*) data;
+
 	for(U64 i = 0; i < p->children; ++i)
 		if(!JobQueue_push(queue, jobIncrement, p->counter, NULL))
 			return false;
@@ -98,6 +101,7 @@ typedef struct RangePayload {
 static Bool jobCheckThreadId(void *data, U64 threadId, JobQueue *queue) {
 	(void) queue;
 	RangePayload *p = (RangePayload*) data;
+
 	if(threadId >= p->threadCount)
 		AtomicI64_inc(p->bad);
 	return true;
@@ -139,6 +143,51 @@ static void jobGroupDestructor(void *data) {
 	AtomicI64_inc(&((GroupResult*) data)->destructorRan);
 }
 
+static Bool jobFailAlloc(void *ptr, U64 size, Buffer *output, Error *e_rr) {
+
+	(void) ptr; (void) size; (void) output;
+	Bool s_uccess = true;
+
+	retError(clean, Error_outOfMemory(0, "jobFailAlloc() allocation refused"));
+
+clean:
+	return s_uccess;
+}
+
+static void jobNoFree(void *ptr, Buffer buf) {
+	(void) ptr; (void) buf;
+}
+
+typedef struct SelfOwnedGroup {
+	JobGroup group;
+	const Allocator *alloc;
+	AtomicI64 *freed;
+} SelfOwnedGroup;
+
+static void jobFreeGroup(void *data) {
+
+	SelfOwnedGroup *self = (SelfOwnedGroup*) data;
+	const Allocator *alloc = self->alloc;
+	AtomicI64 *freed = self->freed;
+	Buffer buffer = Buffer_createManagedPtr(self, sizeof(*self));
+
+	Buffer_free(&buffer, alloc);
+	AtomicI64_inc(freed);
+}
+
+static Bool jobFinalizeFreeGroup(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId; (void) queue;
+
+	jobFreeGroup(data);
+	return true;
+}
+
+static Bool jobLeaveSelfOwnedGroup(void *data, U64 threadId, JobQueue *queue) {
+	(void) threadId; (void) queue;
+	return JobGroup_leave(&((SelfOwnedGroup*) data)->group, NULL);
+}
+
 //--- Test ---------------------------------------------------------------------
 
 void Test_jobQueue(Test *t) {
@@ -147,6 +196,126 @@ void Test_jobQueue(Test *t) {
 	Error *e_rr = &t->err;
 
 	Test_setModule(t, "JobQueue");
+
+	//An enqueue failure still disposes the accumulator and completes the group.
+
+	for(U8 shutdown = 0; shutdown < 2; ++shutdown) {
+
+		JobQueue q = (JobQueue) { 0 };
+		JobGroup group = (JobGroup) { 0 };
+		GroupResult result = { 0 };
+		const Allocator failAlloc = { .alloc = jobFailAlloc, .free = jobNoFree };
+
+		Test_assert(t, "finalize failure: queue", JobQueue_create(1, shutdown ? alloc : &failAlloc, &q, e_rr));
+		Test_assert(t, "finalize failure: group", JobGroup_create(
+			&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr
+		));
+
+		Test_assert(t, "finalize failure: enter", JobGroup_enter(&group, 1, e_rr));
+
+		AtomicI64_store(&q.shutdown, shutdown);
+
+		Test_assert(t, "finalize failure: leave reports failure", !JobGroup_leave(&group, NULL));
+		Test_assert(t, "finalize failure: destructor runs once", AtomicI64_load(&result.destructorRan) == 1);
+		Test_assert(t, "finalize failure: group failed", !JobGroup_isSuccess(&group));
+		Test_assert(t, "finalize failure: wait completes", JobGroup_wait(&group, e_rr));
+		Test_assert(t, "group token underflow rejected", !JobGroup_leave(&group, NULL));
+		Test_assert(t, "group token overflow rejected", !JobGroup_enter(&group, U64_MAX, NULL));
+		Test_assert(t, "invalid tokens preserve empty group", AtomicI64_load(&group.outstanding) == 0);
+
+		JobQueue_free(&q);
+	}
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+		AtomicI64 freed = { 0 };
+		U64 pushed = 0;
+
+		if(Test_assert(t, "self-owned group: queue", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
+
+			for(U64 i = 0; i < 100; ++i) {
+
+				Buffer storage = Buffer_createNull();
+
+				if (!Test_assert(t, "self-owned group: allocate", Buffer_createEmptyBytes(
+					sizeof(SelfOwnedGroup), alloc, &storage, e_rr
+				)))
+					break;
+
+				SelfOwnedGroup *self = (SelfOwnedGroup*) storage.ptrNonConst;
+
+				self->alloc = alloc;
+				self->freed = &freed;
+
+				Test_assert(t, "self-owned group: create", JobGroup_create(
+					&self->group, &q, i & 1 ? jobFinalizeFreeGroup : NULL, self, jobFreeGroup, e_rr
+				));
+
+				Test_assert(t, "self-owned group: enter", JobGroup_enter(&self->group, 1, e_rr));
+
+				if(!Test_assert(t, "self-owned group: push", JobQueue_push(&q, jobLeaveSelfOwnedGroup, self, e_rr))) {
+					JobGroup_fail(&self->group, NULL);
+					JobGroup_leave(&self->group, NULL);
+					break;
+				}
+
+				++pushed;
+			}
+
+			Test_assert(t, "self-owned group: drain", JobQueue_wait(&q, e_rr));
+			Test_assert(t, "self-owned group: callbacks free their group", pushed == 100 && AtomicI64_load(&freed) == 100);
+		}
+
+		JobQueue_free(&q);
+	}
+
+	//Filtered waits leave unrelated jobs in FIFO order across repeated compaction and reuse.
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+		JobGroup group = (JobGroup) { 0 };
+		ListU8 order = { 0 };
+		OrderPayload payloads[100];
+		AtomicI64 workDone = { 0 };
+		GroupWork work = { .group = &group, .workDone = &workDone };
+
+		if(Test_assert(t, "filtered FIFO: create", JobQueue_create(1, alloc, &q, e_rr))) {
+
+			Test_assert(t, "filtered FIFO: group", JobGroup_create(&group, &q, NULL, NULL, NULL, e_rr));
+
+			Bool ok = true;
+
+			for(U8 i = 0; i < 100 && ok; ++i) {
+
+				payloads[i] = (OrderPayload) { .out = &order, .alloc = alloc, .id = i };
+				ok = JobQueue_push(&q, jobRecordOrder, &payloads[i], e_rr);
+				ok &= JobGroup_enter(&group, 8, e_rr);
+
+				for(U8 j = 0; j < 8 && ok; ++j)
+					ok = JobQueue_pushGroup(&q, jobGroupWorker, &work, NULL, &group, e_rr);
+
+				if(ok)
+					ok = JobGroup_wait(&group, e_rr);
+			}
+
+			Test_assert(t, "filtered FIFO: reusable group", ok && AtomicI64_load(&workDone) == 800);
+			Test_assert(t, "filtered FIFO: outsiders deferred", !order.length);
+			Test_assert(t, "filtered FIFO: drain", JobQueue_wait(&q, e_rr));
+
+			ok = order.length == 100;
+
+			for(U8 i = 0; ok && i < 100; ++i)
+				ok = order.ptr[i] == i;
+
+			Test_assert(t, "filtered FIFO: order preserved", ok);
+			Test_assert(t, "negative lane rejected", !JobQueue_pushLane(
+				&q, (EJobLane) -1, jobIncrement, &workDone, NULL, NULL, NULL
+			));
+		}
+
+		JobQueue_free(&q);
+		ListU8_free(&order, alloc);
+	}
 
 	//1. Single threaded (inline) mode: jobs run in push order on the calling thread.
 
@@ -160,6 +329,7 @@ void Test_jobQueue(Test *t) {
 			Test_assert(t, "single threaded has 1 context", JobQueue_threadCount(&q) == 1);
 
 			Bool ok = true;
+
 			for (U8 i = 0; i < 8; ++i) {
 				payloads[i] = (OrderPayload) { .out = &order, .alloc = alloc, .id = i };
 				ok &= JobQueue_push(&q, jobRecordOrder, &payloads[i], e_rr);
@@ -169,6 +339,7 @@ void Test_jobQueue(Test *t) {
 			Test_assert(t, "wait single threaded", JobQueue_wait(&q, e_rr));
 
 			Bool inOrder = order.length == 8;
+
 			for (U8 i = 0; inOrder && i < 8; ++i)
 				inOrder = order.ptr[i] == i;
 
@@ -192,6 +363,7 @@ void Test_jobQueue(Test *t) {
 			Test_assert(t, "threadCount honored", JobQueue_threadCount(&q) == JOBQUEUE_TEST_THREADS);
 
 			Bool ok = true;
+
 			for (U64 i = 0; i < jobCount; ++i)
 				ok &= JobQueue_push(&q, jobIncrement, &counter, e_rr);
 
@@ -213,6 +385,7 @@ void Test_jobQueue(Test *t) {
 		if (Test_assert(t, "create for failure test", JobQueue_create(JOBQUEUE_TEST_THREADS, alloc, &q, e_rr))) {
 
 			Bool ok = true;
+
 			for (U64 i = 0; i < 50; ++i)
 				ok &= JobQueue_push(&q, jobIncrement, &ran, e_rr);
 
@@ -259,6 +432,7 @@ void Test_jobQueue(Test *t) {
 			RangePayload payload = { .bad = &bad, .threadCount = JobQueue_threadCount(&q) };
 
 			Bool ok = true;
+
 			for (U64 i = 0; i < 500; ++i)
 				ok &= JobQueue_push(&q, jobCheckThreadId, &payload, e_rr);
 
@@ -303,6 +477,7 @@ void Test_jobQueue(Test *t) {
 			Test_assert(t, "JobGroup: enter", JobGroup_enter(&group, N, e_rr));      //Count known up front
 
 			GroupWork works[100];
+
 			for (U64 i = 0; i < N; ++i) {
 				works[i] = (GroupWork) { .group = &group, .workDone = &workDone, .fail = false };
 				JobQueue_push(&q, jobGroupWorker, &works[i], e_rr);
@@ -337,6 +512,7 @@ void Test_jobQueue(Test *t) {
 			Test_assert(t, "JobGroup: enter", JobGroup_enter(&group, N, e_rr));
 
 			GroupWork works[100];
+
 			for (U64 i = 0; i < N; ++i) {
 				works[i] = (GroupWork) { .group = &group, .workDone = &workDone, .fail = (i == 50) };
 				JobQueue_push(&q, jobGroupWorker, &works[i], e_rr);

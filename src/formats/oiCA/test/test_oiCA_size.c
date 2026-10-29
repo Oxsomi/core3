@@ -199,7 +199,7 @@ void Test_CAWriteSizeConsistencyFullDate(Test *t) {
 			goto doneFullDateSize;
 		}
 
-		Ns ts = (Ns)946681200 * SECOND + 123 * MS;
+		Ns ts = (Ns) 946681200 * SECOND + 123 * MS;
 		addFile(t, &ca, CAHandle_Root, "precise.bin", ts, false);
 
 		Test_assert(t, "full date size consistent", caCheckSizeConsistency(t, &ca, &type, NULL));
@@ -270,9 +270,9 @@ void Test_CAWriteSizeConsistencyLongDirCount(Test *t) {
 
 			C8 name[16] = { 0 };
 			name[0] = 'd';
-			name[1] = (C8)('0' + i / 100);
-			name[2] = (C8)('0' + (i / 10) % 10);
-			name[3] = (C8)('0' + i % 10);
+			name[1] = (C8) ('0' + i / 100);
+			name[2] = (C8) ('0' + (i / 10) % 10);
+			name[3] = (C8) ('0' + i % 10);
 
 			addFolder(t, &ca, CAHandle_Root, name, false);
 

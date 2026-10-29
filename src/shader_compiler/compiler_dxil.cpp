@@ -198,7 +198,7 @@ static inline Bool Compiler_convertWaveSize(
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMax, &waveMax, e_rr));
 
 	if(waveMax)
-		*waveSizes = (U16)(((U16)waveMin << 4) | ((U16)waveMax << 8) | ((U16)recommend << 12));
+		*waveSizes = (U16) (((U16) waveMin << 4) | ((U16) waveMax << 8) | ((U16) recommend << 12));
 
 	else *waveSizes = waveMin;
 
@@ -284,6 +284,7 @@ extern "C" Bool Compiler_processDXIL(
 	if (isLib) {
 
 		D3D12_LIBRARY_DESC lib = D3D12_LIBRARY_DESC{};
+
 		if(FAILED(dxilReflLib->GetDesc(&lib)))
 			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"));
 
@@ -296,6 +297,7 @@ extern "C" Bool Compiler_processDXIL(
 
 			D3D12_FUNCTION_DESC funcDesc0 = D3D12_FUNCTION_DESC{};
 			D3D12_FUNCTION_DESC1 funcDesc = D3D12_FUNCTION_DESC1{};
+
 			if(FAILED(funcRefl->GetDesc(&funcDesc0)) || FAILED(funcRefl->GetDesc1(&funcDesc)))
 				retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_FUNCTION_DESC1"));
 
@@ -442,6 +444,7 @@ extern "C" Bool Compiler_processDXIL(
 			for (U32 j = 0; j < funcDesc0.BoundResources; ++j) {
 
 				D3D12_SHADER_INPUT_BIND_DESC input{};
+
 				if(FAILED(funcRefl->GetResourceBindingDesc(j, &input)))
 					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained invalid resource"));
 
@@ -483,6 +486,7 @@ extern "C" Bool Compiler_processDXIL(
 		U16 waveSizes = 0;
 
 		D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
+
 		if(FAILED(dxilRefl->GetDesc(&refl)))
 			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"));
 
@@ -510,13 +514,14 @@ extern "C" Bool Compiler_processDXIL(
 			));
 		}
 
-		for(U64 j = 0, outputC = 0, inputC = 0; j < (U64)refl.OutputParameters + refl.InputParameters; ++j) {
+		for(U64 j = 0, outputC = 0, inputC = 0; j < (U64) refl.OutputParameters + refl.InputParameters; ++j) {
 
 			Bool isOutput = j < refl.OutputParameters;
 			ESBType *inputTypes = isOutput ? outputs : inputs;
 			U8 *semantics = isOutput ? outputSemantics : inputSemantics;
 
 			D3D12_SIGNATURE_PARAMETER_DESC signature{};
+
 			if(FAILED(
 				isOutput ?
 				dxilRefl->GetOutputParameterDesc((UINT) j, &signature) :
@@ -584,7 +589,7 @@ extern "C" Bool Compiler_processDXIL(
 						++inputSemanticCount;
 				}
 
-				semanticValue = (U8)((semanticName << 4) | signature.SemanticIndex);
+				semanticValue = (U8) ((semanticName << 4) | signature.SemanticIndex);
 			}
 
 			else semanticValue = (U8) signature.SemanticIndex;
@@ -673,6 +678,7 @@ extern "C" Bool Compiler_processDXIL(
 		for (U32 j = 0; j < refl.BoundResources; ++j) {
 
 			D3D12_SHADER_INPUT_BIND_DESC input{};
+
 			if(FAILED(dxilRefl->GetResourceBindingDesc(j, &input)))
 				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained invalid resource"));
 
@@ -717,7 +723,7 @@ extern "C" Bool Compiler_processDXIL(
 		//The container is therefore asked what it actually holds first, and only those parts are removed.
 
 		static const U32 removableParts[] = { DXC_PART_PDB, DXC_PART_PDB_NAME, DXC_PART_REFLECTION_DATA };
-		U8 removablePartCount = (U8)(sizeof(removableParts) / sizeof(removableParts[0]));
+		U8 removablePartCount = (U8) (sizeof(removableParts) / sizeof(removableParts[0]));
 
 		Bool hasPart[sizeof(removableParts) / sizeof(removableParts[0])] = { false };
 
@@ -755,7 +761,10 @@ extern "C" Bool Compiler_processDXIL(
 		Bool hasErrors = false;
 
 		if (opResult && SUCCEEDED(opResult->GetErrorBuffer(&err)) && err && err->GetBufferSize()) {
-			CharString errStr = CharString_createRefSizedConst((const C8*)err->GetBufferPointer(), err->GetBufferSize(), false);
+			CharString errStr = CharString_createRefSizedConst(
+				(const C8*) err->GetBufferPointer(), err->GetBufferSize(), false
+			);
+
 			gotoIfError3(clean, Compiler_parseErrors(errStr, alloc, errors, &hasErrors, e_rr));
 		}
 
@@ -775,7 +784,7 @@ extern "C" Bool Compiler_processDXIL(
 
 	//Ensure we have a valid DXIL file, signed by DXC's bundled validator
 
-	if(
+	if (
 		Buffer_length(*result) <= 0x14 ||
 		Buffer_readU32(*result, 0, NULL, NULL) != C8x4('D', 'X', 'B', 'C') ||
 		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())                   //Unsigned

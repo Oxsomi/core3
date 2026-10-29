@@ -21,7 +21,7 @@
 //types/container/job_queue.hpp
 
 #pragma once
-#include <memory>
+#include <new>
 #include <utility>
 #include <type_traits>
 
@@ -74,20 +74,36 @@ namespace oxc {
 		c::Bool initialized;
 		c::U8 pad[7];
 
-		//Storage for a pushed callable; freed by the trampoline after execution.
+		//What the C side and destroy() read, at the start of every pushed callable's storage.
 
-		template<typename F>
-		struct JobStorage {
+		struct JobHeader {
 
 			//Has to stay the first member: the queue is handed c::JobQueue_wrapperCallback, which reads the
 			// JobInvoke back out of the start of this storage.
 
 			c::JobWrapperJob base;
 			c::Allocator alloc;
+			c::Buffer allocation;
+		};
+
+		//Storage for a pushed callable; freed by the trampoline after execution.
+
+		template<typename F>
+		struct JobStorage {
+
+			//The header is padded here to func's alignment, so an over-aligned capture leaves the compiler no
+			// padding to insert.
+
+			union {
+				JobHeader header;
+				c::U8 headerBytes[(sizeof(JobHeader) + alignof(F) - 1) / alignof(F) * alignof(F)];
+			};
+
 			F func;
 
-			JobStorage(const c::Allocator &alloc, F &&f) noexcept
-				: base{ &invoke }, alloc(alloc), func(std::move(f)) {}
+			template<typename G>
+			JobStorage(const c::Allocator &alloc, c::Buffer allocation, G &&f) noexcept
+				: header{ { &invoke }, alloc, allocation }, func(std::forward<G>(f)) {}
 
 			//The only function of ours the C queue ever calls, and its signature is builtin only on purpose.
 			//A c::JobQueue parameter here would be a different type to the queue's own JobQueue, which
@@ -108,13 +124,14 @@ namespace oxc {
 			static void destroy(void *data) {
 
 				JobStorage *self = (JobStorage*) data;
-				const c::Allocator allocCopy = self->alloc;
+				const c::Allocator allocCopy = self->header.alloc;
+				c::Buffer buf = self->header.allocation;
+
 				self->~JobStorage();
 
 				//Freed through the C API rather than by calling allocCopy.free here, for the reason push()
 				// documents: the indirect call belongs on the C side where the callback's type matches.
 
-				c::Buffer buf = c::Buffer_createManagedPtr(self, sizeof(JobStorage));
 				c::Buffer_free(&buf, &allocCopy);
 			}
 		};
@@ -195,10 +212,16 @@ namespace oxc {
 			// going through an incorrect function type; Buffer_createUninitializedBytes performs the same
 			// allocation from C, where the types agree, and checks the allocator for us on the way.
 
-			if(!c::Buffer_createUninitializedBytes(sizeof(Storage), queue.alloc, &buf, e_rr))
+			if(!c::Buffer_createUninitializedBytes(sizeof(Storage) + alignof(Storage) - 1, queue.alloc, &buf, e_rr))
 				return false;
 
-			Storage *storage = std::construct_at((Storage*)buf.ptrNonConst, *queue.alloc, std::forward<F>(f));
+			//The allocator guarantees the C types' alignment; a capture can require a larger alignment.
+			//Keep the original allocation so destroy frees its base address and full size.
+
+			const uintptr_t alignMask = (uintptr_t) alignof(Storage) - 1;
+			void *aligned = (void*) (((uintptr_t) buf.ptrNonConst + alignMask) & ~alignMask);
+
+			Storage *storage = new (aligned) Storage(*queue.alloc, buf, std::forward<F>(f));
 
 			//Register destroy as the discard destructor so a queued-but-never-run job frees itself on shutdown.
 

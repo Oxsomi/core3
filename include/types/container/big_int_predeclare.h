@@ -100,9 +100,10 @@ static inline U16 BigInt_bitScan(BigInt a) {
 	for (U64 i = a.length - 1; i != U64_MAX; --i) {
 
 		const U64 v = a.data[i];
+
 		if (!v) continue;
 
-		return (U16)(i * 64 + U64_bitScan(v));
+		return (U16) (i * 64 + U64_bitScan(v));
 	}
 
 	return U16_MAX;
@@ -114,9 +115,10 @@ static inline U16 BigInt_bitScanReverse(BigInt a) {
 	for (U64 i = 0; i < a.length; ++i) {
 		
 		const U64 v = a.data[i];
+
 		if (!v) continue;
 
-		return (U16)(i * 64 + U64_bitScanReverse(v));
+		return (U16) (i * 64 + U64_bitScanReverse(v));
 	}
 
 	return U16_MAX;

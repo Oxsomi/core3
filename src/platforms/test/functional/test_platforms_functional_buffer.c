@@ -60,8 +60,8 @@ static void F1_onDraw(Window *w) {
 	for (U32 y = 0; y < H; ++y)
 		for (U32 x = 0; x < W; ++x) {
 			U8 *p = px + (y * W + x) * 4;
-			p[0] = (U8)x;                  //R gradient
-			p[1] = (U8)y;                  //G gradient
+			p[0] = (U8) x;                  //R gradient
+			p[1] = (U8) y;                  //G gradient
 			p[2] = 128 ^ f1.zxor;          //B constant baseline
 			p[3] = 255;                    //A
 		}
@@ -75,12 +75,12 @@ static void F1_onDraw(Window *w) {
 		Test_assert(f1.t, "topLeft_R",  tl[0] == 0);
 		Test_assert(f1.t, "topLeft_G",  tl[1] == 0);
 		Test_assert(f1.t, "topLeft_B",  tl[2] == (128 ^ f1.zxor));
-		Test_assert(f1.t, "topRight_R", tr[0] == (U8)(W - 1));
+		Test_assert(f1.t, "topRight_R", tr[0] == (U8) (W - 1));
 		Test_assert(f1.t, "topRight_G", tr[1] == 0);
 		Test_assert(f1.t, "botLeft_R",  bl[0] == 0);
-		Test_assert(f1.t, "botLeft_G",  bl[1] == (U8)(H - 1));
-		Test_assert(f1.t, "botRight_R", br[0] == (U8)(W - 1));
-		Test_assert(f1.t, "botRight_G", br[1] == (U8)(H - 1));
+		Test_assert(f1.t, "botLeft_G",  bl[1] == (U8) (H - 1));
+		Test_assert(f1.t, "botRight_R", br[0] == (U8) (W - 1));
+		Test_assert(f1.t, "botRight_G", br[1] == (U8) (H - 1));
 	}
 
 	f1.drawn = true;
@@ -90,6 +90,7 @@ static void F1_onDraw(Window *w) {
 static Bool waitForDraw(volatile Bool *drawn, Ns timeout) {
 
 	Ns waited = 0;
+
 	while (!*drawn && waited < timeout) {
 		
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -128,7 +129,7 @@ static void Test_cpuBuffer(Test *t) {
 
 	U32 W = (U32) I32x2_x(sz);
 	U32 H = (U32) I32x2_y(sz);
-	U64 expectedBytes = (U64)W * H * 4;
+	U64 expectedBytes = (U64) W * H * 4;
 
 	Test_assert(t, "bufferSize", Buffer_length(w->cpuVisibleBuffer) == expectedBytes);
 
@@ -175,8 +176,8 @@ static void F6_onDraw(Window *w) {
 
 			const U64 i = (U64) y * W + x;
 
-			px[i * 4 + 0] = (U8)(x & 0xFF);
-			px[i * 4 + 1] = (U8)(y & 0xFF);
+			px[i * 4 + 0] = (U8) (x & 0xFF);
+			px[i * 4 + 1] = (U8) (y & 0xFF);
 			px[i * 4 + 2] = 42;
 			px[i * 4 + 3] = 255;
 		}
@@ -206,7 +207,7 @@ static void Test_storeCPUBuffer(Test *t) {
 	if (w)
 		sz = w->size;
 
-	U32 W = (U32)I32x2_x(sz), H = (U32)I32x2_y(sz);
+	U32 W = (U32) I32x2_x(sz), H = (U32) I32x2_y(sz);
 
 	ListSubResourceData subResources = (ListSubResourceData){ 0 };
 	StreamRef *readStream = NULL;
@@ -296,11 +297,12 @@ static void Test_storeCPUBuffer(Test *t) {
 
 		U32 px1 = 0;
 		Buffer px1Buf = Buffer_createRef(&px1, sizeof(px1));
+
 		if (Test_assert(t, "readPx1", stream->read(stream, sr->streamOff + pixelBytes, sizeof(px1), px1Buf, alloc, &t->err)))
 			Test_assert(t, "px1", px1 == 0xFF2A0001 || px1 == 0xFF01002A);
 
 		//Verify the reported stream length covers the full image
-		U64 expectedBytes = (U64)W * H * pixelBytes;
+		U64 expectedBytes = (U64) W * H * pixelBytes;
 		Test_assert(t, "streamLen", sr->streamLen == expectedBytes);
 	}
 

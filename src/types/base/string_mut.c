@@ -56,12 +56,12 @@ Bool CharString_erase(const CharStringReplaceErase *erase, C8 c, Bool isFirst) {
 	//memcpy is undefined on overlapping ranges, so this has to be the move.
 
 	Buffer_memmove(
-		Buffer_createRef((U8 *)s->ptr + find, strl - find - 1),
+		Buffer_createRef((U8 *) s->ptr + find, strl - find - 1),
 		Buffer_createRefConst(s->ptr + find + 1, strl - find - 1)
 	);
 
 	s->ptrNonConst[strl - 1] = '\0';
-	s->lenAndNullTerminated = (strl - 1) | ((U64)1 << 63);
+	s->lenAndNullTerminated = (strl - 1) | ((U64) 1 << 63);
 	return true;
 }
 
@@ -80,8 +80,8 @@ Bool CharString_eraseAtCount(CharString *s, U64 i, U64 count, Error *e_rr) {
 
 	const U64 strl = CharString_length(*s);
 
-	if (i + count > strl || i + count < i)
-		retError(clean, Error_outOfBounds(0, i + count, strl, "CharString_eraseAtCount()::i + count is out of bounds"));
+	if (i > strl || count > strl - i)
+		retError(clean, Error_outOfBounds(0, i, strl, "CharString_eraseAtCount()::i or count is out of bounds"));
 
 	Buffer_memmove(
 		Buffer_createRef(s->ptrNonConst + i, strl - i - count),
@@ -90,7 +90,7 @@ Bool CharString_eraseAtCount(CharString *s, U64 i, U64 count, Error *e_rr) {
 
 	const U64 end = strl - count;
 	s->ptrNonConst[end] = '\0';
-	s->lenAndNullTerminated = end | ((U64)1 << 63);
+	s->lenAndNullTerminated = end | ((U64) 1 << 63);
 
 clean:
 	return s_uccess;
@@ -132,7 +132,7 @@ Bool CharString_eraseString(const CharStringReplaceErase *erase, const CharStrin
 
 	const U64 end = strl - otherl;
 	s->ptrNonConst[end] = '\0';
-	s->lenAndNullTerminated = end | ((U64)1 << 63);
+	s->lenAndNullTerminated = end | ((U64) 1 << 63);
 	return true;
 }
 
@@ -148,7 +148,7 @@ Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c) {
 	U64 len = erase->len;
 	EStringTransform transform = (EStringTransform) erase->caseSensitive;
 
-	if (!s || CharString_isRef(*s) || off >= strl || off + len > strl)
+	if (!s || CharString_isRef(*s) || off >= strl || len > strl - off)
 		return false;
 
 	if (len)
@@ -173,7 +173,7 @@ Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c) {
 		s->ptrNonConst[out++] = s->ptr[i];
 
 	s->ptrNonConst[out] = '\0';
-	s->lenAndNullTerminated = out | ((U64)1 << 63);
+	s->lenAndNullTerminated = out | ((U64) 1 << 63);
 	return true;
 }
 
@@ -184,13 +184,14 @@ Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharSt
 
 	CharString *s = erase->s;
 	U64 strl = s ? CharString_length(*s) : 0;
+	const U64 realStrl = strl;
 	U64 off = erase->off;
 	U64 len = erase->len;
 	EStringTransform transform = (EStringTransform) erase->caseSensitive;
 
 	const U64 otherl = !other ? 0 : CharString_length(*other);
 
-	if (!s || !otherl || CharString_isRef(*s) || off >= strl || off + len > strl)
+	if (!s || !otherl || CharString_isRef(*s) || off >= strl || len > strl - off)
 		return false;
 
 	if (len)
@@ -200,9 +201,9 @@ Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharSt
 
 	for (U64 i = off; i < strl; ++i) {
 
-		Bool match = i - strl >= otherl;
+		Bool match = strl - i >= otherl;
 
-		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
+		for (U64 j = i, k = 0; match && k < otherl; ++j, ++k)
 			if (C8_transform(s->ptr[j], transform) != C8_transform(other->ptr[k], transform)) {
 				match = false;
 				break;
@@ -219,8 +220,11 @@ Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharSt
 	if (out == strl)
 		return true;
 
+	for(U64 i = strl; i < realStrl; ++i)
+		s->ptrNonConst[out++] = s->ptr[i];
+
 	s->ptrNonConst[out] = '\0';
-	s->lenAndNullTerminated = out | ((U64)1 << 63);
+	s->lenAndNullTerminated = out | ((U64) 1 << 63);
 	return true;
 }
 
@@ -235,7 +239,7 @@ Bool CharString_replaceAll(const CharStringReplaceErase *replace, C8 c, C8 v) {
 	U64 len = replace->len;
 	EStringTransform transform = (EStringTransform) replace->caseSensitive;
 
-	if (!s || CharString_isConstRef(*s) || off >= strl || off + len > strl)
+	if (!s || CharString_isConstRef(*s) || off >= strl || len > strl - off)
 		return false;
 
 	if (!len)

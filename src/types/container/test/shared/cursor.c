@@ -211,7 +211,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 	if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
 
 		Bool verifyOk = true;
-		const U64 *v64 = (const U64*)full.ptr;
+		const U64 *v64 = (const U64*) full.ptr;
 
 		for (U64 i = 0; i < 96 * KIBI / 8 && verifyOk; ++i)
 			if (v64[i] != 0xDEADBEEFCAFEBABE + i)
@@ -298,7 +298,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		//Read back all 96KiB at once; check written slots and undisturbed locations in one pass
 
 		if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
-			const U64 *v64 = (const U64*)full.ptr;
+			const U64 *v64 = (const U64*) full.ptr;
 			Bool spotOk = true, surroundOk = true;
 
 			for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
@@ -340,7 +340,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		}
 		
 		if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
-			const U64 *v64 = (const U64*)full.ptr;
+			const U64 *v64 = (const U64*) full.ptr;
 			Bool base0Ok = true, base8Ok = true, restOk = true;
 
 			for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
@@ -377,7 +377,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		if (s->read(s, 0, 96 * KIBI, read, t->alloc, &t->err)) {
 
 			Bool zeroOk = true;
-			const U64 *v64 = (const U64*)read.ptr;
+			const U64 *v64 = (const U64*) read.ptr;
 
 			for (U64 i = 0; i < 96 * KIBI / sizeof(U64) && zeroOk; ++i)
 				if (v64[i] != 0)
@@ -400,7 +400,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		if (s->read(s, 0, 96 * KIBI, read, t->alloc, &t->err)) {
 
 			Bool zeroOk = true;
-			const U64 *v64 = (const U64*)read.ptr;
+			const U64 *v64 = (const U64*) read.ptr;
 
 			for (U64 i = 0; i < 96 * KIBI / sizeof(U64) && zeroOk; ++i)
 				if (v64[i] != 0xCACACACACACACACA)
@@ -434,7 +434,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 
 		if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
 			Bool partialOk = true;
-			const U64 *v64 = (const U64*)full.ptr;
+			const U64 *v64 = (const U64*) full.ptr;
 
 			for (U64 i = 0; i < 96 * KIBI / 8 && partialOk; ++i) {
 				const U64 off = (i * 8) & (32 * KIBI - 1);
@@ -461,7 +461,8 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI - 4, sizeof(magic), false, t->alloc, &t->err);
 
 		Test_assert(t, "OOB span write rejected",
-			!StreamCursor_write(&cursor, magicBuf, 0, 96 * KIBI - 4, sizeof(magic), false, t->alloc, NULL));
+			!StreamCursor_write(&cursor, magicBuf, 0, 96 * KIBI - 4, sizeof(magic), false, t->alloc, NULL)
+		);
 
 		if (!StreamCursor_setReadOnly(&cursor, t->alloc, &t->err)) {
 			Test_assert(t, "SetReadOnly for span reads", false);
@@ -471,15 +472,18 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		magic = 0;
 		Test_assert(t, "Span read at 32KiB-4",
 			StreamCursor_read(&cursor, magicBuf, 32 * KIBI - 4, 0, sizeof(magic), false, t->alloc, &t->err) &&
-			magic == magicSpan);
+			magic == magicSpan
+		);
 
 		magic = 0;
 		Test_assert(t, "Span read at 64KiB-4",
 			StreamCursor_read(&cursor, magicBuf, 64 * KIBI - 4, 0, sizeof(magic), false, t->alloc, &t->err) &&
-			magic == magicSpan);
+			magic == magicSpan
+		);
 
 		Test_assert(t, "OOB span read rejected",
-			!StreamCursor_read(&cursor, magicBuf, 96 * KIBI - 4, 0, sizeof(magic), false, t->alloc, NULL));
+			!StreamCursor_read(&cursor, magicBuf, 96 * KIBI - 4, 0, sizeof(magic), false, t->alloc, NULL)
+		);
 	}
 
 clean:
@@ -545,7 +549,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 
 		if (s1->read(s1, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
 			Bool dstOk = true;
-			const U64 *v64 = (const U64*)fill.ptr;
+			const U64 *v64 = (const U64*) fill.ptr;
 
 			for (U64 i = 0; i < 96 * KIBI / 8 && dstOk; ++i)
 				if (v64[i] != 0xAAAAAAAAAAAAAAAA)
@@ -560,7 +564,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 
 		if (s0->read(s0, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
 			Bool srcOk = true;
-			const U64 *v64 = (const U64*)fill.ptr;
+			const U64 *v64 = (const U64*) fill.ptr;
 
 			for (U64 i = 0; i < 96 * KIBI / 8 && srcOk; ++i)
 				if (v64[i] != 0xAAAAAAAAAAAAAAAA)
@@ -605,7 +609,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 
 			if (s1->read(s1, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
 				Bool partialOk = true;
-				const U64 *v64 = (const U64 *)fill.ptr;
+				const U64 *v64 = (const U64 *) fill.ptr;
 
 				for (U64 i = 0; i < 96 * KIBI / 8 && partialOk; ++i) {
 					const U64 want = i < 48 * KIBI / 8 ? 0xBBBBBBBBBBBBBBBB : 0xAAAAAAAAAAAAAAAA;
@@ -623,7 +627,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 
 			if (s0->read(s0, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
 				Bool srcOk = true;
-				const U64 *v64 = (const U64 *)fill.ptr;
+				const U64 *v64 = (const U64 *) fill.ptr;
 
 				for (U64 i = 0; i < 96 * KIBI / 8 && srcOk; ++i)
 					if (v64[i] != 0xBBBBBBBBBBBBBBBB)

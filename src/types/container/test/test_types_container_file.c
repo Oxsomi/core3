@@ -88,6 +88,35 @@ void Test_filePaths(Test *t) {
 
 	Test_setModule(t, "File_resolve");
 
+	{
+
+		const CharString base = Test_ref(BASE), relative = Test_ref("a");
+		CharString result = CharString_createNull();
+		Bool isVirtual = false;
+
+		Test_assert(t, "requested path limit rejects longer result", !File_resolve(
+			&relative, &isVirtual, CharString_length(base), &base, t->alloc, &result, NULL
+		));
+
+		Test_assert(t, "path limit failure clears result", !result.ptr);
+
+		CharString_free(&result, t->alloc);
+
+		Test_assert(t, "requested path limit includes exact length", File_resolve(
+			&relative, &isVirtual, CharString_length(base) + 2, &base, t->alloc, &result, &t->err
+		));
+
+		CharString_free(&result, t->alloc);
+
+		Test_assert(t, "base path also observes requested limit", !File_resolve(
+			&base, &isVirtual, CharString_length(base) - 1, &base, t->alloc, &result, NULL
+		));
+
+		Test_assert(t, "base path limit failure clears result", !result.ptr);
+
+		CharString_free(&result, t->alloc);
+	}
+
 	//Relative paths get the absolute directory prepended
 
 	Test_resolves(t, "a",            BASE "/a",     false);

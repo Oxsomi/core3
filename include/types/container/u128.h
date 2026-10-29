@@ -42,15 +42,18 @@ static inline U8 U128_bitScanReverse(U128 a) {
 
 static inline U128 U128_createFromBase2(CharString text, EIntEncoding type, Error *e_rr) {
 
-	U128 result = U128_zero();
+	U64 limbs[2] = { 0 };
 	BigInt asBigInt = { 0 };
 
-	if (!BigInt_createRef((U64*) &result, 2, &asBigInt, e_rr))
-		return result;
+	if (!BigInt_createRef(limbs, 2, &asBigInt, e_rr))
+		return U128_zero();
 
 	BigIntCreate bigCreate = { &text, U16_MAX, NULL, &asBigInt };
-	BigInt_createFromBase2Type(&bigCreate, type, e_rr);
-	return result;
+
+	if(!BigInt_createFromBase2Type(&bigCreate, type, e_rr))
+		return U128_zero();
+
+	return U128_createU64x2(limbs[0], limbs[1]);
 }
 
 static inline U128 U128_createFromHex(CharString text, Error *e_rr) {
@@ -71,39 +74,29 @@ static inline U128 U128_createFromNyto(CharString text, Error *e_rr) {
 
 static inline U128 U128_createFromDec(CharString text, const Allocator *alloc, Error *e_rr) {
 
-	U128 result = U128_zero();
+	U64 limbs[2] = { 0 };
 	BigInt asBigInt = { 0 };
 
-	//TODO: Optimize with U128_mul when available!
-
-	if (!BigInt_createRef((U64*) &result, 2, &asBigInt, e_rr))
-		return result;
+	if (!BigInt_createRef(limbs, 2, &asBigInt, e_rr))
+		return U128_zero();
 
 	BigIntCreate bigCreate = { &text, U16_MAX, alloc, &asBigInt };
-	BigInt_createFromDec(&bigCreate, e_rr);
-	return result;
+
+	if(!BigInt_createFromDec(&bigCreate, e_rr))
+		return U128_zero();
+
+	return U128_createU64x2(limbs[0], limbs[1]);
 }
 
 static inline U128 U128_createFromString(CharString text, const Allocator *alloc, Error *e_rr) {
 
-	U128 v = U128_zero();
-
 	if (CharString_length(text) > 2)
 		switch (Buffer_readU16(CharString_bufferConst(text), 0, NULL, NULL)) {
 
-			case C8x2('0', 'b'): case C8x2('0', 'B'):
-			case C8x2('0', 'x'): case C8x2('0', 'X'):
-			case C8x2('0', 'o'): case C8x2('0', 'O'):
-			case C8x2('0', 'n'): case C8x2('0', 'N'): {
-
-				BigInt bigInt = { 0 };
-				if (!BigInt_createRef((U64*) &v, 2, &bigInt, e_rr))
-					return v;
-
-				BigIntCreate bigCreate = { &text, U16_MAX, NULL, &bigInt };
-				BigInt_createFromString(&bigCreate, e_rr);
-				return v;
-			}
+			case C8x2('0', 'b'): case C8x2('0', 'B'): return U128_createFromBin(text, e_rr);
+			case C8x2('0', 'x'): case C8x2('0', 'X'): return U128_createFromHex(text, e_rr);
+			case C8x2('0', 'o'): case C8x2('0', 'O'): return U128_createFromOct(text, e_rr);
+			case C8x2('0', 'n'): case C8x2('0', 'N'): return U128_createFromNyto(text, e_rr);
 		}
 
 	return U128_createFromDec(text, alloc, e_rr);
@@ -126,6 +119,7 @@ static inline Bool U128_isBase2(U128 a) {
 static inline Bool U128_base2(const BigIntStringify *stringify, EIntEncoding encoding, U128 a, Error *e_rr) {
 
 	BigInt b = { 0 };
+
 	if (!BigInt_createRefConst((const U64*) &a, 2, &b, e_rr))
 		return false;
 
@@ -153,6 +147,7 @@ static inline Bool U128_nyto(const BigIntStringify *stringify, U128 a, Error *e_
 static inline Bool U128_toString(const BigIntStringify *stringify, EIntEncoding enc, U128 a, Error *e_rr) {
 
 	BigInt b = { 0 };
+
 	if (!BigInt_createRefConst((const U64*) &a, 2, &b, e_rr))
 		return false;
 

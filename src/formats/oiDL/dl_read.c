@@ -32,6 +32,45 @@
 #include "types/base/mathi.h"
 #include "types/math/vec4i.h"
 
+static const U64 DLFile_readCacheSize = 1024 * 1024;
+
+typedef enum EDLReadAllocation {
+	EDLReadAllocation_Stream,
+	EDLReadAllocation_Cache,
+	EDLReadAllocation_Owned
+} EDLReadAllocation;
+
+static EDLReadAllocation DLFile_getReadAllocation(U64 entryLen, U64 cacheSize, U64 *cacheOff, U64 *allocCounter) {
+
+	if (entryLen <= DLFile_smallLen && entryLen <= cacheSize - *cacheOff) {
+		*cacheOff += entryLen;
+		return EDLReadAllocation_Cache;
+	}
+
+	if (*allocCounter < 4 * MIBI && entryLen <= DLFile_medLen && entryLen > DLFile_smallLen) {
+		*allocCounter += entryLen;
+		return EDLReadAllocation_Owned;
+	}
+
+	return EDLReadAllocation_Stream;
+}
+
+Bool DLFile_canReadFullyLoaded(const DLFile *file) {
+
+	if (!DLFile_isAllocated(file))
+		return false;
+
+	U64 cacheOff = 0, allocCounter = 0;
+
+	for (U64 i = 0; i < DLFile_entryCount(file); ++i)
+		if (DLFile_getReadAllocation(
+			DLFile_entrySize(file, i), DLFile_readCacheSize, &cacheOff, &allocCounter
+		) == EDLReadAllocation_Stream)
+			return false;
+
+	return true;
+}
+
 Bool DLFile_read(
 	StreamRef *file,
 	U64 *startOffset,
@@ -49,10 +88,12 @@ Bool DLFile_read(
 	Bool allocate = false;
 
 	I32x4 tag = I32x4_zero();
+	U32 headerKey[8] = { 0 };
 	StreamCursor cursor = (StreamCursor) { 0 };
 	StreamCursor cursorEntry = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
 	StreamRef *dataStream = NULL;
+	CharString ownedStr = CharString_createNull();
 
 	if (!isSubFile)
 		iv = I32x4_zero();
@@ -142,22 +183,34 @@ Bool DLFile_read(
 
 	U64 entryStart = streamOff;
 
+	if (entryCount > (U64_MAX - entryStart) / entryStride)
+		retError(clean, Error_overflow(
+			1, entryCount, (U64_MAX - entryStart) / entryStride, "DLFile_read() entry table overflow"
+		));
+
 	U64 dataSize = 0;
 	U64 allDataLeq32KiB = 0;
 
+	//Every entry takes a full stride: its size, then the extension bytes that follow it.
+	//The data starts after the last stride.
+
 	for (U64 i = 0; i < entryCount; ++i) {
 
+		U64 entryi = entryStart + i * entryStride;
 		U64 entryLen;
-		gotoIfError3(clean, StreamCursor_consumeSizeType(&cursor, &streamOff, dataSizeType, &entryLen, alloc, e_rr));
 
-		if (dataSize + entryLen < dataSize)
-			retError(clean, Error_overflow(0, dataSize + entryLen, U64_MAX, "DLFile_read() overflow"));
+		gotoIfError3(clean, StreamCursor_consumeSizeType(&cursor, &entryi, dataSizeType, &entryLen, alloc, e_rr));
+
+		if (entryLen > U64_MAX - dataSize)
+			retError(clean, Error_overflow(0, dataSize, entryLen, "DLFile_read() overflow"));
 
 		if (entryLen <= DLFile_smallLen)
 			allDataLeq32KiB += entryLen;
 
 		dataSize += entryLen;
 	}
+
+	streamOff = entryStart + entryCount * entryStride;
 
 	//Decrypt
 
@@ -192,11 +245,14 @@ Bool DLFile_read(
 
 		chunkSize = DLHeader_chunkSizes[chunkSize2];
 
+		if (dataSize >> 48)
+			retError(clean, Error_outOfBounds(1, dataSize, (U64) 1 << 48, "DLFile_read() data size out of bounds"));
+
 		U64 realDataSize = EncryptionStream_underlyingSize(chunkSize, dataSize);
 
-		if (streamOff + realDataSize > stream->size)
+		if (streamOff > stream->size || stream->size - streamOff < realDataSize)
 			retError(clean, Error_outOfBounds(
-				0, streamOff + realDataSize, stream->size, "DLFile_read() doesn't contain enough data"
+				0, realDataSize, stream->size - U64_min(streamOff, stream->size), "DLFile_read() doesn't contain enough data"
 			));
 
 		//Copy previously loaded data to run AAD over.
@@ -213,10 +269,14 @@ Bool DLFile_read(
 			));
 		}
 
+		gotoIfError3(clean, Buffer_deriveEncryptionKey(
+			encryptionKey, iv, EEncryptionKeyDomain_DLHeader, headerKey, e_rr
+		));
+
 		gotoIfError3(clean, Buffer_decryptAuto(
 			NULL,                //Instead of decrypting on the fly, we only validate AAD
 			&tmp,
-			encryptionKey,
+			headerKey,
 			tag,
 			iv,
 			e_rr
@@ -254,8 +314,8 @@ Bool DLFile_read(
 		.compressionType = (XXCompressionType) (header.type >> 4),
 		.encryptionType = (XXEncryptionType) (header.type & 0xF),
 		.dataType = header.flags & EDLFlags_IsString ? EDLDataType_String : EDLDataType_Data,
-		.flags = EDLSettingsFlags_None,
-		.chunkSize = (U32)chunkSize
+		.flags = isSubFile ? EDLSettingsFlags_HideMagicNumber : EDLSettingsFlags_None,
+		.chunkSize = (U32) chunkSize
 	};
 
 	if (!chunkSize)
@@ -281,17 +341,22 @@ Bool DLFile_read(
 	//Create DLFile
 	//Allocation strategy:
 	//Small allocations land into the cache for up to 1MiB (when entry <= DLFile_smallLen).
-	//Medium allocations land into their own allocation up to 4MiB (when entry <= DLFile_medLen but not small).
+	//Medium allocations have their own allocation until 4MiB is reached (when entry <= DLFile_medLen but not small).
+	//The medium budget is checked before each entry, so the last allocation can exceed it by less than DLFile_medLen.
 	//Large allocations remain in stream.
-	//This means that by default, a DLFile's data can take up only a max of 5MiB (excluding metadata).
 
-	gotoIfError3(clean, DLFile_create(&settings, U64_min(allDataLeq32KiB, MIBI), alloc, dlFile, e_rr));
+	//The DLFile keeps its own copy of the key, so this one doesn't outlive the create, whether or not it succeeds.
+	//Only the key: the rest of the settings is still read below.
+
+	const Bool created = DLFile_create(&settings, U64_min(allDataLeq32KiB, DLFile_readCacheSize), alloc, dlFile, e_rr);
+	Buffer_clearAllSecure(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
+	gotoIfError3(clean, created);
 	allocate = true;
 
 	//Per entry
 	//Either:    (U8 entries[])[N] or
 	//            chunks[N] where chunk:
-	//                I32x4 tag, U8 data[chunkSize] with iv = root iv + chunkId
+	//                CryptoChunk metadata followed by authenticated ciphertext.
 
 	U64 dataOff = fileStart;
 
@@ -301,10 +366,16 @@ Bool DLFile_read(
 		U64 entryLen;
 		gotoIfError3(clean, StreamCursor_consumeSizeType(&cursor, &entryi, dataSizeType, &entryLen, alloc, e_rr));
 
-		Bool isSmallAlloc = cacheOff < 1 * MIBI && entryLen <= DLFile_smallLen;
-		Bool isMediumAlloc = allocCounter < 4 * MIBI && entryLen <= DLFile_medLen && entryLen > DLFile_smallLen;
+		//The sizes were summed before the cache and the entries were created; they have to be the same sizes now.
 
-		if ((!isSmallAlloc && !isMediumAlloc) || forceKeepInStreams) {
+		if (entryLen > dataSize - (dataOff - fileStart))
+			retError(clean, Error_invalidState(2, "DLFile_read() entry sizes changed while reading"));
+
+		U64 entryCacheOff = cacheOff;
+		EDLReadAllocation allocation = forceKeepInStreams ? EDLReadAllocation_Stream :
+			DLFile_getReadAllocation(entryLen, Buffer_length(dlFile->cache), &cacheOff, &allocCounter);
+
+		if (allocation == EDLReadAllocation_Stream) {
 			RefPtr *ptr = dataStream;
 			RefPtr_inc(ptr);
 			gotoIfError3(clean, DLFile_addEntryStream(dlFile, &ptr, dataOff, entryLen, alloc, e_rr));
@@ -328,22 +399,27 @@ Bool DLFile_read(
 
 		//Allocate space somewhere, into tmp
 
-		if (isSmallAlloc) {
+		if (allocation == EDLReadAllocation_Cache) {
 
 			//An oiDL whose small entries are all zero length asks for no cache at all, so the base stays null
 			// and offsetting it is undefined even by the zero cacheOff is then.
 			//A null ref of length 0 is what Buffer_createRef would have produced anyway.
 
 			tmp = Buffer_length(dlFile->cache)
-				? Buffer_createRef(dlFile->cache.ptrNonConst + cacheOff, entryLen)
+				? Buffer_createRef(dlFile->cache.ptrNonConst + entryCacheOff, entryLen)
 				: Buffer_createNull();
+		}
 
-			cacheOff += entryLen;
+		else if (settings.dataType == EDLDataType_String) {
+
+			//The string owns its memory, as it's the one that gets freed with the DLFile.
+
+			gotoIfError3(clean, CharString_create('\0', entryLen, alloc, &ownedStr, e_rr));
+			tmp = Buffer_createRef(ownedStr.ptrNonConst, entryLen);
 		}
 
 		else {
 			gotoIfError3(clean, Buffer_createUninitializedBytes(entryLen, alloc, &tmp, e_rr));
-			allocCounter += entryLen;
 		}
 
 		//Load/decrypt data
@@ -359,13 +435,19 @@ Bool DLFile_read(
 
 			case EDLDataType_String:
 			default: {
-				CharString str = CharString_createRefSizedConst((const C8*)tmp.ptr, entryLen, false);
-				gotoIfError3(clean, DLFile_addEntryString(dlFile, &str, alloc, e_rr));
+
+				if (allocation == EDLReadAllocation_Cache)
+					ownedStr = CharString_createRefSizedConst((const C8*) tmp.ptr, entryLen, false);
+
+				gotoIfError3(clean, DLFile_addEntryString(dlFile, &ownedStr, alloc, e_rr));
 				tmp = Buffer_createNull();
 				break;
 			}
 		}
 	}
+
+	if (dataOff - fileStart != dataSize)
+		retError(clean, Error_invalidState(2, "DLFile_read() entry sizes changed while reading"));
 
 	streamOff += isEncrypted ? EncryptionStream_underlyingSize(chunkSize, dataSize) : dataSize;
 
@@ -375,6 +457,7 @@ Bool DLFile_read(
 	*startOffset = streamOff;
 
 clean:
+	Buffer_clearAllSecure(Buffer_createRef(headerKey, sizeof(headerKey)));
 
 	if (!s_uccess && allocate)
 		DLFile_free(dlFile, alloc);
@@ -385,6 +468,7 @@ clean:
 	StreamCursor_close(&cursorEntry, alloc);
 	StreamCursor_close(&cursor, alloc);
 	Buffer_free(&tmp, alloc);
+	CharString_free(&ownedStr, alloc);
 
 	iv = I32x4_zero();
 	tag = I32x4_zero();

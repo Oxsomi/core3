@@ -125,6 +125,8 @@ PLFile {
 }
 ```
 
+`PLFile_read` and `PLFile_write` refuse nonzero padding in a binding or sampler record, two rows that bind the same register on either API, and a push constant row that isn't a push constant register. The writer checks these rules before emitting bytes or changing the offset, including in size-only mode. An unbounded array (`count` 0) is a valid file; `PLFile_validate` reports it for a caller that needs the layout on a device.
+
 The push constant row sits beside the bindings rather than among them, since it takes no descriptor. Its SPIRV pair is `U32_MAX` (a SPIRV push constant binds through no pair), its DXIL pair carries the b register the constants occupy in a root signature, and `strideOrLength` is the byte size.
 
 The sampler description and its enums are owned by oiPL, since a file has to describe a baked sampler without a device.

@@ -71,24 +71,8 @@ Bool WAV_write(
 			0, 0, "WAV_write() has to have a streamLength if input stream is missing"
 		));
 
-	switch (freq) {
-
-		case   8000:
-		case  11025:
-		case  22050:
-		case  32000:
-		case  44100:
-		case  48000:
-		case  96000:
-		case 192000:
-			break;
-
-		default:
-			retError(clean, Error_invalidParameter(
-				0, 0, "WAV_write() wav file has invalid frequency; must be one of "
-				"8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz"
-			));
-	}
+	if(!freq)
+		retError(clean, Error_invalidParameter(0, 0, "WAV_write() frequency must be positive"));
 
 	switch (stride) {
 
@@ -120,6 +104,16 @@ Bool WAV_write(
 	}
 
 	U16 bytesPerBlock = ((isStereo ? 2 : 1) * stride) >> 3;
+
+	if(freq > U32_MAX / bytesPerBlock)
+		retError(clean, Error_invalidParameter(0, 0, "WAV_write() byte rate exceeds the RIFF field"));
+
+	//RIFF sizes are U32: the riff size holds the headers, the data and its pad byte
+
+	if(streamLength > (U64) U32_MAX - (sizeof(U32) + sizeof(RIFFFmtHeader) + sizeof(RIFFDataHeader)) - 1)
+		retError(clean, Error_outOfBounds(
+			0, streamLength, U32_MAX, "WAV_write()::streamLength doesn't fit in a RIFF chunk (under 4 GiB)"
+		));
 
 	if(streamLength % bytesPerBlock)
 		retError(clean, Error_invalidParameter(
@@ -155,7 +149,7 @@ Bool WAV_write(
 
 		.section = (RIFFSection) {
 			.magicNumber = RIFFFmtHeader_magic,
-			.size = (U32)(sizeof(RIFFFmtHeader) - sizeof(RIFFSection))
+			.size = (U32) (sizeof(RIFFFmtHeader) - sizeof(RIFFSection))
 		},
 	
 		.format = !isPcm ? ERIFFAudioFormat_IEEE754 : ERIFFAudioFormat_PCM,
@@ -214,14 +208,18 @@ Bool WAV_write(
 			alloc,
 			e_rr
 		));
-
-		if (streamLength & 1) {
-			U64 writeOff = outputStreamOffset + streamLength;
-			gotoIfError3(clean, StreamCursor_appendU8(&cursorWrite, &writeOff, 0, alloc, e_rr));
-		}
 	}
 
 	else *dataOutput = outputStreamOffset;
+
+	//The pad byte follows the data, even if the caller still has to write that data
+
+	if (streamLength & 1) {
+		U64 writeOff = outputStreamOffset + streamLength;
+		gotoIfError3(clean, StreamCursor_appendU8(&cursorWrite, &writeOff, 0, alloc, e_rr));
+	}
+
+	gotoIfError3(clean, StreamCursor_flush(&cursorWrite, alloc, e_rr));
 
 clean:
 	StreamCursor_close(&cursorWrite, alloc);

@@ -42,7 +42,7 @@ Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Erro
 		case EXXDataSizeType_U64:        gotoIfError3(clean, Buffer_consume(buf, result, 8, e_rr));    break;
 		default:
 			retError(clean, Error_invalidEnum(
-				1, (U64)type, (U64)EXXDataSizeType_Count,
+				1, (U64) type, (U64) EXXDataSizeType_Count,
 				"Buffer_consumeSizeType()::type out of bounds"
 			));
 	}
@@ -68,9 +68,9 @@ Bool StreamCursor_consumeSizeType(
 			"StreamCursor_consumeSizeType()::cursor, it and result are required"
 		));
 
-	if ((U64)type >= (U64)EXXDataSizeType_Count)
+	if ((U64) type >= (U64) EXXDataSizeType_Count)
 		retError(clean, Error_invalidEnum(
-			1, (U64)type, (U64)EXXDataSizeType_Count,
+			1, (U64) type, (U64) EXXDataSizeType_Count,
 			"StreamCursor_consumeSizeType()::type out of bounds"
 		));
 
@@ -109,9 +109,9 @@ Bool StreamCursor_appendSizeType(
 			!cursor ? 0 : 1, "StreamCursor_appendSizeType()::cursor, it and result are required"
 		));
 
-	if ((U64)type >= (U64)EXXDataSizeType_Count)
+	if ((U64) type >= (U64) EXXDataSizeType_Count)
 		retError(clean, Error_invalidEnum(
-			1, (U64)type, (U64)EXXDataSizeType_Count,
+			1, (U64) type, (U64) EXXDataSizeType_Count,
 			"StreamCursor_appendSizeType()::type out of bounds"
 		));
 

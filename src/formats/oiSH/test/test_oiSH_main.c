@@ -156,6 +156,23 @@ OXC3_TEST_MAIN(formats_oiSH) {
 	Test_SHFileRegisterConstantBufferSizeLimit(&t);
 	Test_SHFileRegisterHashCollisionKeepsBoth(&t);
 
+	Test_SHFileCombineSemanticsSingleSided(&t);
+	Test_SHFileWriteReportsFailingStream(&t);
+	Test_SHFileBoundedChecksum(&t);
+	Test_SHFileReadBinarySizeBoundedByStream(&t);
+	Test_SHFileStringTableLoadingLimits(&t);
+	Test_SHFileCombineRegisterTypeMismatch(&t);
+	Test_SHFileCombineRegisterTypePromotion(&t);
+	Test_SHFileCombineKeepsRegisterHash(&t);
+	Test_SHFileRoundTripIOGaps(&t);
+	Test_SHFileRoundTripUnboundArray(&t);
+	Test_SHFileWriteTooManyArrays(&t);
+	Test_SHFileAddBinaryArrayCountOverflow(&t);
+	Test_SHFileRoundTripUniformNamedLikeDefine(&t);
+	Test_SHFileAddEntryRejectsOtherEntrypointsBinary(&t);
+	Test_SHFileReadBadBinaryIdFreesEntry(&t);
+	Test_SHFileReadDefineValueBound(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);
 }

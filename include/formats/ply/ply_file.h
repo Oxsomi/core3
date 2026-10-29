@@ -92,7 +92,7 @@ Bool Ply_readParallel(
 
 Bool Ply_readHeader(
 	StreamRef *stream,
-	U64 *off,                     //Left at the body, which is MeshHeader::bodyOffset
+	U64 *off,                     //Left at the start of the body; MeshHeader::bodyOffset is where the first vertex sits
 	MeshInfo *info,
 	MeshHeader *header,
 	const Allocator *alloc,
@@ -129,6 +129,7 @@ typedef enum EPlyWriteFormat {
 // info says they are meaningful, a normal and a uv, then a face element of triangles. Any other property a
 // source file declared is already gone by the time a writer sees the form.
 //Positions are written at full F32 precision whether or not they were quantized on the way in.
+//Written positions, normals and uvs must be finite when using the ASCII format.
 //The binary forms cost no formatting and are the ones for large meshes; ascii pays a format call per line.
 
 Bool Ply_write(

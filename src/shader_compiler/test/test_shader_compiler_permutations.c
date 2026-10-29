@@ -43,6 +43,7 @@
 //Returns how many of the binaries do.
 static U64 countBinariesWithExt(const SHFile *sh, ESHExtension ext) {
 	U64 n = 0;
+
 	for (U64 i = 0; i < sh->binaries.length; ++i)
 		if (sh->binaries.ptr[i].identifier.extensions & ext)
 			++n;
@@ -52,6 +53,7 @@ static U64 countBinariesWithExt(const SHFile *sh, ESHExtension ext) {
 //Is there an entrypoint named `nm` in the reflected file?
 static Bool hasEntry(const SHFile *sh, const C8 *nm) {
 	const CharString n = CharString_createRefCStrConst(nm);
+
 	for (U64 i = 0; i < sh->entries.length; ++i)
 		if (CharString_equalsStringSensitive(&sh->entries.ptr[i].name, &n))
 			return true;
@@ -78,7 +80,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 		Test_assert(t, "per-entrypoint extension isolation (only 1 of 2 binaries has 16BitTypes)",
 			ok && sh.entries.length == 2 && sh.binaries.length == 2 &&
-			countBinariesWithExt(&sh, ESHExtension_16BitTypes) == 1);
+			countBinariesWithExt(&sh, ESHExtension_16BitTypes) == 1
+		);
 
 		SHFile_free(&sh, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
@@ -105,7 +108,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 		}
 
 		Test_assert(t, "per-entrypoint model isolation (one binary 6.7, the other 6.5)",
-			ok && sh.entries.length == 2 && has67 && has65);
+			ok && sh.entries.length == 2 && has67 && has65
+		);
 
 		SHFile_free(&sh, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
@@ -129,7 +133,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 		Test_assert(t, "SPIRV keeps raygen + spv-only miss, drops dxil-only closesthit",
 			spvOk && ssh.entries.length == 2 &&
-			hasEntry(&ssh, "mainRaygen") && hasEntry(&ssh, "mainMiss") && !hasEntry(&ssh, "mainCH"));
+			hasEntry(&ssh, "mainRaygen") && hasEntry(&ssh, "mainMiss") && !hasEntry(&ssh, "mainCH")
+		);
 
 		Bool dxOk =
 			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", EGfxBinaryType_DXIL, true, false, &dx, &err) &&
@@ -137,7 +142,8 @@ void Test_shaderCompilerPermutations(Test *t) {
 
 		Test_assert(t, "DXIL keeps raygen + dxil-only closesthit, drops spv-only miss",
 			dxOk && dsh.entries.length == 2 &&
-			hasEntry(&dsh, "mainRaygen") && hasEntry(&dsh, "mainCH") && !hasEntry(&dsh, "mainMiss"));
+			hasEntry(&dsh, "mainRaygen") && hasEntry(&dsh, "mainCH") && !hasEntry(&dsh, "mainMiss")
+		);
 
 		SHFile_free(&ssh, alloc);
 		SHFile_free(&dsh, alloc);

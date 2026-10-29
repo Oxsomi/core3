@@ -145,7 +145,7 @@ namespace oxc {
 			return c::Error_constData(paramId, subId, errorStr);
 		}
 
-		[[nodiscard]] inline c::Error stderr(c::U32 subId, const c::C8 *errorStr) noexcept {
+		[[nodiscard]] inline c::Error stdError(c::U32 subId, const c::C8 *errorStr) noexcept {
 			return c::Error_stderr(subId, errorStr);
 		}
 

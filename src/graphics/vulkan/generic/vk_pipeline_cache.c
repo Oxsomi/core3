@@ -159,7 +159,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_loadPipelineCache)(GraphicsDevice *device, Buff
 
 	const VkPipelineCacheHeaderVersionOne *expected = &deviceExt->pipelineCacheHeader;
 
-	if(
+	if (
 		header.headerVersion != expected->headerVersion ||
 		header.headerSize < sizeof(header) ||
 		header.vendorID != expected->vendorID ||

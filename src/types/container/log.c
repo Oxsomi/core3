@@ -43,7 +43,7 @@ static Bool Log_reservedAlloc(void *allocator, U64 length, Buffer *output, Error
 
 	Bool s_uccess = true;
 
-	(void)allocator;
+	(void) allocator;
 
 	if(!output)
 		retError(clean, Error_nullPointer(2, "Log_reservedAlloc()::output is required"));
@@ -53,7 +53,7 @@ static Bool Log_reservedAlloc(void *allocator, U64 length, Buffer *output, Error
 
 	//16-byte align every block so SIMD paths behave the same as with the real allocators
 
-	const U64 aligned = (length + 15) &~ (U64)15;
+	const U64 aligned = (length + 15) &~ (U64) 15;
 
 	if(aligned < length || Log_reservedOff + aligned > sizeof(Log_reservedMem))
 		retError(clean, Error_outOfMemory(0, "Log_reservedAlloc() reserved pool exhausted"));
@@ -67,12 +67,12 @@ clean:
 
 static void Log_reservedFree(void *allocator, Buffer buf) {
 
-	(void)allocator;
+	(void) allocator;
 
 	//LIFO reclaim keeps alloc/free ping-pong (e.g. one string per stack trace line) from exhausting the pool.
 	//Out of order frees are simply left for the reset before the next fallback print.
 
-	const U64 aligned = (Buffer_length(buf) + 15) &~ (U64)15;
+	const U64 aligned = (Buffer_length(buf) + 15) &~ (U64) 15;
 
 	if(buf.ptr + aligned == Log_reservedMem + Log_reservedOff)
 		Log_reservedOff -= aligned;
@@ -187,7 +187,7 @@ void Error_print(const Allocator *alloc, const Error *e_rr, ELogLevel logLevel, 
 		platformErr = Error_formatPlatformError(alloc, e_rr);
 
 	if(e_rr->genericError == EGenericError_Stderr)
-		platformErr = CharString_createRefCStrConst(strerror((int)e_rr->paramValue0));
+		platformErr = CharString_createRefCStrConst(strerror((int) e_rr->paramValue0));
 
 	if(Error_printFormat(alloc, e_rr, platformErr, &result))
 		Log_log(alloc, logLevel, options | ELogOptions_NoBreak, &result);
@@ -208,7 +208,7 @@ void Error_print(const Allocator *alloc, const Error *e_rr, ELogLevel logLevel, 
 
 	Log_printCapturedStackTraceCustom(
 		usedReserved ? &Log_reservedAllocator : alloc,
-		(const void**)e_rr->stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options
+		(const void**) e_rr->stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options
 	);
 
 	if (usedReserved) {

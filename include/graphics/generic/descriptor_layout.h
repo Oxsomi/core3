@@ -123,7 +123,7 @@ typedef RefPtr SamplerRef;
 //A static sampler id carries this bit and indexes DescriptorLayoutInfo::staticSamplers; the layout turns it
 // into an immutableSamplers entry when it is created, so the backends only ever see refs.
 
-static const U32 DescriptorLayoutInfo_staticSamplerBit = (U32)1 << 31;
+static const U32 DescriptorLayoutInfo_staticSamplerBit = (U32) 1 << 31;
 
 typedef struct DescriptorLayoutInfo {
 

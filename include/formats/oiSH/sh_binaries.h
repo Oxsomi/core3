@@ -296,7 +296,7 @@ typedef enum ESHVendor {
 
 static inline U16 ESHVendor_allMask(U16 count) {
 	//0xFFFF spelled out rather than U16_MAX, which lives in constants.h and isn't reachable from here.
-	return count >= 16 ? (U16)0xFFFF : (U16)(((U32)1 << count) - 1);
+	return count >= 16 ? (U16) 0xFFFF : (U16) (((U32) 1 << count) - 1);
 }
 
 //Restates an all-vendors mask in terms of the vendors that exist now.

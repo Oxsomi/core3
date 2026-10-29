@@ -229,6 +229,7 @@ void Test_SBFileNameLengthBoundary(Test *t) {
 		//Build names of exactly 128 and 129 chars
 		C8 buf128[129];
 		C8 buf129[130];
+
 		for (U32 i = 0; i < 128; ++i) buf128[i] = 'a';
 		for (U32 i = 0; i < 129; ++i) buf129[i] = 'b';
 		buf128[128] = '\0';

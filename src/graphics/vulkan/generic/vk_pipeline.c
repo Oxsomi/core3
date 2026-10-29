@@ -44,7 +44,7 @@ Bool createShaderModule(
 
 	CharString temp = CharString_createNull();
 
-	(void)stage;
+	(void) stage;
 
 	if(Buffer_length(buf) >> 32)
 		retError(clean, Error_outOfBounds(
@@ -104,7 +104,7 @@ clean:
 
 void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -318,6 +318,7 @@ Bool VK_WRAP_FUNC(Pipeline_getExecutables)(
 				//Driver text is NUL-terminated; wrap without the trailing NUL then copy into the executable
 
 				U64 len = irs[chosen].dataSize;
+
 				while(len && ((const C8*) irData.ptr)[len - 1] == '\0')
 					--len;
 

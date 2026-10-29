@@ -187,7 +187,7 @@ U8 *DeviceBufferRef_hostMemoryWritable(DeviceBufferRef *buffer);
 //resource.size stays exactly what the caller asked for: it is the length of the upload and of every region
 // derived from the resource, and rounding it would change how many elements those describe.
 
-static inline U64 DeviceBuffer_allocSize(U64 size) { return (size + 3) &~ (U64)3; }
+static inline U64 DeviceBuffer_allocSize(U64 size) { return (size + 3) &~ (U64) 3; }
 
 //Mark the underlying data for the DeviceBuffer as dirty.
 //Count 0 indicates rest of the buffer starting at offset.

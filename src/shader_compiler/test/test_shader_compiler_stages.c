@@ -108,6 +108,7 @@ void Test_shaderCompilerStages(Test *t) {
 
 					if (nm) {
 						const CharString got = CharString_createRefCStrConst(nm);
+
 						if (CharString_equalsStringSensitive(&got, &expected)) { stageOk = true; break; }
 					}
 				}

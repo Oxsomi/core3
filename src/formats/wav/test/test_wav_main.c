@@ -31,29 +31,11 @@ OXC3_TEST_MAIN(formats_wav) {
 	t.alloc = &alloc;
 
 	//WAVFile_cvt
-	Test_WAVCvtU8Identity(&t);
-	Test_WAVCvtI16Identity(&t);
-	Test_WAVCvtI16ToU8(&t);
-	Test_WAVCvtI24Identity(&t);
-	Test_WAVCvtI24ToI16(&t);
-	Test_WAVCvtF32Identity(&t);
-	Test_WAVCvtF32ToU8(&t);
-	Test_WAVCvtF32ToI16(&t);
-	Test_WAVCvtF64ToF32(&t);
-	Test_WAVCvtF64Identity(&t);
-	Test_WAVCvtIndexOffset(&t);
-	Test_WAVCvtI32Identity(&t);
-	Test_WAVCvtI32ToI16(&t);
-	Test_WAVCvtI32ToI24(&t);
-	Test_WAVCvtI32ToF32(&t);
+	Test_WAVCvtTable(&t);
+	Test_WAVCvtUnalignedIndex(&t);
 
 	//WAVFile_avg
-	Test_WAVAvgU8(&t);
-	Test_WAVAvgI16(&t);
-	Test_WAVAvgF32(&t);
-	Test_WAVAvgF64(&t);
-	Test_WAVAvgI24(&t);
-	Test_WAVAvgI32(&t);
+	Test_WAVAvgTable(&t);
 
 	//WAV round-trips
 	Test_WAVRoundTripStereo16(&t);
@@ -75,6 +57,17 @@ OXC3_TEST_MAIN(formats_wav) {
 	//WAV_read extensible header
 	Test_WAVReadExtended(&t);
 
+	//WAV_read bounds and fmt chunk
+	Test_WAVReadOffsetAndTrailing(&t);
+	Test_WAVReadChunkBounds(&t);
+	Test_WAVReadFmtChunk(&t);
+	Test_WAVReadAdditionalChunksAndRates(&t);
+
+	//WAV_write failures and limits
+	Test_WAVWriteFailedWrites(&t);
+	Test_WAVWriteLimits(&t);
+	Test_WAVWriteAdditionalRates(&t);
+
 	//WAV odd-length padding
 	Test_WAVOddLengthPadding(&t);
 
@@ -84,6 +77,10 @@ OXC3_TEST_MAIN(formats_wav) {
 	Test_WAVConvertMisalignedSrc(&t);
 	Test_WAVConvertPCM32ToF32(&t);
 	Test_WAVConvertStereoPCM32ToMono(&t);
+	Test_WAVConvertExpand(&t);
+	Test_WAVConvertFloatToPCM(&t);
+	Test_WAVConvertAverageExtremes(&t);
+	Test_WAVConvertInvalidInfo(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

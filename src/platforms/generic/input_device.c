@@ -57,7 +57,7 @@ Bool InputDevice_create(
 	allocated = true;
 
 	const U64 handles = sizeof(InputAxis) * axes + sizeof(InputButton) * buttons;
-	const U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
+	const U64 states = sizeof(F32) * 2 * axes + (((U64) buttons * 2 + 7) >> 3);
 
 	gotoIfError3(clean, Buffer_createEmptyBytes(handles, alloc, &result->handles, e_rr));
 	gotoIfError3(clean, Buffer_createEmptyBytes(states, alloc, &result->states, e_rr));

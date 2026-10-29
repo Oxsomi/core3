@@ -127,7 +127,7 @@ Bool registerFile(const FileInfo *file, void *shaderFilesGeneric, const Allocato
 
 				gotoIfError3(clean, CharString_format(
 					alloc, &tempStr, e_rr, "%.*s%s",
-					(int)U64_min(
+					(int) U64_min(
 						CharString_length(copy),
 						CharString_findLastStringInsensitive(&copy, &hlslSuffix, 0, 0)
 					),
@@ -253,10 +253,10 @@ Bool Compiler_getTargetsFromFile(
 
 		gotoIfError3(clean, CharString_format(
 			alloc, &tempStr, e_rr, "%.*s%s",
-			output ? (int)U64_min(
+			output ? (int) U64_min(
 				CharString_length(*output),
 				CharString_findLastStringInsensitive(output, &hlslSuffix, 0, 0)
-			) : (int)(sizeof("output") - 1),
+			) : (int) (sizeof("output") - 1),
 			output ? output->ptr : "output",
 			oiSHSuffixes[i]
 		));
@@ -301,7 +301,7 @@ Bool Compiler_getTargetsFromFile(
 		}
 
 		gotoIfError3(clean, CharString_createCopy(
-			CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), alloc, &tempStr, e_rr
+			CharString_createRefSizedConst((const C8*) temp.ptr, Buffer_length(temp), false), alloc, &tempStr, e_rr
 		));
 
 		if(!CharString_eraseAllSensitive(&tempStr, '\r', 0, 0))

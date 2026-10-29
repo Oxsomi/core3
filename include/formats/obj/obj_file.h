@@ -66,6 +66,7 @@ Bool Obj_read(
 // meaningful, one vn and one vt beside it, so the three arrays are parallel and a corner names the same index
 // three times. Materials, groups, smoothing and n-gons have no spelling here, since nothing survives a read.
 //Positions are written at full F32 precision whether or not they were quantized on the way in.
+//Written positions, normals and uvs must be finite.
 //Text costs a format call per line, which is what OBJ is; PLY's binary form is the one for large meshes.
 
 Bool Obj_write(

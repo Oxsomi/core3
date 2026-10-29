@@ -513,7 +513,7 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 		//An op-less list, so upload and readback rounds don't replay the clear and copy above
 
-		if(
+		if (
 			Test_assert(t, "createEmptyList", dev.createCommandList(4 * c::KIBI, 64, 16, emptyList, true, e_rr)) &&
 			Test_assert(t, "beginEmptyList", emptyList.begin(true, e_rr)) &&
 			Test_assert(t, "endEmptyList", emptyList.end(e_rr))
@@ -896,7 +896,7 @@ extern "C" void Test_graphicsGpuExecute(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			c::EDeviceBufferUsage_None, c::EGraphicsResourceFlag_None, "Copy other", &dstRef, copyOther, nullptr, e_rr
 		));
 
-		if(
+		if (
 			copySrc && copyDst && copyOther &&
 			Test_assert(t, "copyBufferList", dev.createCommandList(4 * c::KIBI, 16, 16, copyList, true, e_rr))
 		) {

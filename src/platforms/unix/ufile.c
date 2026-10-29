@@ -41,7 +41,7 @@
 
 //Convert struct timespec (nanoseconds since Unix epoch) to Ns
 static inline Ns Ns_fromTimespec(struct timespec ts) {
-	return (Ns)ts.tv_sec * SECOND + (Ns)ts.tv_nsec;
+	return (Ns) ts.tv_sec * SECOND + (Ns) ts.tv_nsec;
 }
 
 //Helper: retry loop
@@ -60,6 +60,7 @@ Bool File_getInfoPhysical(const CharString *str, FileInfo *info, const Allocator
 	Bool s_uccess = true;
  
 	struct stat st;
+
 	if(stat(str->ptr, &st) != 0) {
 		
 		if(errno == ENOENT || errno == ENOTDIR)
@@ -69,7 +70,7 @@ Bool File_getInfoPhysical(const CharString *str, FileInfo *info, const Allocator
 	}
  
 	EFileType type = S_ISDIR(st.st_mode) ? EFileType_Folder : EFileType_File;
-	U64 fileSize   = type == EFileType_File ? (U64)st.st_size : 0;
+	U64 fileSize   = type == EFileType_File ? (U64) st.st_size : 0;
  
 	CharString path = CharString_createNull();
 	gotoIfError3(clean, CharString_createCopy(*str, alloc, &path, e_rr));
@@ -93,7 +94,7 @@ clean:
 
 Bool File_addPhysical(const CharString *str, Bool isFile, const Allocator *alloc, Error *e_rr) {
  
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	if(!str)
@@ -130,10 +131,12 @@ static Bool File_removeDirRecursivePhysical(const char *path, Ns *maxTimeout, Er
 	Bool s_uccess = true;
  
 	DIR *dir = opendir(path);
+
 	if(!dir)
 		retError(clean, Error_platformError(0, errno, "File_removePhysical() opendir failed"));
  
 	struct dirent *entry;
+
 	while((entry = readdir(dir)) != NULL) {
  
 		const CharString entryName = CharString_createRefCStrConst(entry->d_name);
@@ -143,6 +146,7 @@ static Bool File_removeDirRecursivePhysical(const char *path, Ns *maxTimeout, Er
  
 		//Build child path
 		C8 child[MAX_OXC_PATH + 1];
+
 		if(snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= MAX_OXC_PATH) {
 			Log_warnLnx("File_foreach()::path out of bounds. Skipping...");
 			continue;
@@ -179,13 +183,14 @@ clean:
 
 Bool File_removePhysical(const CharString *str, Ns maxTimeout, const Allocator *alloc, Error *e_rr) {
  
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	if(!str)
 		retError(clean, Error_nullPointer(0, "File_removePhysical() str is required"));
  
 	struct stat st;
+
 	if(lstat(str->ptr, &st) != 0)
 		retError(clean, Error_notFound(0, 0, "File_removePhysical() path not found"));
  
@@ -223,6 +228,7 @@ Bool File_renamePhysical(
 	CharString dest = CharString_createNull();
  
 	CharString parent = CharString_createNull();
+
 	if(!CharString_cutAfterLastSensitive(loc, '/', &parent))
 		parent = CharString_createRefCStrConst(".");
  
@@ -249,7 +255,7 @@ Bool File_movePhysical(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	Bool res = false;
@@ -259,10 +265,12 @@ Bool File_movePhysical(
 	if(!res && errno == EXDEV) {
  
 		int src = open(loc->ptr, O_RDONLY);
+
 		if(src < 0)
 			retError(clean, Error_platformError(0, errno, "File_movePhysical() open src failed"));
  
 		struct stat st;
+
 		if(fstat(src, &st) != 0) {
 			close(src);
 			retError(clean, Error_platformError(1, errno, "File_movePhysical() fstat failed"));
@@ -277,8 +285,9 @@ Bool File_movePhysical(
 		char buf[65536];
 		ssize_t n;
 		Bool ok = true;
+
 		while((n = read(src, buf, sizeof(buf))) > 0) {
-			if(write(dst, buf, (size_t)n) != n) { ok = false; break; }
+			if(write(dst, buf, (size_t) n) != n) { ok = false; break; }
 		}
  
 		close(src);
@@ -307,13 +316,14 @@ Bool File_openPhysical(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	Bool isRead  = type == EFileOpenType_Read  || type == EFileOpenType_ReadWrite;
 	Bool isWrite = type == EFileOpenType_Write || type == EFileOpenType_ReadWrite;
  
 	int flags;
+
 	if(isRead && isWrite)  flags = O_RDWR    | O_CREAT;
 	else if(isWrite)       flags = O_WRONLY  | O_CREAT | O_TRUNC;
 	else                   flags = O_RDONLY;
@@ -321,6 +331,7 @@ Bool File_openPhysical(
 	int fd = open(resolved->ptr, flags, 0666);
  
 	Ns maxTimeoutTry = File_retryPause(maxTimeout);
+
 	while(fd < 0 && maxTimeout) {
 		Thread_sleep(maxTimeoutTry);
 		fd = open(resolved->ptr, flags, 0666);
@@ -332,19 +343,21 @@ Bool File_openPhysical(
 		retError(clean, Error_stderr(0, "File_openPhysical() couldn't open file"));
  
 	U64 fileSize = 0;
+
 	if(isRead) {
 		
 		struct stat st;
+
 		if(fstat(fd, &st) != 0) {
 			close(fd);
 			retError(clean, Error_stderr(1, "File_openPhysical() fstat failed"));
 		}
 
-		fileSize = (U64)st.st_size;
+		fileSize = (U64) st.st_size;
 	}
  
 	*fileHandle = (FileHandle) {
-		.ext          = (void*)(intptr_t)fd,
+		.ext          = (void*) (intptr_t) fd,
 		.fileSizeType = FileHandle_makeFileSizeType(fileSize, EFileOpenType_create(isRead, isWrite))
 	};
  
@@ -359,7 +372,7 @@ Bool FileHandle_writePhysical(FileHandle *handle, U64 offset, U64 length, const 
 	if(!handle || !buf)
 		retError(clean, Error_nullPointer(!handle ? 0 : 3, "FileHandle_writePhysical() handle and buf are required"));
  
-	int fd = (int)(intptr_t)handle->ext;
+	int fd = (int) (intptr_t) handle->ext;
  
 	const U8 *src     = buf->ptr;
 	U64 remaining     = length;
@@ -368,14 +381,14 @@ Bool FileHandle_writePhysical(FileHandle *handle, U64 offset, U64 length, const 
 	while(remaining) {
  
 		U64 toWrite = U64_min(remaining, 64 * MIBI);        //64 MB chunks
-		ssize_t wrote = pwrite(fd, src, (size_t)toWrite, (off_t)currentOffset);
+		ssize_t wrote = pwrite(fd, src, (size_t) toWrite, (off_t)currentOffset);
  
-		if(wrote < 0 || (U64)wrote != toWrite)
+		if(wrote < 0 || (U64) wrote != toWrite)
 			retError(clean, Error_stderr(1, "FileHandle_writePhysical() pwrite failed"));
  
 		src           += wrote;
-		currentOffset += (U64)wrote;
-		remaining     -= (U64)wrote;
+		currentOffset += (U64) wrote;
+		remaining     -= (U64) wrote;
 	}
  
 clean:
@@ -389,7 +402,7 @@ Bool FileHandle_readPhysical(FileHandle *handle, U64 offset, U64 length, Buffer 
 	if(!handle || !buf)
 		retError(clean, Error_nullPointer(!handle ? 0 : 3, "FileHandle_readPhysical() handle and buf are required"));
  
-	int fd = (int)(intptr_t)handle->ext;
+	int fd = (int) (intptr_t) handle->ext;
  
 	U8 *dst           = buf->ptrNonConst;
 	U64 remaining     = length;
@@ -398,14 +411,14 @@ Bool FileHandle_readPhysical(FileHandle *handle, U64 offset, U64 length, Buffer 
 	while(remaining) {
  
 		U64 toRead = U64_min(remaining, 64 * MIBI);        //64 MB chunks
-		ssize_t got = pread(fd, dst, (size_t)toRead, (off_t)currentOffset);
+		ssize_t got = pread(fd, dst, (size_t) toRead, (off_t)currentOffset);
  
-		if(got < 0 || (U64)got != toRead)
+		if(got < 0 || (U64) got != toRead)
 			retError(clean, Error_stderr(1, "FileHandle_readPhysical() pread failed"));
  
 		dst           += got;
-		currentOffset += (U64)got;
-		remaining     -= (U64)got;
+		currentOffset += (U64) got;
+		remaining     -= (U64) got;
 	}
  
 clean:
@@ -414,12 +427,13 @@ clean:
 
 void FileHandle_closePhysical(const void *ext, const Allocator *alloc) {
  
-	(void)alloc;
+	(void) alloc;
  
 	if(!ext)
 		return;
  
-	int fd = (int)(intptr_t)ext;
+	int fd = (int) (intptr_t) ext;
+
 	if(fd >= 0)
 		close(fd);
 }
@@ -485,6 +499,7 @@ Bool File_foreach(
 		retError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"));
  
 	struct dirent *entry;
+
 	while((entry = readdir(dir)) != NULL) {
  
 		const CharString entryName = CharString_createRefCStrConst(entry->d_name);
@@ -512,6 +527,7 @@ Bool File_foreach(
 		CharString_free(&tmp2, alloc);
  
 		struct stat st;
+
 		if(lstat(tmp.ptr, &st) != 0)
 			continue;        //best effort; skip entries we cannot stat
  
@@ -544,7 +560,7 @@ Bool File_foreach(
 				.timestamp = timestamp,
 				.access    = access,
 				.type      = EFileType_File,
-				.fileSize  = (U64)st.st_size
+				.fileSize  = (U64) st.st_size
 			};
  
 			gotoIfError3(clean, callback(&info, userData, alloc, e_rr));
@@ -600,7 +616,7 @@ clean:
 
 			VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
-			if(
+			if (
 				!CharString_equalsStringInsensitive(loc, &section->path) &&
 				!CharString_startsWithStringInsensitive(&section->path, &isChild, 0)
 			)
@@ -642,7 +658,7 @@ clean:
 			gotoIfError3(clean, ListCAFile_pushBack(&Platform_instance->archives, caFile, alloc, e_rr));
 			caFile = (CAFile) { 0 };
 
-			section->loadedAndId = archiveIndex | ((U64)1 << 63);
+			section->loadedAndId = archiveIndex | ((U64) 1 << 63);
 			foundAny = true;
 		}
 

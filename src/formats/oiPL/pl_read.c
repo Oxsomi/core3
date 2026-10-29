@@ -85,7 +85,7 @@ Bool PLFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &names, e_rr));
 	didAllocate = true;
 
-	if(
+	if (
 		names.settings.dataType != EDLDataType_String ||
 		names.settings.encryptionType ||
 		names.settings.compressionType
@@ -111,6 +111,16 @@ Bool PLFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	for(U64 i = 0; i < samplers.length; ++i)
 		gotoIfError3(clean, PLSamplerInfo_validate(&samplers.ptr[i], e_rr));
+
+	//The layout as a whole, once the rows are known to be individually valid
+
+	{
+		const PLFile candidate = (PLFile) {
+			.bindings = bindings, .pushConstant = pushConstant, .hasPushConstant = hasPushConstant
+		};
+
+		gotoIfError3(clean, PLFile_validateStructure(&candidate, e_rr));
+	}
 
 	*plFile = (PLFile) {
 		.names = names,

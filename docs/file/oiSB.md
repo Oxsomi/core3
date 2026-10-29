@@ -129,6 +129,10 @@ Without the tightly packing flag, HLSL/DX-like CBuffer packing is used. This mea
 
 With the tightly packing flag, HLSL/DX-like StructuredBuffer packing is used. This means that every struct is aligned to the biggest primitive type (similar to C++) and that the stride for arrays is dependent on that too (so struct of only U8 needs 1-byte alignment, U16 needs 2-byte alignment, U32 needs 4-byte alignment, U64 needs 8-byte alignment). All other types are self aligned, so 8-byte types (U64x2, U64, etc.) need to be 8-byte aligned too.
 
+Every type is self aligned in both packings: with the tightly packing flag too, an F32 starts at a multiple of 4 and a U64x2 at a multiple of 8. Without it a type (or an array, whose elements are 16 bytes apart) that spans a 16-byte boundary has to start on one.
+
+Offsets are from the start of the buffer, also for the members of a struct. A variable has to fit in [0, bufferSize) and a member has to fit in [offset, offset + stride) of its parent struct variable. In a cbuffer struct array, the last element can omit up to 15 bytes of final row padding. Each appended primitive member is checked at the last instance of every enclosing array, so its occupied bytes must still fit in all ancestors and the buffer. Struct metadata is checked against its immediate parent; its primitive members establish its occupied extent. This accepts DXIL's `struct S { float a; }; struct P { S s[2]; };` with S's array stride 16 and P's occupied size 20. Tightly packed struct arrays use their full stride. All sums are checked without wrapping (a U32 offset plus a U32 size can exceed 2^32), a file that violates this is rejected on read.
+
 Overlapping memory is allowed, to allow (future) support for unions.
 
 The SBFile's ListSBVar and ListSBStruct can have duplicate names (which is fine), but a single struct (or the shader buffer itself) can't have duplicate names in its members (so `F32 a, a;` would be disallowed). However, duplicate struct names (even in current scope) is allowed.
@@ -137,18 +141,15 @@ The SBFile's ListSBVar and ListSBStruct can have duplicate names (which is fine)
 
 Variables, structs and arrays should be appended in the order they're first seen. This means that without unions, every member would be located beyond the next, none would have an offset that's lower than the last. With unions, it's possible that memory offset decreases, but that's only allowed to be in the union itself and the structs in the union should still increase the same way. This allows simpler behavior with comparing and other operations such as hashing. This also means that threading SBFile generation is off limits.
 
-Hashes are generated like following:
+The runtime hash XORs independent FNV-1a64 hashes of the settings and each indexed record:
 
-- FNV-1a64 is used (64-bit FNV-1a).
-- On create, ESBSettingsFlags and U32 are treated as a U64 and FNVed.
-- Every time a struct is appended:
-  - The struct | (nameLength << 32) is FNVed.
-- Every time a SBVar is appended:
-  - The SBVar is treated as a U64, U32 and the U32 is cast to an U64 and (nameLength << 32) is ored into it. These two U64s are FNVed.
-  - Every time a unique array is appended:
-    - The array length is FNVed and every 2 U32 array count are treated as a single U64 and FNVed, while the last element (if odd) is treated as a single U32 and FNVed.
+- Settings hash the flags and buffer size as one U64, excluding HideMagicNumber.
+- Each record starts with `(index << 2) | table`, where table is 0 for structs, 1 for variables and 2 for arrays. The index is its position in that table.
+- A struct hashes its stride, name length and name bytes.
+- A variable hashes its fields, name length and name bytes.
+- An array hashes its dimension count and dimension values, pairing U32 values into U64 values with a final U32 when needed.
 
-This hash can be used for quick comparison and is only available at runtime.
+An append updates the hash only after it succeeds, with work proportional to the new record. Interleaving struct and variable appends during reflection gives the same hash as reading the serialized tables in order. Table positions remain significant. SBFile_combine recomputes the result in one pass over each table. The hash is only a quick comparison prefilter and is not serialized. HideMagicNumber is a write time flag and is ignored by hashing, SBFile_equals and SBFile_combine alike.
 
 ## Quirk(s) between DXIL/SPIRV
 

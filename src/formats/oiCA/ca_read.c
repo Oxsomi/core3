@@ -25,6 +25,8 @@
 #include "formats/oiCA/ca_edit.h"
 #include "formats/oiCA/ca_props.h"
 #include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
+#include "formats/oiDL/dl_load.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/stream.h"
 #include "types/container/container_types.h"
@@ -35,7 +37,7 @@
 Ns CAFile_loadDate(U16 time, U16 date) {
 
 	Date d = (Date) {
-		.year = 1980 + (date >> 11),
+		.year = 1980 + (date >> 9),
 		.month = (date >> 5) & 0xF,
 		.day = date & 0x1F,
 		.hour = time >> 11,
@@ -67,8 +69,8 @@ void DLFile_prepMoveStringRef(DLFile *src, CharString *str, DLFile *dst) {
 		Buffer_memcpy(subArea, contentBuf);
 
 		*str =
-			isConst ? CharString_createRefSizedConst((const C8*)subArea.ptr, bufl, false) :
-			CharString_createRefSized((C8*)subArea.ptrNonConst, bufl, false);
+			isConst ? CharString_createRefSizedConst((const C8*) subArea.ptr, bufl, false) :
+			CharString_createRefSized((C8*) subArea.ptrNonConst, bufl, false);
 	}
 
 	//Else accept string as is
@@ -92,8 +94,10 @@ Bool CAFile_read(
 	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };   //packed parent + timestamp per file
 	ListU16 dirHandles = (ListU16) { 0 };                //disk index -> live handle map
 	I32x4 iv = I32x4_zero();
+	U32 headerKey[8] = { 0 };
 	DLFile names = (DLFile) { 0 };
 	DLFile content = (DLFile) { 0 };
+	CASettings settings = (CASettings) { 0 };        //Holds a copy of the key until the CAFile takes its own
 
 	if (!file || file->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "CAFile_read()::file must be a valid StreamRef"));
@@ -121,7 +125,7 @@ Bool CAFile_read(
 	if (header.magicNumber != CAHeader_MAGIC)
 		retError(clean, Error_invalidParameter(0, 0, "CAFile_read()::invalid magic number, not an oiCA file"));
 
-	if (header.version != (U8)ECAVersion_V1_0)
+	if (header.version != (U8) ECAVersion_V1_0)
 		retError(clean, Error_invalidParameter(0, 1, "CAFile_read()::unsupported oiCA version"));
 
 	if (header.type >= EXXEncryptionType_Count)
@@ -144,6 +148,11 @@ Bool CAFile_read(
 
 	if (isEncrypted && !encryptionKey)
 		retError(clean, Error_unauthorized(0, "CAFile_read()::encryptionKey is required for encrypted files"));
+
+	//A key means the caller expects an encrypted archive, so a plaintext one is refused before anything is parsed from it
+
+	if (!isEncrypted && encryptionKey)
+		retError(clean, Error_invalidOperation(3, "CAFile_read()::encryptionKey is provided but no encryption is used"));
 
 	//Extended header: forwards compatibility
 	
@@ -193,7 +202,63 @@ Bool CAFile_read(
 	if (fileCount >= U32_MAX)
 		retError(clean, Error_outOfBounds(0, fileCount, U32_MAX, "CAFile_read()::too many files"));
 	
-	U16 sentinelDir = dirCountLong ? (U16)0xFFFF : (U16)0xFF;
+	U16 sentinelDir = dirCountLong ? (U16) 0xFFFF : (U16) 0xFF;
+
+	//The counts are only trusted as far as the stream holds their records, so nothing is reserved from a bare header.
+	//Every record is at most 2 + 8 + 255 bytes, so the sums can't overflow.
+
+	const U64 dirRecordSize  = (dirCountLong ? 2 : 1) + dirExtSize;
+	const U64 fileRecordSize = (dirCountLong ? 2 : 1) + (hasDate ? (hasExtendedDate ? 8 : 4) : 0) + fileExtSize;
+	const U64 recordsEnd     = readOffset + dirCount * dirRecordSize + fileCount * fileRecordSize;
+
+	{
+		const OxStream *fileStream = RefPtr_data(file, OxStream);
+		const U64 bytesLeft = readOffset > fileStream->size ? 0 : fileStream->size - readOffset;
+
+		if (bytesLeft < recordsEnd - readOffset)
+			retError(clean, Error_outOfBounds(
+				0, recordsEnd - readOffset, bytesLeft,
+				"CAFile_read()::dirCount and fileCount exceed the bytes left in the stream"
+			));
+	}
+
+	//Encrypted: the iv and tag follow the records, so the whole header, records included, is authenticated before
+	// anything is reserved or parsed from the counts.
+
+	if (isEncrypted) {
+
+		U64 tagOffset = recordsEnd;
+		gotoIfError3(clean, StreamCursor_consume(&cursor, &tagOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
+
+		I32x4 tag = I32x4_zero();
+		gotoIfError3(clean, StreamCursor_consume(&cursor, &tagOffset, &tag, sizeof(I32x4), alloc, e_rr));
+
+		const U64 headerRegionSize = recordsEnd - startOffset;
+
+		if (StreamCursor_contains(&cursor, startOffset, headerRegionSize))
+			tmp = Buffer_createRefConst(
+				cursor.cacheData.ptr + (startOffset - cursor.lastLocation),
+				headerRegionSize
+			);
+
+		else {
+			gotoIfError3(clean, Buffer_createUninitializedBytes(headerRegionSize, alloc, &tmp, e_rr));
+
+			U64 where = startOffset;
+			gotoIfError3(clean, StreamCursor_consume(
+				&cursor, &where, tmp.ptrNonConst, headerRegionSize, alloc, e_rr
+			));
+		}
+
+		gotoIfError3(clean, Buffer_deriveEncryptionKey(
+			encryptionKey, iv, EEncryptionKeyDomain_CAHeader, headerKey, e_rr
+		));
+
+		gotoIfError3(clean, Buffer_decryptAuto(NULL, &tmp, headerKey, tag, iv, e_rr));
+
+		tag = I32x4_zero();
+		Buffer_free(&tmp, alloc);
+	}
 
 	//Pass 1: read directories[] into a ListU16 of memory-space parent indices.
 	//Actual CAFile_addFolder calls happen in pass 2, once the names DLFile is available.
@@ -218,7 +283,7 @@ Bool CAFile_read(
 			));
 
 		//Convert: sentinel -> 0 (root), else disk index + 1
-		U16 parentMem = (parentDisk == sentinelDir) ? 0 : (U16)(parentDisk + 1);
+		U16 parentMem = (parentDisk == sentinelDir) ? 0 : (U16) (parentDisk + 1);
 		gotoIfError3(clean, ListU16_pushBack(&dirParents, parentMem, alloc, e_rr));
 
 		readOffset += dirExtSize;
@@ -240,7 +305,7 @@ Bool CAFile_read(
 			parentDisk = p;
 		}
 
-		U16 parentMem = (parentDisk == sentinelDir) ? 0 : (U16)(parentDisk + 1);
+		U16 parentMem = (parentDisk == sentinelDir) ? 0 : (U16) (parentDisk + 1);
 
 		if (parentMem > dirCount)
 			retError(clean, Error_outOfBounds(0, parentMem, dirCount + 1,
@@ -257,6 +322,9 @@ Bool CAFile_read(
 				gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &date, alloc, e_rr));
 				gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &time, alloc, e_rr));
 				timestamp = CAFile_loadDate(time, date);
+
+				if (timestamp == U64_MAX)
+					retError(clean, Error_invalidParameter(0, 3, "CAFile_read()::file has an invalid date"));
 			}
 		}
 
@@ -265,47 +333,20 @@ Bool CAFile_read(
 		gotoIfError3(clean, ListCAFileInfo_pushBack(&fileMetas, CAFileInfo_create(parentMem, timestamp), alloc, e_rr));
 	}
 
-	//Encryption: read iv + tag, verify AAD over the fixed header region
+	//The records end where the authenticated region did, and the iv and tag after them were read above
 
-	if (isEncrypted) {
+	if (readOffset != recordsEnd)
+		retError(clean, Error_invalidState(2, "CAFile_read()::records didn't end where their sizes said"));
 
-		gotoIfError3(clean, StreamCursor_consume(&cursor, &readOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
-
-		I32x4 tag = I32x4_zero();
-		gotoIfError3(clean, StreamCursor_consume(&cursor, &readOffset, &tag, sizeof(I32x4), alloc, e_rr));
-
-		U64 headerRegionSize = (readOffset - sizeof(I32x4) - 3 * sizeof(U32)) - startOffset;
-
-		if (StreamCursor_contains(&cursor, startOffset, headerRegionSize))
-			tmp = Buffer_createRefConst(
-				cursor.cacheData.ptr + (startOffset - cursor.lastLocation),
-				headerRegionSize
-			);
-
-		else {
-			gotoIfError3(clean, Buffer_createUninitializedBytes(headerRegionSize, alloc, &tmp, e_rr));
-			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
-
-			U64 where = startOffset;
-			gotoIfError3(clean, StreamCursor_consume(
-				&cursor, &where, tmp.ptrNonConst, headerRegionSize, alloc, e_rr
-			));
-
-			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
-		}
-
-		gotoIfError3(clean, Buffer_decryptAuto(NULL, &tmp, encryptionKey, tag, iv, e_rr));
-
-		tag = I32x4_zero();
-		Buffer_free(&tmp, alloc);
-	}
+	if (isEncrypted)
+		readOffset += 3 * sizeof(U32) + sizeof(I32x4);
 
 	readOffset = (readOffset + 15) & ~15;
 	StreamCursor_close(&cursor, alloc);
 
 	//Read DLFile names and content
 
-	CASettings settings = (CASettings) {
+	settings = (CASettings) {
 		.encryptionType = (EXXEncryptionType) header.type,
 		.flags =
 			(hasDate         ? ECASettingsFlags_IncludeDate     : ECASettingsFlags_None) |
@@ -325,7 +366,7 @@ Bool CAFile_read(
 		file, &readOffset, encryptionKey, nameIv, true, false, alloc, encStreamType, &names, e_rr
 	));
 
-	readOffset = (readOffset + 15) & ~(U64)15;
+	readOffset = (readOffset + 15) & ~(U64) 15;
 
 	gotoIfError3(clean, DLFile_read(
 		file, &readOffset, encryptionKey, contentIv, true, false, alloc, encStreamType, &content, e_rr
@@ -354,23 +395,17 @@ Bool CAFile_read(
 	if (content.settings.dataType != EDLDataType_Data)
 		retError(clean, Error_invalidState(0, "CAFile_read()::content DLFile must have data type"));
 
-	//Validate all name entries: must already be in memory (not stream-backed) and within the name size limit.
-	//Small entries are loaded into the DLFile cache by DLFile_read automatically, so if an entry is still
-	// stream-backed it means it exceeded DLFile_smallLen, which means it also exceeds CAFile_maxFileNameSize
-	// and is therefore invalid.
-	//We check both to be explicit.
-	//This can happen if we exceed 5MiB, which is rare with a max of 96 bytes per file name
-	// (54K files at max size, more realistically >327K)
+	//Every name must be available during hierarchy reconstruction. The oiDL cache is bounded, so names
+	// beyond its capacity need individual allocations even though each name fits within the size limit.
 
-	for (U64 i = 0; i < dirCount + fileCount; ++i) {
-
-		if (names.entryStreams.ptr[i].stream)
-			retError(clean, Error_invalidState(0, "CAFile_read()::name entry is stream-backed; exceeds maximum name size"));
+	for (U64 i = 0; i < names.entryStreams.length; ++i) {
 
 		if (DLFile_entrySize(&names, i) > CAFile_maxFileNameSize)
 			retError(clean, Error_outOfBounds(0, DLFile_entrySize(&names, i), CAFile_maxFileNameSize,
 				"CAFile_read()::name entry exceeds maximum file name size"
 			));
+
+		gotoIfError3(clean, DLFile_loadEntry(&names, i, alloc, e_rr));
 	}
 
 	//Pass 2: reconstruct hierarchy via CAFile_add so all parenting bookkeeping is correct.
@@ -403,7 +438,7 @@ Bool CAFile_read(
 		if (handle == CAHandle_Invalid)
 			retError(clean, Error_invalidState(0, "CAFile_read()::CAFile_addFolder failed"));
 
-		gotoIfError3(clean, ListU16_pushBack(&dirHandles, (U16)CAHandle_getId(handle), alloc, e_rr));
+		gotoIfError3(clean, ListU16_pushBack(&dirHandles, (U16) CAHandle_getId(handle), alloc, e_rr));
 	}
 
 	for (U64 i = 0; i < fileCount; ++i) {
@@ -453,12 +488,12 @@ Bool CAFile_read(
 				Buffer subArea =
 					Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
 				Buffer_memcpy(subArea, contentBuf);
-				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &subArea, e_rr));
+				gotoIfError3(clean, DLFile_setEntry(&caFile->content, CAHandle_getId(fileHandle), &subArea, alloc, e_rr));
 			}
 
 			//We can only move the real buffer if it's a dedicated allocation
 			else {
-				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &contentBuf, e_rr));
+				gotoIfError3(clean, DLFile_setEntry(&caFile->content, CAHandle_getId(fileHandle), &contentBuf, alloc, e_rr));
 				content.entryBuffers.ptrNonConst[i] = Buffer_createNull();
 			}
 		}
@@ -468,6 +503,8 @@ Bool CAFile_read(
 	DLFile_free(&content, alloc);
 
 clean:
+	Buffer_clearAllSecure(Buffer_createRef(headerKey, sizeof(headerKey)));
+	Buffer_clearAllSecure(Buffer_createRef(&settings, sizeof(settings)));
 	iv = I32x4_zero();
 	StreamCursor_close(&cursor, alloc);
 	Buffer_free(&tmp, alloc);

@@ -102,7 +102,7 @@ void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8
 
 	if (N4 > 1) {
 
-		for (U32 i = 0; i < (U32)(N4 >> 1); ++i) {
+		for (U32 i = 0; i < (U32) (N4 >> 1); ++i) {
 			U32 left = i << 1;
 			clmul00_16[left] = I32x16_xor(clmul00_16[left], clmul00_16[left | 1]);
 			clmul11_16[left] = I32x16_xor(clmul11_16[left], clmul11_16[left | 1]);
@@ -116,7 +116,7 @@ void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8
 		//It was unreachable and clang rejects it outright under -Warray-bounds.
 
 		if (N4 > 2)
-			for (U32 i = 0; i < (U32)(N4 >> 2); ++i) {
+			for (U32 i = 0; i < (U32) (N4 >> 2); ++i) {
 				U32 left = i << 2;
 				clmul00_16[left] = I32x16_xor(clmul00_16[left], clmul00_16[left | 2]);
 				clmul11_16[left] = I32x16_xor(clmul11_16[left], clmul11_16[left | 2]);
@@ -530,7 +530,7 @@ void AESEncryptionContext_blocks16(
 	const Bool isEncrypt,
 	const EBufferEncryptionType encryptionType
 ) {
-	(void)end;
+	(void) end;
 
 	//Prologue
 
@@ -546,28 +546,28 @@ void AESEncryptionContext_blocks16(
 	{
 		U32 counter = *counterForIv;
 
-		I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter));
-		I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 1));
-		I32x4 ivi2 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 2));
-		I32x4 ivi3 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 3));
+		I32x4 ivi0 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter));
+		I32x4 ivi1 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 1));
+		I32x4 ivi2 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 2));
+		I32x4 ivi3 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 3));
 		I32x16 ivi0123 = I32x16_create4_4_4_4(ivi0, ivi1, ivi2, ivi3);
 
-		I32x4 ivi4 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 4));
-		I32x4 ivi5 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 5));
-		I32x4 ivi6 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 6));
-		I32x4 ivi7 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 7));
+		I32x4 ivi4 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 4));
+		I32x4 ivi5 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 5));
+		I32x4 ivi6 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 6));
+		I32x4 ivi7 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 7));
 		I32x16 ivi4567 = I32x16_create4_4_4_4(ivi4, ivi5, ivi6, ivi7);
 
-		I32x4 ivi8 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 8));
-		I32x4 ivi9 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 9));
-		I32x4 iviA = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 10));
-		I32x4 iviB = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 11));
+		I32x4 ivi8 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 8));
+		I32x4 ivi9 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 9));
+		I32x4 iviA = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 10));
+		I32x4 iviB = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 11));
 		I32x16 ivi89AB = I32x16_create4_4_4_4(ivi8, ivi9, iviA, iviB);
 
-		I32x4 iviC = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 12));
-		I32x4 iviD = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 13));
-		I32x4 iviE = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 14));
-		I32x4 iviF = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 15));
+		I32x4 iviC = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 12));
+		I32x4 iviD = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 13));
+		I32x4 iviE = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 14));
+		I32x4 iviF = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 15));
 		I32x16 iviCDEF = I32x16_create4_4_4_4(iviC, iviD, iviE, iviF);
 
 		*counterForIv += 16;
@@ -608,34 +608,34 @@ void AESEncryptionContext_blocks16(
 
 	I32x4 tag = *tagPtr;
 
-	//Contents
+	//Contents: whole batches of 16 only, a shorter rest is left to the smaller batches
 
-	while (*next + 8 <= end) {
+	while (*next + 16 <= end) {
 
 		U32 counter = *counterForIv;
 
-		I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter));
-		I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 1));
-		I32x4 ivi2 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 2));
-		I32x4 ivi3 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 3));
+		I32x4 ivi0 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter));
+		I32x4 ivi1 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 1));
+		I32x4 ivi2 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 2));
+		I32x4 ivi3 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 3));
 		I32x16 ivi0123 = I32x16_create4_4_4_4(ivi0, ivi1, ivi2, ivi3);
 
-		I32x4 ivi4 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 4));
-		I32x4 ivi5 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 5));
-		I32x4 ivi6 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 6));
-		I32x4 ivi7 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 7));
+		I32x4 ivi4 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 4));
+		I32x4 ivi5 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 5));
+		I32x4 ivi6 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 6));
+		I32x4 ivi7 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 7));
 		I32x16 ivi4567 = I32x16_create4_4_4_4(ivi4, ivi5, ivi6, ivi7);
 
-		I32x4 ivi8 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 8));
-		I32x4 ivi9 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 9));
-		I32x4 iviA = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 10));
-		I32x4 iviB = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 11));
+		I32x4 ivi8 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 8));
+		I32x4 ivi9 = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 9));
+		I32x4 iviA = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 10));
+		I32x4 iviB = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 11));
 		I32x16 ivi89AB = I32x16_create4_4_4_4(ivi8, ivi9, iviA, iviB);
 
-		I32x4 iviC = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 12));
-		I32x4 iviD = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 13));
-		I32x4 iviE = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 14));
-		I32x4 iviF = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counter + 15));
+		I32x4 iviC = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 12));
+		I32x4 iviD = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 13));
+		I32x4 iviE = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 14));
+		I32x4 iviF = I32x4_setWCopy(iv, (I32) U32_swapEndianness(counter + 15));
 		I32x16 iviCDEF = I32x16_create4_4_4_4(iviC, iviD, iviE, iviF);
 
 		*counterForIv += 16;

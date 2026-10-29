@@ -235,7 +235,8 @@ extern "C" void Test_graphicsBlasGeometry(oxc::c::Test *t, oxc::c::GraphicsDevic
 		return;
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "geometryEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) &&
 
 		//The readback submits this one, so it has to be a CLOSED list rather than only an allocated one
@@ -264,7 +265,8 @@ extern "C" void Test_graphicsBlasGeometry(oxc::c::Test *t, oxc::c::GraphicsDevic
 	//The structures are submitted before the dispatch is even recorded: a TLAS only takes its bindless slot
 	// once its build has run, and a push constant filled in before that points the shader at nothing.
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "geometryBuildEnd", buildList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, buildList) &&
 		Test_assert(t, "geometryTlasHandle", tlas.bindlessHandle() != c::BindlessDescriptor_None)
@@ -301,7 +303,8 @@ extern "C" void Test_graphicsBlasGeometry(oxc::c::Test *t, oxc::c::GraphicsDevic
 		Test_assert(t, "geometryTraceScopeEnd", scope.end(e_rr));
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "geometryEnd", commandList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, commandList) &&
 		gfxtest::pullBuffer(t, dev, emptyList, output)
@@ -354,7 +357,8 @@ namespace {
 		c::Error *e_rr = &t->err;
 		gfx::CommandList commandList;
 
-		if (!(
+		if (
+			!(
 			Test_assert(t, "scratchTraceList", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) &&
 			Test_assert(t, "scratchTraceBegin", commandList.begin(true, e_rr))
 		))
@@ -467,7 +471,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	c::ListBLASGeometry forwardList = {}, reversedList = {};
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchForwardList", c::ListBLASGeometry_createRefConst(
 			forwardGeometries, GEOMETRY_COUNT, &forwardList, e_rr
 		)) &&
@@ -487,7 +492,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	c::U64 asSize = 0, forwardScratch = 0, reversedScratch = 0;
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchSizeForward", dev.getBlasSizes(forwardInfo, asSize, forwardScratch, e_rr)) &&
 		Test_assert(t, "scratchSizeReversed", dev.getBlasSizes(reversedInfo, asSize, reversedScratch, e_rr))
 	))
@@ -530,7 +536,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 		tooSmall.release();
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchForward", dev.createBlas(forwardInfo, scratch, "Forward BLAS", forward, e_rr)) &&
 		Test_assert(t, "scratchReversed", dev.createBlas(reversedInfo, scratch, "Reversed BLAS", reversed, e_rr))
 	))
@@ -565,7 +572,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 	)))
 		return;
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) &&
 		Test_assert(t, "scratchEmptyBegin", emptyList.begin(true, e_rr)) &&
 		Test_assert(t, "scratchEmptyEnd", emptyList.end(e_rr)) &&
@@ -590,7 +598,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "scratchTlasScopeEnd", scope.end(e_rr));
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchBuildEnd", buildList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, buildList)
 	))
@@ -607,7 +616,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 	buildList.release();
 	scratch.release();
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchRefitList", dev.createCommandList(4 * c::KIBI, 64, 16, refitList, true, e_rr)) &&
 		Test_assert(t, "scratchRefitBegin", refitList.begin(true, e_rr))
 	))
@@ -620,7 +630,8 @@ extern "C" void Test_graphicsBlasScratch(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "scratchRefitScopeEnd", scope.end(e_rr));
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "scratchRefitEnd", refitList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, refitList) &&
 		Test_assert(

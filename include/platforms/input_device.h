@@ -134,7 +134,7 @@ static inline InputAxis *InputDevice_getAxis(const InputDevice *dev, U16 localHa
 
 //Simple helpers
 
-static inline U32 InputDevice_getHandles(const InputDevice *d) { return !d ? 0 : (U32)d->axes + d->buttons; }
+static inline U32 InputDevice_getHandles(const InputDevice *d) { return !d ? 0 : (U32) d->axes + d->buttons; }
 
 static inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U32_MAX; }
 
@@ -145,7 +145,7 @@ static inline Bool InputDevice_isValidHandle(const InputDevice *d, InputHandle h
 static inline Bool InputDevice_isAxis(const InputDevice *d, InputHandle handle) { return d && handle < d->axes; }
 
 static inline Bool InputDevice_isButton(const InputDevice *d, InputHandle handle) {
-	return d && !InputDevice_isAxis(d, handle) && handle < (U32)d->axes + d->buttons;
+	return d && !InputDevice_isAxis(d, handle) && handle < (U32) d->axes + d->buttons;
 }
 
 static inline InputHandle InputDevice_createHandle(const InputDevice *d, U16 localHandle, EInputType type) {
@@ -153,7 +153,7 @@ static inline InputHandle InputDevice_createHandle(const InputDevice *d, U16 loc
 }
 
 static inline U16 InputDevice_getLocalHandle(const InputDevice *d, InputHandle handle) {
-	return !d ? U16_MAX : (U16)(handle - (InputDevice_isAxis(d, handle) ? 0 : d->axes));
+	return !d ? U16_MAX : (U16) (handle - (InputDevice_isAxis(d, handle) ? 0 : d->axes));
 }
 
 //Getting previous/current states
@@ -167,7 +167,7 @@ static inline Bool InputDevice_hasFlag(const InputDevice *d, U8 flag) {
 }
 
 static inline F32 *InputDevice_getAxisValue(const InputDevice *dev, U16 localHandle, Bool isCurrent) {
-	return !dev || localHandle >= dev->axes ? NULL : (F32*)dev->states.ptrNonConst + ((U64)localHandle << 1) + isCurrent;
+	return !dev || localHandle >= dev->axes ? NULL : (F32*) dev->states.ptrNonConst + ((U64) localHandle << 1) + isCurrent;
 }
 
 static inline BitRef InputDevice_getButtonValue(const InputDevice *dev, U16 localHandle, Bool isCurrent) {
@@ -177,13 +177,13 @@ static inline BitRef InputDevice_getButtonValue(const InputDevice *dev, U16 loca
 		return ret;
 	}
 
-	const U64 bitOff = ((U32)localHandle << 1) + isCurrent;
+	const U64 bitOff = ((U32) localHandle << 1) + isCurrent;
 	U8 *off = dev->states.ptrNonConst + dev->axes * 2 * sizeof(F32) + (bitOff >> 3);
 
 	//The cast is what keeps this header includable from C++: bitOff is U64 and off is U8, and a braced
 	//initializer refuses a narrowing conversion there even though the mask makes it provably in range.
 
-	const BitRef ret = { .ptr = off, .off = (U8)(bitOff & 7) };
+	const BitRef ret = { .ptr = off, .off = (U8) (bitOff & 7) };
 	return ret;
 }
 
@@ -278,7 +278,7 @@ static inline Bool InputDevice_setFlag(InputDevice *d, U8 flag) {
 	if(flag >= 32 || !d)
 		return false;
 
-	d->flags |= (U32)1 << flag;
+	d->flags |= (U32) 1 << flag;
 	return true;
 }
 
@@ -287,7 +287,7 @@ static inline Bool InputDevice_resetFlag(InputDevice *d, U8 flag) {
 	if(flag >= 32 || !d)
 		return false;
 
-	d->flags &= ~((U32)1 << flag);
+	d->flags &= ~((U32) 1 << flag);
 	return true;
 }
 

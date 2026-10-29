@@ -72,7 +72,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(!containedSlash)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"));
 
-	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
+	CharString appDir = CharString_createRefSizedConst(exeName, (U64) exeNameLen, false);
 
 	gotoIfError3(clean, CharString_createCopy(appDir, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr));
 
@@ -160,7 +160,7 @@ clean:
 void Platform_cleanupUnixExt() {
 	if(Platform_instance->data1) {
 		munmap(Platform_instance->data1, Platform_instance->size1);
-		close((I32)(U64) Platform_instance->data);
+		close((I32) (U64) Platform_instance->data);
 	}
 }
 
@@ -285,11 +285,11 @@ static const U16 EKey_toScanCode[EKey_Count] = {
 
 Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
 
-	(void)keyboard;
+	(void) keyboard;
 	Bool s_uccess = true;
 
-	if((U32)key >= EKey_Count)
-		retError(clean, Error_outOfBounds(0, (U64)key, EKey_Count, "Keyboard_remap() key out of range"));
+	if((U32) key >= EKey_Count)
+		retError(clean, Error_outOfBounds(0, (U64) key, EKey_Count, "Keyboard_remap() key out of range"));
 
 	U16 scanCode = EKey_toScanCode[key];
 

@@ -208,6 +208,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # SET(GRAPHVIZ_CUSTOM_TARGETS TRUE)
 
+# Current dependencies and instrumented builds require the release static CRT in every configuration.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
 set(CMAKE_C_STANDARD 17)
@@ -295,19 +296,6 @@ if(EMSCRIPTEN)
 
 	if(EnableUBSAN)
 		set(target "${target}_ubsan")
-	endif()
-
-	# LLVM's middle end folds I32x4_clmul64Fallback to zero at -O3 on wasm64, which fails types_math.
-	# It is a constant folding bug: only operands the compiler can see as constants are affected, so
-	# runtime keys and data are computed correctly and the AES-GCM suites pass either way. It also
-	# only reproduces when I32x4 is the scalar struct, so it hits _SIMD == SIMD_NONE and not
-	# SIMD_WASM, where I32x4 is v128_t. Confirmed on emsdk 6.0.6: SIMD off fails types_math at -O3,
-	# SIMD on passes all 15 suites. See docs/bug_wasm64_o3_constfold.md for the standalone repro.
-	# Pin only the affected configuration, so the default web build keeps -O3.
-
-	if(NOT EnableSIMD)
-		set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
-		set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 	endif()
 
 elseif("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|arm64|aarch64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
@@ -402,446 +390,7 @@ if(DynamicLinkingGraphics OR DynamicLinkingShaderCompiler)
 	set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
-# clang-cl sets MSVC too, since it takes MSVC's flags and targets its ABI.
-# It is not MSVC though: it has clang's warnings and lacks the MSVC-only flags.
-# So everything below that is genuinely MSVC-specific has to be gated on this rather than on MSVC.
-set(isClangCl FALSE)
-if(MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang")
-	set(isClangCl TRUE)
-endif()
-
-# NOT MSVC would be the wrong guard here: clang-cl sets MSVC too,
-# and it's the one Windows toolchain that does have usable sanitizers.
-# Key off the compiler id instead.
-
-if((EnableASAN OR EnableUBSAN) AND NOT CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
-	message(FATAL_ERROR
-		"EnableASAN/EnableUBSAN are only supported on clang and gcc. On Windows rebuild with "
-		"-compiler clang (clang-cl), which keeps MSVC's ABI and CRT."
-	)
-endif()
-
-# Instruction sets the x64 SIMD paths assume.
-# MSVC declares every intrinsic regardless and only wants a codegen baseline (/d2archSSE42),
-# but clang and gcc gate each one behind its own -m flag.
-# Without these, flp.c's _mm_cvtph_ps/_mm_cvtps_ph (F16C) and vec4f_sse.inc.h's FMA builtin
-# don't exist as far as the compiler is concerned.
-# Shared so the clang-cl and gcc/clang branches can't drift apart.
-#
-# Only spellings every driver accepts belong here.
-# clang-cl rejects -mfpmath=sse and -msse4, and rejection is fatal rather than cosmetic:
-# that's -Wunknown-argument, which /WX turns into an error.
-# It is a different warning from the -Wunused-command-line-argument covering flags it merely ignores.
-# -msse4 is dropped rather than moved, being exactly -msse4.1 plus -msse4.2, both already here.
-
-set(X64_SIMD_FLAGS
-	-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2
-	-mrdrnd -msha -maes -mpclmul -mbmi2 -mf16c -mavx -mfma
-)
-
-if(MSVC)
-
-	# /wd4201: anonymous struct/union members are standard in C11 but an extension in C++; OxC3 uses them
-	# throughout (e.g. sh_entries.h), and gcc/clang get the same via -fms-extensions below.
-	set(BUILD_FLAGS "/MP" "/GR" "/D_CRT_SECURE_NO_WARNINGS" "/Gy" "/W4" "/WX" "/wd4201" "/fp:strict")
-
-	if(EnableSIMD)
-		if(NOT ARM)
-			if(isClangCl)
-				list(APPEND BUILD_FLAGS ${X64_SIMD_FLAGS})	# /d2archSSE42 is MSVC-only and undocumented
-			else()
-				list(APPEND BUILD_FLAGS "/d2archSSE42")		#  Require SSE4.2
-			endif()
-		elseif(isClangCl)
-
-			# Same features the gcc/clang branch below asks for on arm64: clang gates each NEON crypto
-			# intrinsic (vaeseq_u8, vmull_p64, the sha2 set) behind its target feature and errors at the
-			# always_inline call site without it, while MSVC declares every intrinsic unconditionally.
-			# clang-cl has no -march spelling of its own, so /clang: hands the flag to the GCC-style
-			# driver underneath.
-
-			list(APPEND BUILD_FLAGS "/clang:-march=armv8-a+simd+crypto+crc")
-		endif()
-	endif()
-
-	if(isClangCl)
-
-		# clang-cl defaults to -fms-compatibility, which emulates MSVC's legacy preprocessor.
-		# That breaks the variadic generators (sb_variable.c's EXPAND4x4, the vec swizzle expanders),
-		# which are conformant and rely on __VA_ARGS__ being prescanned into separate arguments.
-		# /Zc:preprocessor is silently ignored by clang-cl, so this is the only lever.
-		# The code is standard C either way.
-		list(APPEND BUILD_FLAGS "-fno-ms-compatibility")
-
-		# The same two suppressions the gcc/clang branch below applies, for the same reasons.
-		# `{ 0 }` is the idiomatic zero-initializer, and TList(T) expands to a set of static inline
-		# accessors a TU only partly uses.
-		# MSVC has no equivalent warnings, so they only need saying for clang.
-		list(APPEND BUILD_FLAGS "-Wno-missing-field-initializers" "-Wno-unused-function")
-
-		# MSVC-only flags that survive elsewhere in this file (and in conan's toolchain) are accepted
-		# but ignored by clang-cl, which reports them as unused arguments -- fatal under /WX.
-		list(APPEND BUILD_FLAGS "-Wno-unused-command-line-argument")
-
-		# The /fsanitize spelling, not -fsanitize.
-		# It makes clang-cl embed /defaultlib directives for the clang_rt runtime into the objects,
-		# which is how the runtime gets linked when CMake drives lld-link directly
-		# instead of going through the compiler driver.
-
-		# CMake drives lld-link directly rather than going through the compiler driver, so the /defaultlib
-		# directives clang-cl embeds for the sanitizer runtimes never reach the linker.
-		# Point it at clang's own runtime directory ourselves.
-
-		if(EnableASAN OR EnableUBSAN)
-
-			get_filename_component(clangBinDir "${CMAKE_C_COMPILER}" DIRECTORY)
-			file(GLOB clangRtDirs "${clangBinDir}/../lib/clang/*/lib/windows")
-
-			if(NOT clangRtDirs)
-				message(FATAL_ERROR "Sanitizer runtimes not found next to ${CMAKE_C_COMPILER}")
-			endif()
-
-			list(GET clangRtDirs 0 clangRtDir)
-			link_directories("${clangRtDir}")
-		endif()
-
-		# /Oy- is the frame pointer flag clang-cl takes.
-		# -fno-omit-frame-pointer is a driver spelling it rejects outright, which /WX turns into an error.
-		# The dynamic runtime rather than the static one, because dynamicLinkingShaderCompiler puts a DLL in
-		# the picture and a statically linked ASan in more than one module doesn't work.
-
-		# The annotation defines are not optional here.
-		# MSVC's STL annotates its string and vector storage for ASan, and records which way it was built in
-		# an object directive, so lld-link rejects the mix with /failifmismatch on 'annotate_string'.
-		# Our code is instrumented while the prebuilt dependencies (DXC, SPIRV-Reflect) are not, and
-		# rebuilding those under ASan would cost far more than the annotations are worth.
-
-		# compiler-rt names its Windows runtimes after the target arch, so this can't be hardcoded to x86_64:
-		# that is what kept an arm64 sanitizer build off the table entirely.
-
-		if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
-			set(sanitizerArch "aarch64")
-		else()
-			set(sanitizerArch "x86_64")
-		endif()
-
-		# Whether a given toolchain actually ships the runtime for this arch is a build-time fact we can't
-		# assume: LLVM has supported ASan on Windows aarch64 for a while, but whether a particular installer
-		# includes the prebuilt library is up to whoever produced it.
-		# Checking here turns "unresolved external symbol __asan_report_load8" thousands of lines into the
-		# link log into a configure-time error that names the arch and lists what the toolchain does have,
-		# which is what the first arm64 sanitizer run needs in order to be actionable.
-
-		set(requiredSanitizerLibs "")
-
-		if(EnableASAN)
-			list(APPEND requiredSanitizerLibs
-				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
-				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
-
-				# The DLL and not just its import library, since it's needed to RUN anything we build; it is
-				# copied next to the executables below.
-
-				"clang_rt.asan_dynamic-${sanitizerArch}.dll"
-			)
-		endif()
-
-		if(EnableUBSAN)
-			list(APPEND requiredSanitizerLibs "clang_rt.ubsan_standalone-${sanitizerArch}.lib")
-		endif()
-
-		foreach(sanitizerLib ${requiredSanitizerLibs})
-			if(NOT EXISTS "${clangRtDir}/${sanitizerLib}")
-
-				file(GLOB availableSanitizerLibs RELATIVE "${clangRtDir}" "${clangRtDir}/clang_rt.*")
-				string(REPLACE ";" "\n  " availableSanitizerLibs "${availableSanitizerLibs}")
-
-				message(FATAL_ERROR
-					"${sanitizerLib} is missing from ${clangRtDir}, so this toolchain can't produce a "
-					"sanitized ${sanitizerArch} build. Runtimes it does ship:\n  ${availableSanitizerLibs}"
-				)
-			endif()
-		endforeach()
-
-		if(EnableASAN)
-			list(APPEND BUILD_FLAGS
-				"/fsanitize=address" "/Oy-"
-				"-D_DISABLE_STRING_ANNOTATION=1" "-D_DISABLE_VECTOR_ANNOTATION=1"
-			)
-			link_libraries(
-				"clang_rt.asan_dynamic-${sanitizerArch}.lib"
-				"clang_rt.asan_dynamic_runtime_thunk-${sanitizerArch}.lib"
-			)
-
-			# Linking the import library is only half of it: the dynamic ASan runtime has to be findable when
-			# anything we built actually RUNS.
-			# The build runs tools of its own (the packaging steps in add_virtual_files) and ctest runs the test
-			# executables, and the loader looks next to the exe while knowing nothing about the toolchain's
-			# lib/windows, so every one of them dies at load with
-			# "clang_rt.asan_dynamic-<arch>.dll was not found".
-			# A custom build step reports that as nothing but an exit code (0xC0000135), which says nothing
-			# about a DLL, so this is worth being explicit about rather than rediscovering.
-			# Adding the directory here reuses the copy every executable already does for its dependencies,
-			# see apply_dependencies in cmake/oxc3.cmake.
-
-			list(APPEND CONAN_RUNTIME_LIB_DIRS "${clangRtDir}")
-		endif()
-
-		# Identical COMDAT folding has to be off for a sanitized link, or ASan reports false positives on
-		# perfectly legal reads.
-		# ASan gives every global a trailing redzone, and Release folds identical globals across translation
-		# units, so one global's redzone ends up sitting on another global's data.
-		# The report that found this had THREE globals at one address, DXC's L"\0" and L"" plus our own "" from
-		# compiler_helper_jobs.c, all of them nothing but NUL bytes and therefore foldable.
-		# Reading the empty string then looks like reading a redzone, and ASan names the nearest preceding
-		# global instead, which is why it read as a 6491 byte overrun of an unrelated 26 KB literal.
-		# Debug never reproduced it because folding is a Release optimization, and DXC was identical in both.
-		# ODR detection is likely the same story, since it works through a per-global indicator symbol that
-		# folding can alias, so detect_odr_violation may be worth re-enabling once this is in.
-
-		if(EnableASAN OR EnableUBSAN)
-			add_link_options("-opt:noicf")
-		endif()
-
-		# Trap rather than diagnose: UBSan's reporting runtime is the flakiest part of its Windows support,
-		# and a trap is enough here since OxC3 installs a crash handler that prints a stacktrace anyway.
-		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies
-		# don't give us.
-
-		# Linking the standalone runtime so UBSan names the check and the line rather than just trapping.
-		# vptr is off because it needs RTTI across the whole program, which the prebuilt dependencies don't
-		# give us. enum is off because OxC3 uses flag enums and sentinels (e.g. ESHExtension holds OR'd bits
-		# and a 1<<Count "unset" marker) whose values are legal by design but not individual enumerators, which
-		# -fsanitize=enum flags on every load; that idiom is pervasive here, so the check is all noise.
-
-		if(EnableUBSAN)
-			list(APPEND BUILD_FLAGS "-fsanitize=undefined" "-fno-sanitize=vptr,enum" "/Oy-")
-			link_libraries("clang_rt.ubsan_standalone-${sanitizerArch}.lib")
-		endif()
-	endif()
-
-	# add_compile_options(/fsanitize=address)
-
-	add_compile_options(
-		"$<$<COMPILE_LANGUAGE:C>:${BUILD_FLAGS}>"
-		"$<$<COMPILE_LANGUAGE:CXX>:${BUILD_FLAGS}>"
-	)
-
-	# MSVC's legacy preprocessor mis-expands nested __VA_ARGS__,
-	# which vec4f_swizzle.h's generators rely on (F32x4_expand -> expand2 -> expand3 -> expand4).
-	# C doesn't hit it because C17 mode already implies the conformant preprocessor.
-	# C++ still defaults to the legacy one, so the oxc:: wrappers, which pull the vector headers into oxc::c,
-	# fail to compile without this.
-	# gcc/clang are conformant either way.
-	# clang-cl ignores the flag entirely, and gets the same result from -fno-ms-compatibility above.
-	if(NOT isClangCl)
-		add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>")
-	endif()
-
-	# Whole-program optimization (MSVC LTO): /GL to compile, /LTCG to link. lib.exe needs /LTCG told separately
-	# via the static-linker flags or every archive step warns (LNK4075/D9035). /LTCG makes the link the
-	# bottleneck, so this is gated to Release only - a ship/CI config, keeping local Debug/RelWithDebInfo fast.
-	# A target that sets OXC3_NO_WHOLE_PROGRAM opts out.
-	# WINDOWS_EXPORT_ALL_SYMBOLS reads the .obj files to write the .def,
-	# and neither /GL nor -flto leaves anything there it can parse.
-	# Excluding those targets up front beats overriding with /GL- afterwards,
-	# which works but makes MSVC warn D9025 on every TU, since it sees both on the command line.
-
-	set(wholeProgram "$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:$<TARGET_PROPERTY:OXC3_NO_WHOLE_PROGRAM>>>>")
-
-	if(isClangCl)
-
-		# ThinLTO would go here, and it does work when one LLVM does the whole build:
-		# add_compile_options("$<$<AND:${wholeProgram},$<COMPILE_LANGUAGE:C,CXX>>:-flto=thin>")
-		#
-		# It's off because the ClangCL toolset doesn't guarantee that.
-		# The compile runs the clang-cl CMake resolved, usually from PATH,
-		# while the link runs lld-link out of $(LLVMInstallDir), which defaults to the LLVM shipped with Visual Studio.
-		# Bitcode isn't readable across LLVM major versions,
-		# so the moment those two differ every link fails with "is not a native COFF file",
-		# and the build works or doesn't purely by which clang happens to be installed.
-		# Pinning both to one LLVM is what this needs before it can come back.
-
-	else()
-		add_compile_options("$<$<AND:${wholeProgram},$<COMPILE_LANGUAGE:C,CXX>>:/GL>")
-		add_link_options("$<${wholeProgram}:/LTCG>")
-		string(APPEND CMAKE_STATIC_LINKER_FLAGS_RELEASE " /LTCG")
-	endif()
-
-else()
-
-	if(EMSCRIPTEN)
-
-		# wasm floats are IEEE 754 strict by spec, so nothing is needed for float behaviour, and the x86/arm
-		# -march flags below are invalid here.
-		# The math uses wasm_simd128.h directly through vec4*_wasm.inc.h (see SIMD_WASM in
-		# types/base/platform_types.h), so -msimd128 is the only flag needed. Emscripten does ship SSE
-		# compat headers in sysroot/include/compat, but they misparse under the -fms-extensions the C++
-		# TUs require, so that route is not taken and no -msse/-mfma flag belongs here.
-
-		if(EnableSIMD)
-			add_compile_options(-msimd128)    #Native SIMD128; no SSE shims, so no -msse/-mfma
-		endif()
-	elseif(ARM)
-		if(EnableSIMD)
-			add_compile_options(-march=armv8-a+simd+crypto+crc)
-		else()
-			add_compile_options(-march=armv8-a)
-		endif()
-	else()
-		if(EnableSIMD)
-			add_compile_options(${X64_SIMD_FLAGS} -mfpmath=sse)		# gcc spelling, kept off the shared list
-		else()
-			add_compile_options(-mfpmath=sse -msse)		# Consistent float behavior
-		endif()
-	endif()
-
-	add_compile_options(-fno-unsafe-math-optimizations)
-	add_compile_options(-fms-extensions)
-	add_compile_options(-Wall -Wextra -Werror)
-
-	# LTO only for optimized configs, on both compile and link.
-	# Debug stays fast (LTO makes the link the bottleneck).
-	# -flto=auto parallelizes the link-time work across cores.
-	#
-	# clang emits LLVM bitcode, and GNU ld only reads that through LLVMgold.so,
-	# which distros build against whatever LLVM the *system* has rather than the clang you're compiling with.
-	# One major version apart is enough to fail the link with
-	# "Unknown attribute kind ... (Producer: LLVM 18, Reader: LLVM 17)",
-	# after which every archive looks empty and every symbol comes back undefined.
-	# lld reads its own bitcode, so point clang at it, and drop LTO when it isn't installed:
-	# a slightly slower binary beats a build that can't link.
-	#
-	# gcc is unaffected (its plugin ships with the compiler), and so are apple and android, which already
-	# default to a linker that matches their toolchain.
-
-	set(useLTO TRUE)
-
-	if(EMSCRIPTEN)
-
-		# Nor emscripten, which is also clang-but-not-apple-not-android and would otherwise take the
-		# branch below and get -fuse-ld=lld handed to emcc. Bitcode archives would additionally force
-		# every consumer link through LTO (DXC alone is ~500 MB of archives, and wasm-ld's LTO is
-		# single threaded), for marginal gain.
-
-		set(useLTO FALSE)
-
-	elseif(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT APPLE AND NOT ANDROID)
-
-		find_program(OXC3_LLD NAMES ld.lld lld)
-
-		if(OXC3_LLD)
-			add_link_options("$<$<NOT:$<CONFIG:Debug>>:-fuse-ld=lld>")
-		else()
-			message("-- LTO disabled: clang needs lld to link its own bitcode and ld.lld wasn't found")
-			set(useLTO FALSE)
-		endif()
-
-	endif()
-
-	if(useLTO)
-		add_compile_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
-		add_link_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
-	endif()
-
-	# `{ 0 }` is OxC3's idiomatic zero-initializer (every field ends up zeroed).
-	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++ (the oxc::c compat layer),
-	# where `{}` would be needed but isn't valid C.
-	# The idiom is intentional, so silence this one.
-	add_compile_options(-Wno-missing-field-initializers)
-
-	# TList(T) expands to a full set of `static inline` accessors and a TU only ever uses a handful of them.
-	# gcc and MSVC don't mind, but clang reports every leftover under -Wunused-function whenever the macro is
-	# expanded in a .c instead of a header, which is the case for platform.c, the vulkan/d3d12 backends and the shader compiler.
-	# Keep the warning on for gcc, which still catches genuinely dead static functions.
-	if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-		add_compile_options(-Wno-unused-function)
-	endif()
-
-	# Fix for certain GCC versions misbehaving with struct copies.
-	# (Yes, I did run into this, but it seems fixed in 14.3, 13.4)
-	if(
-		CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
-		CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "14.1" AND
-		CMAKE_CXX_COMPILER_VERSION VERSION_LESS_EQUAL "14.2"
-	)
-		add_compile_options(-mprefer-vector-width=128)
-	endif()
-
-	# Here the compiler driver does the link, so the same flag goes to both halves and pulls in its runtime.
-
-	if(EnableASAN)
-
-		add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-		add_link_options(-fsanitize=address)
-
-		# The runtime has to be the SHARED one. Linked statically it lands in the executable, which the dynamic
-		# linker searches before anything in LD_PRELOAD, so the DEEPBIND shim below can never win the dlopen
-		# interception and a driver keeps the private symbol scope a sanitizer cannot see through. The shim then
-		# looks wired up and does nothing. gcc links it shared already, so this is clang's alone.
-		# clang adds no rpath for it, and -print-runtime-dir names a directory the runtimes are not in on every
-		# layout, so the path is taken from the runtime itself.
-		# Linux only, where the shim is built: macOS's ASan runtime is always the dynamic one, and Android and
-		# Emscripten name theirs differently, so on those this .so never exists and there is nothing to force.
-
-		if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-
-			execute_process(
-				COMMAND ${CMAKE_C_COMPILER} -print-file-name=libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so
-				OUTPUT_VARIABLE asanRuntime
-				OUTPUT_STRIP_TRAILING_WHITESPACE
-			)
-
-			if(NOT IS_ABSOLUTE "${asanRuntime}" OR NOT EXISTS "${asanRuntime}")
-				message(FATAL_ERROR
-					"EnableASAN needs the shared runtime libclang_rt.asan-${CMAKE_SYSTEM_PROCESSOR}.so, which "
-					"this toolchain doesn't ship. Without it the RTLD_DEEPBIND shim is inert and a sanitized "
-					"run silently covers only the software adapters."
-				)
-			endif()
-
-			get_filename_component(asanRuntimeDir "${asanRuntime}" DIRECTORY)
-			add_link_options(-shared-libasan "-Wl,-rpath,${asanRuntimeDir}")
-		endif()
-	endif()
-
-	# A proprietary driver has two quarrels with a sanitized process, and both surface only as
-	# vkCreateDevice failing: it maps memory inside the shadow gap, and it loads its compiler with
-	# RTLD_DEEPBIND. Neither is negotiable from inside the driver, so the gap protection comes off and
-	# the flag is stripped by a preload.
-	# Both are needed. With only one the outcome depends on where the process happens to land in memory,
-	# which reads as an intermittent driver bug rather than as a sanitizer restriction.
-	# This lives here rather than in the build script so that running ctest directly behaves the same,
-	# which is how the suite is usually run while working on it.
-
-	if(EnableASAN AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-
-		add_library(OxC3_asan_no_deepbind MODULE cmake/linux/asan_no_deepbind.c)
-		set_target_properties(OxC3_asan_no_deepbind PROPERTIES FOLDER Oxsomi/test)
-
-		# Left uninstrumented: it is preloaded ahead of the sanitizer runtime so that it wins the dlopen
-		# interception, which is earlier than that runtime is ready to serve instrumented code.
-
-		target_compile_options(OxC3_asan_no_deepbind PRIVATE -fno-sanitize=all)
-		target_link_options(OxC3_asan_no_deepbind PRIVATE -fno-sanitize=all)
-	endif()
-
-
-	# vptr needs RTTI across the prebuilt dependencies, which they aren't built with. enum is off because OxC3
-	# uses flag enums and sentinels (ESHExtension holds OR'd bits and a 1<<Count "unset" marker) whose values
-	# are legal by design but not individual enumerators, which -fsanitize=enum flags on every load.
-	# function stays ON: every callback implementation now genuinely takes void* and casts internally, so an
-	# indirect call through the callback pointer is a true type match.
-
-	if(EnableUBSAN)
-		add_compile_options(-fsanitize=undefined -fno-sanitize=vptr,enum -fno-omit-frame-pointer)
-		add_link_options(-fsanitize=undefined)
-	endif()
-
-	# add_compile_options(-fsanitize=thread)
-	# add_link_options(-fsanitize=thread)
-
-endif()
+include(cmake/build_options.cmake)
 
 include(cmake/oxc3.cmake)
 
@@ -897,8 +446,25 @@ else()
 endif()
 
 if(EnableTests)
+
 	message("-- Enabling OxC3 unit tests (-DEnableTests=On)")
 	enable_testing()
+
+	if(NOT CMAKE_CROSSCOMPILING)
+
+		find_program(oxc3BuildOptionsNinja NAMES ninja ninja-build)
+
+		if(oxc3BuildOptionsNinja)
+
+			add_test(
+				NAME OxC3_build_options_test
+				COMMAND "${CMAKE_COMMAND}"
+					"-DTEST_BINARY_DIR=${CMAKE_BINARY_DIR}/build-options-test"
+					"-DtestNinja=${oxc3BuildOptionsNinja}"
+					-P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests/test_build_options.cmake"
+			)
+		endif()
+	endif()
 else()
 	message("-- Disabling OxC3 unit tests (-DEnableTests=Off)")
 endif()
@@ -1097,6 +663,7 @@ set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if static linking)")
 
 add_subdirectory(src)
+oxc3_apply_build_options("${CMAKE_CURRENT_SOURCE_DIR}")
 
 # compile_commands.json lands in the build tree, but every editor looks for it beside the sources.
 # Copied rather than symlinked, since a symlink on Windows needs Developer Mode or elevation.

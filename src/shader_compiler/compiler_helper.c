@@ -219,7 +219,7 @@ Bool Compiler_getUniqueCompiles(
 				gotoIfError3(clean, ListSHBinaryIdentifier_pushBack(&identifiers, binaryIdentifier, alloc, e_rr));
 
 				if(compileCombinations)
-					gotoIfError3(clean, ListU32_pushBack(compileCombinations, (U32)(j | (i << 16)), alloc, e_rr));
+					gotoIfError3(clean, ListU32_pushBack(compileCombinations, (U32) (j | (i << 16)), alloc, e_rr));
 			}
 
 			//Update flags of compileCombinations->ptr[k] stored in bit 15 (isRt), 31 (isGfxOrComp)
@@ -401,7 +401,7 @@ Bool Compiler_compileShaderSingle(
 
 		const SHEntryRuntime *other = &runtimeEntries->ptr[i];
 
-		if(
+		if (
 			other->isShaderAnnotation &&
 			(other->entry.stage == EGfxPipelineStage_MeshExt || other->entry.stage == EGfxPipelineStage_TaskExt)
 		)

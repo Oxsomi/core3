@@ -26,6 +26,8 @@
 
 #include <wasm_simd128.h>
 
+#include <math.h>
+
 //Loads
 
 static inline F32x4 F32x4_fromI32x4(I32x4 a) { return wasm_f32x4_convert_i32x4(a); }
@@ -53,8 +55,8 @@ static inline F32x4 F32x4_trunc3(F32x4 a) {
 //No horizontal add; sum lanewise through two shuffles, matching I32x4_reduce.
 
 static inline F32 F32x4_reduce(F32x4 a) {
-	const F32x4 pairs = wasm_f32x4_add(a, wasm_i32x4_shuffle(a, a, 2, 3, 0, 1));
-	return wasm_f32x4_extract_lane(wasm_f32x4_add(pairs, wasm_i32x4_shuffle(pairs, pairs, 1, 0, 3, 2)), 0);
+	const F32x4 pairs = wasm_f32x4_add(a, wasm_i32x4_shuffle(a, a, 1, 0, 3, 2));
+	return wasm_f32x4_extract_lane(wasm_f32x4_add(pairs, wasm_i32x4_shuffle(pairs, pairs, 2, 3, 0, 1)), 0);
 }
 
 //Arithmetic
@@ -65,11 +67,10 @@ static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { return wasm_f32x4_mul(a, b); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { return wasm_f32x4_div(a, b); }
 
 //SIMD128 has no dot product instruction (_mm_dp_ps), so these multiply and then reduce.
-//Truncating the second operand is what makes the 2 and 3 component forms ignore the unused lanes.
-//The SSE backend truncates the same way and always passes 0xFF to dpps.
+//Discard unused products before reduction so NaN and infinity in unused lanes cannot affect the result.
 
-static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, F32x4_trunc2(b))); }
-static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, F32x4_trunc3(b))); }
+static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_trunc2(F32x4_mul(a, b))); }
+static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_trunc3(F32x4_mul(a, b))); }
 static inline F32 F32x4_dot4(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, b)); }
 
 static inline F32x4 F32x4_negate(F32x4 a) { return wasm_f32x4_neg(a); }
@@ -78,8 +79,8 @@ static inline F32x4 F32x4_negate(F32x4 a) { return wasm_f32x4_neg(a); }
 //wasm_f32x4_min/max are the IEEE forms and propagate NaN, where SSE's minps/maxps return the second
 // operand on NaN. OxC3 does not rely on that difference, and pmin/pmax exist if it ever needs to.
 
-static inline F32x4 F32x4_min(F32x4 a, F32x4 b) { return wasm_f32x4_min(a, b); }
-static inline F32x4 F32x4_max(F32x4 a, F32x4 b) { return wasm_f32x4_max(a, b); }
+static inline F32x4 F32x4_min(F32x4 a, F32x4 b) { return wasm_v128_bitselect(a, b, wasm_f32x4_lt(a, b)); }
+static inline F32x4 F32x4_max(F32x4 a, F32x4 b) { return wasm_v128_bitselect(a, b, wasm_f32x4_gt(a, b)); }
 
 //Rounding
 
@@ -97,11 +98,15 @@ static inline F32x4 F32x4_abs(F32x4 a) { return wasm_f32x4_abs(a); }
 static inline F32x4 F32x4_rsqrt(F32x4 a) { return wasm_f32x4_div(wasm_f32x4_splat(1), wasm_f32x4_sqrt(a)); }
 static inline F32x4 F32x4_rsqrtFast(F32x4 a) { return F32x4_rsqrt(a); }
 
-//No fused multiply add in the SIMD128 MVP either, so this is a multiply then an add.
-//That is not a true FMA: it rounds twice. OxC3's callers use it for throughput rather than for the extra
-// precision a fused form gives, and the scalar fallback rounds twice as well.
+//SIMD128 has no fused instruction; scalar fmaf preserves one-rounding semantics.
 
-static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return wasm_f32x4_add(wasm_f32x4_mul(a, b), c); }
+static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) {
+
+	return F32x4_create4(
+		fmaf(F32x4_x(a), F32x4_x(b), F32x4_x(c)), fmaf(F32x4_y(a), F32x4_y(b), F32x4_y(c)),
+		fmaf(F32x4_z(a), F32x4_z(b), F32x4_z(c)), fmaf(F32x4_w(a), F32x4_w(b), F32x4_w(c))
+	);
+}
 
 //Comparison
 //SIMD128 comparisons give an all ones mask per true lane, same as SSE, so these reuse the same

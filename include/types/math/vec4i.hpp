@@ -28,6 +28,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>        //vec4f_none.inc.h and vec4f_wasm.inc.h through the swizzles; see vec4f.hpp
 
 #ifdef _MSC_VER
 	#include <vcruntime_string.h>        //buffer_base.h's copies under MSVC, see lock.hpp

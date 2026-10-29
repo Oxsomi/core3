@@ -264,13 +264,15 @@ static void shCrossCheckReflection(Test *t, const Allocator *alloc, Buffer spvBu
 			if(se->inputs[s] || de->inputs[s]) {
 				const CharString sn = shSemanticName(se, false, s), dn = shSemanticName(de, false, s);
 				Test_assert(t, "cross-check: same input semantic", CharString_equalsStringInsensitive(&sn, &dn) &&
-					(se->inputSemanticNames[s] & 0xF) == (de->inputSemanticNames[s] & 0xF));
+					(se->inputSemanticNames[s] & 0xF) == (de->inputSemanticNames[s] & 0xF)
+				);
 			}
 
 			if(se->outputs[s] || de->outputs[s]) {
 				const CharString sn = shSemanticName(se, true, s), dn = shSemanticName(de, true, s);
 				Test_assert(t, "cross-check: same output semantic", CharString_equalsStringInsensitive(&sn, &dn) &&
-					(se->outputSemanticNames[s] & 0xF) == (de->outputSemanticNames[s] & 0xF));
+					(se->outputSemanticNames[s] & 0xF) == (de->outputSemanticNames[s] & 0xF)
+				);
 			}
 		}
 	}
@@ -297,7 +299,7 @@ static Bool shReflectionMatches(const Allocator *alloc, Buffer a, Buffer b) {
 	match = true;
 
 	for(U64 i = 0; i < fa.binaries.length && match; ++i)
-		if(
+		if (
 			fa.binaries.ptr[i].identifier.extensions != fb.binaries.ptr[i].identifier.extensions ||
 			fa.binaries.ptr[i].identifier.extensions2 != fb.binaries.ptr[i].identifier.extensions2
 		)
@@ -308,7 +310,7 @@ static Bool shReflectionMatches(const Allocator *alloc, Buffer a, Buffer b) {
 		const SHEntry *ea = &fa.entries.ptr[i];
 		const SHEntry *eb = shFindEntry(&fb, ea->name);
 
-		if(
+		if (
 			!eb || ea->stage != eb->stage ||
 			!Buffer_eq(
 				Buffer_createRefConst(ea->inputs, sizeof(ea->inputs)),
@@ -360,7 +362,7 @@ static void dumpDisasmDiff(
 		Error err = Error_none();
 		CharString gDis = CharString_createNull(), pDis = CharString_createNull();
 
-		if(
+		if (
 			Compiler_disassemble(comp, types[k], gBin, alloc, &gDis, &err) &&
 			Compiler_disassemble(comp, types[k], pBin, alloc, &pDis, &err)
 		) {
@@ -374,7 +376,7 @@ static void dumpDisasmDiff(
 
 				CharString refPath = CharString_createNull(), newPath = CharString_createNull();
 
-				if(
+				if (
 					CharString_format(alloc, &refPath, &err, "%.*s.ref.%s", (int) CharString_length(ref), ref.ptr, exts[k]) &&
 					CharString_format(alloc, &newPath, &err, "%.*s.new.%s", (int) CharString_length(ref), ref.ptr, exts[k])
 				) {
@@ -459,7 +461,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 	gotoIfError3(clean, Compiler_getTargetsFromFile(
 		here,
 		ECompileType_Compile,
-		(U64)1 << EGfxBinaryType_SPIRV,     //Single SPIRV target (byte-snapshot)
+		(U64) 1 << EGfxBinaryType_SPIRV,     //Single SPIRV target (byte-snapshot)
 		false,                              //multipleModes
 		true,                               //combineFlag
 		true,                               //enableLogging
@@ -945,13 +947,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 		Error dxErr = Error_none();
 
 		U64 spvProduced = 0;
+
 		for (U64 i = 0; i < allBuffers.length; ++i)
 			if (Buffer_length(allBuffers.ptr[i]))
 				++spvProduced;
 
 		Bool dxCompiled =
 			Compiler_getTargetsFromFile(
-				here, ECompileType_Compile, (U64)1 << EGfxBinaryType_DXIL, false, true, true,
+				here, ECompileType_Compile, (U64) 1 << EGfxBinaryType_DXIL, false, true, true,
 				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
 			) &&
 			Compiler_compileShaders(
@@ -960,6 +963,7 @@ void Test_shaderCompilerCorpus(Test *t) {
 			);
 
 		U64 dxProduced = 0;
+
 		for (U64 i = 0; dxCompiled && i < dxBuffers.length; ++i)
 			if (Buffer_length(dxBuffers.ptr[i]))
 				++dxProduced;

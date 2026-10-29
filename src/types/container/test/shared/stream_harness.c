@@ -107,7 +107,7 @@ static void Test_streamReadWrite(Test *t, StreamHarness *h) {
 				Bool ok = true;
 
 				for (U8 i = 0; i < 100 && ok; ++i)
-					if (full[i] != (i >= 10 && i < 60 ? (U8)(i - 10) : i))
+					if (full[i] != (i >= 10 && i < 60 ? (U8) (i - 10) : i))
 						ok = false;
 
 				Test_assert(t, "Write [10,60) verify full buffer", ok);
@@ -144,7 +144,7 @@ static void Test_streamResize(Test *t, StreamHarness *h) {
 	U8 src[50];
 
 	for (U64 i = 0; i < 50; ++i)
-		src[i] = (U8)i;
+		src[i] = (U8) i;
 
 	//Write beyond size, grow to 170
 
@@ -255,7 +255,7 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 		Buffer buf2 = Buffer_createRef(data, 500);
 
 		for (U64 i = 0; i < 500; ++i)
-			buf2.ptrNonConst[i] = (U8)i;
+			buf2.ptrNonConst[i] = (U8) i;
 
 		Bool writesOk = true;
 
@@ -281,7 +281,7 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 				Bool dataOk = true;
 
 				for (U64 i = 0; i < 5000 && dataOk; ++i)
-					if (readBuf.ptr[i] != (U8)(i % 500))
+					if (readBuf.ptr[i] != (U8) (i % 500))
 						dataOk = false;
 
 				Test_assert(t, "Reserve: data correct", dataOk);

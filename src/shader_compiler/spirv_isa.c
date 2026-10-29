@@ -208,6 +208,7 @@ static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
 	const U64 n = Buffer_length(text);
 
 	U64 kl = 0;
+
 	while(key[kl]) ++kl;
 
 	U64 best = 0;
@@ -233,6 +234,7 @@ static U64 SpvISA_metaU64(Buffer text, const C8 *key) {
 			k += 2;
 			for(; k < n; ++k) {
 				const C8 c = p[k];
+
 				if(c >= '0' && c <= '9') v = (v << 4) | (U64) (c - '0');
 				else if(c >= 'a' && c <= 'f') v = (v << 4) | (U64) (c - 'a' + 10);
 				else if(c >= 'A' && c <= 'F') v = (v << 4) | (U64) (c - 'A' + 10);
@@ -350,13 +352,16 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 			//The triple is "amdgcn--amdpal--gfxNNNN"; the target is what follows the last separator
 
 			U64 e = i + kl;
+
 			while(e < n && p[e] != '\n' && p[e] != '"') ++e;
 			if(e >= n || p[e] != '"') break;
 
 			const U64 q = ++e;
+
 			while(e < n && p[e] != '"') ++e;
 
 			U64 sIdx = q;
+
 			for(U64 k = q; k + 1 < e; ++k)
 				if(p[k] == '-' && p[k + 1] == '-') sIdx = k + 2;
 
@@ -406,6 +411,7 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 		if(!keep && len >= 2 && l[0] == '_') {
 
 			U64 e = 0;
+
 			while(e < len && l[e] != ';') ++e;
 			while(e && (l[e - 1] == ' ' || l[e - 1] == '\t')) --e;
 

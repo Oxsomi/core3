@@ -3,7 +3,7 @@
 Honest, per-feature maturity so nobody designs against something that doesn't exist yet.
 Legend: ✅ implemented + tested · 🟡 implemented, caveats · 🚧 in progress · 📄 spec/design only · ❌ not planned near-term
 
-Last updated: 2026-10-21 (v3.2.106). Update this table in the same PR as the feature.
+Last updated: 2026-10-24 (v3.2.107). Update this table in the same PR as the feature.
 
 ## Core (types_*)
 
@@ -12,7 +12,7 @@ Last updated: 2026-10-21 (v3.2.106). Update this table in the same PR as the fea
 | Base types / Error / Buffer / CharString | ✅ | Two error conventions exist; new code uses `Bool + e_rr` (see ARCHITECTURE.md) |
 | Atomics / SpinLock / Thread / Time | ✅ | MSVC-ARM64 cycle counter via .s shim |
 | SIMD vectors (SSE / NEON / scalar) | ✅ | `I32x8`/`I32x16` are SSE-only internals |
-| Arbitrary float format casts (F16/BF16/TF19/…) | ✅ | Software tie-rounding is round-half-away-from-half (not IEEE RNE); hardware paths differ on exact ties |
+| Arbitrary float format casts (F16/BF16/TF19/…) | ✅ | Round-to-nearest-even, gradual underflow and single-rounding narrowing conversions |
 | Checked numeric casts | ✅ | |
 | TList / GenericList / strings / Unicode | ✅ | |
 | SHA256 / CRC32C / MD5 / CSPRNG | ✅ | Hardware SHA on supporting CPUs |

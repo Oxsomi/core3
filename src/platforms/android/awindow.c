@@ -106,7 +106,7 @@ I32 APlatform_getDeviceOrientation() {
 	Error err = Error_none(), *e_rr = &err;
 	I32 orientation = -1;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void**) &env, JNI_VERSION_1_6) != JNI_OK) {
 		(*vm)->AttachCurrentThread(vm, &env, NULL);
 		attached = true;
 	}
@@ -152,7 +152,7 @@ I32 APlatform_getKeyUnicode(I32 keyCode, I32 metaState, I32 deviceId) {
 	Error err = Error_none(), *e_rr = &err;
 	I32 unicode = 0;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void**) &env, JNI_VERSION_1_6) != JNI_OK) {
 		(*vm)->AttachCurrentThread(vm, &env, NULL);
 		attached = true;
 	}
@@ -197,7 +197,7 @@ F32 APlatform_getRefreshRate() {
 	Error err = Error_none(), *e_rr = &err;
 	F32 refreshRate = 0;
 
-	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+	if ((*vm)->GetEnv(vm, (void**) &env, JNI_VERSION_1_6) != JNI_OK) {
 		(*vm)->AttachCurrentThread(vm, &env, NULL);
 		attached = true;
 	}
@@ -345,6 +345,7 @@ void AWindow_finalize(Window *w) {
 
 	if(w->callbacks.onCreate) {
 		Error err = Error_none();
+
 		if(!w->callbacks.onCreate(w, &err))
 			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 	}
@@ -784,7 +785,7 @@ static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
 	const I32 masked = action & AMOTION_EVENT_ACTION_MASK;
 
 	const size_t changed =
-		(size_t)((action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);
+		(size_t) ((action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);
 
 	switch(masked) {
 
@@ -881,7 +882,7 @@ static void AWindow_onTouch(Window *w, Mouse *mouse, AInputEvent *event) {
 		case AMOTION_EVENT_ACTION_UP:
 		case AMOTION_EVENT_ACTION_POINTER_UP:
 
-			if(
+			if (
 				AWindow_primaryTouchId != -1 &&
 				changed < AMotionEvent_getPointerCount(event) &&
 				AMotionEvent_getPointerId(event, changed) == AWindow_primaryTouchId
@@ -1017,7 +1018,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, deltaY);
 					}
 
-				} else if(
+				} else if (
 					action == AMOTION_EVENT_ACTION_BUTTON_PRESS ||
 					action == AMOTION_EVENT_ACTION_BUTTON_RELEASE
 				) {
@@ -1049,7 +1050,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 							w->callbacks.onDeviceButton(w, dev, handle, states[i]);
 					}
 
-				} else if(
+				} else if (
 					action == AMOTION_EVENT_ACTION_DOWN ||
 					action == AMOTION_EVENT_ACTION_UP
 				) {
@@ -1107,9 +1108,9 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event) {
 				InputDevice *dev = keyboard;
 
 				dev->flags =
-					((U32)((metaState & AMETA_CAPS_LOCK_ON) != 0)   << EKeyboardFlags_Caps) |
-					((U32)((metaState & AMETA_NUM_LOCK_ON) != 0)    << EKeyboardFlags_NumLock) |
-					((U32)((metaState & AMETA_SCROLL_LOCK_ON) != 0) << EKeyboardFlags_ScrollLock);
+					((U32) ((metaState & AMETA_CAPS_LOCK_ON) != 0)   << EKeyboardFlags_Caps) |
+					((U32) ((metaState & AMETA_NUM_LOCK_ON) != 0)    << EKeyboardFlags_NumLock) |
+					((U32) ((metaState & AMETA_SCROLL_LOCK_ON) != 0) << EKeyboardFlags_ScrollLock);
 
 				//Send keys through interface and update input device
 

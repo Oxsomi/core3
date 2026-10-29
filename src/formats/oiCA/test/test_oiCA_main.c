@@ -51,6 +51,7 @@ OXC3_TEST_MAIN(formats_oiCA) {
 
 	Test_CARename(&t);
 	Test_CAMove(&t);
+	Test_CAMoveFolders(&t);
 
 	Test_CAForeach(&t);
 
@@ -60,6 +61,18 @@ OXC3_TEST_MAIN(formats_oiCA) {
 
 	Test_CAMixedTree(&t);
 	Test_CAStress(&t);
+
+	Test_CAWriteFailures(&t);
+	Test_CAReadLargeNames(&t);
+	Test_CARenameSubtree(&t);
+	Test_CAEmptyStreamCompare(&t);
+	Test_CAReadBigHeader(&t);
+	Test_CAWriteCursorSize(&t);
+	Test_CAReadHugeCounts(&t);
+	Test_CAReadForgedEncryptedCounts(&t);
+	Test_CARefCopies(&t);
+	Test_CAFolderFileLimit(&t);
+	Test_CADateFlags(&t);
 
 	Test_CAWriteSizeConsistencyEmpty(&t);
 	Test_CAWriteSizeConsistencySingleFile(&t);
@@ -75,6 +88,7 @@ OXC3_TEST_MAIN(formats_oiCA) {
 	Test_CASerializeMsDosDate(&t);
 	Test_CASerializeFullDate(&t);
 	Test_CASerializeEncrypted(&t);
+	Test_CASerializeEncryptedTamper(&t);
 	Test_CASerializeMultipleFiles(&t);
 	Test_CASerializeStreamBacked(&t);
 

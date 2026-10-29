@@ -45,6 +45,7 @@
 		"output": "include/types/base/error.hpp",
 		"type": "Error",
 		"staticOnly": true,
+		"methodNames": { "stderr": "stdError" },
 		"doc": [
 			"Factories for the C Error struct.",
 			"A namespace rather than a class: Error is a plain value that the C API fills in by pointer,",

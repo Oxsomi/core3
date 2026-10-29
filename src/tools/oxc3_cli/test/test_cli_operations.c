@@ -56,8 +56,8 @@ OXC3_TEST_MAIN(tools_cli_operations) {
 	Test_assert(&t, "maskIsU64", sizeof(EOperationHasParameter_Exposure) == sizeof(U64));
 
 	Test_assert(&t, "maskFollowsShift",
-		EOperationHasParameter_Input == ((U64)1 << EOperationHasParameter_InputShift) &&
-		EOperationHasParameter_Exposure == ((U64)1 << EOperationHasParameter_ExposureShift) &&
+		EOperationHasParameter_Input == ((U64) 1 << EOperationHasParameter_InputShift) &&
+		EOperationHasParameter_Exposure == ((U64) 1 << EOperationHasParameter_ExposureShift) &&
 		EOperationHasParameter_FileFormat == 1
 	);
 
@@ -70,12 +70,12 @@ OXC3_TEST_MAIN(tools_cli_operations) {
 	//The sets an operation and a format hold keep every bit
 
 	Operation operation = (Operation) { 0 };
-	operation.requiredParameters = EOperationHasParameter_Input | ((U64)1 << 40);
-	operation.optionalParameters = (U64)1 << 63;
+	operation.requiredParameters = EOperationHasParameter_Input | ((U64) 1 << 40);
+	operation.optionalParameters = (U64) 1 << 63;
 
 	Format format = (Format) { 0 };
-	format.requiredParameters = (U64)1 << 33;
-	format.optionalParameters = (U64)1 << 63 | EOperationHasParameter_Output;
+	format.requiredParameters = (U64) 1 << 33;
+	format.optionalParameters = ((U64) 1 << 63) | EOperationHasParameter_Output;
 
 	Test_assert(&t, "operationKeepsHighBits",
 		((operation.requiredParameters >> 40) & 1) && ((operation.optionalParameters >> 63) & 1) &&
@@ -90,7 +90,7 @@ OXC3_TEST_MAIN(tools_cli_operations) {
 	//ParsedArgs_getArg counts the parameters present below a shift to find its argument, and has to see all 64 bits
 
 	ParsedArgs parsed = (ParsedArgs) { 0 };
-	parsed.parameters = EOperationHasParameter_Input | ((U64)1 << 33) | ((U64)1 << 40) | ((U64)1 << 63);
+	parsed.parameters = EOperationHasParameter_Input | ((U64) 1 << 33) | ((U64) 1 << 40) | ((U64) 1 << 63);
 
 	Test_assert(&t, "parsedKeepsHighBits", ((parsed.parameters >> 63) & 1) && ((parsed.parameters >> 33) & 1));
 

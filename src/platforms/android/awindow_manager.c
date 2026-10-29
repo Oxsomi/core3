@@ -105,7 +105,7 @@ Bool AWindowManager_getMonitor(Monitor *monitor) {
 		.offsetPixels = I32x2_zero,
 		.sizePixels   = I32x2_create2(width, height),
 		.sizeMm       = I32x2_create2(
-			(I32)(width * 25.4f / (F32)density), (I32)(height * 25.4f / (F32)density)
+			(I32) (width * 25.4f / (F32) density), (I32) (height * 25.4f / (F32) density)
 		),
 		.orientation  = (EMonitorOrientation)(orientation < 0 ? 0 : orientation),
 		.refreshRate  = APlatform_getRefreshRate()
@@ -143,7 +143,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 	Window *w = (Window*)app->userData;
 
 repeat:
-	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
+	while((ident = ALooper_pollOnce(0, NULL, &events, (void**) &source)) >= 0) {
 		if(source)
 			source->process(app, source);
 	}
@@ -180,7 +180,7 @@ repeat:
 	//ShouldTerminate is checked too: APP_CMD_TERM_WINDOW clears IsFinalized, and without this a window on its way out
 	// would spin here forever waiting for a surface that isn't coming back.
 
-	if(
+	if (
 		ident == ALOOPER_POLL_TIMEOUT &&
 		!(w->flags & EWindowFlags_IsFinalized) &&
 		!(w->flags & EWindowFlags_ShouldTerminate)

@@ -81,7 +81,7 @@ void Test_rand(Test *test) {
 	U32 previousBit = 2;
 
 	for (U32 i = 0; i < 64; ++i) {
-		const U32 bit = (U32)(Random_nextFloat(&seedF) * (F32)(0x01000000)) & 1;
+		const U32 bit = (U32) (Random_nextFloat(&seedF) * (F32) (0x01000000)) & 1;
 		alternates &= bit != previousBit;
 		previousBit = bit;
 	}

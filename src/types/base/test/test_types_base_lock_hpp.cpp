@@ -45,6 +45,7 @@ extern "C" void Test_lockHpp(oxc::c::Test *t) {
 	{
 		AcquiredLock first;
 		Test_assert(t, "acquire", AcquiredLock::acquire(lock, first, 0) && first.lockedForThread());
+		Test_assert(t, "acquire same guard", AcquiredLock::acquire(lock, first, 0) && first.lockedForThread());
 
 		AcquiredLock second(std::move(first));
 		Test_assert(t, "move construct keeps the lock", second.lockedForThread() && c::SpinLock_isLockedForThread(&lock));
@@ -55,4 +56,37 @@ extern "C" void Test_lockHpp(oxc::c::Test *t) {
 	}
 
 	Test_assert(t, "the last owner releases it", !c::SpinLock_isLockedForThread(&lock));
+
+	{
+
+		AcquiredLock owner, nested;
+
+		Test_assert(t, "owner acquire", AcquiredLock::acquire(lock, owner, 0));
+		Test_assert(t, "nested acquire", AcquiredLock::acquire(lock, nested, 0));
+		owner = std::move(nested);
+		Test_assert(t, "nested move preserves ownership", owner.lockedForThread() && !nested.lockedForThread());
+
+		AcquiredLock *alias = &owner;
+
+		owner = std::move(*alias);
+		Test_assert(t, "self move preserves ownership", owner.lockedForThread());
+	}
+
+	Test_assert(t, "nested owner releases", !c::SpinLock_isLockedForThread(&lock));
+
+	{
+
+		c::SpinLock busy{};
+
+		c::AtomicI64_store(&busy.lockedThreadId, (c::I64) (c::Thread_getId() + 1));
+
+		AcquiredLock owner;
+
+		Test_assert(t, "switch setup", AcquiredLock::acquire(lock, owner, 0));
+		Test_assert(t, "switch to busy lock times out", !AcquiredLock::acquire(busy, owner, 0));
+		Test_assert(t, "switch releases previous lock before waiting", !c::SpinLock_isLockedForThread(&lock));
+		Test_assert(t, "failed switch leaves an empty guard", !owner.lockedForThread());
+		c::AtomicI64_store(&busy.lockedThreadId, 0);
+	}
+
 }

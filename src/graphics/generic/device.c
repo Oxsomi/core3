@@ -176,11 +176,12 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 
 						U32 nameIndex = U32_MAX;
 
-						if(
+						if (
 							info.opSize > sizeof(CommandScopePredicate) &&
 							((const C8*) data)[sizeof(CommandScopePredicate)]
 						) {
 							CharString copy = CharString_createNull();
+
 							if(CharString_createCopy(
 								CharString_createRefCStrConst((const C8*) data + sizeof(CommandScopePredicate)),
 								alloc, &copy, NULL
@@ -223,11 +224,12 @@ U32 GraphicsDevice_buildTimings(GraphicsDevice *device, U8 fifId, const ListComm
 				case ECommandOp_InsertTiming: {
 
 					const U32 id = ((const TimingRegionCmd*) data)->id;
-					const C8 *namePtr = (const C8*)(data + sizeof(TimingRegionCmd));
+					const C8 *namePtr = (const C8*) (data + sizeof(TimingRegionCmd));
 					U32 nameIndex = U32_MAX;
 
 					if(namePtr[0]) {
 						CharString copy = CharString_createNull();
+
 						if(CharString_createCopy(CharString_createRefCStrConst(namePtr), alloc, &copy, NULL)) {
 							nameIndex = (U32) device->timingNames[fifId].length;
 							if(!ListCharString_pushBack(&device->timingNames[fifId], copy, alloc, NULL)) {
@@ -308,14 +310,14 @@ Bool GraphicsDevice_resolveTimings(
 		U64 gpuNs;
 
 		if(e.endSlot == U32_MAX)
-			gpuNs = (U64)((F64) ticks[e.beginSlot] * nsPerTick);
+			gpuNs = (U64) ((F64) ticks[e.beginSlot] * nsPerTick);
 
 		else {
 
 			if(e.endSlot >= tickCount || ticks[e.endSlot] < ticks[e.beginSlot])
 				continue;                //Out of range, or a counter that wrapped within its valid bits: drop the one span
 
-			gpuNs = (U64)((F64)(ticks[e.endSlot] - ticks[e.beginSlot]) * nsPerTick);
+			gpuNs = (U64) ((F64) (ticks[e.endSlot] - ticks[e.beginSlot]) * nsPerTick);
 		}
 
 		CharString nameCopy = CharString_createNull();
@@ -346,7 +348,7 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 	GraphicsDevice *device = (GraphicsDevice*) deviceGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	if(!device)
 		return;
@@ -467,9 +469,9 @@ void GraphicsDevice_free(void *deviceGeneric, const Allocator *alloc) {
 
 		if(device->resourcesInFlight[i].list.length)
 			Log_warnLnx(
-			"GraphicsDevice_free detected resourcesInFlight still left on free. "
+				"GraphicsDevice_free detected resourcesInFlight still left on free. "
 			"This shouldn't be possible, as all resources should already be released!"
-		);
+			);
 
 		HashSetRefPtr_free(&device->resourcesInFlight[i], alloc);
 	}
@@ -1122,8 +1124,8 @@ Bool GraphicsDeviceRef_create(
 		gpuHeapSize >>= 1;
 	}
 
-	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 2);
-	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 2);
+	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64) cpuHeapSize)) - 32, 0, 2);
+	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64) gpuHeapSize)) - 32, 0, 2);
 
 	//Create in flight resource refs
 
@@ -1164,7 +1166,7 @@ Bool GraphicsDeviceRef_create(
 
 			//No sampler exists before the device does, so a sampler this layout bakes is only ever given by value.
 
-			if(
+			if (
 				!(bindlessLayout->flags & EDescriptorLayoutFlags_InternalStaticSamplers) &&
 				bindlessLayout->immutableSamplers.length
 			)
@@ -1471,7 +1473,7 @@ static Bool GraphicsDevice_checkShaderBindless(
 
 			//The name is only tracked to describe a layout that moved the register somewhere else.
 
-			if(
+			if (
 				nameMatch == U64_MAX && j < info->bindingNames.length &&
 				CharString_equalsStringSensitive(&info->bindingNames.ptr[j], &reg->name)
 			)
@@ -1673,7 +1675,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 	//Extensions OxC3 doesn't recognize were never reflected, so nothing below can check them: the device has to have
 	// been made to take that on trust.
 
-	if(
+	if (
 		(declared & ESHExtension_UnsafeExtensionExecution) &&
 		!(device->flags & EGraphicsDeviceFlags_AllowUnsafeExtensionExecution)
 	)
@@ -1721,7 +1723,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(
 
 	if(binaryType == EGfxBinaryType_DXIL) {
 
-		if((device->info.capabilities.flags.featuresExt & (U32)featuresDx) != (U32)featuresDx)
+		if((device->info.capabilities.flags.featuresExt & (U32) featuresDx) != (U32) featuresDx)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"));
 
 		if(!Buffer_length(bin->binaries[EGfxBinaryType_DXIL]))
@@ -1929,7 +1931,7 @@ static U64 GraphicsDevice_allocatedBytes(const AllocationBuffer *allocations) {
 
 	for(U64 i = 0; i < entries->length; ++i)
 		if(!(entries->ptr[i].startAndNonLinearAndFree >> 63))
-			used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64)1 << 62) - 1));
+			used += entries->ptr[i].end - (entries->ptr[i].startAndNonLinearAndFree & (((U64) 1 << 62) - 1));
 
 	return used;
 }
@@ -2234,7 +2236,7 @@ Bool GraphicsDeviceRef_reserveReadback(GraphicsDeviceRef *deviceRef, U64 sizePer
 
 	//A reservation only grows the buffer, and stays the floor the automatic shrink keeps to
 
-	if(
+	if (
 		!device->stagingReadback ||
 		DeviceBufferRef_ptr(device->stagingReadback)->resource.size / 3 < sizePerFrame
 	)
@@ -2327,13 +2329,13 @@ static void GraphicsDevice_pullRowMeasures(
 	ETextureFormat_getAlignment(format, NULL, &alignY);
 
 	*rowBytes = ETextureFormat_getSize(format, TextureRange_width(*range), alignY, 1);
-	*rows = ((U64)TextureRange_height(*range) + alignY - 1) / alignY;
+	*rows = ((U64) TextureRange_height(*range) + alignY - 1) / alignY;
 
 	if(fullRowBytes)
 		*fullRowBytes = ETextureFormat_getSize(format, utex.width, alignY, 1);
 
 	if(fullRows)
-		*fullRows = ((U64)utex.height + alignY - 1) / alignY;
+		*fullRows = ((U64) utex.height + alignY - 1) / alignY;
 
 	if(xOffBytes)
 		*xOffBytes = ETextureFormat_getSize(format, range->startRange[0], alignY, 1);
@@ -2612,7 +2614,7 @@ Bool GraphicsDeviceRef_flushPendingPulls(GraphicsDeviceRef *deviceRef, void *com
 			gotoIfError3(clean, AllocationBuffer_allocateBlock(&retry, len, &location, e_rr));
 		}
 
-		pull.stagingOffset = (U64)(location - base);
+		pull.stagingOffset = (U64) (location - base);
 		pull.rowPitch = isBuffer ? len : pitch;
 
 		if(isBuffer) {
@@ -2812,7 +2814,8 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		if(cmd->state != ECommandListState_Closed)
 			retError(clean, Error_invalidParameter(
-				1, (U32)i, "GraphicsDeviceRef_submitCommands()::commandLists[i] wasn't closed properly"));
+				1, (U32) i, "GraphicsDeviceRef_submitCommands()::commandLists[i] wasn't closed properly"
+			));
 	}
 
 	for (U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
@@ -2843,7 +2846,8 @@ Bool GraphicsDeviceRef_submitCommands(
 			lockPtr = NULL;
 
 			retError(clean, Error_invalidState(
-				2, "GraphicsDeviceRef_submitCommands()::swapchains[i] couldn't acquire lock"));
+				2, "GraphicsDeviceRef_submitCommands()::swapchains[i] couldn't acquire lock"
+			));
 		}
 
 		if(acq == ELockAcquire_Acquired)
@@ -2923,8 +2927,8 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	CBufferData data = (CBufferData) {
 		.frameId = (U32) device->submitId,
-		.time = device->firstSubmit ? (F32)((F64)(now - device->firstSubmit) / SECOND) : 0,
-		.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
+		.time = device->firstSubmit ? (F32) ((F64) (now - device->firstSubmit) / SECOND) : 0,
+		.deltaTime = device->firstSubmit ? (F32) ((F64) (now - device->lastSubmit) / SECOND) : 0,
 		.swapchainCount = (U32) (!swapchains ? 0 : swapchains->length)
 	};
 
@@ -2978,7 +2982,7 @@ clean:
 	//A frame that failed without a loss after its breadcrumbs started is never the one a later loss is blamed on.
 	//breadcrumbSubmit says whether they started: it only names this submit once the backend began the frame.
 
-	if(
+	if (
 		!s_uccess && frameStarted && device->breadcrumbs &&
 		device->breadcrumbSubmit[device->fifId] == device->submitId &&
 		!AtomicI64_load(&device->lossReported)
@@ -3162,7 +3166,7 @@ static Bool GraphicsDeviceRef_waitIntern(GraphicsDeviceRef *deviceRef, Bool midS
 
 				RefPtr *res = inFlight->list.ptrNonConst[j - 1];
 
-				if(
+				if (
 					res->refPtrType->typeId != (TypeId) EGraphicsTypeId_DeviceBuffer ||
 					!(DeviceBufferRef_ptr(res)->resource.flags & EGraphicsResourceFlag_InternalWeakDeviceRef) ||
 					AtomicI64_load(&res->refCount) != 1

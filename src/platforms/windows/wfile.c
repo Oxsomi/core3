@@ -52,7 +52,7 @@ Bool CharString_toLongPath(wchar_t *buf, const CharString *str, Error *e_rr) {
 	buf[0] = L'\\'; buf[1] = L'\\'; buf[2] = L'?'; buf[3] = L'\\';
 
 	ListU16 utf16 = (ListU16) { 0 };
-	gotoIfError3(clean, ListU16_createRef((U16*)buf + 4, WIN_PATH_MAX - 4, &utf16, e_rr));
+	gotoIfError3(clean, ListU16_createRef((U16*) buf + 4, WIN_PATH_MAX - 4, &utf16, e_rr));
 
 	gotoIfError3(clean, CharString_toUTF16(*str, NULL, &utf16, e_rr));
 	
@@ -67,7 +67,7 @@ clean:
 //FILETIME is 100-nanosecond intervals since Jan 1 1601
 //Convert to Unix epoch (Jan 1 1970) = 11644473600 seconds offset
 static Ns Ns_fromFileTime(FILETIME ft) {
-	U64 ticks = ((U64)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+	U64 ticks = ((U64) ft.dwHighDateTime << 32) | ft.dwLowDateTime;
 	ticks -= 116444736000000000ULL;
 	return ticks * 100;
 }
@@ -91,9 +91,11 @@ Bool File_getInfoPhysical(const CharString *str, FileInfo *info, const Allocator
 	gotoIfError3(clean, CharString_toLongPath(buf, str, e_rr));
  
 	WIN32_FILE_ATTRIBUTE_DATA data;
+
 	if(!GetFileAttributesExW(buf, GetFileExInfoStandard, &data)) {
 
 		DWORD err = GetLastError();
+
 		if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND)
 			retError(clean, Error_notFound(0, 0, "File_getInfoPhysical() path not found"));
 
@@ -102,7 +104,7 @@ Bool File_getInfoPhysical(const CharString *str, FileInfo *info, const Allocator
  
 	EFileType type = data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? EFileType_Folder : EFileType_File;
  
-	U64 fileSize = type == EFileType_File ? (((U64)data.nFileSizeHigh << 32) | data.nFileSizeLow) : 0;
+	U64 fileSize = type == EFileType_File ? (((U64) data.nFileSizeHigh << 32) | data.nFileSizeLow) : 0;
  
 	CharString path = CharString_createNull();
 	gotoIfError3(clean, CharString_createCopy(*str, alloc, &path, e_rr));
@@ -120,7 +122,7 @@ clean:
 
 Bool File_addPhysical(const CharString *str, Bool isFile, const Allocator *alloc, Error *e_rr) {
 
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	if(!str)
@@ -174,6 +176,7 @@ static Bool File_removeDirRecursivePhysical(const wchar_t *path, Ns *maxTimeout,
  
 	WIN32_FIND_DATAW ffd;
 	HANDLE hFind = FindFirstFileW(glob, &ffd);
+
 	if(hFind == INVALID_HANDLE_VALUE)
 		retError(clean, Error_platformError(0, GetLastError(), "File_removePhysical() FindFirstFileW failed"));
  
@@ -216,7 +219,7 @@ clean:
 
 Bool File_removePhysical(const CharString *str, Ns maxTimeout, const Allocator *alloc, Error *e_rr) {
 
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	if(!str)
@@ -226,6 +229,7 @@ Bool File_removePhysical(const CharString *str, Ns maxTimeout, const Allocator *
 	gotoIfError3(clean, CharString_toLongPath(buf, str, e_rr));
  
 	DWORD attrs = GetFileAttributesW(buf);
+
 	if(attrs == INVALID_FILE_ATTRIBUTES)
 		retError(clean, Error_notFound(0, 0, "File_removePhysical() path not found"));
  
@@ -263,6 +267,7 @@ Bool File_renamePhysical(
 	CharString dest = CharString_createNull();
  
 	CharString parent = CharString_createNull();
+
 	if(!CharString_cutAfterLastSensitive(loc, '/', &parent))
 		parent = CharString_createRefCStrConst(".");
  
@@ -293,7 +298,7 @@ Bool File_movePhysical(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	wchar_t wSrc[WIN_PATH_MAX], wDst[WIN_PATH_MAX];
@@ -321,7 +326,7 @@ Bool File_openPhysical(
 	const Allocator *alloc,
 	Error *e_rr
 ) {
-	(void)alloc;
+	(void) alloc;
 	Bool s_uccess = true;
  
 	wchar_t buf[WIN_PATH_MAX];
@@ -337,6 +342,7 @@ Bool File_openPhysical(
 	HANDLE h = CreateFileW(buf, access, share, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL);
  
 	Ns maxTimeoutTry = File_retryPause(maxTimeout);
+
 	while(h == INVALID_HANDLE_VALUE && maxTimeout) {
 		Thread_sleep(maxTimeoutTry);
 		h = CreateFileW(buf, access, share, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -348,17 +354,19 @@ Bool File_openPhysical(
 		retError(clean, Error_stderr(0, "File_openPhysical() couldn't open file"));
  
 	U64 fileSize = 0;
+
 	if(isRead) {
 		LARGE_INTEGER li;
+
 		if(!GetFileSizeEx(h, &li)) {
 			CloseHandle(h);
 			retError(clean, Error_stderr(1, "File_openPhysical() GetFileSizeEx failed"));
 		}
-		fileSize = (U64)li.QuadPart;
+		fileSize = (U64) li.QuadPart;
 	}
  
 	*fileHandle = (FileHandle) {
-		.ext          = (void*)h,
+		.ext          = (void*) h,
 		.fileSizeType = FileHandle_makeFileSizeType(fileSize, EFileOpenType_create(isRead, isWrite))
 	};
  
@@ -432,7 +440,7 @@ clean:
 
 void FileHandle_closePhysical(const void *ext, const Allocator *alloc) {
 
-	(void)alloc;
+	(void) alloc;
 
 	if(!ext || ext == INVALID_HANDLE_VALUE)
 		return;
@@ -561,7 +569,7 @@ Bool File_foreach(
 					.timestamp = timestamp,
 					.access    = access,
 					.type      = EFileType_File,
-					.fileSize  = (U64)size.QuadPart
+					.fileSize  = (U64) size.QuadPart
 				};
 
 				gotoIfError3(clean, callback(&info, userData, alloc, e_rr));
@@ -570,6 +578,7 @@ Bool File_foreach(
 		} while(FindNextFileW(file, &dat));
 
 		DWORD err = GetLastError();
+
 		if(err != ERROR_NO_MORE_FILES)
 			retError(clean, Error_platformError(0, err, "File_foreach() FindNextFile failed"));
 	}
@@ -617,7 +626,7 @@ Bool File_loadVirtualInternal1(
 
 		VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
-		if(
+		if (
 			!CharString_equalsStringInsensitive(loc, &section->path) &&
 			!CharString_startsWithStringInsensitive(&section->path, &isChild, 0)
 		)
@@ -645,17 +654,19 @@ Bool File_loadVirtualInternal1(
 		//Load from Windows resource
 		
 		HRSRC hrsrc = FindResourceA(NULL, section->path.ptr, MAKEINTRESOURCEA(10));
+
 		if(!hrsrc)
 			retError(clean, Error_notFound(0, 1, "File_loadVirtualInternal1() FindResource failed"));
 
-		U32 size = (U32)SizeofResource(NULL, hrsrc);
+		U32 size = (U32) SizeofResource(NULL, hrsrc);
 
 		HGLOBAL hglobal = LoadResource(NULL, hrsrc);
+
 		if(!hglobal)
 			retError(clean, Error_notFound(3, 1, "File_loadVirtualInternal1() LoadResource failed"));
 
 		//LockResource returns a pointer into the memory-mapped resource, no cleanup needed
-		const U8 *dat = (const U8*)LockResource(hglobal);
+		const U8 *dat = (const U8*) LockResource(hglobal);
 
 		if(!dat)
 			retError(clean, Error_notFound(3, 1, "File_loadVirtualInternal1() LockResource failed"));
@@ -674,7 +685,7 @@ Bool File_loadVirtualInternal1(
 		gotoIfError3(clean, ListCAFile_pushBack(&Platform_instance->archives, caFile, alloc, e_rr));
 		caFile = (CAFile) { 0 };
 
-		section->loadedAndId = archiveIndex | ((U64)1 << 63);
+		section->loadedAndId = archiveIndex | ((U64) 1 << 63);
 		foundAny = true;
 	}
 

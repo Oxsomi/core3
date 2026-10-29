@@ -124,7 +124,7 @@ Bool SRFile_create(ESRSettingsFlags flags, U32 features, const Allocator *alloc,
 	if(flags & ESRSettingsFlags_Invalid)
 		retError(clean, Error_invalidParameter(0, 0, "SRFile_create()::flags contained unsupported flag"));
 
-	if(features & ~(U32)ESRFeature_All & ~(U32)ESRFeature_SymbolInfo)
+	if(features & ~(U32) ESRFeature_All & ~(U32) ESRFeature_SymbolInfo)
 		retError(clean, Error_invalidParameter(1, 0, "SRFile_create()::features contained unsupported bits"));
 
 	DLSettings settings = (DLSettings) {
@@ -272,8 +272,10 @@ U32 SRFile_findNodeByName(const SRFile *srFile, CharString name, ESRNodeType typ
 
 		Bool typeMatch = t == type || (type == ESRNodeType_Struct && t == ESRNodeType_Union);
 
-		if(typeMatch && nameId != U32_MAX &&
-			CharString_equalsStringSensitive(&srFile->names.entryStrings.ptr[nameId], &name))
+		if (
+			typeMatch && nameId != U32_MAX &&
+			CharString_equalsStringSensitive(&srFile->names.entryStrings.ptr[nameId], &name)
+		)
 			return (U32) i;
 	}
 
@@ -301,9 +303,9 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 
 	//Hash content deterministically (flags without HideMagicNumber, features, then the POD arrays and strings)
 
-	U32 hashedFlags = srFile->flags & ~(U32)ESRSettingsFlags_HideMagicNumber;
+	U32 hashedFlags = srFile->flags & ~(U32) ESRSettingsFlags_HideMagicNumber;
 
-	U64 hash = Buffer_fnv1a64Single(((U64)srFile->features << 32) | hashedFlags, Buffer_fnv1a64Offset);
+	U64 hash = Buffer_fnv1a64Single(((U64) srFile->features << 32) | hashedFlags, Buffer_fnv1a64Offset);
 
 	hash = Buffer_fnv1a64(ListSRNode_bufferConst(srFile->nodes), hash);
 	hash = Buffer_fnv1a64(ListSRSymbol_bufferConst(srFile->symbols), hash);
@@ -401,7 +403,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 			Bool builtin = false;
 			U32 fileId = U32_MAX;
 
-			if(
+			if (
 				i < srFile->symbols.length && srFile->symbols.ptr[i].fileNameId != U32_MAX &&
 				srFileIsBuiltin(srFile->names.entryStrings.ptr[srFile->symbols.ptr[i].fileNameId])
 			) {
@@ -555,6 +557,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 
 				if(ty.baseNodeId != U32_MAX && ty.baseNodeId < srFile->nodes.length) {
 					U32 baseName = srFile->nodes.ptr[ty.baseNodeId].nameId;
+
 					if(baseName != U32_MAX) {
 						CharString bn = srFile->names.entryStrings.ptr[baseName];
 						Log_debug(alloc, ELogOptions_None, " : %.*s", (int) CharString_length(bn), bn.ptr);
@@ -686,7 +689,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 			Log_debug(
 				alloc, ELogOptions_None,
 				"  {#%"PRIu64" localId=0x%08"PRIx32" parent=%"PRIi64" children=%"PRIu32,
-				i, node.localId, node.parent == U32_MAX ? (I64)-1 : (I64)node.parent, node.childCount
+				i, node.localId, node.parent == U32_MAX ? (I64) -1 : (I64) node.parent, node.childCount
 			);
 
 			if(node.flags & ESRNodeFlag_IsFwdDeclare)
@@ -708,6 +711,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 			const U64 annDepth = depth + 1 < SHORTSTRING_LEN - 1 ? depth + 1 : SHORTSTRING_LEN - 1;
 
 			ShortString annIndent;
+
 			for(U64 j = 0; j < annDepth; ++j) annIndent[j] = '\t';
 			annIndent[annDepth] = '\0';
 

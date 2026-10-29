@@ -48,7 +48,7 @@ Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) 
 	U64 stride = EAudioStreamFormat_getSize(AudioStreamInfo_format(&stream->info));
 
 	U64 streamOffset = offset / SECOND * stream->info.bytesPerSecond;
-	streamOffset += (Ns)((offset % SECOND) * (stream->info.bytesPerSecond / (F64)SECOND));
+	streamOffset += (Ns) ((offset % SECOND) * (stream->info.bytesPerSecond / (F64) SECOND));
 
 	stream->streamOffset = (streamOffset + stride - 1) &~ (stride - 1);
 
@@ -206,7 +206,7 @@ Bool AudioDeviceRef_createStream(
 	
 	U8 bytesPerBlock = EAudioStreamFormat_getSize(format);
 
-	if((U64)info->sampleRate * bytesPerBlock != info->bytesPerSecond)
+	if((U64) info->sampleRate * bytesPerBlock != info->bytesPerSecond)
 		retError(clean, Error_invalidParameter(
 			1, 0, "AudioDeviceRef_createStream()::info.sampleRate is invalid"
 		));
@@ -238,7 +238,7 @@ Bool AudioDeviceRef_createStream(
 			1, 0, "AudioDeviceRef_createStream() reversing playing audio not supported yet"
 		));
 		
-	if(
+	if (
 		!type ||
 		type->typeId != (TypeId)EAudioTypeId_AudioStream ||
 		RefPtrType_length(type) != sizeof(AudioStream) + AudioStream_sizeExt ||
@@ -289,19 +289,24 @@ Bool AudioDeviceRef_createFromFile(
 	U32 magic = 0;
 
 	if (pitch < 0)
-		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() negative pitch not supported yet"));    //TODO:
+		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFromFile() negative pitch not supported yet"));    //TODO:
 
 	if (!inputStream || inputStream->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
-		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createFileStream()::inputStream is required"));
+		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createFromFile()::inputStream is required"));
 
 	OxStream *stream = RefPtr_data(inputStream, OxStream);
 
 	if(!stream->read)
-		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createFileStream()::stream must be readable"));
+		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createFromFile()::stream must be readable"));
 
 	gotoIfError3(clean, stream->read(
 		stream, inputStreamOffset, sizeof(magic), Buffer_createRef(&magic, sizeof(magic)), alloc, e_rr
 	));
+
+	//The stream keeps its own reference, so the caller's is never taken over, whatever the result.
+
+	if(!RefPtr_inc(inputStream))
+		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFromFile()::inputStream can't be referenced"));
 
 	streamInfo.stream = inputStream;
 	streamInfo.pitch = !pitch ? 1 : pitch;
@@ -315,10 +320,10 @@ Bool AudioDeviceRef_createFromFile(
 		case RIFFHeader_magic: {
 
 			WAVFile file = (WAVFile) { 0 };
-			gotoIfError3(clean, WAV_read(streamInfo.stream, 0, 0, alloc, &file, e_rr));
+			gotoIfError3(clean, WAV_read(streamInfo.stream, inputStreamOffset, 0, alloc, &file, e_rr));
 
 			U64 seconds = file.dataLength / file.fmt.bytesPerSecond;
-			F64 nanos = (F64)(file.dataLength % file.fmt.bytesPerSecond) / ((F64)file.fmt.bytesPerSecond / SECOND);
+			F64 nanos = (F64) (file.dataLength % file.fmt.bytesPerSecond) / ((F64) file.fmt.bytesPerSecond / SECOND);
 
 			EAudioStreamFormat format;
 
@@ -337,7 +342,7 @@ Bool AudioDeviceRef_createFromFile(
 
 			streamInfo.duration = seconds * SECOND + (U64) nanos;
 			streamInfo.sampleRate = file.fmt.frequency;
-			streamInfo.dataStart = file.dataStart + inputStreamOffset;
+			streamInfo.dataStart = file.dataStart;
 			streamInfo.dataLengthLo32 = file.dataLength;
 			streamInfo.dataLengthHi8 = 0;                    //Standard WAV is 32-bit (for now)
 			streamInfo.bytesPerSecond = file.fmt.bytesPerSecond;
@@ -350,7 +355,7 @@ Bool AudioDeviceRef_createFromFile(
 		//TODO: FLAC/M4A/AAC/AIFF?
 
 		default:
-			retError(clean, Error_invalidParameter(1, 0, "AudioDeviceRef_createFileStream() file format unsupported"));
+			retError(clean, Error_invalidParameter(1, 0, "AudioDeviceRef_createFromFile() file format unsupported"));
 	}
 
 	gotoIfError3(clean, AudioDeviceRef_createStream(device, &streamInfo, startOffset, alloc, type, outStream, e_rr));

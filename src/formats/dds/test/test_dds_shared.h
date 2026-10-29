@@ -21,7 +21,10 @@
 //formats/dds/test/test_dds_shared.h
 
 #pragma once
+
 #include "types/test/test.h"
+
+void Test_DDSLegacyVariants(Test *t);
 
 void Test_DDSRoundTripRGBA8(Test *t);
 void Test_DDSRoundTripMipChain(Test *t);
@@ -38,3 +41,11 @@ void Test_DDSWriteSizeConsistency3D(Test *t);
 void Test_DDSWriteSizeConsistencyCubemap(Test *t);
 void Test_DDSWriteSizeConsistencyMipChain(Test *t);
 void Test_DDSWriteSizeConsistencyRGBA8(Test *t);
+
+void Test_DDSReadHugeSizes(Test *t);
+void Test_DDSCubeArray(Test *t);
+void Test_DDSReadAtOffset(Test *t);
+void Test_DDSLegacyMasks(Test *t);
+void Test_DDSDepthOnNonVolume(Test *t);
+void Test_DDSSortComparator(Test *t);
+void Test_DDSWriteFailedWrites(Test *t);

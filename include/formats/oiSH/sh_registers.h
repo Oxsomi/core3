@@ -103,6 +103,7 @@ Bool SHRegisterRuntime_hash(
 	const SHRegister *reg, const CharString *name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr
 );
 
+//Copies everything including the hash, so a copy is equal to the original.
 Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator *alloc, SHRegisterRuntime *res, Error *e_rr);
 
 Bool ListSHRegisterRuntime_createCopyUnderlying(

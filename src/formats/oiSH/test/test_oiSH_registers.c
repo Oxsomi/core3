@@ -198,7 +198,8 @@ void Test_SHFileRegisterAddRWTexture(Test *t) {
 			EGfxTexturePrimitive_Count,    /* auto-detect from format */
 			ETextureFormatId_RGBA8,
 			&name, NULL, b, t->alloc, &t->err
-		));
+		)
+	);
 
 	Test_assert(t, "count 1", info.registers.length == 1);
 	Test_assert(t, "is write",
@@ -228,6 +229,7 @@ void Test_SHFileRegisterArray(Test *t) {
 	CharString n2 = CharString_createRefCStrConst("arrSamp2");
 	GfxBindings b2 = makeSPIRVBinding(0, 10);
 	U32 dims[33];
+
 	for (U8 i = 0; i < 33; ++i) dims[i] = 1;
 	ListU32 arr33 = (ListU32) { 0 };
 	Test_assert(t, "createRef(1)", ListU32_createRefConst(dims, 33, &arr33, &t->err));
@@ -333,6 +335,7 @@ void Test_SHFileRegisterStoredInBinary(Test *t) {
 static SBFile makeCBufferSBFile(Test *t) {
 
 	SBFile sb = { 0 };
+
 	if (!SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &sb, &t->err)) {
 		Test_assert(t, "makeCBufferSBFile: create", false);
 		return sb;
@@ -356,6 +359,7 @@ static SBFile makeCBufferSBFile(Test *t) {
 static SBFile makeTightSBFile(Test *t) {
 
 	SBFile sb = { 0 };
+
 	if (!SBFile_create(ESBSettingsFlags_IsTightlyPacked, 8, t->alloc, &sb, &t->err)) {
 		Test_assert(t, "makeTightSBFile: create", false);
 		return sb;
@@ -379,6 +383,7 @@ static SBFile makeTightSBFile(Test *t) {
 static SBFile makeCBufferSBFileOfSize(U32 size, Test *t) {
 
 	SBFile sb = { 0 };
+
 	if (!SBFile_create(ESBSettingsFlags_None, size, t->alloc, &sb, &t->err)) {
 		Test_assert(t, "makeCBufferSBFileOfSize: create", false);
 		return sb;
@@ -635,7 +640,7 @@ void Test_SHFileRegisterHashCollisionKeepsBoth(Test *t) {
 	const U64 inverse = SHTest_modInverse(Buffer_fnv1a64Prime);
 	const U64 solved  = (probe.registers.ptr[0].hash * inverse) ^ (target * inverse);
 
-	ok &= SHTest_setArrays(&arrays, (U32) solved, (U32)(solved >> 32), t);
+	ok &= SHTest_setArrays(&arrays, (U32) solved, (U32) (solved >> 32), t);
 	name = CharString_createRefCStrConst("second");
 
 	ok &= ListSHRegisterRuntime_addSampler(

@@ -50,6 +50,10 @@ Bool DLFile_write(
 	Buffer tmp = Buffer_createNull();
 	Buffer loadCache = Buffer_createNull();
 	StreamRef *encryptionStream = NULL;
+	U32 headerKey[8] = { 0 };
+	U32 generatedKey[8] = { 0 };
+	U64 offset = 0;
+	Bool generatedKeyUsed = false;
 
 	if(!DLFile_isAllocated(dlFile))
 		retError(clean, Error_nullPointer(0, "DLFile_write()::dlFile is required"));
@@ -71,11 +75,15 @@ Bool DLFile_write(
 	if(*startOffset & 15)
 		retError(clean, Error_unsupportedOperation(0, "DLFile_write() at misaligned startOffset is unsupported (16-byte)"));
 
+	//The caller's offset is only written back once everything succeeded.
+
+	offset = *startOffset;
+
 	U64 totalSize = 0, maxSize = 0;
 	U64 entryCount = DLFile_entryCount(dlFile);
 
 	if (entryCount >> 48)
-		retError(clean, Error_outOfBounds(0, entryCount, (U64)1 << 48, "DLFile_write() entryCount out of bounds"));
+		retError(clean, Error_outOfBounds(0, entryCount, (U64) 1 << 48, "DLFile_write() entryCount out of bounds"));
 
 	Bool isPartiallyLoaded = false;
 
@@ -94,7 +102,7 @@ Bool DLFile_write(
 	}
 
 	if (totalSize >> 48)
-		retError(clean, Error_outOfBounds(0, totalSize, (U64)1 << 48, "DLFile_write() totalSize out of bounds"));
+		retError(clean, Error_outOfBounds(0, totalSize, (U64) 1 << 48, "DLFile_write() totalSize out of bounds"));
 
 	U64 chunkSize = 0;
 	U8 chunkSize2 = 0;
@@ -180,12 +188,13 @@ Bool DLFile_write(
 	//Add to stream
 
 	if (!stream) {        //Handle size detection
-		*startOffset += headerSize + totalSize;
+		offset += headerSize + totalSize;
+		*startOffset = offset;
 		goto clean;
 	}
 
 	if(stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *startOffset + headerSize + totalSize, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, offset + headerSize + totalSize, alloc, e_rr));
 
 	U64 cursorSize = U64_max(U64_min(headerSize + totalSize, chunkSize + sizeof(CryptoChunk)), 32 * KIBI);
 
@@ -196,74 +205,86 @@ Bool DLFile_write(
 	if (isString)
 		dlFlags |= EDLFlags_IsString;
 
-	U64 start = *startOffset;
+	U64 start = offset;
 
 	DLHeader header = (DLHeader) {
 		.version = EDLVersion_V1_0,
-		.flags = (U8)dlFlags,
-		.type = (U8)dlFile->settings.encryptionType,
-		.sizeTypes = (U8)entrySizeType | ((U8)dataSizeType << 4)
+		.flags = (U8) dlFlags,
+		.type = (U8) dlFile->settings.encryptionType,
+		.sizeTypes = (U8) entrySizeType | ((U8) dataSizeType << 4)
 	};
 
 	if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
-		gotoIfError3(clean, StreamCursor_appendU32(&cursor, startOffset, DLHeader_MAGIC, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, &offset, DLHeader_MAGIC, alloc, e_rr));
 
-	gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &header, sizeof(header), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &header, sizeof(header), alloc, e_rr));
 
-	gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, startOffset, entryCount, entrySizeType, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, &offset, entryCount, entrySizeType, alloc, e_rr));
 
 	for (U64 i = 0; i < entryCount; ++i) {
 		U64 l = DLFile_entrySize(dlFile, i);
-		gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, startOffset, l, dataSizeType, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, &offset, l, dataSizeType, alloc, e_rr));
 	}
 
 	//Encryption header
 
 	if (isEncrypted) {
 
-		if (StreamCursor_contains(&cursor, start, *startOffset - start))
-			tmp = Buffer_createRefConst(cursor.cacheData.ptr + (start - cursor.lastLocation), *startOffset - start);
+		if (StreamCursor_contains(&cursor, start, offset - start))
+			tmp = Buffer_createRefConst(cursor.cacheData.ptr + (start - cursor.lastLocation), offset - start);
 
 		//Slow path, because our region is out of cache, so we need to flush to stream and readback
 
 		else {
 
-			gotoIfError3(clean, Buffer_createUninitializedBytes(*startOffset - start, alloc, &tmp, e_rr));
-
+			gotoIfError3(clean, Buffer_createUninitializedBytes(offset - start, alloc, &tmp, e_rr));
 			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));    //Flush to make changes visible
 
 			U64 where = start;
-			gotoIfError3(clean, StreamCursor_consume(&cursor, &where, tmp.ptrNonConst, *startOffset - start, alloc, e_rr));
 
+			gotoIfError3(clean, StreamCursor_consume(&cursor, &where, tmp.ptrNonConst, offset - start, alloc, e_rr));
 			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));            //Return to writable
 		}
 
-		const U32 key[8] = { 0 };
+		const U32 zeroKey[8] = { 0 };
 
 		const Bool hasKey = Buffer_neq(
-			Buffer_createRefConst(dlFile->settings.encryptionKey, sizeof(key)),
-			Buffer_createRefConst(key, sizeof(key))
+			Buffer_createRefConst(dlFile->settings.encryptionKey, sizeof(zeroKey)),
+			Buffer_createRefConst(zeroKey, sizeof(zeroKey))
 		);
+
+		//A generated key is only handed to the caller (through the settings) once the write succeeded.
+
+		const U32 *encryptionKey = dlFile->settings.encryptionKey;
 
 		I32x4 tag = I32x4_zero();
 
-		EBufferEncryptionFlags encFlags = EBufferEncryptionFlags_None;
+		if (!hasKey) {
 
-		if (!hasKey)
-			encFlags |= EBufferEncryptionFlags_GenerateKey;
+			if (!Buffer_csprng(Buffer_createRef(generatedKey, sizeof(generatedKey))))
+				retError(clean, Error_invalidState(0, "DLFile_write()::key generation failed"));
 
-		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
-			iv = I32x4_zero();
+			encryptionKey = generatedKey;
+			generatedKeyUsed = true;
+		}
 
-		else encFlags |= EBufferEncryptionFlags_StopCreateIv;
+		if (
+			!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber) &&
+			!Buffer_csprng(Buffer_createRef(&iv, 12))
+		)
+			retError(clean, Error_invalidState(0, "DLFile_write()::root IV generation failed"));
+
+		gotoIfError3(clean, Buffer_deriveEncryptionKey(
+			encryptionKey, iv, EEncryptionKeyDomain_DLHeader, headerKey, e_rr
+		));
 
 		BufferEncrypt encrypt = (BufferEncrypt) {
 			.target = NULL,
 			.additionalData = (const Buffer *restrict) &tmp,
 			.type = EBufferEncryptionType_AES256GCM,
-			.flags = encFlags,
+			.flags = EBufferEncryptionFlags_StopCreateIv,
 			.nonConstEncrypt = {
-				.key = (U32 *restrict) dlFile->settings.encryptionKey,
+				.key = headerKey,
 				.tag = (I32x4 *restrict) &tag,
 				.iv = (I32x4 *restrict) &iv
 			}
@@ -274,15 +295,15 @@ Bool DLFile_write(
 		Buffer_free(&tmp, alloc);
 
 		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
-			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &iv, 3 * sizeof(U32), alloc, e_rr));
 
-		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &tag, sizeof(tag), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &tag, sizeof(tag), alloc, e_rr));
 
 		U8 emptyBytes[16] = { 0 };
-		U64 utilized = *startOffset & 15;
+		U64 utilized = offset & 15;
 		
 		if (utilized)
-			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, emptyBytes, 16 - utilized, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, emptyBytes, 16 - utilized, alloc, e_rr));
 
 		//We need our stream cursor to be reset to the first chunk, since we'll do the encryption in our cache.
 
@@ -291,20 +312,20 @@ Bool DLFile_write(
 		//Create encryption stream to virtualize our data in our real stream
 
 		gotoIfError3(clean, EncryptionStream_create(
-			streamRef, *startOffset, dlFile->settings.encryptionKey, iv, chunkSize, 0, encStreamType, &encryptionStream, e_rr
+			streamRef, offset, encryptionKey, iv, chunkSize, 0, encStreamType, &encryptionStream, e_rr
 		));
 
 		gotoIfError3(clean, StreamCursor_createWithCache(encryptionStream, &loadCache, true, &cursor, e_rr));
 
-		*startOffset = 0;        //Pretend to be at the start (we're now at the encryption stream)
+		offset = 0;        //Pretend to be at the start (we're now at the encryption stream)
 
 	} else {
 
 		U8 emptyBytes[16] = { 0 };
-		U64 utilized = *startOffset & 15;
+		U64 utilized = offset & 15;
 
 		if (utilized)
-			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, emptyBytes, 16 - utilized, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, emptyBytes, 16 - utilized, alloc, e_rr));
 	}
 
 	//Contents
@@ -331,26 +352,41 @@ Bool DLFile_write(
 		}
 
 		if (isFullyLoaded) {
-			const void *ptr = isString ? dlFile->entryStrings.ptr[i].ptr : (const void*)dlFile->entryBuffers.ptr[i].ptr;
-			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, ptr, siz, alloc, e_rr));
+			const void *ptr = isString ? dlFile->entryStrings.ptr[i].ptr : (const void*) dlFile->entryBuffers.ptr[i].ptr;
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, ptr, siz, alloc, e_rr));
 		}
 
 		else {
 
-			gotoIfError3(clean, StreamCursor_copyStream(
-				&cursor, &inputCursor, inputStream.dataOff, *startOffset, siz, alloc, e_rr
-			));
+			//A zero length copy would mean the rest of the input stream.
 
-			*startOffset += siz;
+			if (siz)
+				gotoIfError3(clean, StreamCursor_copyStream(
+					&cursor, &inputCursor, inputStream.dataOff, offset, siz, alloc, e_rr
+				));
+
+			offset += siz;
 		}
 	}
 
+	gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
 	if (isEncrypted) {
 		EncryptionStream *es = RefPtr_data(encryptionStream, EncryptionStream);
-		*startOffset = es->startOffset + totalSize;
+		offset = es->startOffset + totalSize;
 	}
 
+	if (generatedKeyUsed)
+		Buffer_memcpy(
+			Buffer_createRef((U32*) dlFile->settings.encryptionKey, sizeof(generatedKey)),
+			Buffer_createRefConst(generatedKey, sizeof(generatedKey))
+		);
+
+	*startOffset = offset;
+
 clean:
+	Buffer_clearAllSecure(Buffer_createRef(headerKey, sizeof(headerKey)));
+	Buffer_clearAllSecure(Buffer_createRef(generatedKey, sizeof(generatedKey)));
 	RefPtr_dec(&encryptionStream);
 	Buffer_free(&loadCache, alloc);
 	Buffer_free(&tmp, alloc);

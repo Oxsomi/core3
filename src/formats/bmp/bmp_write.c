@@ -33,7 +33,7 @@
 
 Bool BMP_write(
 	StreamRef *streamRef,
-	U64 *off,
+	U64 *startOffset,
 	const BMPInfo *info,
 	const Allocator *alloc,
 	StreamRef *inputStreamRef,
@@ -43,11 +43,14 @@ Bool BMP_write(
 ) {
 
 	Bool s_uccess = true;
+	U64 off = 0;
 	StreamCursor cursor = (StreamCursor) { 0 };
 	StreamCursor cursorInput = (StreamCursor) { 0 };
 
-	if(!off || !info)
-		retError(clean, Error_nullPointer(!off ? 1 : 2, "BMP_write()::off and info are required"));
+	if(!startOffset || !info)
+		retError(clean, Error_nullPointer(!startOffset ? 1 : 2, "BMP_write()::off and info are required"));
+
+	off = *startOffset;
 
 	if (!info->w || !info->h)
 		retError(clean, Error_invalidParameter(2, 0, "BMP_write()::info->w and h are required"));
@@ -68,12 +71,17 @@ Bool BMP_write(
 		));
 
 	const U64 pixelStride = info->discardAlpha ? 3 : 4;
-	const U64 stride = ((U64)info->w * pixelStride + 3) & ~3;        //Every line needs to be 4-byte aligned
+	const U64 stride = ((U64) info->w * pixelStride + 3) & ~3;        //Every line needs to be 4-byte aligned
 
 	U64 expectedLen = stride * info->h;
 
+	//BMP's file size is a signed 32-bit value, so this is checked before anything is reserved or written
+
+	if(expectedLen + sizeof(BMPHeadersCombined) > (U64) I32_MAX)
+		retError(clean, Error_invalidParameter(0, 0, "BMP_write() BMP has an image limit of 2GiB"));
+
 	if (!streamRef) {
-		*off += expectedLen + sizeof(BMPHeadersCombined);
+		off += expectedLen + sizeof(BMPHeadersCombined);
 		goto clean;
 	}
 
@@ -83,19 +91,16 @@ Bool BMP_write(
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 	OxStream *inputStream = RefPtr_data(inputStreamRef, OxStream);
 
-	if(inputOffset + expectedLen > inputStream->size)
-		retError(clean, Error_outOfBounds(1, inputOffset + expectedLen, inputStream->size, "BMP_write()::off out of bounds"));
+	if(inputOffset > inputStream->size || inputStream->size - inputOffset < expectedLen)
+		retError(clean, Error_outOfBounds(1, inputOffset, inputStream->size, "BMP_write()::off out of bounds"));
 
 	if (stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *off + sizeof(BMPHeadersCombined) + expectedLen, alloc, e_rr));
-
-	if(expectedLen + sizeof(BMPHeadersCombined) > (U64)I32_MAX)
-		retError(clean, Error_invalidParameter(0, 0, "BMP_write() BMP has an image limit of 2GiB"));
+		gotoIfError3(clean, stream->reserve(stream, off + sizeof(BMPHeadersCombined) + expectedLen, alloc, e_rr));
 
 	const BMPHeadersCombined header = (BMPHeadersCombined) {
 		.header = (BMPHeader) {
 			.fileType = BMP_MAGIC,
-			.fileSize = (U32)(info->h * stride + sizeof(BMPHeadersCombined)),
+			.fileSize = (U32) (info->h * stride + sizeof(BMPHeadersCombined)),
 			.offsetData = sizeof(BMPHeadersCombined)
 		},
 		.info = (BMPInfoHeader) {
@@ -114,33 +119,38 @@ Bool BMP_write(
 	};
 
 	gotoIfError3(clean, StreamCursor_write(
-		&cursor, Buffer_createRefConst(&header, sizeof(header)), 0, *off, 0, false, alloc, e_rr
+		&cursor, Buffer_createRefConst(&header, sizeof(header)), 0, off, 0, false, alloc, e_rr
 	));
 
-	*off += sizeof(header);
+	off += sizeof(header);
 
 	//Flip hasn't changed, so we can go into the fast path
 	if (inputIsFlipped == info->isFlipped) {
-		gotoIfError3(clean, StreamCursor_copyStream(&cursor, &cursorInput, inputOffset, *off, expectedLen, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_copyStream(&cursor, &cursorInput, inputOffset, off, expectedLen, alloc, e_rr));
 	}
 
 	//We need to flip the image's y
 	else {
-		for (U64 j = (U64)info->h - 1, k = 0; j != U64_MAX; --j, ++k)
+		for (U64 j = (U64) info->h - 1, k = 0; j != U64_MAX; --j, ++k)
 			gotoIfError3(clean, StreamCursor_copyStream(
 				&cursor,
 				&cursorInput,
 				inputOffset + stride * j,
-				*off + stride * k,
+				off + stride * k,
 				stride,
 				alloc,
 				e_rr
 			));
 	}
 
-	*off += expectedLen;
+	off += expectedLen;
+
+	gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
 
 clean:
+	if(s_uccess)
+		*startOffset = off;
+
 	StreamCursor_close(&cursor, alloc);
 	StreamCursor_close(&cursorInput, alloc);
 	return s_uccess;

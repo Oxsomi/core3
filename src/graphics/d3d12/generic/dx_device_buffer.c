@@ -161,7 +161,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	// doesn't always know about (WARP even returns less for the AS itself): acceleration structures and their
 	// scratch memory are addressed 256 byte aligned and shader binding tables 64 byte aligned
 
-	if(
+	if (
 		(buf->usage & (EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASExt)) &&
 		allocInfo.Alignment < D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT
 	)
@@ -174,7 +174,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	// (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT); tight alignment can hand out less for small buffers,
 	// and a CBV pointing at an unaligned buffer start gets the device removed for the invalid call.
 
-	if(
+	if (
 		(buf->usage & EDeviceBufferUsage_Uniform) &&
 		allocInfo.Alignment < D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT
 	)
@@ -184,7 +184,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	// alignment can place a buffer at less (AMD hands out 8): a raw view on it is invalid and gets the device removed.
 	//Any buffer a shader reads or writes can be bound as a ByteAddressBuffer, so the floor covers all of them.
 
-	if(
+	if (
 		(buf->resource.flags & (EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite)) &&
 		allocInfo.Alignment < D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT
 	)
@@ -201,13 +201,13 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	//Any ASRead buffer may hold a TLAS's instance descs, which have to be 16 byte aligned
 	// (D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT); tight alignment can place one at 8.
 
-	if(
+	if (
 		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
 		allocInfo.Alignment < D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT
 	)
 		allocInfo.Alignment = D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT;
 
-	if(
+	if (
 		(buf->usage & EDeviceBufferUsage_ASReadExt) &&
 		(device->info.capabilities.flags.features & EGraphicsFeatures_RayMicromapOpacity)
 	) {
@@ -247,7 +247,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		};
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
-			Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
+			Error_captureStackTrace(block.stackTrace, (U8) (sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 		if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
 			retError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"));
@@ -332,7 +332,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			NULL,
 			NULL, 0, NULL,
 			&IID_ID3D12Resource,
-			(void**)&bufExt->buffer
+			(void**) &bufExt->buffer
 		), e_rr));
 
 		if(forbidden)
@@ -386,7 +386,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			NULL,
 			0, NULL,
 			&IID_ID3D12Resource,
-			(void**)&bufExt->buffer
+			(void**) &bufExt->buffer
 		), e_rr));
 	}
 
@@ -410,7 +410,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(!buf->resource.deviceAddress)
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"));
 
-	if(
+	if (
 		cpuAccessible &&
 		(device->info.capabilities.flags.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
@@ -497,7 +497,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 			U64 start = range.buffer.startRange;
 			U64 len = range.buffer.endRange - range.buffer.startRange;
 
-			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
+			Buffer dst = Buffer_createRef((U8*) buffer->resource.mappedMemoryExt + start, len);
 			gotoIfError3(clean, DeviceBuffer_readUploadSource(buffer, start, len, dst, alloc, e_rr));
 
 			if (tracking) {
@@ -716,7 +716,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 					bufferExt->buffer,
 					bufferj.startRange,
 					stagingExt->buffer,
-					allocRange + (location - (const U8*)staging->resource.mappedMemoryExt),        //Resource relative
+					allocRange + (location - (const U8*) staging->resource.mappedMemoryExt),        //Resource relative
 					len
 				);
 

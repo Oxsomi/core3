@@ -82,8 +82,9 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 					const U64 elems = Buffer_length(full) / siz;
 
 					I64 blockSizeHint = blockSizeHints[k];
+
 					if (!blockSizeHint)
-						blockSizeHint = (I64)siz;
+						blockSizeHint = (I64) siz;
 
 					gotoIfError3(clean, Buffer_aesExpertCreate(
 						I32x4_zero(), EBufferEncryptionType_AES256GCM,
@@ -91,14 +92,14 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 						&blockSizeMax, &use256Or512, &ctx, e_rr
 					));
 
-					if (blockSizeHints[k] && blockSizeMax < (U8)(U8)-blockSizeHints[k])
+					if (blockSizeHints[k] && blockSizeMax < (U8) (U8) -blockSizeHints[k])
 						break;   // This block size is not supported
 
 					if (logToConsole && !printedHeader) {
 						Log_debugLn(
 							alloc,
 							"Starting profile for AES256GCM blockSize = %"PRIu64" (crypto: %"PRIx8", %s)",
-							(U64)-blockSizeHints[k],
+							(U64) -blockSizeHints[k],
 							cryptoState[l],
 							m ? "Instant encrypt" : "Streaming"
 						);
@@ -147,8 +148,8 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 								alloc,
 								"AES-256-GCM ops for 3s on %"PRIu64" byte blocks: %"PRIu64" ops in %fs (%f GiB/s)",
 								siz, count,
-								(F64)diff / SECOND,
-								count * siz / ((F64)diff / SECOND) / GIBI
+								(F64) diff / SECOND,
+								count * siz / ((F64) diff / SECOND) / GIBI
 							);
 
 						gotoIfError3(clean, CharString_format(
@@ -159,8 +160,8 @@ Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Boo
 							cryptoState[l],
 							blockSizeMax,
 							siz, count,
-							(F64)diff / SECOND,
-							count * siz / ((F64)diff / SECOND) / GIBI
+							(F64) diff / SECOND,
+							count * siz / ((F64) diff / SECOND) / GIBI
 						));
 
 						CharString_free(&csv, alloc);
@@ -266,7 +267,7 @@ Bool Perf_hashIndex(const Allocator *alloc, const CharString *outputCsv, Bool lo
 			const U64 high = Perf_hashIndexRandom(&seed);
 			const U64 low = Perf_hashIndexRandom(&seed);
 
-			keys.ptrNonConst[i] = high << 32 | low;
+			keys.ptrNonConst[i] = (high << 32) | low;
 		}
 
 		//Both reserves hoisted, as every hot path this exists for does.

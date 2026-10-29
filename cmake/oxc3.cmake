@@ -1,17 +1,7 @@
-# oxc3's vector headers generate their swizzles with nested __VA_ARGS__ macros,
-# F32x4_expand -> expand2 -> expand3 -> expand4 in vec4f_swizzle.h, which MSVC's LEGACY preprocessor
-# mis-expands into a wall of syntax errors.
-# C never trips it, since C17 mode already implies the conformant preprocessor, but C++ still defaults to
-# the legacy one, so EVERY consumer TU that reaches an oxc:: header fails to compile without this.
-# That makes it a property of the headers rather than a choice each consumer should have to rediscover,
-# hence riding on the imported target. core3's own build sets the same flag for its C++ targets.
-# clang-cl ignores /Zc:preprocessor entirely and is conformant regardless, hence the compiler id check.
+# Conan's target carries the public header language requirements without overriding a newer consumer standard.
 
-if(TARGET oxc3::oxc3 AND MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	set_property(
-		TARGET oxc3::oxc3 APPEND PROPERTY
-		INTERFACE_COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>"
-	)
+if(TARGET oxc3::oxc3)
+	target_compile_features(oxc3::oxc3 INTERFACE c_std_11 cxx_std_20)
 endif()
 
 # Setting the icon of the app
@@ -180,6 +170,10 @@ function(oxc3_add_bundled_test)
 		"${T_ROOT}/platforms/test/interface/*.cpp"
 	)
 
+	# The math consumer test is its own project with its own main() (types/math/test/consumer), not a suite.
+
+	list(FILTER bundledSources EXCLUDE REGEX "/types/math/test/consumer/")
+
 	# CMakeLists.txt is a source so the bundle stays editable from the IDE, like every other test target.
 
 	if(T_SHARED)
@@ -204,7 +198,7 @@ function(oxc3_add_bundled_test)
 	target_link_libraries(${T_TARGET} PUBLIC
 		OxC3_platforms
 		OxC3_audio
-		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_types_mesh OxC3_formats_obj OxC3_formats_ply
+		OxC3_formats_bmp OxC3_formats_dds OxC3_formats_hdr OxC3_formats_json OxC3_types_mesh OxC3_formats_obj OxC3_formats_ply
 		OxC3_formats_oiBC OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_oiSB
 		OxC3_formats_oiSH OxC3_formats_oiPL OxC3_formats_oiSP OxC3_formats_oiSR OxC3_formats_wav
 		OxC3_types_test

@@ -44,7 +44,7 @@ TListNamedImpl(ListU16PtrConst);
 TListNamedImpl(ListU32PtrConst);
 
 U32 CompileError_lineId(CompileError err) {
-	return err.lineId | ((U32)(err.typeLineId & (U8)I8_MAX) << 16);
+	return err.lineId | ((U32) (err.typeLineId & (U8) I8_MAX) << 16);
 }
 
 void ListCompiler_freeUnderlying(ListCompiler *compilers, const Allocator *alloc) {
@@ -255,6 +255,7 @@ static Bool Compiler_filterWarning(CharString str) {
 
 		for (U64 i = 2; i <= 8; ++i) {
 			const CharString w = CharString_createRefCStrConst(ignoredWarnings[i]);
+
 			if (CharString_equalsStringSensitive(&str, &w))
 				return true;
 		}
@@ -269,6 +270,7 @@ static Bool Compiler_filterWarning(CharString str) {
 
 	for (U64 i = 9; i <= 16; ++i) {
 		const CharString w = CharString_createRefCStrConst(ignoredWarnings[i]);
+
 		if (CharString_equalsStringSensitive(&str, &w))
 			return true;
 	}
@@ -298,11 +300,13 @@ Bool Compiler_parseErrors(CharString errs, const Allocator *alloc, ListCompileEr
 	//We fix that.
 
 	CharString lameString = CharString_createRefCStrConst("In file included from ");
+
 	if (CharString_containsStringSensitive(&errs, &lameString, 0, 0)) {
 
 		gotoIfError3(clean, CharString_createCopy(errs, alloc, &tempStr3, e_rr));
 
 		U64 o = 0;
+
 		while ((o = CharString_findFirstStringSensitive(&tempStr3, &lameString, o, 0)) != U64_MAX) {
 
 			U64 end = CharString_findFirstSensitive(&tempStr3, '\n', o, 0);
@@ -367,7 +371,7 @@ Bool Compiler_parseErrors(CharString errs, const Allocator *alloc, ListCompileEr
 
 			off = nextProblem + CharString_length(errStr);
 
-			if(
+			if (
 				nextError >= CharString_length(fatalOnly) &&
 				CharString_startsWithStringSensitive(&errs, &fatalOnly, nextError - CharString_length(fatalOnly))
 			) {
@@ -393,7 +397,7 @@ Bool Compiler_parseErrors(CharString errs, const Allocator *alloc, ListCompileEr
 			//a:5: error:
 			//     ^
 
-			if(
+			if (
 				nextProblem < 5 ||
 				errs.ptr[nextProblem - 1] != ' ' ||
 				errs.ptr[nextProblem - 2] != ':' ||
@@ -525,7 +529,7 @@ Bool Compiler_parseErrors(CharString errs, const Allocator *alloc, ListCompileEr
 
 			CompileError cerr = (CompileError) {
 				.lineId = (U16) prevLineId,
-				.typeLineId = (U8) ((prevLineId >> 16) | ((U8)(prevProblemType >= 2) << 7)),
+				.typeLineId = (U8) ((prevLineId >> 16) | ((U8) (prevProblemType >= 2) << 7)),
 				.lineOffset = (U8) prevLineOff,
 				.error = tempStr,
 				.file = tempStr2
@@ -577,7 +581,7 @@ Bool Compiler_parseErrors(CharString errs, const Allocator *alloc, ListCompileEr
 
 		CompileError cerr = (CompileError) {
 			.lineId = (U16) prevLineId,
-			.typeLineId = (U8) ((prevLineId >> 16) | ((U8)(prevProblemType >= 2) << 7)),
+			.typeLineId = (U8) ((prevLineId >> 16) | ((U8) (prevProblemType >= 2) << 7)),
 			.lineOffset = (U8) prevLineOff,
 			.error = tempStr,
 			.file = tempStr2
@@ -633,7 +637,7 @@ static Bool Compiler_paddingCheck(
 			U32 v = var.arrayDimOrArrayId;
 
 			if (var.arrayDimOrArrayId >> 15)
-				array = sb->arrays.ptr[var.arrayDimOrArrayId & (U16)I16_MAX];
+				array = sb->arrays.ptr[var.arrayDimOrArrayId & (U16) I16_MAX];
 			else ListU32_createRefConst(&v, 1, &array, NULL);
 
 			for(U64 j = 0; j < array.length; ++j)

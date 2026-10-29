@@ -27,7 +27,11 @@
 
 //Loads
 
-static inline I32x4 I32x4_fromF32x4(F32x4 a) { return vcvtq_s32_f32(vrndq_f32(a)); }
+static inline I32x4 I32x4_fromF32x4(F32x4 a) {
+	const uint32x4_t valid = vandq_u32(vcgeq_f32(a, vdupq_n_f32(-2147483648.0f)), vcltq_f32(a, vdupq_n_f32(2147483648.0f)));
+	return vbslq_s32(valid, vcvtq_s32_f32(a), vdupq_n_s32(-2147483647 - 1));
+}
+
 static inline I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) {
 	uint64x2_t v = vdupq_n_u64(0);
 	v = vsetq_lane_u64(i0, v, 0);
@@ -73,7 +77,10 @@ static inline I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) {
 }
 
 static inline I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) {
-	uint64x2_t result = vmull_u32(vget_low_u32(vreinterpretq_u32_s32(a)), vget_low_u32(vreinterpretq_u32_s32(b)));
+
+	const uint32x2_t ax = vget_low_u32(vuzp1q_u32(vreinterpretq_u32_s32(a), vreinterpretq_u32_s32(a)));
+	const uint32x2_t bx = vget_low_u32(vuzp1q_u32(vreinterpretq_u32_s32(b), vreinterpretq_u32_s32(b)));
+	uint64x2_t result = vmull_u32(ax, bx);
 	return vreinterpretq_s32_u64(result);
 }
 
@@ -130,7 +137,7 @@ static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
 	if (!bits) return a;
 	if (bits >= 32) return I32x4_zero();
-	return vreinterpretq_s32_u32(vshlq_u32(vreinterpretq_u32_s32(a), vdupq_n_s32(-(I32)bits)));
+	return vreinterpretq_s32_u32(vshlq_u32(vreinterpretq_u32_s32(a), vdupq_n_s32(-(I32) bits)));
 }
 
 static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
@@ -145,7 +152,7 @@ static inline I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
 	if (!bits) return a;
 	if (bits >= 64) return I32x4_zero();
 	uint64x2_t v = vreinterpretq_u64_s32(a);
-	v = vshlq_u64(v, vdupq_n_s64(-(I64)bits));
+	v = vshlq_u64(v, vdupq_n_s64(-(I64) bits));
 	return vreinterpretq_s32_u64(v);
 }
 

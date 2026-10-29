@@ -102,7 +102,7 @@ clean:
 			dst.ptrNonConst[i] x src.ptr[i];                                                        \
 	}                                                                                               \
 																									\
-	else for(U8 i = 0; i < l; ++i)                                                                  \
+	else for(U64 i = 0; i < l; ++i)                                                                 \
 		dst.ptrNonConst[i] x src.ptr[i];                                                            \
 																									\
 	__VA_ARGS__                                                                                     \
@@ -119,7 +119,7 @@ Bool Buffer_bitwiseNot(const Buffer dst, Error *e_rr) BitOp(=~, dst, dst, )
 Bool Buffer_bitwiseAnd(const Buffer dst, const Buffer src, Error *e_rr) BitOp(
 	&=, dst, src,
 	if(dstLen > srcLen)
-		gotoIfError3(clean, Buffer_unsetAllBits(Buffer_createRefConst(dst.ptrNonConst + srcLen, dstLen - srcLen), e_rr));
+		gotoIfError3(clean, Buffer_unsetAllBits(Buffer_createRef(dst.ptrNonConst + srcLen, dstLen - srcLen), e_rr));
 )
 
 ECompareResult Buffer_cmp(const Buffer buf0, const Buffer buf1) {
@@ -176,10 +176,13 @@ Bool Buffer_appendBuffer(Buffer *buf, const Buffer append, Error *e_rr) {
 
 	Bool s_uccess = true;
 
+	if(!buf)
+		retError(clean, Error_nullPointer(0, "Buffer_appendBuffer()::buf is required"));
+
 	if(!append.ptr)
 		retError(clean, Error_nullPointer(1, "Buffer_appendBuffer()::append is required"));
 
-	if(buf && Buffer_isConstRef(*buf))                    //We need write access
+	if(Buffer_isConstRef(*buf))                         //We need write access
 		retError(clean, Error_constData(0, 0, "Buffer_appendBuffer()::buf should be writable"));
 
 	U8 *ptr = buf->ptrNonConst;
@@ -221,9 +224,11 @@ Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 	if(!bits)
 		retError(clean, Error_invalidParameter(2, 0, "Buffer_setBitRange()::bits should be non zero"));
 
-	if(dstOff + bits > (Buffer_length(dst) << 3))
+	const U64 bitCount = Buffer_length(dst) << 3;
+
+	if(dstOff > bitCount || bits > bitCount - dstOff)
 		retError(clean, Error_outOfBounds(
-			1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds"
+			1, dstOff, bitCount, "Buffer_setBitRange()::dstOff or bits out of bounds"
 		));
 
 	//Split into: leading partial byte, whole bytes in the middle, trailing partial byte.
@@ -236,12 +241,12 @@ Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 	const U64 lastFull = end >> 3;
 
 	if (firstFull > lastFull)
-		dst.ptrNonConst[dstOff >> 3] |= (U8)(((1U << bits) - 1) << (dstOff & 7));
+		dst.ptrNonConst[dstOff >> 3] |= (U8) (((1U << bits) - 1) << (dstOff & 7));
 
 	else {
 
 		if(dstOff & 7)
-			dst.ptrNonConst[dstOff >> 3] |= (U8)(0xFF << (dstOff & 7));
+			dst.ptrNonConst[dstOff >> 3] |= (U8) (0xFF << (dstOff & 7));
 
 		if(lastFull > firstFull)
 			memset(dst.ptrNonConst + firstFull, 0xFF, lastFull - firstFull);
@@ -249,7 +254,7 @@ Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 		//The trailing bits start at bit 0 of lastFull, so this mask isn't shifted
 
 		if(end & 7)
-			dst.ptrNonConst[lastFull] |= (U8)((1U << (end & 7)) - 1);
+			dst.ptrNonConst[lastFull] |= (U8) ((1U << (end & 7)) - 1);
 	}
 
 clean:
@@ -269,9 +274,11 @@ Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 	if(!bits)
 		retError(clean, Error_invalidParameter(2, 0, "Buffer_unsetBitRange()::bits should be non zero"));
 
-	if(dstOff + bits > (Buffer_length(dst) << 3))
+	const U64 bitCount = Buffer_length(dst) << 3;
+
+	if(dstOff > bitCount || bits > bitCount - dstOff)
 		retError(clean, Error_outOfBounds(
-			1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds"
+			1, dstOff, bitCount, "Buffer_unsetBitRange()::dstOff or bits out of bounds"
 		));
 
 	//Same split as Buffer_setBitRange, see the comment there
@@ -281,18 +288,18 @@ Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
 	const U64 lastFull = end >> 3;
 
 	if (firstFull > lastFull)
-		dst.ptrNonConst[dstOff >> 3] &=~ (U8)(((1U << bits) - 1) << (dstOff & 7));
+		dst.ptrNonConst[dstOff >> 3] &=~ (U8) (((1U << bits) - 1) << (dstOff & 7));
 
 	else {
 
 		if(dstOff & 7)
-			dst.ptrNonConst[dstOff >> 3] &=~ (U8)(0xFF << (dstOff & 7));
+			dst.ptrNonConst[dstOff >> 3] &=~ (U8) (0xFF << (dstOff & 7));
 
 		if(lastFull > firstFull)
 			memset(dst.ptrNonConst + firstFull, 0x00, lastFull - firstFull);
 
 		if(end & 7)
-			dst.ptrNonConst[lastFull] &=~ (U8)((1U << (end & 7)) - 1);
+			dst.ptrNonConst[lastFull] &=~ (U8) ((1U << (end & 7)) - 1);
 	}
 
 clean:

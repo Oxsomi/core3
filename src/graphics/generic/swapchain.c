@@ -92,7 +92,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 			retError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
 
-	if(
+	if (
 		I32x2_x(newSize) == swapchain->base.width && I32x2_y(newSize) == swapchain->base.height &&
 		swapchain->base.textureFormatId == textureFormatId &&
 		swapchain->orientation == orientation
@@ -153,7 +153,7 @@ void Swapchain_free(void *swapchainGeneric, const Allocator *alloc) {
 		return;
 
 	Swapchain_freeExt(swapchain, alloc);
-	UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
+	UnifiedTexture_free((TextureRef*)((U8*) swapchain - sizeof(RefPtr)));
 }
 
 Bool GraphicsDeviceRef_createSwapchain(

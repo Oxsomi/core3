@@ -32,15 +32,22 @@
 
 Bool Buffer_csprng(const Buffer target) {
 
-	if(!Buffer_length(target) || Buffer_isConstRef(target))
+	const U64 length = Buffer_length(target);
+
+	if(!length || Buffer_isConstRef(target))
 		return false;
 
-	const NTSTATUS stat = BCryptGenRandom(
-		0,
-		target.ptrNonConst,
-		(ULONG) Buffer_length(target),
-		BCRYPT_USE_SYSTEM_PREFERRED_RNG
-	);
+	//BCrypt takes a 32-bit length even on Win64. Service the entire buffer without narrowing its size.
+	for(U64 offset = 0; offset < length;) {
 
-	return BCRYPT_SUCCESS(stat);
+		const U64 remaining = length - offset;
+		const ULONG chunk = (ULONG) (remaining > U32_MAX ? U32_MAX : remaining);
+
+		if(!BCRYPT_SUCCESS(BCryptGenRandom(0, target.ptrNonConst + offset, chunk, BCRYPT_USE_SYSTEM_PREFERRED_RNG)))
+			return false;
+
+		offset += chunk;
+	}
+
+	return true;
 }

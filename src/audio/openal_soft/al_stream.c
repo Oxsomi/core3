@@ -228,7 +228,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 		ALint buffersProcessed = 0;
 		AL_PROCESS_ERROR(alGetSourcei(streamExt->source, AL_BUFFERS_PROCESSED, &buffersProcessed));
 
-		freeBufferCount = (U8)buffersProcessed;
+		freeBufferCount = (U8) buffersProcessed;
 		AL_PROCESS_ERROR(alSourceUnqueueBuffers(streamExt->source, freeBufferCount, freeBuffers));
 	}
 
@@ -281,9 +281,9 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 			U64 filled = 0;
 			U64 consumed = 0;
 
-			void *tmp = (void*)streamExt->tmp.ptr;
-			U8 *tmp8 = (U8*)tmp;
-			U16 *tmp16 = (U16*)tmp;
+			void *tmp = (void*) streamExt->tmp.ptr;
+			U8 *tmp8 = (U8*) tmp;
+			U16 *tmp16 = (U16*) tmp;
 
 			Bool finishedLoop = false;
 
@@ -312,8 +312,8 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 							);
 
 						switch (newStride) {
-							default:       tmp16[k] = (U16)result;  break;
-							case 1:        tmp8[k] = (U8)result;    break;
+							default:       tmp16[k] = (U16) result;  break;
+							case 1:        tmp8[k] = (U8) result;    break;
 						}
 					}
 

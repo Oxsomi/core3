@@ -107,7 +107,8 @@ void Test_SHPipelineStagePrefixes(Test *t) {
 
 	for (U8 i = 0; i < EGfxPipelineStage_Count; ++i)
 		Test_assert(t, "prefix non-null",
-			EGfxPipelineStage_getStagePrefix((EGfxPipelineStage)i) != NULL);
+			EGfxPipelineStage_getStagePrefix((EGfxPipelineStage)i) != NULL
+		);
 }
 
 void Test_SHEntryStageName(Test *t) {
@@ -132,6 +133,7 @@ void Test_SHEntryStageName(Test *t) {
 	};
 
 	SHEntry e = (SHEntry) { 0 };
+
 	for (U64 i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
 		e.stage = cases[i].stage;
 		Test_assert(t, cases[i].name, cmpstr(SHEntry_stageName(&e), cases[i].name));
@@ -150,6 +152,7 @@ void Test_SHExtensionSetSanity(Test *t) {
 	//Bit-count of All must equal Count
 
 	U32 bits = 0;
+
 	for (U32 i = 0; i < 32; ++i)
 		bits += (ESHExtension_All >> i) & 1;
 
@@ -191,6 +194,7 @@ void Test_GfxBindingsDummy(Test *t) {
 	Test_setModule(t, "GfxBindings_dummy: all slots invalid");
 
 	GfxBindings b = GfxBindings_dummy();
+
 	for (U8 i = 0; i < EGfxBinaryType_Count; ++i) {
 		Test_assert(t, "binding = U32_MAX", b.arr[i].binding == U32_MAX);
 		Test_assert(t, "space = U32_MAX",   b.arr[i].space   == U32_MAX);
@@ -240,7 +244,8 @@ void Test_SHFileAddIncDuplicateSameCrc(Test *t) {
 
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create",
-		Test_SHFileCreate(t, &sh));
+		Test_SHFileCreate(t, &sh)
+	);
 
 	SHInclude a = { .relativePath = CharString_createRefCStrConst("common.hlsli"), .crc32c = 0xAABBCCDD };
 	SHInclude b = { .relativePath = CharString_createRefCStrConst("common.hlsli"), .crc32c = 0xAABBCCDD };
@@ -275,8 +280,9 @@ void Test_SHFileAddIncSortedOrder(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
 	const C8 *paths[] = { "z_last.hlsli", "a_first.hlsli", "m_middle.hlsli" };
+
 	for (U8 i = 0; i < 3; ++i) {
-		SHInclude inc = { .relativePath = CharString_createRefCStrConst(paths[i]), .crc32c = (U32)(i + 1) };
+		SHInclude inc = { .relativePath = CharString_createRefCStrConst(paths[i]), .crc32c = (U32) (i + 1) };
 		Test_assert(t, "insert ok", SHFile_addInclude(&sh, &inc, t->alloc, &t->err));
 	}
 
@@ -296,8 +302,9 @@ void Test_SHFileAddIncMultipleDistinct(Test *t) {
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
 	const C8 *paths[] = { "a.hlsli","b.hlsli","c.hlsli","d.hlsli","e.hlsli" };
+
 	for (U8 i = 0; i < 5; ++i) {
-		SHInclude inc = { .relativePath = CharString_createRefCStrConst(paths[i]), .crc32c = (U32)(i + 1) };
+		SHInclude inc = { .relativePath = CharString_createRefCStrConst(paths[i]), .crc32c = (U32) (i + 1) };
 		Test_assert(t, "insert ok", SHFile_addInclude(&sh, &inc, t->alloc, &t->err));
 	}
 
@@ -372,6 +379,7 @@ void Test_SHBinaryIdentifierEquals(Test *t) {
 	a.extensions = b.extensions = ESHExtension_None;
 
 	CharString strs[2] = { CharString_createRefCStrConst("A"), CharString_createRefCStrConst("1") };
+
 	if(!ListCharString_createRefConst(strs, 2, &a.defines, NULL))
 		goto skip;
 
@@ -476,12 +484,12 @@ void Test_SHValueParse(Test *t) {
 		{ ETypeId_U8,  "255",   true, 255 },     { ETypeId_U8,  "256",   false, 0 },  { ETypeId_U8, "-1", false, 0 },
 		{ ETypeId_U8,  "+3",    true, 3 },       { ETypeId_U16, "65535", true, 65535 },  { ETypeId_U16, "65536", false, 0 },
 		{ ETypeId_U32, "300",   true, 300 },     { ETypeId_U32, "4294967295", true, 0xFFFFFFFF },
-		{ ETypeId_U32, "4294967296", false, 0 }, { ETypeId_U64, "18446744073709551615", true, ~(U64)0 },
+		{ ETypeId_U32, "4294967296", false, 0 }, { ETypeId_U64, "18446744073709551615", true, ~(U64) 0 },
 
 		{ ETypeId_I8,  "-128",  true, 0x80 },    { ETypeId_I8,  "127",   true, 127 },  { ETypeId_I8, "128", false, 0 },
 		{ ETypeId_I8,  "-129",  false, 0 },      { ETypeId_I16, "-2",    true, 0xFFFE },
 		{ ETypeId_I16, "-32769", false, 0 },     { ETypeId_I32, "-70000", true, 0xFFFEEE90 },
-		{ ETypeId_I32, "2147483648", false, 0 }, { ETypeId_I64, "-9223372036854775808", true, (U64)1 << 63 },
+		{ ETypeId_I32, "2147483648", false, 0 }, { ETypeId_I64, "-9223372036854775808", true, (U64) 1 << 63 },
 		{ ETypeId_I64, "9223372036854775808", false, 0 },
 
 		{ ETypeId_F16, "1.5",   true, 0x3E00 },  { ETypeId_F16, "70000", false, 0 },

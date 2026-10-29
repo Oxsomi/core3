@@ -27,6 +27,7 @@
 #include "types/test/test.h"
 #include "types/container/memory_stream.h"
 #include "types/container/test/basic_alloc.h"
+#include "types/container/test/failing_stream.h"
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
 #include "types/base/string_base.h"
@@ -492,7 +493,7 @@ void Test_SPFileSubFileAndSize(Test *t) {
 		Test_assert(t, "exact", SPFile_isExact(&read, 0));
 
 		MemoryStream *ms = RefPtr_data(archive, MemoryStream);
-		Test_assert(t, "sizeMatches", sizeOnly == Buffer_length(ms->data));
+		Test_assert(t, "sizeMatches", sizeOnly == ms->parent.size);
 	}
 
 clean:
@@ -594,8 +595,7 @@ void Test_SPFileBlendAttachmentPacking(Test *t) {
 		Test_assert(t, "sameHash", read.hash == sp.hash);
 
 		MemoryStream *ms = RefPtr_data(archive, MemoryStream);
-		Test_assert(t, "sizeMatches", sizePacked == Buffer_length(ms->data));
-
+		Test_assert(t, "sizeMatches", sizePacked == ms->parent.size);
 	}
 
 	//Reaching all eight targets costs exactly eight attachments more than reaching none, and 8 of them are a
@@ -729,7 +729,7 @@ static Bool tamper(Test *t, const C8 *label, StreamRef *stream, U64 offset, U8 v
 
 	MemoryStream *ms = RefPtr_data(stream, MemoryStream);
 
-	if(offset >= Buffer_length(ms->data))
+	if(offset >= ms->parent.size)
 		return Test_assert(t, label, false);
 
 	const U8 previous = ms->data.ptr[offset];
@@ -846,6 +846,28 @@ void Test_SPReadTamperRecords(Test *t) {
 
 	tamper(t, "renderTargetCountAboveEight", stream, G + 1, 9);
 
+	//Padding is part of the record, and every enum a graphics state stores has to name something. The stored state
+	// is 64 bytes: msaa, targets, depth format and a pad byte, then the target formats at 8, the blend state at 16,
+	// the depth state at 28, the rasterizer at 36 and the input assembler at 52.
+
+	tamper(t, "stagePadding", stream, S + 13, 1);
+	tamper(t, "specializationPadding", stream, X + 3, 1);
+	tamper(t, "graphicsPadding", stream, G + 3, 1);
+	tamper(t, "inputAssemblerPadding", stream, G + 53, 1);
+	tamper(t, "msaaInvalid", stream, G + 0, 9);
+	tamper(t, "depthFormatInvalid", stream, G + 2, 0xFF);
+	tamper(t, "renderTargetFormatInvalid", stream, G + 8, 0xFF);
+	tamper(t, "blendEnableNotBool", stream, G + 16, 2);
+	tamper(t, "logicOpInvalid", stream, G + 19, 0xFF);
+	tamper(t, "writeMaskInvalid", stream, G + 20, 0xF0);
+	tamper(t, "depthFlagsInvalid", stream, G + 28, 0x80);
+	tamper(t, "depthCompareInvalid", stream, G + 29, 0xFF);
+	tamper(t, "stencilOpInvalid", stream, G + 31, 0xFF);
+	tamper(t, "cullModeInvalid", stream, G + 36, 9);
+	tamper(t, "rasterizerFlagsInvalid", stream, G + 38, 0x80);
+	tamper(t, "topologyInvalid", stream, G + 52, 0xFF);
+	tamper(t, "patchControlPointsInvalid", stream, G + 56, 33);
+
 	//A read that doesn't start 16-byte aligned, and one that runs out of bytes
 
 	{
@@ -857,7 +879,7 @@ void Test_SPReadTamperRecords(Test *t) {
 
 	{
 		MemoryStream *ms = RefPtr_data(stream, MemoryStream);
-		Buffer cut = Buffer_createRefConst(ms->data.ptr, Buffer_length(ms->data) - 48);
+		Buffer cut = Buffer_createRefConst(ms->data.ptr, ms->parent.size - 48);
 
 		if (Test_assert(t, "truncatedStream", MemoryStream_createFromBuffer(
 			&cut, EMemoryStreamFlags_None, &type, &truncated, &t->err
@@ -1166,7 +1188,7 @@ void Test_SPReadTamper(Test *t) {
 
 	MemoryStream *ms = RefPtr_data(stream, MemoryStream);
 
-	if(!Test_assert(t, "wroteBytes", Buffer_length(ms->data) > 8))
+	if(!Test_assert(t, "wroteBytes", ms->parent.size > 8))
 		goto clean;
 
 	//A wrong magic number can't be read as an oiSP.
@@ -1310,7 +1332,7 @@ static void Test_SPLayoutDeriveSupplyRoundTrip(Test *t) {
 		PLDescriptorBinding_source(row0) == EPLSource_Derived && PLDescriptorBinding_source(row1) == EPLSource_Derived
 	);
 
-	Test_assert(t, "visibility", row0.visibility == ((U32)1 << EGfxPipelineStage_Compute));
+	Test_assert(t, "visibility", row0.visibility == ((U32) 1 << EGfxPipelineStage_Compute));
 	const GfxBinding row0Spv = row0.bindings.arr[EGfxBinaryType_SPIRV];
 
 	Test_assert(t, "spirvPairKept", row0Spv.space == 1 && row0Spv.binding == 3);
@@ -1376,7 +1398,7 @@ static void Test_SPLayoutDeriveSupplyRoundTrip(Test *t) {
 		U64 sizeOnly = 0;
 
 		Test_assert(t, "sizeOnly", SPFile_write(&sp, t->alloc, NULL, &sizeOnly, &t->err));
-		Test_assert(t, "sizeOnlyMatches", sizeOnly == Buffer_length(ms->data));
+		Test_assert(t, "sizeOnlyMatches", sizeOnly == ms->parent.size);
 	}
 
 	SPFile_free(&reread, t->alloc);
@@ -1652,6 +1674,134 @@ static void Test_SPLayoutPcGlobalsMerge(Test *t) {
 	SPFile_free(&sp, t->alloc);
 }
 
+//Every count in the header sizes an allocation, so a file that is only a header must not be able to ask for more
+// than the file holds. The allocator refuses anything big, so a regression fails cleanly instead of exhausting memory.
+
+static const Allocator *spCapInner;
+static Bool spCapHit;
+
+static Bool spCappedAlloc(void *ctx, U64 length, Buffer *output, Error *e_rr) {
+
+	(void) ctx;
+
+	if(length > 1024 * 1024) {
+		spCapHit = true;
+		return false;
+	}
+
+	return spCapInner->alloc(spCapInner->ptr, length, output, e_rr);
+}
+
+static void spCappedFree(void *ctx, Buffer buf) {
+	(void) ctx;
+	spCapInner->free(spCapInner->ptr, buf);
+}
+
+static void Test_SPCountsBounded(Test *t) {
+
+	Test_setModule(t, "SPFile: counts are bounded by the bytes in the stream");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+	const Allocator capped = (Allocator) { .alloc = spCappedAlloc, .free = spCappedFree };
+
+	spCapInner = t->alloc;
+
+	for(U8 field = 0; field < 6; ++field) {
+
+		U8 bytes[4 + sizeof(SPHeader)] = { 0 };
+		const U32 magic = SPHeader_MAGIC;
+		SPHeader header = (SPHeader) { .version = ESPVersion_V1_1 };
+
+		switch(field) {
+			case 0: header.pipelineCount = U32_MAX; break;
+			case 1: header.stageCount = U32_MAX; break;
+			case 2: header.specializationCount = U32_MAX; break;
+			case 3: header.graphicsStateCount = U32_MAX; break;
+			case 4: header.raytracingStateCount = U32_MAX; break;
+			default: header.layoutCount = U32_MAX; break;
+		}
+
+		Buffer_memcpy(Buffer_createRef(bytes, 4), Buffer_createRefConst(&magic, 4));
+		Buffer_memcpy(Buffer_createRef(bytes + 4, sizeof(header)), Buffer_createRefConst(&header, sizeof(header)));
+
+		StreamRef *src = NULL;
+
+		if (!Test_assert(t, "stream", MemoryStream_createFromBufferRegion(
+			Buffer_createRefConst(bytes, sizeof(bytes)), 0, sizeof(bytes), EMemoryStreamFlags_None, &type, &src, &t->err
+		)))
+			continue;
+
+		SPFile sp = (SPFile) { 0 };
+		U64 off = 0;
+
+		spCapHit = false;
+
+		const Bool ok = SPFile_read(src, &off, false, &capped, &sp, NULL);
+
+		Test_assert(t, "refused", !ok);
+		Test_assert(t, "nothing big was requested", !spCapHit);
+
+		SPFile_free(&sp, &capped);
+		RefPtr_dec(&src);
+	}
+}
+
+//A write that fails anywhere has to fail the writer, the cursor's own flush included
+
+static void Test_SPWriteFailures(Test *t) {
+
+	Test_setModule(t, "SPFile write: every failing write is reported");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	SHEntry entries[1] = { entryOf("mainCompute", EGfxPipelineStage_Compute) };
+	SHFile sh = fileOf(entries, 1);
+	ListSHFile files = (ListSHFile) { 0 };
+
+	ListSHFile_createRefConst(&sh, 1, &files, NULL);
+
+	SPFile sp = (SPFile) { 0 };
+	StreamRef *stream = NULL;
+	U64 off = 0;
+
+	if(!Test_assert(t, "create", SPFile_create(ESPSettingsFlags_None, t->alloc, &sp, &t->err)))
+		goto clean;
+
+	const SPStageRef stages[1] = { refOf(0, 0) };
+	CharString none = CharString_createNull();
+
+	if(!Test_assert(t, "derive", SPFile_derivePipeline(&sp, &files, NULL, none, stages, 1, NULL, t->alloc, NULL, &t->err)))
+		goto clean;
+
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &stream, &t->err));
+	FailingStream_arm(stream, 0);
+	Test_assert(t, "counting write", SPFile_write(&sp, t->alloc, stream, &off, &t->err));
+
+	const U64 writes = FailingStream_writes();
+
+	RefPtr_dec(&stream);
+	Test_assert(t, "the writer writes", writes > 0);
+
+	for(U64 i = 1; i <= writes; ++i) {
+
+		off = 0;
+		Test_assert(t, "stream again", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &stream, &t->err));
+		FailingStream_arm(stream, i);
+
+		const Bool ok = SPFile_write(&sp, t->alloc, stream, &off, NULL);
+
+		Test_assert(t, "the write was reached", FailingStream_failed());
+		Test_assert(t, "a failed write fails the writer", !ok);
+		Test_assert(t, "a failed write leaves the offset", !off);
+		RefPtr_dec(&stream);
+	}
+
+clean:
+	SPFile_free(&sp, t->alloc);
+	ListSHFile_free(&files, t->alloc);
+	ListSHEntry_free(&sh.entries, t->alloc);
+}
+
 OXC3_TEST_MAIN(formats_oiSP) {
 
 	const Allocator alloc = BasicAllocator_instance;
@@ -1678,6 +1828,8 @@ OXC3_TEST_MAIN(formats_oiSP) {
 	Test_SPLayoutDxilArrayOverlap(&t);
 	Test_SPLayoutPcRegisterClash(&t);
 	Test_SPLayoutPcGlobalsMerge(&t);
+	Test_SPCountsBounded(&t);
+	Test_SPWriteFailures(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

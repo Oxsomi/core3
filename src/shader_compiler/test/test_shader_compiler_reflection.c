@@ -120,6 +120,7 @@ void Test_shaderCompilerReflection(Test *t) {
 			const SHRegisterRuntime *r = ok ? findReg(&sh, "sampCmp") : NULL;
 			const U8 want = mode == EGfxBinaryType_DXIL
 				? EGfxRegisterType_SamplerComparisonState : EGfxRegisterType_Sampler;
+
 			if (!CharString_format(alloc, &label, &err, "sampCmp comparison sampler (%s)", bk))
 				label = CharString_createRefCStrConst("sampCmp");
 			Test_assert(t, label.ptr, r && (r->reg.registerType & EGfxRegisterType_TypeMask) == want);
@@ -129,18 +130,22 @@ void Test_shaderCompilerReflection(Test *t) {
 		//Descriptor array Texture2D[4]: recorded via the arrays dimension list, not the IsArray (layered) flag.
 		{
 			const SHRegisterRuntime *r = ok ? findReg(&sh, "texArr") : NULL;
+
 			if (!CharString_format(alloc, &label, &err, "texArr Texture2D[4] descriptor array (%s)", bk))
 				label = CharString_createRefCStrConst("texArr");
 			Test_assert(t, label.ptr,
 				r && (r->reg.registerType & EGfxRegisterType_TypeMask) == EGfxRegisterType_Texture2D &&
 				!(r->reg.registerType & EGfxRegisterType_IsArray) &&
-				r->arrays.length == 1 && r->arrays.ptr[0] == 4);
+				r->arrays.length == 1 && r->arrays.ptr[0] == 4
+			);
+
 			CharString_free(&label, alloc);
 		}
 
 		//Structured-buffer element stride: Particle is four 4-byte members => 16 bytes.
 		{
 			const SHRegisterRuntime *r = ok ? findReg(&sh, "outBuf") : NULL;
+
 			if (!CharString_format(alloc, &label, &err, "outBuf element stride is 16 (%s)", bk))
 				label = CharString_createRefCStrConst("outBuf stride");
 			Test_assert(t, label.ptr, r && r->shaderBuffer.bufferSize == 16);
@@ -151,11 +156,14 @@ void Test_shaderCompilerReflection(Test *t) {
 		//(this per-backend duality is what lets SHFile_combine merge a SPIRV + DXIL binary's bindings).
 		{
 			const SHRegisterRuntime *r = ok ? findReg(&sh, "outBuf") : NULL;
+
 			if (!CharString_format(alloc, &label, &err, "outBuf binding present for %s only", bk))
 				label = CharString_createRefCStrConst("outBuf binding");
 			Test_assert(t, label.ptr,
 				r && r->reg.bindings.arr[mode].binding != U32_MAX &&
-				r->reg.bindings.arr[mode].space != U32_MAX);
+				r->reg.bindings.arr[mode].space != U32_MAX
+			);
+
 			CharString_free(&label, alloc);
 		}
 

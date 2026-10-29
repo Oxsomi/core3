@@ -34,7 +34,7 @@ Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allo
 	UnicodeCodePointInfo codepoint = { 0 };
 	U64 j = 0;
 
-	const Buffer buf = Buffer_createRefConst(ptr, limit == U64_MAX ? ((U64)1 << 48) - 1 : limit * sizeof(U16));
+	const Buffer buf = Buffer_createRefConst(ptr, limit == U64_MAX ? ((U64) 1 << 48) - 1 : limit * sizeof(U16));
 	Buffer buf0 = CharString_allocatedBuffer(*result);
 
 	for(U64 i = 0; i < limit * 2; ) {
@@ -42,7 +42,7 @@ Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allo
 		U16 c = ptr[i >> 1];
 
 		if (!c) {
-			result->lenAndNullTerminated = j | ((U64)1 << 63);
+			result->lenAndNullTerminated = j | ((U64) 1 << 63);
 			break;
 		}
 
@@ -60,7 +60,7 @@ Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allo
 
 		gotoIfError3(clean, Buffer_writeAsUTF8(buf0, j, codepoint.index, &codepoint.bytes, e_rr));
 		j += codepoint.bytes;
-		result->lenAndNullTerminated = j | ((U64)1 << 63);
+		result->lenAndNullTerminated = j | ((U64) 1 << 63);
 	}
 
 	result->ptrNonConst[j] = '\0';
@@ -91,7 +91,7 @@ Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allo
 		U32 c = ptr[i];
 
 		if (!c) {
-			result->lenAndNullTerminated = j | ((U64)1 << 63);
+			result->lenAndNullTerminated = j | ((U64) 1 << 63);
 			break;
 		}
 
@@ -104,7 +104,7 @@ Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allo
 
 		gotoIfError3(clean, Buffer_writeAsUTF8(buf0, j, c, &codepoint.bytes, e_rr));
 		j += codepoint.bytes;
-		result->lenAndNullTerminated = j | ((U64)1 << 63);
+		result->lenAndNullTerminated = j | ((U64) 1 << 63);
 	}
 
 	result->ptrNonConst[j] = '\0';

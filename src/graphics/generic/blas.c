@@ -38,7 +38,7 @@ void BLAS_free(void *blasGeneric, const Allocator *alloc) {
 
 	BLAS *blas = (BLAS*) blasGeneric;
 
-	(void)alloc;
+	(void) alloc;
 
 	SpinLock_lock(&blas->base.lock, U64_MAX);
 
@@ -176,7 +176,7 @@ Bool GraphicsDeviceRef_createBLAS(
 
 			U8 reqMultiple = 2;
 
-			if(
+			if (
 				positionFormat == ETextureFormatId_RGBA32f || positionFormat == ETextureFormatId_RG32f ||
 				positionFormat == ETextureFormatId_RGB32f
 			)
@@ -289,7 +289,7 @@ Bool GraphicsDeviceRef_createBLAS(
 						1, "GraphicsDeviceRef_createBLAS()::ommIndexFormat requires an indexed BLAS"
 					));
 
-				if(
+				if (
 					ommIndexFormat != ETextureFormatId_R16u && ommIndexFormat != ETextureFormatId_R32u &&
 					ommIndexFormat != ETextureFormatId_R8u
 				)
@@ -328,7 +328,7 @@ Bool GraphicsDeviceRef_createBLAS(
 					// memory, and on a device that likely emulates micromaps traversal won't pay that back the
 					// way the free special indices would (see EGraphicsFeatures2_RayMicromapOpacityActual).
 
-					if(
+					if (
 						!(GraphicsDeviceRef_ptr(dev)->info.capabilities.flags.features2 &
 						EGraphicsFeatures2_RayMicromapOpacityActual) &&
 						GraphicsDevice_logOnce(GraphicsDeviceRef_ptr(dev), EGraphicsDeviceMessage_OmmLikelyEmulated)
@@ -388,7 +388,7 @@ Bool GraphicsDeviceRef_createBLAS(
 				1, "GraphicsDeviceRef_createBLAS()::stride must be >0 and divisible by 8"
 			));
 
-		if((U64)blas->aabbOffset + 24 > stride)
+		if((U64) blas->aabbOffset + 24 > stride)
 			retError(clean, Error_unsupportedOperation(
 				1, "GraphicsDeviceRef_createBLAS()::aabbOffset out of bounds (> stride)"
 			));
@@ -569,7 +569,7 @@ static U8 EOMMIndex_stride(ETextureFormatId ommIndexFormat) {
 //All ones at the element's width, so the helpers below stay arithmetic rather than a ladder of ternaries.
 
 static U32 EOMMIndex_mask(U8 stride) {
-	return stride == 4 ? U32_MAX : ((U32)1 << (stride * 8)) - 1;
+	return stride == 4 ? U32_MAX : ((U32) 1 << (stride * 8)) - 1;
 }
 
 U32 EOMMSpecialIndex_pack(EOMMSpecialIndex specialIndex, ETextureFormatId ommIndexFormat) {
@@ -583,7 +583,7 @@ U32 EOMMSpecialIndex_pack(EOMMSpecialIndex specialIndex, ETextureFormatId ommInd
 	if(!stride)
 		return 0;
 
-	const U32 raw = (U32)(I32) specialIndex;
+	const U32 raw = (U32) (I32) specialIndex;
 	return raw & EOMMIndex_mask(stride);
 }
 

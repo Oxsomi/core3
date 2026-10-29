@@ -198,6 +198,9 @@ typedef struct SRInterface {
 //Verify if everything's in bounds.
 //Verify if SRFile includes any invalid data.
 
+//The counts in the header come from the file: a reader checks that the stream holds every record they declare
+// (sum of count * record size) before it sizes any list, so a tiny file can't ask for gigabytes.
+
 SRFile {		//Has to be 16-byte aligned
 
 	SRHeader header;

@@ -65,6 +65,7 @@ static Bool writeAndRead(
 		return false;
 
 	U64 startOffset = 0;
+
 	if (!CAFile_write(caIn, encStreamType, sr, &startOffset, t->alloc, &t->err)) {
 		RefPtr_dec(&sr);
 		return false;
@@ -289,7 +290,7 @@ void Test_CASerializeMsDosDate(Test *t) {
 			goto doneMsDos;
 		}
 
-		Date date = (Date) { .year = 2000, .month = 1, .day = 1, };
+		Date date = (Date) { .year = 2046, .month = 4, .day = 9, .hour = 8, .minute = 41, .second = 26 };
 		Ns ts = Time_date(&date, false);
 
 		addFile(t, &ca, CAHandle_Root, "dated.txt", ts, false);
@@ -327,7 +328,7 @@ void Test_CASerializeFullDate(Test *t) {
 			goto doneFullDate;
 		}
 
-		Ns ts = (Ns)946681200 * SECOND + 123 * MS;        //We can only store up to MSI
+		Ns ts = (Ns) 946681200 * SECOND + 123 * MS;        //We can only store up to MSI
 
 		addFile(t, &ca, CAHandle_Root, "precise.txt", ts, false);
 
@@ -488,6 +489,162 @@ void Test_CASerializeEncrypted(Test *t) {
 		CAFile_free(&ca, t->alloc);
 		CAFile_free(&ca2, t->alloc);
 	}
+
+	{
+
+		CASettings generated = kCASettingsEncrypted;
+
+		Buffer_unsetAllBits(Buffer_createRef(generated.encryptionKey, sizeof(generated.encryptionKey)), NULL);
+
+		CAFile source = { 0 }, decoded = { 0 };
+		StreamRef *stream = NULL;
+
+		if (!Test_assert(t, "generated key archive", CAFile_create(&generated, 0, 0, t->alloc, &source, &t->err)))
+			goto cleanGenerated;
+
+		addFile(t, &source, CAHandle_Root, "generated.bin", 0, false);
+
+		if (!Test_assert(t, "generated key backing", MemoryStream_create(
+			0, EMemoryStreamFlags_WriteResize, &type, &stream, &t->err
+		)))
+			goto cleanGenerated;
+
+		U64 offset = 0;
+
+		if (!Test_assert(t, "write generates one master key", CAFile_write(
+			&source, &encStreamType, stream, &offset, t->alloc, &t->err
+		)))
+			goto cleanGenerated;
+
+		Test_assert(t, "generated master key is nonzero", Buffer_neq(
+			Buffer_createRefConst(source.settings.encryptionKey, 32), Buffer_createRefConst(generated.encryptionKey, 32)
+		));
+
+		Test_assert(t, "generated key reaches embedded streams", CAFile_read(
+			stream, &encStreamType, 0, source.settings.encryptionKey, t->alloc, &decoded, &t->err
+		));
+
+		Test_assert(t, "generated key archive content", CAFile_fileCount(&decoded, CAHandle_Root, false) == 1);
+
+	cleanGenerated:
+		RefPtr_dec(&stream);
+		CAFile_free(&source, t->alloc);
+		CAFile_free(&decoded, t->alloc);
+	}
+
+}
+
+//Every byte of an encrypted archive's plaintext header is authenticated: the header itself, the root iv and the tag.
+//The sweep flips each bit of that region. Moving a file to another folder keeps the header well formed,
+// so only the tag can refuse it.
+
+void Test_CASerializeEncryptedTamper(Test *t) {
+
+	Test_setModule(t, "CAFile serialize: encrypted header tampering");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+	const RefPtrType encStreamType = EncryptionStream_makeType(t->alloc);
+
+	CASettings settings = {
+		.flags = ECASettingsFlags_None,
+		.compressionType = EXXCompressionType_None,
+		.encryptionType = EXXEncryptionType_AES256GCM
+	};
+
+	Buffer_memcpy(
+		Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
+		Buffer_createRefConst(kTestKey, sizeof(kTestKey))
+	);
+
+	CAFile ca = (CAFile) { 0 }, decoded = (CAFile) { 0 };
+	StreamRef *sr = NULL;
+	Buffer saved = Buffer_createNull();
+
+	//Header 8, file count 2, directory count 1, one directory parent and two file parents, then root iv 12 and tag 16
+
+	const U64 firstFileParent = 8 + 2 + 1 + 1;
+	const U64 authenticatedEnd = firstFileParent + 2 + 12 + 16;
+
+	if(!Test_assert(t, "create", CAFile_create(&settings, 0, 0, t->alloc, &ca, &t->err)))
+		goto clean;
+
+	const CAHandle dir = addFolder(t, &ca, CAHandle_Root, "dir", false);
+	const C8 *names[] = { "a.bin", "b.bin" };
+
+	for (U8 i = 0; i < 2; ++i) {
+
+		const CAHandle file = addFile(t, &ca, dir, names[i], 0, false);
+		const U8 byte = (U8) (0x40 + i);
+		Buffer data = Buffer_createNull();
+
+		Test_assert(t, "data", Buffer_createCopy(Buffer_createRefConst(&byte, 1), t->alloc, &data, &t->err));
+		Test_assert(t, "setData", CAFile_setData(&ca, file, t->alloc, &data, &t->err));
+		Buffer_free(&data, t->alloc);
+	}
+
+	U64 written = 0;
+
+	if (
+		!Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &sr, &t->err)) ||
+		!Test_assert(t, "write", CAFile_write(&ca, &encStreamType, sr, &written, t->alloc, &t->err)) ||
+		!Test_assert(t, "untouched archive reads", CAFile_read(
+			sr, &encStreamType, 0, kTestKey, t->alloc, &decoded, &t->err
+		))
+	)
+		goto clean;
+
+	CAFile_free(&decoded, t->alloc);
+
+	MemoryStream *ms = RefPtr_data(sr, MemoryStream);
+
+	if(!Test_assert(t, "save", Buffer_createCopy(ms->data, t->alloc, &saved, &t->err)))
+		goto clean;
+
+	//The layout above has to be the one written: both files in the folder, and padding right after the tag
+
+	Bool padZero = true;
+
+	for(U64 i = authenticatedEnd; i < ((authenticatedEnd + 15) & ~(U64) 15); ++i)
+		padZero &= !ms->data.ptr[i];
+
+	Test_assert(t, "files sit in the folder", !ms->data.ptr[firstFileParent] && !ms->data.ptr[firstFileParent + 1]);
+	Test_assert(t, "padding follows the tag", padZero);
+
+	Bool allRefused = true;
+
+	for(U64 i = 0; i < authenticatedEnd; ++i)
+		for (U8 bit = 0; bit < 8; ++bit) {
+
+			ms->data.ptrNonConst[i] ^= (U8) (1 << bit);
+
+			if (CAFile_read(sr, &encStreamType, 0, kTestKey, t->alloc, &decoded, NULL)) {
+				allRefused = false;
+				CAFile_free(&decoded, t->alloc);
+			}
+
+			Buffer_memcpy(ms->data, saved);
+		}
+
+	Test_assert(t, "every bit of the header, root iv and tag is authenticated", allRefused);
+
+	//0xFF is the root, so the file still has a valid parent and only the tag knows it moved
+
+	ms->data.ptrNonConst[firstFileParent] = 0xFF;
+
+	Test_assert(t, "file moved to the root refused", !CAFile_read(
+		sr, &encStreamType, 0, kTestKey, t->alloc, &decoded, NULL
+	));
+
+	CAFile_free(&decoded, t->alloc);
+	Buffer_memcpy(ms->data, saved);
+
+	Test_assert(t, "restored archive reads", CAFile_read(sr, &encStreamType, 0, kTestKey, t->alloc, &decoded, &t->err));
+
+clean:
+	CAFile_free(&decoded, t->alloc);
+	CAFile_free(&ca, t->alloc);
+	Buffer_free(&saved, t->alloc);
+	RefPtr_dec(&sr);
 }
 
 //Several files in one directory, all names and contents must be distinct after read.

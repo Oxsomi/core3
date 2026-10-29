@@ -72,6 +72,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		gotoIfError3(clean, DynamicLibrary_load(info->path, true, &library, e_rr));
 
 		void *tableFunc = NULL;
+
 		if(!DynamicLibrary_loadSymbol(library, CharString_createRefCStrConst("GraphicsInterface_getTable"), &tableFunc, NULL))
 			goto clean;
 

@@ -144,7 +144,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			default:                                 stagePtr->stageType = EPipelineStage_RaygenExt;          break;
 		}
 
-		if(
+		if (
 			stage.binaryId == U32_MAX && entry->stage == EGfxPipelineStage_MissExt &&
 			!(info->flags & EPipelineRaytracingFlags_NoNullMiss)
 		)
@@ -166,7 +166,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));
 
-		pipelineExtensions |= (U32)(bin->identifier.extensions &~ bin->dormantExtensions);
+		pipelineExtensions |= (U32) (bin->identifier.extensions &~ bin->dormantExtensions);
 
 		if(stage.binaryId == U32_MAX)
 			retError(clean, Error_invalidParameter(
@@ -175,7 +175,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 				"but it's not allowed"
 			));
 
-		U32 id = realBinaryId | ((U32)shFileId << 16);
+		U32 id = realBinaryId | ((U32) shFileId << 16);
 
 		if(!ListU32_contains(binaryIndices, id, 0, NULL))
 			gotoIfError3(clean, ListU32_pushBack(&binaryIndices, id, alloc, e_rr));
@@ -186,7 +186,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	Bool anyOpacityMicromapExt = info->flags & EPipelineRaytracingFlags_AllowOpacityMicromapExt;
 
-	if((((U64)groups->length + tmpStages.length) >> 32) || ((tmpStages.length) >> 32))
+	if((((U64) groups->length + tmpStages.length) >> 32) || ((tmpStages.length) >> 32))
 		retError(clean, Error_outOfBounds(
 			1, groups->length + tmpStages.length, U32_MAX,
 			"GraphicsDeviceRef_createPipelineRaytracing() tmpStages.length + groups.length out of bounds"
@@ -195,7 +195,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	//Cast because flags is a U8 and the enum now fills all 8 of its bits, which msvc flags as a shift by the
 	// full width even though the promotion in front of it makes the shift defined.
 
-	if((U32)info->flags >> EPipelineRaytracingFlags_Count)
+	if((U32) info->flags >> EPipelineRaytracingFlags_Count)
 		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::info.flags is invalid"
 		));

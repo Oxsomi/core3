@@ -33,6 +33,9 @@ void Thread_free(const Allocator *alloc, Thread **thread) {
 	if(!thread || !*thread)
 		return;
 
+	if(!alloc || !alloc->free || !Thread_wait(*thread, NULL))
+		return;
+
 	Thread_freeExt(*thread);
 	alloc->free(alloc->ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
 	*thread = NULL;

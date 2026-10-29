@@ -149,7 +149,7 @@ Bool SBFile_equals(const SBFile *a, const SBFile *b) {
 	if((a->flags & mask) != (b->flags & mask) || a->bufferSize != b->bufferSize)
 		return false;
 
-	if(
+	if (
 		a->structs.length != b->structs.length ||
 		a->vars.length != b->vars.length ||
 		a->arrays.length != b->arrays.length
@@ -265,7 +265,7 @@ void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecurs
 			U32 v = var.arrayDimOrArrayId;
 			
 			if (var.arrayDimOrArrayId >> 15)
-				array = sbFile->arrays.ptr[var.arrayDimOrArrayId & (U16)I16_MAX];
+				array = sbFile->arrays.ptr[var.arrayDimOrArrayId & (U16) I16_MAX];
 
 			else ListU32_createRefConst(&v, 1, &array, NULL);
 

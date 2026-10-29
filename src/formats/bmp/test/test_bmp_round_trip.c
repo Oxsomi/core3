@@ -39,7 +39,7 @@ static Bool makePixelStream(
 	const RefPtrType *type
 ) {
 	const U64 pixelStride = discardAlpha ? 3 : 4;
-	const U64 stride      = ((U64)w * pixelStride + 3) & ~3;
+	const U64 stride      = ((U64) w * pixelStride + 3) & ~3;
 	const U64 total       = stride * h;
 
 	StreamRef *sr = NULL;
@@ -51,8 +51,9 @@ static Bool makePixelStream(
 
 	for (U32 y = 0; y < h; ++y) {
 		for (U32 x = 0; x < w; ++x) {
-			U64 off = (U64)y * stride + (U64)x * pixelStride;
-			U8 px[4] = { (U8)x, (U8)y, (U8)(x + y), 0xFF };
+			U64 off = (U64) y * stride + (U64) x * pixelStride;
+			U8 px[4] = { (U8) x, (U8) y, (U8) (x + y), 0xFF };
+
 			if (!stream->write(stream, off, 0, Buffer_createRefConst(px, pixelStride), t->alloc, &t->err)) {
 				RefPtr_dec(&sr);
 				return false;
@@ -347,7 +348,7 @@ void Test_BMPRoundTripHeaderFields(Test *t) {
 
 		//BI_RGB (0); BI_BITFIELDS (3) would require channel masks the writer never emitted
 		Test_assert(t, "compression == 0 (BI_RGB)", hdr.info.compression    == 0);
-		Test_assert(t, "compressedSize == 64",       hdr.info.compressedSize == (U32)expectedLen);
+		Test_assert(t, "compressedSize == 64",       hdr.info.compressedSize == (U32) expectedLen);
 		Test_assert(t, "fileSize == header + data",  hdr.header.fileSize     == sizeof(BMPHeadersCombined) + expectedLen);
 
 	doneHeaderFields:
@@ -411,12 +412,12 @@ static Bool checkPixel(
 	Error *e_rr
 ) {
 	U8 got[4] = { 0 };
-	U64 off = dataOffset + (U64)outRow * stride + (U64)x * pixelStride;
+	U64 off = dataOffset + (U64) outRow * stride + (U64) x * pixelStride;
 
 	if (!s->read(s, off, pixelStride, Buffer_createRef(got, pixelStride), alloc, e_rr))
 		return false;
 
-	U8 exp[4] = { (U8)x, (U8)expectedOrigRow, (U8)(x + expectedOrigRow), 0xFF };
+	U8 exp[4] = { (U8) x, (U8) expectedOrigRow, (U8) (x + expectedOrigRow), 0xFF };
 
 	for (U64 i = 0; i < pixelStride; ++i)
 		if (got[i] != exp[i])
@@ -440,7 +441,7 @@ void Test_BMPPixelContentNoFlip(Test *t) {
 
 		const U32 w = 4, h = 4;
 		const U64 pixelStride = 4;
-		const U64 stride      = ((U64)w * pixelStride + 3) & ~3;
+		const U64 stride      = ((U64) w * pixelStride + 3) & ~3;
 
 		BMPInfo writeInfo = {
 			.w               = w,
@@ -494,7 +495,7 @@ void Test_BMPPixelContentFlipped(Test *t) {
 
 		const U32 w = 4, h = 4;
 		const U64 pixelStride = 4;
-		const U64 stride      = ((U64)w * pixelStride + 3) & ~3;
+		const U64 stride      = ((U64) w * pixelStride + 3) & ~3;
 
 		BMPInfo writeInfo = {
 			.w               = w,

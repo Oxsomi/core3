@@ -69,41 +69,75 @@ F32x4 unpackUnorm4x8(U32 p) {
 //Three fit in a U64 with one bit spare, which is what an RG32u accumulator wants.
 //The exponent spans 2^-30..2^32, wider than F16 both ways,
 // so neither an emissive value nor a deep-shadow one leaves the range.
-//Denormals, NaN and Inf are not represented; input is clamped non-negative.
-//Matches EFloatType_UF21 on the CPU side (flp.h), EXCEPT that flp.c truncates ties where this rounds to nearest even,
-// an exact tie can differ by one ulp between the two.
+//Matches EFloatType_UF21 on the CPU side, including subnormals, infinity and quiet NaNs.
+//Negative inputs, including negative NaNs, clamp to zero; finite inputs round to nearest with ties to even.
 //
 //F16 is not an alternative here:
 // its 10-bit mantissa cannot hold a progressive mean.
 //Once the increment falls under half an ulp the downward corrections round away while the upward ones still land,
 // and a non-negative heavy-tailed signal then drifts UP by tens of percent.
 
-static const U32 F21_MANT = 15, F21_BIAS = 31, F21_MAX = (63u << F21_MANT) | 0x7FFFu;
+static const U32 F21_MANT = 15, F21_BIAS = 31, F21_EXP_MAX = 63;
+static const U32 F21_DROP = 23 - F21_MANT;        //Mantissa bits an F32 has beyond an F21
 
 U32 packF21(F32 v) {
 
-	U32 u = asuint(max(v, 0)) + 0x7F;
-	u += (u >> 8) & 1;
+	const U32 u = asuint(v);
 
-	const I32 e = I32((u >> 23) & 0xFF) - 127 + I32(F21_BIAS);
-
-	if(e <= 0)
+	if(u >> 31)
 		return 0;
 
-	if(e >= 63)
-		return F21_MAX;
+	const U32 exponent = (u >> 23) & 0xFF, mantissa = u & 0x7FFFFF;
 
-	return (U32(e) << F21_MANT) | ((u >> 8) & 0x7FFFu);
+	if(exponent == 255)
+		return (F21_EXP_MAX << F21_MANT) | (mantissa ? (mantissa >> F21_DROP) | (1u << (F21_MANT - 1)) : 0);
+
+	const I32 e = asint(exponent) - asint(127 - F21_BIAS);
+
+	if(e <= 0) {
+
+		const U32 shift = asuint(asint(F21_DROP + 1) - e);
+
+		if(shift > 24)
+			return 0;
+
+		const U32 significand = mantissa | 0x800000;
+		const U32 half = 1u << (shift - 1);
+		const U32 discarded = significand & ((half << 1) - 1);
+		const U32 rounded = significand >> shift;
+
+		return rounded + U32(discarded > half || (discarded == half && (rounded & 1)));
+	}
+
+	if(e >= asint(F21_EXP_MAX))
+		return F21_EXP_MAX << F21_MANT;
+
+	const U32 rounding = (1u << (F21_DROP - 1)) - 1 + ((mantissa >> F21_DROP) & 1);        //Ties to even
+	return (asuint(e) << F21_MANT) + ((mantissa + rounding) >> F21_DROP);
 }
 
 F32 unpackF21(U32 p) {
 
-	const U32 e = p >> F21_MANT;
+	const U32 e = (p >> F21_MANT) & F21_EXP_MAX, mantissa = p & ((1u << F21_MANT) - 1);
 
-	if(!e)
-		return 0;
+	if(!e) {
 
-	return asfloat(((e - F21_BIAS + 127) << 23) | ((p & 0x7FFFu) << 8));
+		if(!mantissa)
+			return 0;
+
+		//A subnormal is mantissa * 2^(1 - F21_BIAS - F21_MANT), so its highest bit decides the F32 exponent
+
+		const U32 highest = firstbithigh(mantissa);
+
+		return asfloat(
+			((highest + 127 + 1 - F21_BIAS - F21_MANT) << 23) | ((mantissa << (23 - highest)) & 0x7FFFFF)
+		);
+	}
+
+	if(e == F21_EXP_MAX)
+		return asfloat(0x7F800000 | (mantissa << F21_DROP) | (mantissa ? 0x400000 : 0));
+
+	return asfloat(((e - F21_BIAS + 127) << 23) | (mantissa << F21_DROP));
 }
 
 //Three F21 in the 64 bits of an RG32u texel:
@@ -182,7 +216,7 @@ F32x4 unpackRGB10A2(U32 p) {
 
 U32 packOct18(F32x3 n) {
 
-	const F32x2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+	precise F32x2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
 	const F32x2 e = n.z >= 0 ? p : (1.xx - abs(p.yx)) * select(p >= 0, 1.xx, (-1).xx);
 	const U32x2 q = U32x2((I32x2) round(clamp(e, -1, 1) * 255) + 256);
 
@@ -206,9 +240,11 @@ F32x3 unpackOct18(U32 v) {
 // types/math/pack.h, which is what a mesh reader packs its shading normals with. About 0.005 degrees.
 
 U32 packOct32(F32x3 n) {
-	const F32x2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+
+	precise F32x2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
 	const F32x2 e = n.z >= 0 ? p : (1.xx - abs(p.yx)) * select(p >= 0, 1.xx, (-1).xx);
 	const U32x2 q = U32x2((I32x2) round(clamp(e, -1, 1) * 32767) + 32768);
+
 	return q.x | (q.y << 16);
 }
 

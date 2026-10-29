@@ -28,6 +28,94 @@
 #include "types/container/stream.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include <stddef.h>
+
+//Every count in the header sizes an allocation, so each is held to the bytes the stream still has, at the least a
+// record can take, before anything is allocated: a 44 byte file must not be able to ask for gigabytes.
+
+static Bool SPFile_fits(
+	const OxStream *stream, U64 offset, U64 count, U64 recordBytes, const C8 *what, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!stream || offset > stream->size || (stream->size - offset) / recordBytes < count)
+		retError(clean, Error_outOfBounds(
+			0, count, stream && offset <= stream->size ? (stream->size - offset) / recordBytes : 0, what
+		));
+
+clean:
+	return s_uccess;
+}
+
+//A stored graphics state is checked as the raw bytes it is: its enums have to name something, its flags only set
+// bits that exist and its padding be zero, since a value that reads back differently than it was written is how
+// a file smuggles state past the reader.
+
+static Bool SPFile_validateStored(const SPGraphicsStateStored *s, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(s->padding || s->inputAssembler.padding[0] || s->inputAssembler.padding[1] || s->inputAssembler.padding[2])
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state padding has to be zero"));
+
+	if(s->msaa >= EMSAASamples_Count)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state msaa is unknown"));
+
+	if(s->depthFormat >= EDepthStencilFormat_Count)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state depth format is unknown"));
+
+	for(U8 i = 0; i < 8; ++i)
+		if(s->renderTargetFormats[i] >= ETextureFormatId_Count)
+			retError(clean, Error_invalidState(0, "SPFile_read() graphics state render target format is unknown"));
+
+	if(s->inputAssembler.topologyMode >= EToplogyMode_Count)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state topology is unknown"));
+
+	if(s->inputAssembler.patchControlPoints > 32)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state patch control points exceed 32"));
+
+	const U8 *blendRaw = (const U8*) &s->blend;
+
+	if (
+		blendRaw[offsetof(SPBlendStateStored, enable)] > 1 ||
+		blendRaw[offsetof(SPBlendStateStored, allowIndependentBlend)] > 1
+	)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state blend flags have to be 0 or 1"));
+
+	if(s->blend.logicOpExt >= ELogicOpExt_Count)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state logic op is unknown"));
+
+	for(U8 i = 0; i < 8; ++i)
+		if(s->blend.writeMask[i] & ~(U8) EWriteMask_All)
+			retError(clean, Error_invalidState(0, "SPFile_read() graphics state write mask carries unknown bits"));
+
+	if(s->depth.flags & ~(U8) (EDepthStencilFlags_DepthWrite | EDepthStencilFlags_StencilTest))
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state depth flags carry unknown bits"));
+
+	if(s->depth.depthCompare >= ECompareOp_Count || s->depth.stencilCompare >= ECompareOp_Count)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state compare op is unknown"));
+
+	if (
+		s->depth.stencilFail >= EStencilOp_Count || s->depth.stencilPass >= EStencilOp_Count ||
+		s->depth.stencilDepthFail >= EStencilOp_Count
+	)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state stencil op is unknown"));
+
+	if(s->rasterizer.cullMode >= ECullMode_Count)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state cull mode is unknown"));
+
+	if (
+		s->rasterizer.flags & ~(U16) (
+			ERasterizerFlags_IsClockWise | ERasterizerFlags_IsWireframeExt |
+			ERasterizerFlags_EnableDepthClamp | ERasterizerFlags_EnableDepthBias
+		)
+	)
+		retError(clean, Error_invalidState(0, "SPFile_read() graphics state rasterizer flags carry unknown bits"));
+
+clean:
+	return s_uccess;
+}
 
 Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SPFile *spFile, Error *e_rr) {
 
@@ -74,11 +162,26 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	//Consume the fixed-size POD arrays
 
+	const OxStream *stream = RefPtr_data(streamRef, OxStream);
+
+	gotoIfError3(clean, SPFile_fits(
+		stream, *offset, header.pipelineCount, sizeof(SPPipelineBase), "SPFile_read() pipelineCount exceeds the stream", e_rr
+	));
+
 	gotoIfError3(clean, ListSPPipelineBase_resize(&pipelines, header.pipelineCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSPPipelineBase_buffer(pipelines), alloc, e_rr));
 
+	gotoIfError3(clean, SPFile_fits(
+		stream, *offset, header.stageCount, sizeof(SPStage), "SPFile_read() stageCount exceeds the stream", e_rr
+	));
+
 	gotoIfError3(clean, ListSPStage_resize(&stages, header.stageCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSPStage_buffer(stages), alloc, e_rr));
+
+	gotoIfError3(clean, SPFile_fits(
+		stream, *offset, header.specializationCount, sizeof(SPSpecialization),
+		"SPFile_read() specializationCount exceeds the stream", e_rr
+	));
 
 	gotoIfError3(clean, ListSPSpecialization_resize(&specializations, header.specializationCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(
@@ -86,6 +189,11 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	));
 
 	//A graphics state is stored without its blend attachments, so it's consumed as the two halves either side of them.
+
+	gotoIfError3(clean, SPFile_fits(
+		stream, *offset, header.graphicsStateCount, sizeof(SPGraphicsStateStored),
+		"SPFile_read() graphicsStateCount exceeds the stream", e_rr
+	));
 
 	gotoIfError3(clean, ListSPGraphicsState_resize(&graphicsStates, header.graphicsStateCount, alloc, e_rr));
 
@@ -99,9 +207,16 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		gotoIfError3(clean, StreamCursor_consume(&cursor, offset, &stored, sizeof(stored), alloc, e_rr));
 
+		gotoIfError3(clean, SPFile_validateStored(&stored, e_rr));
+
 		graphicsStates.ptrNonConst[i] = SPGraphicsStateStored_expand(stored);
 		vertexMasks.ptrNonConst[i] = stored.inputAssembler.vertexLayout;
 	}
+
+	gotoIfError3(clean, SPFile_fits(
+		stream, *offset, header.raytracingStateCount, sizeof(SPRaytracingState),
+		"SPFile_read() raytracingStateCount exceeds the stream", e_rr
+	));
 
 	gotoIfError3(clean, ListSPRaytracingState_resize(&raytracingStates, header.raytracingStateCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(
@@ -124,10 +239,10 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	for (U64 i = 0; i < graphicsStates.length; ++i)
 		for (U8 j = 0; j < 16; ++j) {
 
-			if(vertexMasks.ptr[i].bufferMask & ((U16)1 << j))
+			if(vertexMasks.ptr[i].bufferMask & ((U16) 1 << j))
 				++derivedBuffers;
 
-			if(vertexMasks.ptr[i].attributeMask & ((U16)1 << j))
+			if(vertexMasks.ptr[i].attributeMask & ((U16) 1 << j))
 				++derivedAttributes;
 		}
 
@@ -146,6 +261,17 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			gotoIfError3(clean, StreamCursor_consume(
 				&cursor, offset, &gfx->blend.attachments[j], sizeof(SPBlendAttachment), alloc, e_rr
 			));
+
+			const SPBlendAttachment att = gfx->blend.attachments[j];
+
+			if (
+				att.srcBlend >= EBlend_Count || att.dstBlend >= EBlend_Count ||
+				att.srcBlendAlpha >= EBlend_Count || att.dstBlendAlpha >= EBlend_Count
+			)
+				retError(clean, Error_invalidState(0, "SPFile_read() blend factor is unknown"));
+
+			if(att.blendOp >= EBlendOp_Count || att.blendOpAlpha >= EBlendOp_Count)
+				retError(clean, Error_invalidState(0, "SPFile_read() blend op is unknown"));
 		}
 	}
 
@@ -155,12 +281,15 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		for(U8 j = 0; j < 16; ++j) {
 
-			if(!(vertexMasks.ptr[i].bufferMask & ((U16)1 << j)))
+			if(!(vertexMasks.ptr[i].bufferMask & ((U16) 1 << j)))
 				continue;
 
 			gotoIfError3(clean, StreamCursor_consumeU16(
 				&cursor, offset, &layout->bufferStrides12_isInstance1[j], alloc, e_rr
 			));
+
+			if(layout->bufferStrides12_isInstance1[j] >> 13)
+				retError(clean, Error_invalidState(0, "SPFile_read() vertex buffer stride carries unknown bits"));
 		}
 	}
 
@@ -170,12 +299,17 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		for(U8 j = 0; j < 16; ++j) {
 
-			if(!(vertexMasks.ptr[i].attributeMask & ((U16)1 << j)))
+			if(!(vertexMasks.ptr[i].attributeMask & ((U16) 1 << j)))
 				continue;
 
 			gotoIfError3(clean, StreamCursor_consume(
 				&cursor, offset, &layout->attributes[j], sizeof(SPVertexAttribute), alloc, e_rr
 			));
+
+			const SPVertexAttribute attribute = layout->attributes[j];
+
+			if(attribute.offset11 >> 11 || attribute.bufferId4 >> 4 || attribute.format >= ETextureFormatId_Count)
+				retError(clean, Error_invalidState(0, "SPFile_read() vertex attribute is out of range"));
 		}
 	}
 
@@ -191,12 +325,16 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &names, e_rr));
 	didAllocate = true;
 
+	gotoIfError3(clean, SPFile_fits(
+		stream, *offset, header.layoutCount, sizeof(PLHeader), "SPFile_read() layoutCount exceeds the stream", e_rr
+	));
+
 	gotoIfError3(clean, ListPLFile_resize(&layouts, header.layoutCount, alloc, e_rr));
 
 	for(U64 i = 0; i < header.layoutCount; ++i)
 		gotoIfError3(clean, PLFile_read(streamRef, offset, true, alloc, &layouts.ptrNonConst[i], e_rr));
 
-	if(
+	if (
 		names.settings.dataType != EDLDataType_String ||
 		names.settings.encryptionType ||
 		names.settings.compressionType
@@ -222,6 +360,9 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		const SPStage stage = stages.ptr[i];
 
+		if(stage.padding[0] || stage.padding[1] || stage.padding[2])
+			retError(clean, Error_invalidState(0, "SPFile_read() stage padding has to be zero"));
+
 		if(stage.stage >= EGfxPipelineStage_Count)
 			retError(clean, Error_invalidState(0, "SPFile_read() stage had an invalid pipeline stage"));
 
@@ -238,6 +379,9 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 		const SPSpecialization spec = specializations.ptr[i];
 
+		if(spec.padding)
+			retError(clean, Error_invalidState(0, "SPFile_read() specialization padding has to be zero"));
+
 		if(spec.field >= ESPField_Count)
 			retError(clean, Error_invalidState(0, "SPFile_read() specialization had an invalid field"));
 
@@ -249,6 +393,10 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(spec.index >= ESPField_indexCount((ESPField) spec.field))
 			retError(clean, Error_invalidState(0, "SPFile_read() specialization index is out of range for its field"));
 	}
+
+	for (U64 i = 0; i < raytracingStates.length; ++i)
+		if(raytracingStates.ptr[i].padding)
+			retError(clean, Error_invalidState(0, "SPFile_read() ray tracing state padding has to be zero"));
 
 	//Validate the pipelines and that their ranges sit inside the pools
 
@@ -265,10 +413,10 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(pipeline.name != U32_MAX && pipeline.name >= nameCount)
 			retError(clean, Error_invalidState(0, "SPFile_read() pipeline.name out of bounds"));
 
-		if((U64)pipeline.stageStart + pipeline.stageCount > stages.length)
+		if((U64) pipeline.stageStart + pipeline.stageCount > stages.length)
 			retError(clean, Error_invalidState(0, "SPFile_read() pipeline stage range out of bounds"));
 
-		if((U64)pipeline.specializationStart + pipeline.specializationCount > specializations.length)
+		if((U64) pipeline.specializationStart + pipeline.specializationCount > specializations.length)
 			retError(clean, Error_invalidState(0, "SPFile_read() pipeline specialization range out of bounds"));
 
 		//The kind specific state a pipeline points at has to exist, since every lowering dereferences it.
@@ -279,7 +427,7 @@ Bool SPFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(pipeline.type == (U8) ESPPipelineType_Raytracing && pipeline.stateIndex >= raytracingStates.length)
 			retError(clean, Error_invalidState(0, "SPFile_read() ray tracing pipeline stateIndex out of bounds"));
 
-		if(
+		if (
 			pipeline.type == (U8) ESPPipelineType_Graphics &&
 			graphicsStates.ptr[pipeline.stateIndex].renderTargetCount > 8
 		)

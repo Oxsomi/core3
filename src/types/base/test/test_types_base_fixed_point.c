@@ -22,10 +22,28 @@
 
 #include "test_types_base_shared.h"
 #include "types/base/fixed_point.h"
+#include "types/base/constants.h"
+#include "types/base/buffer_base.h"
 
 void Test_fixedPoint(Test *test) {
 
 	Test_setModule(test, "FP37f4 (fixed point)");
+
+	const U64 specialBits[] = { 0x7FF8000000000000, 0x7FF0000000000000, 0xFFF0000000000000 };
+	const I64 expected[] = { 0, I64_MAX, I64_MIN };
+
+	for(U64 i = 0; i < 3; ++i) {
+
+		F64 value = 0;
+
+		Buffer_memcpy(Buffer_createRef(&value, sizeof(value)), Buffer_createRefConst(&specialBits[i], sizeof(value)));
+
+		Test_assert(test, "fixed point nonfinite conversion", FP37f4_fromDouble(value) == expected[i]);
+		Test_assert(test, "fixed point nonfinite conversion f6", FP46f6_fromDouble(value) == expected[i]);
+	}
+
+	Test_assert(test, "fixed point positive saturation", FP37f4_fromDouble(0x1p59) == I64_MAX);
+	Test_assert(test, "fixed point negative saturation", FP37f4_fromDouble(-0x1p60) == I64_MIN);
 
 	{
 		const FP37f4 a = FP37f4_fromDouble(123.25);            //123.25

@@ -75,17 +75,18 @@ static volatile Bool keyPressed = false;
 
 static void onTypeKey(Window *w, CharString str) {
 
-	(void)w;
+	(void) w;
 
 	if(CharString_length(str) && str.ptr[0] == TEST_KEY_CHAR)
 		keyPressed = true;
 }
 
 static void onDeviceButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
-	(void)w;
+	(void) w;
 	if (dev->type == EInputDeviceType_Keyboard && down) {
 		U16 local = InputDevice_getLocalHandle(dev, h);
-		if (local == (U32)TEST_KEY)
+
+		if (local == (U32) TEST_KEY)
 			keyPressed = true;
 	}
 }
@@ -132,6 +133,7 @@ static void Test_keyboard(Test *t) {
 			SendInput(2, input, sizeof(INPUT));
 
 			Ns waited = 0;
+
 			while (!keyPressed && waited < 1 * SECOND) {
 
 				WindowManager_step(&windowManager, NULL, NULL);
@@ -169,6 +171,7 @@ static void Test_keyboard(Test *t) {
 
 	Test_print(t, ">>> INTERACTIVE: Press " TEST_KEY_NAME " in the window (5s timeout) <<<");
 	Ns waited = 0;
+
 	while (!keyPressed && waited < 5 * SECOND) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -197,13 +200,14 @@ static volatile Bool leftClicked = false;
 
 static void onMouseButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 
-	(void)w;
+	(void) w;
 
 	if (dev->type != EInputDeviceType_Mouse || !down)
 		return;
 
 	U16 local = InputDevice_getLocalHandle(dev, h);
-	if (local == (U16)(EMouseButton_Left - EMouseAxis_End))
+
+	if (local == (U16) (EMouseButton_Left - EMouseAxis_End))
 		leftClicked = true;
 }
 
@@ -248,6 +252,7 @@ static void Test_mouse(Test *t) {
 			SendInput(2, input, sizeof(INPUT));
 
 			Ns waited = 0;
+
 			while (!leftClicked && waited < 1 * SECOND) {
 
 				WindowManager_step(&windowManager, NULL, NULL);
@@ -297,6 +302,7 @@ static void Test_mouse(Test *t) {
 
 	Test_print(t, ">>> INTERACTIVE: Left-click anywhere in the window (5s timeout) <<<");
 	Ns waited = 0;
+
 	while (!leftClicked && waited < 5 * SECOND) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -332,7 +338,7 @@ clean:
 static CharString typedText;
 
 static void onTypeChar(Window *w, CharString str) {
-	(void)w;
+	(void) w;
 	CharString_appendString(&typedText, &str, Platform_instance->alloc, NULL);
 }
 
@@ -456,6 +462,7 @@ static void Test_typeChar(Test *t) {
 	Test_print(t, ">>> INTERACTIVE: Click the window and type \"Hello world\" (8s timeout) <<<");
 
 	Ns waited = 0;
+
 	while (waited < 8 * SECOND) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -491,7 +498,7 @@ clean:
 static volatile Bool focusResetTriggered = false;
 
 static void onButtonReset(Window *w, InputDevice *dev, InputHandle h, Bool down) {
-	(void)w; (void)dev; (void)h;
+	(void) w; (void) dev; (void) h;
 	if (!down) focusResetTriggered = true; //Reset callback fired
 }
 
@@ -576,7 +583,7 @@ static void Test_focusReset(Test *t) {
 		RefPtr_dec(&wRef);
 
 	#else
-		(void)onButtonReset;
+		(void) onButtonReset;
 	#endif
 }
 
@@ -606,19 +613,20 @@ static C8 f15_labels[F15_KEY_COUNT];
 
 static void F15_onDeviceButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 
-	(void)w;
+	(void) w;
 	if (dev->type != EInputDeviceType_Keyboard || !down)
 		return;
 
 	U16 local = InputDevice_getLocalHandle(dev, h);
+
 	for (U32 i = 0; i < F15_KEY_COUNT; ++i)
-		if (local == (U16)F15_keys[i])
+		if (local == (U16) F15_keys[i])
 			f15_pressed |= (1u << i);
 }
 
 static void F15_onTypeChar(Window *w, CharString str) {
 
-	(void)w;
+	(void) w;
 
 	for (U64 c = 0; c < CharString_length(str); ++c)
 		for (U32 i = 0; i < F15_KEY_COUNT; ++i)
@@ -783,7 +791,7 @@ static void F18_onDraw(Window *w) {
 
 	I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
 
-	if (f18ButtonHeld && f18.pointCount < (U32)(sizeof(f18.points) / sizeof(f18.points[0]))) {
+	if (f18ButtonHeld && f18.pointCount < (U32) (sizeof(f18.points) / sizeof(f18.points[0]))) {
 
 		I32x2 p = w->cursor;
 		Bool dup = f18.pointCount && I32x2_eq2(f18.points[f18.pointCount - 1], p);
@@ -821,18 +829,19 @@ static void F18_onDraw(Window *w) {
 		for (I32 y = cy - brush + 1; y < cy + brush; ++y)
 			for (I32 x = cx - brush + 1; x < cx + brush; ++x)
 				if (x >= 0 && x < W && y >= 0 && y < H)
-					*(U32*)(px + (y * W + x) * 4) = 0xFFFF00FF;
+					*(U32*) (px + (y * W + x) * 4) = 0xFFFF00FF;
 	}
 }
 
 static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 
-	(void)w;
+	(void) w;
 	if (dev->type != EInputDeviceType_Mouse)
 		return;
 
 	U16 local = InputDevice_getLocalHandle(dev, h);
-	if (local == (U16)(EMouseButton_Left - EMouseAxis_End))
+
+	if (local == (U16) (EMouseButton_Left - EMouseAxis_End))
 		f18ButtonHeld = down;
 }
 
@@ -841,6 +850,7 @@ static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) 
 static void F18_pumpAndPaint(Window *w, Ns ns) {
 
 	Ns waited = 0;
+
 	while (waited < ns) {
 
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -884,6 +894,7 @@ static void Test_mouseDraw(Test *t) {
 	{
 		U8 *px = w->cpuVisibleBuffer.ptrNonConst;
 		U64 len = Buffer_length(w->cpuVisibleBuffer);
+
 		for (U64 i = 0; i < len; ++i)
 			px[i] = F18_INIT_COLOR;
 	}
@@ -1036,19 +1047,19 @@ static F19State f19;
 
 static void F19_onAxis(Window *w, InputDevice *dev, InputHandle h, F32 value) {
 
-	(void)w;
+	(void) w;
 
 	if (dev->type != EInputDeviceType_Mouse)
 		return;
 
 	U16 local = InputDevice_getLocalHandle(dev, h);
 
-	if (local == (U16)EMouseAxis_ScrollWheel_Y) {
+	if (local == (U16) EMouseAxis_ScrollWheel_Y) {
 		f19.scrollY = value;
 		f19.gotScrollY = true;
 	}
 
-	if (local == (U16)EMouseAxis_ScrollWheel_X) {
+	if (local == (U16) EMouseAxis_ScrollWheel_X) {
 		f19.scrollX = value;
 		f19.gotScrollX = true;
 	}
@@ -1138,6 +1149,7 @@ static void Test_scrollWheel(Test *t) {
 		Test_print(t, ">>> INTERACTIVE: Scroll the mouse wheel up/down in the window (8s) <<<");
 
 		Ns waited = 0;
+
 		while (!f19.gotScrollY && waited < 8 * SECOND) {
 
 			WindowManager_step(&windowManager, NULL, NULL);
@@ -1162,6 +1174,7 @@ static void Test_scrollWheel(Test *t) {
 		Test_print(t, ">>> INTERACTIVE: Scroll horizontally (tilt wheel or Shift+scroll) (5s, optional) <<<");
 
 		Ns waited = 0;
+
 		while (!f19.gotScrollX && waited < 5 * SECOND) {
 
 			WindowManager_step(&windowManager, NULL, NULL);

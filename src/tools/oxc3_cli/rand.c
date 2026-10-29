@@ -183,7 +183,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 					));
 				}
 
-				F64 f = (F64)((U64)1 << U64_min(63, b));
+				F64 f = (F64) ((U64) 1 << U64_min(63, b));
 
 				if(b == 64)        //Shift by 64 is illegal ofc
 					f *= 2;
@@ -291,7 +291,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 
 								if (!pickAll) {
 
-									if(
+									if (
 										C8_isUpperCase(c) &&
 										!(args->flags & (
 											EOperationFlags_Alpha | EOperationFlags_Uppercase | EOperationFlags_Alphanumeric
@@ -299,7 +299,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 									)
 										continue;
 
-									if(
+									if (
 										C8_isLowerCase(c) &&
 										!(args->flags & (
 											EOperationFlags_Alpha | EOperationFlags_Lowercase | EOperationFlags_Alphanumeric)
@@ -330,10 +330,10 @@ Bool CLI_rand(const ParsedArgs *args) {
 
 					if (outputAsBase == 10) {
 
-						U64 v = *(const U64*)tmp.ptr;
+						U64 v = *(const U64*) tmp.ptr;
 
 						if(b != 64)
-							v &= ((U64)1 << b) - 1;
+							v &= ((U64) 1 << b) - 1;
 
 						gotoIfError3(clean, CharString_createDec(&(CharStringCreateNumber) {
 							.v = v, .leadingZeros = false, .allocator = alloc, .result = &tmpString
@@ -350,7 +350,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 
 					else for (U64 k = 0, j = Buffer_length(tmp); k < j; k += 8) {
 
-						U64 v = *(const U64*)(tmp.ptr + k);
+						U64 v = *(const U64*) (tmp.ptr + k);
 						v %= CharString_length(options);
 
 						//Ensure we stay within our bit limit

@@ -143,7 +143,7 @@ static inline U32 PLDescriptorBinding_name(PLDescriptorBinding b) { return b.nam
 static inline EPLSource PLDescriptorBinding_source(PLDescriptorBinding b) { return (EPLSource)(b.name24_source8 >> 24); }
 
 static inline U32 PLDescriptorBinding_pack(U32 name, EPLSource source) {
-	return (name & 0xFFFFFF) | ((U32)source << 24);
+	return (name & 0xFFFFFF) | ((U32) source << 24);
 }
 
 TList(PLSamplerInfo);
@@ -204,6 +204,12 @@ Bool PLDescriptorBinding_validate(
 // pipeline: a bad layout names its mismatches before a driver gets to fail on them opaquely.
 
 Bool PLFile_validate(const PLFile *plFile, const Allocator *alloc, ListCharString *issues, Error *e_rr);
+
+//The part of PLFile_validate a file can never be valid without (rows that bind the same register, a push constant
+// that isn't one), as an error rather than a list. PLFile_read applies it; an unbounded array is left to
+// PLFile_validate since a file may legitimately carry one for the device to size.
+
+Bool PLFile_validateStructure(const PLFile *plFile, Error *e_rr);
 
 //The device free rules a sampler's stored values have to satisfy; the reader runs it on every pooled sampler.
 

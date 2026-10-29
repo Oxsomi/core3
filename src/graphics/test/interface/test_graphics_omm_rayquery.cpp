@@ -197,7 +197,8 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 	const c::U16 triangleIndices[3] = { 0, 1, 2 };
 	c::Buffer indexData = c::Buffer_createRefConst(triangleIndices, sizeof(triangleIndices));
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "ommRqPositions", dev.createBufferData(
 			c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
 			"OMM ray query positions", &triData, positions, nullptr, e_rr
@@ -231,7 +232,8 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	c::Buffer entryRef = c::Buffer_createRefConst(entryData, sizeof(entryData));
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "ommRqBits", dev.createBufferData(
 			c::EDeviceBufferUsage_ASReadExt, c::EGraphicsResourceFlag_None,
 			"OMM ray query opacity bits", &bitsData, inputBits, nullptr, e_rr
@@ -362,7 +364,8 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	else c::Test_print(t, "Device lacks ray pipelines, skipping the OMM ray query raygen variant");
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "ommRqEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) &&
 		Test_assert(t, "ommRqEmptyBegin", emptyList.begin(true, e_rr)) &&
 		Test_assert(t, "ommRqEmptyEnd", emptyList.end(e_rr)) &&
@@ -399,7 +402,8 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	//Submitted before the dispatch is recorded: a TLAS only takes its bindless slot once its build has run
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "ommRqBuildEnd", buildList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, buildList) &&
 		Test_assert(t, "ommRqTlasHandle", tlas.bindlessHandle() != c::BindlessDescriptor_None)
@@ -433,7 +437,8 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "ommRqTraceScopeEnd", scope.end(e_rr));
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "ommRqEnd", commandList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, commandList) &&
 		gfxtest::pullBuffer(t, dev, emptyList, output)
@@ -486,7 +491,8 @@ extern "C" void Test_graphicsOmmRayQuery(oxc::c::Test *t, oxc::c::GraphicsDevice
 		Test_assert(t, "ommRqRaygenScopeEnd", scope.end(e_rr));
 	}
 
-	if (!(
+	if (
+		!(
 		Test_assert(t, "ommRqRaygenEnd", raygenList.end(e_rr)) &&
 		gfxtest::submitAndWait(t, dev, raygenList) &&
 		gfxtest::pullBuffer(t, dev, emptyList, raygenOutput)

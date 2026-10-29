@@ -137,6 +137,41 @@ void Test_stringRead(Test *test) {
 	Test_assert(test, "CharString_findLastStringSensitive", CharString_findLastStringSensitive(&str, &abc, 0, 0) == 6);
 	Test_assert(test, "CharString_findLastStringInsensitive", CharString_findLastStringInsensitive(&str, &ABC, 0, 0) == 6);
 
+	CharString partial = CharString_createRefCStrConst("cxx");
+
+	Test_assert(
+		test, "CharString_findLastString partial prefix",
+		CharString_findLastStringSensitive(&partial, &abc, 0, 0) == U64_MAX
+	);
+
+	Test_assert(
+		test, "CharString_findLastString missing in range",
+		CharString_findLastStringSensitive(&str, &ABC, 2, 0) == U64_MAX
+	);
+
+	Test_assert(
+		test, "CharString_findLastString starts before range",
+		CharString_findLastStringSensitive(&str, &abc, 1, 2) == U64_MAX
+	);
+
+	Test_assert(
+		test, "CharString_findLastString exact range",
+		CharString_findLastStringSensitive(&str, &abc, 6, 3) == 6
+	);
+
+	Test_assert(test, "CharString_findFirst range overflow", CharString_findFirstSensitive(&str, 'b', 1, U64_MAX) == U64_MAX);
+	Test_assert(test, "CharString_findLast range overflow", CharString_findLastSensitive(&str, 'b', 1, U64_MAX) == U64_MAX);
+
+	Test_assert(
+		test, "CharString_findFirstString range overflow",
+		CharString_findFirstStringSensitive(&str, &abc, 1, U64_MAX) == U64_MAX
+	);
+
+	Test_assert(
+		test, "CharString_findLastString range overflow",
+		CharString_findLastStringSensitive(&str, &abc, 1, U64_MAX) == U64_MAX
+	);
+
 	//contains (char)
 
 	Test_assert(test, "CharString_containsSensitive", CharString_containsSensitive(&str, 'a', 0, 0));
@@ -211,6 +246,7 @@ void Test_stringRead(Test *test) {
 
 	Test_assert(test, "CharString_parseDec", !CharString_parseDec(CharString_createRefCStrConst("123abc"), &u64));
 	Test_assert(test, "CharString_parseDec", !CharString_parseDec(empty, &u64));
+	Test_assert(test, "CharString_parseDec empty literal", !CharString_parseDec(CharString_createRefCStrConst(""), &u64));
 
 	//parseDecSigned
 
@@ -224,6 +260,44 @@ void Test_stringRead(Test *test) {
 	Test_assert(test, "CharString_parseDecSigned", i64 == 0);
 
 	Test_assert(test, "CharString_parseDecSigned", !CharString_parseDecSigned(CharString_createRefCStrConst("--1"), &i64));
+
+	//Integer boundary values must not wrap.
+
+	Test_assert(
+		test, "CharString_parseDec U64 max",
+		CharString_parseDec(CharString_createRefCStrConst("18446744073709551615"), &u64) && u64 == U64_MAX
+	);
+
+	Test_assert(test, "CharString_parseDec overflow", !CharString_parseDec(
+		CharString_createRefCStrConst("18446744073709551616"), &u64
+	));
+
+	Test_assert(
+		test, "CharString_parseOct U64 max",
+		CharString_parseOct(CharString_createRefCStrConst("1777777777777777777777"), &u64) && u64 == U64_MAX
+	);
+
+	Test_assert(test, "CharString_parseOct overflow", !CharString_parseOct(
+		CharString_createRefCStrConst("2000000000000000000000"), &u64
+	));
+
+	Test_assert(
+		test, "CharString_parseDecSigned I64 max",
+		CharString_parseDecSigned(CharString_createRefCStrConst("9223372036854775807"), &i64) && i64 == I64_MAX
+	);
+
+	Test_assert(
+		test, "CharString_parseDecSigned I64 min",
+		CharString_parseDecSigned(CharString_createRefCStrConst("-9223372036854775808"), &i64) && i64 == I64_MIN
+	);
+
+	Test_assert(test, "CharString_parseDecSigned positive overflow", !CharString_parseDecSigned(
+		CharString_createRefCStrConst("9223372036854775808"), &i64
+	));
+
+	Test_assert(test, "CharString_parseDecSigned negative overflow", !CharString_parseDecSigned(
+		CharString_createRefCStrConst("-9223372036854775809"), &i64
+	));
 
 	//parseHex
 
@@ -279,7 +353,123 @@ void Test_stringRead(Test *test) {
 	Test_assert(test, "CharString_parseU64", CharString_parseU64(CharString_createRefCStrConst("0o10"), &u64));
 	Test_assert(test, "CharString_parseU64", u64 == 8);
 
+	//Parsing and classification share decimal syntax and leave outputs unchanged on failure.
+
+	static const C8 *const validDecimals[] = { "0.3", "5e-324", "1f", ".5F", "1.e+2f", "+5" };
+
+	for(U64 i = 0; i < sizeof(validDecimals) / sizeof(validDecimals[0]); ++i)
+		Test_assert(test, "decimal grammar", CharString_isFloat(CharString_createRefCStrConst(validDecimals[i])));
+
+	static const C8 *const invalidDecimals[] = { ".", "e5", ".e5", "1e5fx", "1ff", " 1", "1,5" };
+
+	for(U64 i = 0; i < sizeof(invalidDecimals) / sizeof(invalidDecimals[0]); ++i) {
+
+		f64 = 17;
+
+		const CharString input = CharString_createRefCStrConst(invalidDecimals[i]);
+
+		Test_assert(test, "invalid decimal grammar", !CharString_isFloat(input));
+		Test_assert(test, "failed decimal parse preserves output", !CharString_parseDouble(input, &f64) && f64 == 17);
+	}
+
+	static const struct { const C8 *text; F64 value; } exactDecimals[] = {
+		{ "0.3", 0.3 }, { "5e-324", 0x1p-1074 }, { "2.4703282292062327e-324", 0 },
+		{ "2.4703282292062328e-324", 0x1p-1074 }, { "1.7976931348623157e308", 0x1.fffffffffffffp1023 },
+		{ "1.00000000000000011102230246251565404236316680908203125", 1 },
+		{ "1.00000000000000011102230246251565404236316680908203126", 0x1.0000000000001p0 }
+	};
+
+	for(U64 i = 0; i < sizeof(exactDecimals) / sizeof(exactDecimals[0]); ++i)
+		Test_assert(
+			test, "decimal rounding",
+			CharString_parseDouble(CharString_createRefCStrConst(exactDecimals[i].text), &f64) && f64 == exactDecimals[i].value
+		);
+
+	C8 longDecimal[1700] = "1.00000000000000011102230246251565404236316680908203125";
+
+	for(U64 i = 55; i < sizeof(longDecimal); ++i)
+		longDecimal[i] = '0';
+
+	longDecimal[sizeof(longDecimal) - 1] = '1';
+
+	Test_assert(
+		test, "decimal sticky tail above halfway",
+		CharString_parseDouble(
+			CharString_createRefSizedConst(longDecimal, sizeof(longDecimal), false), &f64
+		) && f64 == 0x1.0000000000001p0
+	);
+
+	static const C8 tinyHalfway[] =
+		"222507385850720064199176395546258779936602667813027328296362349540005779643539444484102225369938"
+		"322261431279727704724131030539099297686371887094685146802422296858397735918514102854036197547684"
+		"430319581327346934820113042116530855453208314936760676083249201067093840472615434740825730172168"
+		"377656439210106482391161721588524757602313035270771562002841775343298712758123539074213191978739"
+		"083589771549597066404661620550578925994422322342444472859570416955675758542375241712413480599907"
+		"313780801813381104948904668664894425583448890100825972149614710420439919855653569753100552319354"
+		"486638980954850896040660352681852824502078615102443513620912377597978521535770387775045705684361"
+		"475530270683064113556748943345076587312006145811358486831521563686919762403704226016998291015625";
+
+	C8 tinyDecimal[1728];
+
+	for(U64 i = 0; i < 1700; ++i)
+		tinyDecimal[i] = i < sizeof(tinyHalfway) - 1 ? tinyHalfway[i] : '0';
+
+	tinyDecimal[1700] = 'e';
+	tinyDecimal[1701] = '-';
+	tinyDecimal[1702] = '2';
+	tinyDecimal[1703] = '0';
+	tinyDecimal[1704] = '0';
+	tinyDecimal[1705] = '7';
+
+	Test_assert(
+		test, "long subnormal halfway ties to even",
+		CharString_parseDouble(CharString_createRefSizedConst(tinyDecimal, 1706, false), &f64) && f64 == 0x0.ffffffffffffep-1022
+	);
+
+	tinyDecimal[1699] = '1';
+
+	Test_assert(
+		test, "long subnormal sticky tail rounds upward",
+		CharString_parseDouble(CharString_createRefSizedConst(tinyDecimal, 1706, false), &f64) && f64 == 0x0.fffffffffffffp-1022
+	);
+
+	Test_assert(
+		test, "signed decimal accepts plus",
+		CharString_parseDecSigned(CharString_createRefCStrConst("+5"), &i64) && i64 == 5
+	);
+
+	u64 = 42;
+
+	Test_assert(
+		test, "failed hex preserves output",
+		!CharString_parseHex(CharString_createRefCStrConst("g1"), &u64) && u64 == 42
+	);
+
+	Test_assert(
+		test, "failed oct preserves output",
+		!CharString_parseOct(CharString_createRefCStrConst("81"), &u64) && u64 == 42
+	);
+
+	Test_assert(
+		test, "failed bin preserves output",
+		!CharString_parseBin(CharString_createRefCStrConst("21"), &u64) && u64 == 42
+	);
+
+	Test_assert(
+		test, "failed nyto preserves output",
+		!CharString_parseNyto(CharString_createRefCStrConst("!1"), &u64) && u64 == 42
+	);
+
 	//parseDouble / parseFloat
+
+	Test_assert(test, "CharString_parseDouble null input", !CharString_parseDouble(empty, &f64));
+
+	Test_assert(test, "CharString_parseDouble zero length", !CharString_parseDouble(
+		CharString_createRefSizedConst("1", 0, false), &f64
+	));
+
+	Test_assert(test, "CharString_parseDouble null output", !CharString_parseDouble(str, NULL));
+	Test_assert(test, "CharString_parseFloat null output", !CharString_parseFloat(CharString_createRefCStrConst("1"), NULL));
 
 	Test_assert(test, "CharString_parseDouble", CharString_parseDouble(CharString_createRefCStrConst("3.14"), &f64));
 	Test_assert(test, "CharString_parseDouble", F64_approxEq(f64, 3.14, 0.001));
@@ -291,6 +481,32 @@ void Test_stringRead(Test *test) {
 	Test_assert(test, "CharString_parseDouble", F64_approxEq(f64, 1000, 0.001));
 
 	Test_assert(test, "CharString_parseDouble", !CharString_parseDouble(CharString_createRefCStrConst("abc"), &f64));
+
+	//A number has a digit in its mantissa, and one in its exponent when it has an exponent
+
+	static const C8 *const notNumbers[] = { "e5", ".", "-.", "+.", ".e5", "-e5", "1e", "1e+", "1e-", "1.e", "1ef", ".f" };
+
+	for(U64 i = 0; i < sizeof(notNumbers) / sizeof(notNumbers[0]); ++i) {
+		f64 = 7;
+		Test_assert(test, notNumbers[i], !CharString_parseDouble(CharString_createRefCStrConst(notNumbers[i]), &f64));
+	}
+
+	static const struct { const C8 *text; F64 value; } numbers[] = {
+		{ "5.", 5 }, { ".5", 0.5 }, { "-.5", -0.5 }, { "1.e2", 100 }, { "1e+2", 100 }, { "1E-1", 0.1 }, { "0", 0 }, { "-0.", 0 }
+	};
+
+	for(U64 i = 0; i < sizeof(numbers) / sizeof(numbers[0]); ++i) {
+
+		f64 = 7;
+
+		Test_assert(
+			test, numbers[i].text,
+			CharString_parseDouble(CharString_createRefCStrConst(numbers[i].text), &f64) &&
+			F64_approxEq(f64, numbers[i].value, 1e-9)
+		);
+	}
+
+	Test_assert(test, "CharString_parseFloat e5", !CharString_parseFloat(CharString_createRefCStrConst("e5"), &f32));
 
 	Test_assert(test, "CharString_parseFloat", CharString_parseFloat(CharString_createRefCStrConst("1.5"), &f32));
 	Test_assert(test, "CharString_parseDouble", F32_approxEq(f32, 1.5f, 0.001f));
@@ -350,7 +566,27 @@ void Test_stringRead(Test *test) {
 	Test_assert(test, "CharString_cutBegin", CharString_equalsCStringSensitive(&s, "World!"));
 
 	Test_assert(test, "CharString_cut", !CharString_cut(&cutSrc, 7, 100, &s));
+	Test_assert(test, "CharString_cut overflowing length", !CharString_cut(&cutSrc, 1, U64_MAX, &s));
 	Test_assert(test, "CharString_cutBegin", !CharString_cutBegin(&cutSrc, 100, &s));
+
+	const CharString leadingSeparator = CharString_createRefCStrConst("::value");
+	const CharString separator = CharString_createRefCStrConst("::");
+
+	Test_assert(
+		test, "cutAfter leading separator",
+		CharString_cutAfterFirstSensitive(&leadingSeparator, ':', &s) && !CharString_length(s)
+	);
+
+	Test_assert(
+		test, "cutAfterString leading separator",
+		CharString_cutAfterFirstStringSensitive(&leadingSeparator, &separator, &s) && !CharString_length(s)
+	);
+
+	const C8 highBytes[] = "\xC3\xA9";
+	const CharString unicode = CharString_createRefSizedConst(highBytes, sizeof(highBytes) - 1, false);
+	const CharString ascii = CharString_createRefCStrConst("z");
+
+	Test_assert(test, "unsigned byte string ordering", CharString_compareSensitive(&unicode, &ascii) == ECompareResult_Gt);
 
 	//cutAfter / cutBefore (char)
 
@@ -512,11 +748,13 @@ void Test_stringRead(Test *test) {
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 		static const C8 *validFilePathsWin[] = {
+			"C:/", "C:\\",
 			"C:/folder/file.txt",
 			"C:\\folder\\file.txt"
 		};
 
 		static const C8 *invalidFilePathsWin[] = {
+			"C:",
 			"C:folder/file.txt",
 			"0:/folder"
 		};

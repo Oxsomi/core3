@@ -51,6 +51,7 @@ ATEST_SUITE(types_container);
 ATEST_SUITE(formats_bmp);
 ATEST_SUITE(formats_dds);
 ATEST_SUITE(formats_hdr);
+ATEST_SUITE(formats_json);
 ATEST_SUITE(types_mesh);
 ATEST_SUITE(formats_obj);
 ATEST_SUITE(formats_ply);
@@ -99,6 +100,7 @@ static const ATestSuite ATest_suites[] = {
 	{ "formats_bmp",          OxC3_test_formats_bmp,          false, false },
 	{ "formats_dds",          OxC3_test_formats_dds,          false, false },
 	{ "formats_hdr",          OxC3_test_formats_hdr,          false, false },
+	{ "formats_json",         OxC3_test_formats_json,         false, false },
 	{ "types_mesh",           OxC3_test_types_mesh,           false, false },
 	{ "formats_obj",          OxC3_test_formats_obj,          false, false },
 	{ "formats_ply",          OxC3_test_formats_ply,          false, false },
@@ -139,7 +141,7 @@ static Bool ATest_logThreadStarted = false;
 
 static void *ATest_logPump(void *arg) {
 
-	const int readFd = (int)(U64) arg;
+	const int readFd = (int) (U64) arg;
 	C8 line[512];
 	U64 len = 0;
 
@@ -209,7 +211,7 @@ static Bool ATest_redirectStdio() {
 
 	close(fds[1]);
 
-	if(pthread_create(&ATest_logThread, NULL, ATest_logPump, (void*)(U64) fds[0]))
+	if(pthread_create(&ATest_logThread, NULL, ATest_logPump, (void*) (U64) fds[0]))
 		return false;
 
 	//Joinable, not detached: the run ends by finishing the activity, which would otherwise kill the pump

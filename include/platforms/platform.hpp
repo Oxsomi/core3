@@ -102,7 +102,7 @@ namespace oxc {
 
 					c::I64 v = 0;
 
-					if(
+					if (
 						!c::Platform_parseEnvI64(str, &v) ||
 						v < (c::I64) std::numeric_limits<T>::min() || v > (c::I64) std::numeric_limits<T>::max()
 					)

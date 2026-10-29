@@ -95,6 +95,8 @@ CAFileObject<hasDateAndTime, isExtendedTime> {
 //Files are written in order from root to child, so the parent must always appear before the child.
 //Directories are always defined before files.
 //Recursion is limited to 128.
+//A folder holds at most 65535 files; the counts can't claim more records than the stream has bytes left.
+//An MS-DOS date that isn't a real date (such as day 0 or February 31st) makes the file invalid.
 
 CAFile {			//Must be 16-byte aligned
 
@@ -121,10 +123,9 @@ CAFile {			//Must be 16-byte aligned
 		//Basically the IV for them will be rootIv ^ U64x2(0, 1) and rootIv ^ U64x2(0, 2) respectively.
 		U8[12] rootIv;
     
-	    //This verifies the header of the oiCA and the headers of the oiDL (written after writing the DLFiles)
-    	//To prevent runtime overhead, it doesn't actually check DLFile content.
-    	//This is fine, as chunkId is contained in each iv of each DLFile's chunk and 
-	    //	the same key is verified using the oiDL header. Invalid data would error right when it's decrypted in the stream.
+		//Authenticates this oiCA header. Each embedded oiDL authenticates its own header.
+		//Each oiDL chunk authenticates its index, length and embedded-stream identity as AAD.
+		//Content is authenticated when decrypted from the stream.
 		I32x4 tag;
     
     U8[N] pad;	//Padding to align to 16-byte
@@ -140,11 +141,13 @@ CAFile {			//Must be 16-byte aligned
     //	In case of encryption, both names and content have to be encrypted and match header.encryptionType.
     //DLFile should have the string flag set. If not, the file is invalid.
     //	Could contain UTF8.
-    //DLFile also needs to include dirCount + fileCount entries.
-    //	directory names are defined at [0, dirCount - 1] and file names at [dirCount, dirCount + fileCount - 1]
+    //DLFile also needs to include 1 + dirCount + fileCount entries.
+    //	Entry 0 is the root folder's name: written empty and ignored when read.
+    //	directory names are defined at [1, dirCount] and file names at [dirCount + 1, dirCount + fileCount]
     //DLFile also doesn't include a leading magicNumber, context already implies it.
     //File paths are insensitive; it can't have duplicates.
     //Implementations SHOULD keep these names in memory since they may not exceed 96 bytes each.
+    //The aggregate name size is not limited by oiDL's 1 MiB cache; names outside the cache are loaded separately.
     // Names are relative, not absolute.
     DLFile names;
     
@@ -160,6 +163,22 @@ CAFile {			//Must be 16-byte aligned
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer. Ki is Kibi like KiB (1024).
 
 All oiDL notes apply, see [oiDL format](oiDL.md).
+
+## Encryption key separation
+
+The archive generates a fresh CSPRNG root IV for each new output.
+Its header authentication key is HKDF-SHA256(raw key, salt = root IV, info = `OxC3 oiCA header`, length = 32 bytes).
+The info is exactly 16 ASCII bytes, without a terminator.
+The header is authenticated as AAD under that derived key and the root IV, with no plaintext.
+The raw key is not used directly as an AES key by the archive or its embedded oiDL streams.
+
+The names and contents oiDL identities remain `rootIv ^ U64x2(0, 1)` and `rootIv ^ U64x2(0, 2)`.
+Each derives its own header and data keys and binds its identity into every chunk's AAD, as specified in
+[oiDL encryption](oiDL.md#encryption-key-schedule-and-chunk-authentication).
+Their chunks store fresh random nonces for every encryption rather than deriving nonces from their index.
+Each chunk has a 32-byte metadata record: a 12-byte nonce, a 4-byte reserved field and a 16-byte authentication tag.
+During pre-release development the version byte remains unchanged; encrypted files using the previous key schedule
+or chunk layout must be regenerated.
 
 ## Changelog
 

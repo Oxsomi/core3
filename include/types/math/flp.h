@@ -43,16 +43,16 @@
 
 typedef enum EFloatType {
 
-	EFloatType_F8            = EFloatType_make( 4,   3,  1),
+	EFloatType_F8             = EFloatType_make( 4,   3,  1),
 	EFloatType_F16            = EFloatType_make( 5,  10,  2),
 	EFloatType_F32            = EFloatType_make( 8,  23,  4),
 	EFloatType_F64            = EFloatType_make(11,  52,  8),
 	//EFloatType_Quadruple    = EFloatType_make(15, 112, 16),
-	//EFloatType_Octuple    = EFloatType_make(19, 236, 32),
+	//EFloatType_Octuple      = EFloatType_make(19, 236, 32),
 
 	EFloatType_BF16            = EFloatType_make( 8,   7,  2),            //BFloat
 	EFloatType_TF19            = EFloatType_make( 8,  10,  4),            //TensorFloat
-	EFloatType_PXR24        = EFloatType_make( 8,  15,  4),
+	EFloatType_PXR24           = EFloatType_make( 8,  15,  4),
 	EFloatType_FP24            = EFloatType_make( 7,  16,  4),
 
 	//Unsigned.
@@ -76,11 +76,11 @@ static inline Bool EFloatType_hasSign(EFloatType type) {
 }
 
 static inline U8 EFloatType_bytes(EFloatType type) {
-	return (U8)((type >> 16) & 0xFF);
+	return (U8) ((type >> 16) & 0xFF);
 }
 
 static inline U8 EFloatType_exponentBits(EFloatType type) {
-	return (U8)(type >> 8);
+	return (U8) (type >> 8);
 }
 
 static inline U8 EFloatType_mantissaBits(EFloatType type) {
@@ -88,7 +88,7 @@ static inline U8 EFloatType_mantissaBits(EFloatType type) {
 }
 
 static inline U64 EFloatType_mantissaShift(EFloatType type) {
-	(void)type;
+	(void) type;
 	return 0;
 }
 
@@ -106,15 +106,15 @@ static inline U64 EFloatType_signShift(EFloatType type) {
 //Every other accessor reads fields BELOW the sign either way.
 
 static inline U64 EFloatType_signMask(EFloatType type) {
-	return EFloatType_hasSign(type) ? (U64)1 << EFloatType_signShift(type) : 0;
+	return EFloatType_hasSign(type) ? (U64) 1 << EFloatType_signShift(type) : 0;
 }
 
 static inline U64 EFloatType_exponentMask(EFloatType type) {            //Not shifted
-	return ((U64)1 << EFloatType_exponentBits(type)) - 1;
+	return ((U64) 1 << EFloatType_exponentBits(type)) - 1;
 }
 
 static inline U64 EFloatType_mantissaMask(EFloatType type) {            //Not shifted
-	return ((U64)1 << EFloatType_mantissaBits(type)) - 1;
+	return ((U64) 1 << EFloatType_mantissaBits(type)) - 1;
 }
 
 static inline Bool EFloatType_sign(EFloatType type, U64 v) {
@@ -162,6 +162,8 @@ static inline U64 EFloatType_isZero(EFloatType type, U64 v) {
 	return !EFloatType_abs(type, v);
 }
 
+//Rounds finite values to nearest with ties to even, including subnormals. Overflow produces infinity.
+//Negative values clamp to zero when the destination has no sign bit. NaNs preserve their sign and a quiet payload.
 U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType);
 
 //Auto-generated software float casts
@@ -184,7 +186,7 @@ static inline a b##_cast##a(b v) {                                  \
 		case 2:        v64 = *(const U16*) vptr;        break;      \
 		case 4:        v64 = *(const U32*) vptr;        break;      \
 		case 8:        v64 = *(const U64*) vptr;        break;      \
-		default:       v64 = *(const U8*) vptr;        break;          \
+		default:       v64 = *(const U8*) vptr;         break;      \
 	}                                                               \
 																	\
 	v64 = EFloatType_convert(EFloatType_##b, v64, EFloatType_##a);  \

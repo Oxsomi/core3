@@ -79,12 +79,12 @@ static inline CAFileInfo CAFileInfo_create(U16 parent, Ns timestamp) {
 		return v;
 	}
 
-	CAFileInfo v = { ((U64)parent << 48) | timestampTrunc };
+	CAFileInfo v = { ((U64) parent << 48) | timestampTrunc };
 	return v;
 }
 
 static inline U16 CAFileInfo_getParent(CAFileInfo info) {
-	return (U16)(info.parentTimestamp >> 48);
+	return (U16) (info.parentTimestamp >> 48);
 }
 
 static inline Ns CAFileInfo_getTimestamp(CAFileInfo info) {
@@ -124,6 +124,7 @@ Bool CAFile_createCopy(const CAFile *caFile, const Allocator *alloc, CAFile *res
 
 void CAFile_free(CAFile *caFile, const Allocator *alloc);
 
+//Advances startOffset only on success, including when result is NULL to calculate the required size.
 Bool CAFile_write(
 	const CAFile *caFile,
 	const RefPtrType *encStreamType,
@@ -151,14 +152,14 @@ Bool CAFile_read(
 //A changed version means an add/move/remove happened and the handle may now point at a different (or no) entry.
 typedef U64 CAHandle;
 
-static const U64 CAHandle_Invalid = (U64)-1;
-static const CAHandle CAHandle_Root = (U64)1 << 63;
+static const U64 CAHandle_Invalid = (U64) -1;
+static const CAHandle CAHandle_Root = (U64) 1 << 63;
 
 static inline U64 CAHandle_getId(CAHandle handle) { return handle << 1 >> 1; }
 static inline Bool CAHandle_isFolder(CAHandle handle) { return handle >> 63; }
 static inline Bool CAHandle_isFile(CAHandle handle) { return !CAHandle_isFolder(handle); }
 
-static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }    //Unsafe, only use if you know it's a dir
+static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64) 1 << 63) | id; }    //Unsafe, only use if you know it's a dir
 static inline CAHandle CAHandle_makeFile(U64 id) { return id; }                       //Unsafe, only use if you know it's a file
 
 static inline Bool CAHandle_isRoot(CAHandle handle) {

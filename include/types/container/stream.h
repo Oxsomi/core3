@@ -116,7 +116,9 @@ typedef struct StreamCursor {
 
 } StreamCursor;
 
-typedef struct CryptoChunk {        //chunkId can be computed, iv is also computed from root iv + chunkId.
+typedef struct CryptoChunk {
+	U32 nonce[3];
+	U32 reserved;
 	I32x4 tag;
 } CryptoChunk;
 
@@ -124,9 +126,14 @@ static inline Bool StreamCursor_canRead(const StreamCursor *cursor) { return cur
 static inline Bool StreamCursor_canWrite(const StreamCursor *cursor) { return cursor && cursor->stream && !cursor->readOnly; }
 
 static inline Bool StreamCursor_contains(const StreamCursor *cursor, U64 offset, U64 length) {
-	return cursor &&
-		offset >= cursor->lastLocation &&
-		offset + length <= cursor->lastLocation + Buffer_length(cursor->cacheData);
+
+	if (!cursor || cursor->lastLocation == U64_MAX || offset < cursor->lastLocation)
+		return false;
+
+	const U64 relativeOffset = offset - cursor->lastLocation;
+	const U64 cacheLength = Buffer_length(cursor->cacheData);
+
+	return relativeOffset <= cacheLength && length <= cacheLength - relativeOffset;
 }
 
 RefPtrType Stream_inheritType(const Allocator *alloc, U32 extraSize);
@@ -187,6 +194,9 @@ Bool StreamCursor_setReadOnly(StreamCursor *cursor, const Allocator *alloc, Erro
 //Returns false if not writable.
 Bool StreamCursor_setWritable(StreamCursor *cursor, Error *e_rr);
 
+//Flushes pending writes but cannot report a failure, because it is the cleanup every exit path runs.
+//A writer therefore calls StreamCursor_flush itself before it reports success: appends only reach the stream on a
+// flush, so for a small output the flush in close is the only write there is.
 void StreamCursor_close(StreamCursor *cursor, const Allocator *alloc);
 Bool StreamCursor_closeAndKeepCache(StreamCursor *cursor, const Allocator *alloc, Buffer *cache, Error *e_rr);
 
@@ -209,7 +219,7 @@ Bool StreamCursor_write(
 	Buffer buf,
 	U64 srcOff,
 	U64 dstOff,
-	U64 length,
+	U64 length,                //0 writes all remaining bytes after srcOff
 	Bool bypassCache,
 	const Allocator *alloc,
 	Error *e_rr

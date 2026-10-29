@@ -572,7 +572,7 @@ static Bool SPFile_deriveLayout(
 
 		const SHFile *file = &files->ptr[stages[i].fileId];
 		const SHBinaryInfo *bin = &file->binaries.ptr[entry->binaryIds.ptr[0]];
-		const U32 stageBit = (U32)1 << entry->stage;
+		const U32 stageBit = (U32) 1 << entry->stage;
 
 		for (U64 j = 0; j < bin->registers.length; ++j) {
 
@@ -616,7 +616,7 @@ static Bool SPFile_deriveLayout(
 
 				default:
 
-					if(
+					if (
 						reg->reg.registerType & EGfxRegisterType_IsWrite &&
 						(reg->reg.registerType & EGfxRegisterType_TypeMask) >= EGfxRegisterType_TextureStart
 					)
@@ -737,7 +737,7 @@ static Bool SPFile_deriveLayout(
 				//A pair one side lacks merges in rather than disagreeing, since not every stage compiles
 				// for every binary type
 
-				if(
+				if (
 					other.registerType != reg->reg.registerType ||
 					(hasSpirv && otherSpv != U64_MAX && otherSpv != spv) ||
 					(hasDxil && otherDxil != U64_MAX && otherDxil != dxil) ||
@@ -793,7 +793,7 @@ static Bool SPFile_deriveLayout(
 			const PLDescriptorBinding row = layout.bindings.ptr[i];
 			const U32 rowName = PLDescriptorBinding_name(row);
 
-			if(
+			if (
 				(row.registerType & EGfxRegisterType_TypeMask) != EGfxRegisterType_ConstantBuffer ||
 				row.bindings.arrU64[EGfxBinaryType_SPIRV] != U64_MAX ||
 				row.bindings.arrU64[EGfxBinaryType_DXIL] == U64_MAX ||
@@ -1298,13 +1298,13 @@ Bool SPFile_supply(SPFile *spFile, U32 pipelineId, ESPField field, U8 index, U32
 
 		case ESPField_VertexBufferStride: {
 			U16 *strides = gfx->inputAssembler.vertexLayout.bufferStrides12_isInstance1;
-			strides[index] = (strides[index] & ~(U16)4095) | (U16)(value & 4095);
+			strides[index] = (strides[index] & ~(U16) 4095) | (U16) (value & 4095);
 			break;
 		}
 
 		case ESPField_VertexBufferRate: {
 			U16 *strides = gfx->inputAssembler.vertexLayout.bufferStrides12_isInstance1;
-			strides[index] = (strides[index] & (U16)4095) | (value ? (U16)(1 << 12) : 0);
+			strides[index] = (strides[index] & (U16) 4095) | (value ? (U16) (1 << 12) : 0);
 			break;
 		}
 
@@ -1752,7 +1752,7 @@ U16 SPVertexLayoutRuntime_bufferMask(SPVertexLayoutRuntime layout) {
 
 	for(U8 i = 0; i < 16; ++i)
 		if(layout.bufferStrides12_isInstance1[i])
-			mask |= (U16)1 << i;
+			mask |= (U16) 1 << i;
 
 	return mask;
 }
@@ -1763,7 +1763,7 @@ U16 SPVertexLayoutRuntime_attributeMask(SPVertexLayoutRuntime layout) {
 
 	for(U8 i = 0; i < 16; ++i)
 		if(layout.attributes[i].format)
-			mask |= (U16)1 << i;
+			mask |= (U16) 1 << i;
 
 	return mask;
 }
@@ -1872,7 +1872,7 @@ Bool SPFile_finalize(SPFile *spFile, const Allocator *alloc, Error *e_rr) {
 
 	//Hash content deterministically (flags without HideMagicNumber, then the POD arrays and strings)
 
-	const U32 hashedFlags = spFile->flags & ~(U32)ESPSettingsFlags_HideMagicNumber;
+	const U32 hashedFlags = spFile->flags & ~(U32) ESPSettingsFlags_HideMagicNumber;
 
 	U64 hash = Buffer_fnv1a64Single(hashedFlags, Buffer_fnv1a64Offset);
 	hash = Buffer_fnv1a64(ListSPPipelineBase_bufferConst(spFile->pipelines), hash);

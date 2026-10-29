@@ -28,6 +28,11 @@
 	extern "C" {
 #endif
 
+//Truncate toward zero; NaN and values outside I32 return I32_MIN on every backend.
+static inline I32 I32_truncateF32(F32 value) {
+	return value >= -2147483648.0f && value < 2147483648.0f ? (I32) value : (-2147483647 - 1);
+}
+
 BUFFER_OP_IMPL(I32x4)
 
 #if _SIMD == SIMD_SSE
@@ -120,10 +125,17 @@ static inline I32x4 I32x4_ror(I32x4 a, U8 bits) {
 
 static inline I32x4 I32x4_pow2(I32x4 a) { return I32x4_mul(a, a); }
 
-static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {                //UB for any d[x] == 0
-	I32x4 r = I32x4_sub(v, I32x4_mul(I32x4_div(v, d), d));
-	I32x4 mask = I32x4_lt(r, I32x4_zero());
-	return I32x4_add(r, I32x4_mul(mask, d));
+//Floor modulo has the divisor's sign; a zero divisor is undefined.
+static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {
+
+	//Multiples of -1 have zero remainder; zero the dividend to keep I32_MIN / -1 representable.
+	v = I32x4_mul(v, I32x4_neq(d, I32x4_negOne()));
+
+	const I32x4 zero = I32x4_zero();
+	const I32x4 r = I32x4_sub(v, I32x4_mul(I32x4_div(v, d), d));
+	const I32x4 adjust = I32x4_and(I32x4_neq(r, zero), I32x4_lt(I32x4_xor(r, d), zero));
+
+	return I32x4_add(r, I32x4_mul(adjust, d));
 }
 
 static inline I32x4 I32x4_clamp(I32x4 a, I32x4 mi, I32x4 ma) { return I32x4_max(mi, I32x4_min(ma, a)); }
@@ -175,24 +187,28 @@ static inline I32x4 I32x4_rsh128(I32x4 a, U8 bits) {
 
 static inline I32x4 I32x4_load1(const void *arr) {
 	I32x4 result = I32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
 	return result;
 }
 
 static inline I32x4 I32x4_load2(const void *arr) {
 	I32x4 result = I32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
 	return result;
 }
 
 static inline I32x4 I32x4_load3(const void *arr) {
 	I32x4 result = I32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 3), Buffer_createRefConst(arr, sizeof(I32) * 3));
 	return result;
 }
 
 static inline I32x4 I32x4_load4(const void *arr) {
 	I32x4 result = I32x4_zero();
+
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 4), Buffer_createRefConst(arr, sizeof(I32) * 4));
 	return result;
 }

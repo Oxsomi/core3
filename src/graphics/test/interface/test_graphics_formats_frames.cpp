@@ -483,7 +483,7 @@ extern "C" void Test_graphicsFramesInFlight(oxc::c::Test *t, oxc::c::GraphicsDev
 
 			const c::DeviceTexture *texPtr = tex.data();
 
-			if(
+			if (
 				c::Buffer_length(texPtr->cpuData) >= sizeof(c::U32) &&
 				((const c::U32*)texPtr->cpuData.ptr)[0] == pattern
 			)

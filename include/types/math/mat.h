@@ -46,6 +46,9 @@
 //  Handedness   left handed, +Z into the screen, matching F32x4x4_perspective / _lookAt in the HLSL.
 //  Depth        [0, 1] clip range (D3D style, not GL's [-1, 1]), reversed: near lands on 1, far on 0.
 //               The engine renders reverse Z (Gt compare, clear far to 0), see docs/graphics_api.md.
+//
+//  Rotations    rotateX/Y/Z use the opposite angle sense to QuatF32_angleAxis; +Z pi/2 maps +X to +Y here.
+//               rotateQuat(q) preserves QuatF32_applyToNormal(q)'s rotation, including its angle sense.
 
 #define MAT_FUNC(T, relErr, absErr)                                                                             \
 																												\
@@ -216,6 +219,7 @@ T##x4x4 T##x4x4_transformSRT(T##x4 scale, T##x4 eulerRad, T##x4 translate);     
 T##x4x4 T##x4x4_view(T##x4 position, T##x4 eulerRad);                                                           \
 																												\
 /* Projections; left handed, reverse Z (near depth 1, far 0), matching the HLSL helpers */                      \
+/* Perspective supports a positive infinite far plane. */                                                       \
 																												\
 T##x4x4 T##x4x4_perspective(T fovYRad, T aspect, T nearPlane, T farPlane);                                      \
 T##x4x4 T##x4x4_ortho(T left, T right, T bottom, T top, T nearPlane, T farPlane);                               \
@@ -226,12 +230,13 @@ static inline T##x4x4 T##x4x4_orthoSize(T width, T height, T nearPlane, T farPla
 																												\
 /* View matrix from an orthonormal basis plus an eye position */                                                \
 T##x4x4 T##x4x4_construct(T##x4 x, T##x4 y, T##x4 z, T##x4 eye);                                                \
+/* Zero direction uses +Z; parallel or zero up uses a perpendicular fallback axis. */                           \
 T##x4x4 T##x4x4_lookDir(T##x4 eye, T##x4 direction, T##x4 up);                                                  \
 T##x4x4 T##x4x4_lookAt(T##x4 eye, T##x4 center, T##x4 up);                                                      \
 																												\
 T T##x4x4_determinant(T##x4x4 m);                                                                               \
 																												\
-/* False (and *result untouched) for a singular matrix, rather than filling it with inf/NaN */                  \
+/* False with *result untouched for a singular matrix or an unrepresentable inverse. */                          \
 Bool T##x4x4_inverse(T##x4x4 m, T##x4x4 *result);                                                               \
 																												\
 /* Human readable dump into a caller supplied buffer, one row per line. */                                      \

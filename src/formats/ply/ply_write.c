@@ -110,17 +110,13 @@ Bool Ply_write(
 
 		if(isAscii) {
 
-			gotoIfError3(clean, MeshSink_writeFormatted(
-				&sink, e_rr, "%.9g %.9g %.9g", (F64) position[0], (F64) position[1], (F64) position[2]
-			));
+			gotoIfError3(clean, MeshSink_writeFloats(&sink, e_rr, "", position, 3, 9));
 
 			if(writeNormals)
-				gotoIfError3(clean, MeshSink_writeFormatted(
-					&sink, e_rr, " %.9g %.9g %.9g", (F64) normal[0], (F64) normal[1], (F64) normal[2]
-				));
+				gotoIfError3(clean, MeshSink_writeFloats(&sink, e_rr, " ", normal, 3, 9));
 
 			if(writeUvs)
-				gotoIfError3(clean, MeshSink_writeFormatted(&sink, e_rr, " %.9g %.9g", (F64) uv[0], (F64) uv[1]));
+				gotoIfError3(clean, MeshSink_writeFloats(&sink, e_rr, " ", uv, 2, 9));
 
 			gotoIfError3(clean, MeshSink_writeFormatted(&sink, e_rr, "\n"));
 			continue;

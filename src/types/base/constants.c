@@ -29,8 +29,8 @@ const C8  C8_MIN  = (C8) CHAR_MIN;
 const U64 KIBI    = 1 << 10;
 const U64 MIBI    = 1 << 20;
 const U64 GIBI    = 1 << 30;
-const U64 TIBI    = (U64)1 << 40;
-const U64 PEBI    = (U64)1 << 50;
+const U64 TIBI    = (U64) 1 << 40;
+const U64 PEBI    = (U64) 1 << 50;
 
 const F32 F32_MAX = FLT_MAX;
 const F32 F32_MIN = -FLT_MAX;

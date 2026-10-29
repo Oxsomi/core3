@@ -31,8 +31,8 @@
 
 void GraphicsDevice_freeRenderTexture(void *renderTextureGeneric, const Allocator *alloc) {
 	RenderTexture *renderTexture = (RenderTexture*) renderTextureGeneric;
-	(void)alloc;
-	UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
+	(void) alloc;
+	UnifiedTexture_free((TextureRef*)((U8*) renderTexture - sizeof(RefPtr)));
 }
 
 Bool GraphicsDeviceRef_createRenderTexture(

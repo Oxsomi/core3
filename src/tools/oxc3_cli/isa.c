@@ -800,7 +800,7 @@ clean:
 			return CharString_createNull();
 
 		const SHEntry *shEntry = &shFile->entries.ptr[(U16) entry];
-		const U16 binaryIndex = (U16)(entry >> 16);
+		const U16 binaryIndex = (U16) (entry >> 16);
 
 		if(binaryIndex >= shEntry->binaryIds.length)
 			return CharString_createNull();
@@ -848,7 +848,7 @@ clean:
 			if(stage == EGfxPipelineStage_Compute)
 				++kindCounts[0];
 
-			else if(
+			else if (
 				stage == EGfxPipelineStage_Vertex || stage == EGfxPipelineStage_Pixel || stage == EGfxPipelineStage_Hull ||
 				stage == EGfxPipelineStage_Domain || stage == EGfxPipelineStage_GeometryExt
 			)
@@ -993,7 +993,8 @@ clean:
 		if (!GraphicsInterface_supportsApi(api)) {
 
 			Log_errorLnx("%s isn't available on this machine, which is what %s binaries are compiled by.", apiName,
-				EGfxBinaryType_names[binaryType]);
+				EGfxBinaryType_names[binaryType]
+			);
 
 			retError(clean, Error_unsupportedOperation(0, "CLI_isaDisassembleLive() the required graphics API is unavailable"));
 		}
@@ -1104,7 +1105,7 @@ clean:
 						target.ptr + targetSplit + 1, CharString_length(target) - targetSplit - 1, false
 					);
 
-					if(
+					if (
 						!CharString_equalsStringInsensitive(&wantedGpu, &targetGpu) &&
 						!CharString_equalsStringInsensitive(&wantedIp, &targetIp)
 					)

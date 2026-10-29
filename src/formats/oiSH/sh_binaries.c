@@ -149,6 +149,12 @@ const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
 	"Unknown"
 };
 
+//Counts saturate instead of wrapping, so an enormous array can't add up to something under the limits.
+
+static void SHBinary_addSat(U64 *counter, U64 add) {
+	*counter = add > U64_MAX - *counter ? U64_MAX : *counter + add;
+}
+
 Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -218,7 +224,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 		TypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
-		if((U32)uniform.dataOffset + ETypeId_getBytes(typeId) > binaries->identifier.uniformData.length)
+		if((U32) uniform.dataOffset + ETypeId_getBytes(typeId) > binaries->identifier.uniformData.length)
 			retError(clean, Error_invalidParameter(
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] data out of bounds"
 			));
@@ -257,7 +263,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			2, 0, "SHFile_addBinary()::binaries->identifier.entrypoint is required for [[oxc::stage()]] annotation"
 		));
 
-	if(
+	if (
 		binaries->identifier.shaderVersion < OISH_SHADER_MODEL_MIN ||
 		binaries->identifier.shaderVersion > OISH_SHADER_MODEL_MAX
 	)
@@ -300,10 +306,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 		if(reg.arrays.length == 1 && !reg.arrays.ptr[0])
 			unboundArraySize = true;
 
-		U64 regs = 1;
+		//Saturating: a product that wraps would look small enough to dodge the limits below.
 
-		for(U64 j = 0; j < reg.arrays.length; ++j)
-			regs *= reg.arrays.ptr[j];
+		const U64 regs = SHRegister_arrayCount(&reg.arrays);
 
 		//Keep track of current sets
 
@@ -338,8 +343,8 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			case EGfxRegisterType_Sampler:
 			case EGfxRegisterType_SamplerComparisonState:
 
-				if(hasSPIRV) counters[Counter_SamplerSPIRV] += regs;
-				if(hasDXIL)  counters[Counter_SamplerDXIL]  += regs;
+				if(hasSPIRV) SHBinary_addSat(&counters[Counter_SamplerSPIRV], regs);
+				if(hasDXIL)  SHBinary_addSat(&counters[Counter_SamplerDXIL], regs);
 
 				//An ARRAY of samplers is indexed at runtime, which only the bindless _samplers[] array can
 				// serve; a singular sampler is a binding or a static sampler and needs none of it.
@@ -350,28 +355,28 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 				break;
 
 			case EGfxRegisterType_SubpassInput:
-				counters[Counter_SubpassInput] += regs;
+				SHBinary_addSat(&counters[Counter_SubpassInput], regs);
 				break;
 
 			case EGfxRegisterType_AccelerationStructure:
 
-				if(hasSPIRV) counters[Counter_RTASSPIRV] += regs;
+				if(hasSPIRV) SHBinary_addSat(&counters[Counter_RTASSPIRV], regs);
 
 				if(hasDXIL) {
-					counters[Counter_RTASDXIL] += regs;
-					counters[Counter_SRV] += regs;
+					SHBinary_addSat(&counters[Counter_RTASDXIL], regs);
+					SHBinary_addSat(&counters[Counter_SRV], regs);
 				}
 
 				break;
 
 			case EGfxRegisterType_ConstantBuffer:
-				if(hasSPIRV) counters[Counter_UBO] += regs;
-				if(hasDXIL)  counters[Counter_CBV] += regs;
+				if(hasSPIRV) SHBinary_addSat(&counters[Counter_UBO], regs);
+				if(hasDXIL)  SHBinary_addSat(&counters[Counter_CBV], regs);
 				break;
 				
 			case EGfxRegisterType_PushConstants:
-				if(hasDXIL)     counters[Counter_CBV] += regs;
-				counters[Counter_PushConstants] += regs;        //SPV is the only one that can make type push constants
+				if(hasDXIL)     SHBinary_addSat(&counters[Counter_CBV], regs);
+				SHBinary_addSat(&counters[Counter_PushConstants], regs);    //SPV is the only one that can make push constants
 				break;
 
 			case EGfxRegisterType_ByteAddressBuffer:
@@ -379,8 +384,8 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			case EGfxRegisterType_StructuredBufferAtomic:
 			case EGfxRegisterType_StorageBuffer:
 			case EGfxRegisterType_StorageBufferAtomic:
-				if(hasSPIRV) counters[Counter_SSBO] += regs;
-				if(hasDXIL)  counters[regType & EGfxRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
+				if(hasSPIRV) SHBinary_addSat(&counters[Counter_SSBO], regs);
+				if(hasDXIL)  SHBinary_addSat(&counters[regType & EGfxRegisterType_IsWrite ? Counter_UAV : Counter_SRV], regs);
 				break;
 
 			case EGfxRegisterType_Texture1D:
@@ -388,22 +393,33 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			case EGfxRegisterType_Texture3D:
 			case EGfxRegisterType_TextureCube:
 			case EGfxRegisterType_Texture2DMS:
-				if(hasSPIRV) counters[regType & EGfxRegisterType_IsWrite ? Counter_Image : Counter_Texture] += regs;
-				if(hasDXIL)  counters[regType & EGfxRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
+			
+				if(hasSPIRV)
+					SHBinary_addSat(&counters[regType & EGfxRegisterType_IsWrite ? Counter_Image : Counter_Texture], regs);
+
+				if(hasDXIL)
+					SHBinary_addSat(&counters[regType & EGfxRegisterType_IsWrite ? Counter_UAV : Counter_SRV], regs);
+
 				break;
 		}
 	}
 
-	U64 totalSPIRV =
-		counters[Counter_SamplerSPIRV] +
-		counters[Counter_UBO] +
-		counters[Counter_RTASSPIRV] +
-		counters[Counter_Image] +
-		counters[Counter_Texture] +
-		counters[Counter_SSBO] +
-		counters[Counter_SubpassInput];
+	U64 totalSPIRV = 0;
 
-	if(
+	SHBinary_addSat(&totalSPIRV, counters[Counter_SamplerSPIRV]);
+	SHBinary_addSat(&totalSPIRV, counters[Counter_UBO]);
+	SHBinary_addSat(&totalSPIRV, counters[Counter_RTASSPIRV]);
+	SHBinary_addSat(&totalSPIRV, counters[Counter_Image]);
+	SHBinary_addSat(&totalSPIRV, counters[Counter_Texture]);
+	SHBinary_addSat(&totalSPIRV, counters[Counter_SSBO]);
+	SHBinary_addSat(&totalSPIRV, counters[Counter_SubpassInput]);
+
+	U64 totalDescriptors = counters[Counter_SRV];
+
+	SHBinary_addSat(&totalDescriptors, counters[Counter_UAV]);
+	SHBinary_addSat(&totalDescriptors, counters[Counter_CBV]);
+
+	if (
 		U64_max(counters[Counter_RTASSPIRV], counters[Counter_RTASDXIL]) > 16 ||
 		counters[Counter_SubpassInput] > 8
 	)
@@ -448,7 +464,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			counters[Counter_SSBO] > 500000 ||
 			counters[Counter_Texture] > 250000 ||
 			counters[Counter_Image] > 250000 ||
-			counters[Counter_SRV] + counters[Counter_UAV] + counters[Counter_CBV] > 1000000 ||
+			totalDescriptors > 1000000 ||
 			totalSPIRV > 1000000
 		)
 			retError(clean, Error_invalidState(
@@ -551,7 +567,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 	if(binaries->identifier.uniforms.length) {
 
-		if(
+		if (
 			ListSHUniformRuntime_isRef(binaries->identifier.uniforms) ||
 			ListU8_isRef(binaries->identifier.uniformData)
 		) {
@@ -649,7 +665,7 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 	if (stageB >= EGfxPipelineStage_RtStartExt && stageB <= EGfxPipelineStage_RtEndExt)
 		stageB = EGfxPipelineStage_RtStartExt;
 
-	if(
+	if (
 		extensionsA != extensionsB ||
 		a->extensions2 != b->extensions2 ||
 		a->shaderVersion != b->shaderVersion ||
@@ -743,7 +759,7 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 	U16 shaderVersion = binary->identifier.shaderVersion;
 
 	if (isVerbose || (shaderVersion != OISH_SHADER_MODEL_MIN))
-		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8) (shaderVersion >> 8), (U8) shaderVersion);
 
 	const SHExtensionSet exts = (SHExtensionSet) {
 		.extensions = binary->identifier.extensions,
@@ -799,8 +815,8 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 				alloc, ELogOptions_None,
 				CharString_length(value) ? "%s\"%.*s\" = \"%.*s\"" : "%s\"%.*s\"",
 				prev ? ", " : "",
-				(int)CharString_length(name), name.ptr,
-				(int)CharString_length(value), value.ptr
+				(int) CharString_length(name), name.ptr,
+				(int) CharString_length(value), value.ptr
 			);
 
 			prev = true;
@@ -847,7 +863,7 @@ void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Alloca
 				"%s%s %.*s = %s",
 				prev ? ", " : "",
 				tmp.ptr,
-				(int)CharString_length(uniform.name), uniform.name.ptr,
+				(int) CharString_length(uniform.name), uniform.name.ptr,
 				tmp1.ptr
 			);
 

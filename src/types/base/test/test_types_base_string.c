@@ -45,7 +45,7 @@ void Test_baseString(Test *test) {
 
 	//Auto detection
 
-	CharString autoStr = CharString_createRefAuto((C8*)cstr, 100);
+	CharString autoStr = CharString_createRefAuto((C8*) cstr, 100);
 	
 	Test_assert(test, "CharString_createRefAuto", CharString_length(autoStr) == 13);
 	Test_assert(test, "CharString_createRefAuto (ref)", CharString_isRef(autoStr));
@@ -104,8 +104,8 @@ void Test_baseString(Test *test) {
 
 	//Mut iteration
 	
-	Test_assert(test, "CharString_begin (mutable)", CharString_begin(autoStr) == (C8*)cstr);
-	Test_assert(test, "CharString_end (mutable)", CharString_end(autoStr) == (C8*)cstr + 13);
+	Test_assert(test, "CharString_begin (mutable)", CharString_begin(autoStr) == (C8*) cstr);
+	Test_assert(test, "CharString_end (mutable)", CharString_end(autoStr) == (C8*) cstr + 13);
 
 	//Char at
 
@@ -165,7 +165,7 @@ void Test_baseString(Test *test) {
 
 	Buffer buf = CharString_bufferConst(str);
 	Test_assert(test, "CharString_bufferConst", Buffer_length(buf) == 13);
-	Test_assert(test, "CharString_bufferConst (ptr)", buf.ptr == (const U8*)cstr);
+	Test_assert(test, "CharString_bufferConst (ptr)", buf.ptr == (const U8*) cstr);
 	Test_assert(test, "CharString_bufferConst (const)", Buffer_isConstRef(buf));
 
 	//Buffer (mut)
@@ -174,7 +174,7 @@ void Test_baseString(Test *test) {
 
 	buf = CharString_buffer(autoStr);
 	Test_assert(test, "CharString_buffer (mutable)", Buffer_length(buf) == 13);
-	Test_assert(test, "CharString_buffer (ptr)", buf.ptrNonConst == (U8*)cstr);
+	Test_assert(test, "CharString_buffer (ptr)", buf.ptrNonConst == (U8*) cstr);
 
 	//Allocated buffer
 
@@ -223,7 +223,7 @@ void Test_baseString(Test *test) {
 	C8 ownedBuf[64] = "Test";
 	CharString ownedStr = (CharString) {
 		.ptrNonConst = ownedBuf,
-		.lenAndNullTerminated = 4 | ((U64)1 << 63),        //4 chars, null terminated
+		.lenAndNullTerminated = 4 | ((U64) 1 << 63),        //4 chars, null terminated
 		.capacityAndRefInfo = 64                           //Pretend we own 64 bytes
 	};
 	

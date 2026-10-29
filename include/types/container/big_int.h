@@ -167,7 +167,7 @@ static inline Bool BigInt_trunc(BigInt *big, const Allocator *allocator, Error *
 	return BigInt_resize(big, i + 1, allocator, e_rr);
 }
 
-static inline U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
+static inline U16 BigInt_byteCount(BigInt b) { return (U16) (b.length * sizeof(U64)); }
 static inline U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }
 
 static inline Buffer BigInt_buffer(BigInt b) {

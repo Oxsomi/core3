@@ -122,7 +122,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		U32 binId = binaryIndices->ptr[j];
 		U16 realBinaryId = (U16) binId;
-		U16 shFileId = (U16)(binId >> 16);
+		U16 shFileId = (U16) (binId >> 16);
 
 		const SHBinaryInfo *info = &binaries->ptr[shFileId].binaries.ptr[realBinaryId];
 
@@ -216,7 +216,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		SHEntry entry = binaries->ptr[stage->shFileId].entries.ptr[entrypointId];
 		U16 realBinId = entry.binaryIds.ptr[binaryId];
-		U32 binId = ((U32)stage->shFileId << 16) | realBinId;
+		U32 binId = ((U32) stage->shFileId << 16) | realBinId;
 
 		U64 libId = ListU32_findFirst(*binaryIndices, binId, 0, NULL);
 
@@ -239,7 +239,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	//Capture ISA + statistics for live disassembly when requested and supported (VK_KHR_pipeline_executable_properties)
 
-	if(
+	if (
 		(pipeline->flags & EPipelineFlags_CaptureISA) &&
 		(device->info.capabilities.flags.features2 & EGraphicsFeatures2_PipelineExecutableInfo)
 	)
@@ -359,7 +359,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		Buffer_memcpy(
 			Buffer_createRef(shaderBindings.ptrNonConst + raytracingShaderAlignment * groupId,  raytracingShaderIdSize),
-			Buffer_createRefConst((const U8*)shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
+			Buffer_createRefConst((const U8*) shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
 		);
 	}
 

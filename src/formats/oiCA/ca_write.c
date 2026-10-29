@@ -41,8 +41,8 @@ Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 	if (!b || d.year < 1980 || d.year >(1980 + 0x7F))
 		return false;
 
-	*time = (d.second >> 1) | ((U16)d.minute << 5) | ((U16)d.hour << 11);
-	*date = d.day | ((U16)d.month << 5) | ((U16)(d.year - 1980) << 11);
+	*time = (d.second >> 1) | ((U16) d.minute << 5) | ((U16) d.hour << 11);
+	*date = d.day | ((U16) d.month << 5) | ((U16) (d.year - 1980) << 9);
 	return true;
 }
 
@@ -58,6 +58,11 @@ Bool CAFile_write(
 	StreamCursor cursor = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
 	I32x4 iv = I32x4_zero();
+	U32 headerKey[8] = { 0 };
+	U32 masterKey[8] = { 0 };
+	Bool generatedKey = false;
+	U64 offset = 0;
+	DLFile names = { 0 }, content = { 0 };
 
 	if (!caFile || !caFile->folders.ptr || !startOffset)
 		retError(clean, Error_nullPointer(
@@ -68,6 +73,9 @@ Bool CAFile_write(
 		retError(clean, Error_nullPointer(2, "CAFile_write()::result must be a valid StreamRef"));
 
 	const CASettings *settings = &caFile->settings;
+
+	names = caFile->names;
+	content = caFile->content;
 
 	if (settings->compressionType >= EXXCompressionType_Count)
 		retError(clean, Error_invalidParameter(0, 0, "CAFile_write()::compressionType is invalid"));
@@ -80,6 +88,10 @@ Bool CAFile_write(
 
 	if (*startOffset & 15)
 		retError(clean, Error_unsupportedOperation(0, "CAFile_write() at misaligned startOffset is unsupported (16-byte)"));
+
+	//Publish the final offset only after the complete archive has been written.
+
+	offset = *startOffset;
 
 	OxStream *stream = RefPtr_data(result, OxStream);
 
@@ -129,49 +141,52 @@ Bool CAFile_write(
 
 	//Align to 16 bytes before DLFiles
 
-	headerSize = (headerSize + 15) & ~(U64)15;
-	gotoIfError3(clean, DLFile_write(&caFile->names, alloc, NULL, encStreamType, I32x4_zero(), &headerSize, e_rr));
+	headerSize = (headerSize + 15) & ~(U64) 15;
 
-	headerSize = (headerSize + 15) & ~(U64)15;
-	gotoIfError3(clean, DLFile_write(&caFile->content, alloc, NULL, encStreamType, I32x4_zero(), &headerSize, e_rr));
+	//The cursor only has to hold the fixed header, the DLFiles that follow are written by DLFile_write.
+	U64 cursorSize = U64_max(headerSize, 32 * KIBI);
+
+	gotoIfError3(clean, DLFile_write(&names, alloc, NULL, encStreamType, I32x4_zero(), &headerSize, e_rr));
+
+	headerSize = (headerSize + 15) & ~(U64) 15;
+	gotoIfError3(clean, DLFile_write(&content, alloc, NULL, encStreamType, I32x4_zero(), &headerSize, e_rr));
 
 	if (!result) {
-		*startOffset += headerSize;
+		offset += headerSize;
 		goto clean;
 	}
 
 	if (stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *startOffset + headerSize, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, offset + headerSize, alloc, e_rr));
 
-	U64 cursorSize = U64_max(headerSize, 32 * KIBI);
 	gotoIfError3(clean, StreamCursor_create(result, cursorSize, true, alloc, &cursor, e_rr));
 
-	U64 start = *startOffset;
+	U64 start = offset;
 
 	//Header
 
 	CAHeader header = (CAHeader) {
 		.magicNumber = CAHeader_MAGIC,
-		.version     = (U8)ECAVersion_V1_0,
-		.type        = (U8)settings->encryptionType,
+		.version     = (U8) ECAVersion_V1_0,
+		.type        = (U8) settings->encryptionType,
 		.flags       = flags
 	};
 
-	gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &header, sizeof(CAHeader), alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &header, sizeof(CAHeader), alloc, e_rr));
 
 	//fileCount and dirCount
 
 	if (fileCountLong) {
-		gotoIfError3(clean, StreamCursor_appendU32(&cursor, startOffset, (U32) fileCount, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, &offset, (U32) fileCount, alloc, e_rr));
 	}
 
-	else gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, (U16) fileCount, alloc, e_rr));
+	else gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, (U16) fileCount, alloc, e_rr));
 
 	if (dirCountLong) {
-		gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, (U16) dirCount, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, (U16) dirCount, alloc, e_rr));
 	}
 
-	else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, startOffset, (U8) dirCount, alloc, e_rr));
+	else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, &offset, (U8) dirCount, alloc, e_rr));
 
 	//directories[]
 	//Folder index 0 is runtime root (no on-disk representation).
@@ -181,13 +196,13 @@ Bool CAFile_write(
 
 		const CAFolderInfo *fi = &caFile->folders.ptr[i];
 
-		U16 parentDisk = fi->parent == 0 ? (dirCountLong ? (U16)0xFFFF : (U16)0xFF) : (U16)(fi->parent - 1);
+		U16 parentDisk = fi->parent == 0 ? (dirCountLong ? (U16) 0xFFFF : (U16) 0xFF) : (U16) (fi->parent - 1);
 
 		if (dirCountLong) {
-			gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, parentDisk, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, parentDisk, alloc, e_rr));
 		}
 
-		else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, startOffset, (U8)parentDisk, alloc, e_rr));
+		else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, &offset, (U8) parentDisk, alloc, e_rr));
 	}
 
 	//files[]
@@ -198,18 +213,18 @@ Bool CAFile_write(
 		U16 parent    = CAFileInfo_getParent(*fi);
 		Ns  timestamp = CAFileInfo_getTimestamp(*fi);
 
-		U16 parentDisk = parent == 0 ? (dirCountLong ? (U16)0xFFFF : (U16)0xFF) : (U16)(parent - 1);
+		U16 parentDisk = parent == 0 ? (dirCountLong ? (U16) 0xFFFF : (U16) 0xFF) : (U16) (parent - 1);
 
 		if (dirCountLong) {
-			gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, parentDisk, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, parentDisk, alloc, e_rr));
 		}
 
-		else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, startOffset, (U8)parentDisk, alloc, e_rr));
+		else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, &offset, (U8) parentDisk, alloc, e_rr));
 
 		if (hasDate) {
 
 			if (hasExtendedDate) {
-				gotoIfError3(clean, StreamCursor_appendU64(&cursor, startOffset, timestamp, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU64(&cursor, &offset, timestamp, alloc, e_rr));
 			}
 
 			else {
@@ -220,8 +235,8 @@ Bool CAFile_write(
 						"CAFile_write()::couldn't store file date, please use full date"
 					));
 
-				gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, date, alloc, e_rr));
-				gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, time, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, date, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU16(&cursor, &offset, time, alloc, e_rr));
 			}
 		}
 	}
@@ -232,47 +247,71 @@ Bool CAFile_write(
 
 		//Read back the header region for AAD, same fast/slow path as DLFile_write
 
-		if (StreamCursor_contains(&cursor, start, *startOffset - start))
+		if (StreamCursor_contains(&cursor, start, offset - start))
 			tmp = Buffer_createRefConst(
 				cursor.cacheData.ptr + (start - cursor.lastLocation),
-				*startOffset - start
+				offset - start
 			);
 
 		else {
-			gotoIfError3(clean, Buffer_createUninitializedBytes(*startOffset - start, alloc, &tmp, e_rr));
+
+			gotoIfError3(clean, Buffer_createUninitializedBytes(offset - start, alloc, &tmp, e_rr));
 
 			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
 
 			U64 where = start;
 			gotoIfError3(clean, StreamCursor_consume(
-				&cursor, &where, tmp.ptrNonConst, *startOffset - start, alloc, e_rr
+				&cursor, &where, tmp.ptrNonConst, offset - start, alloc, e_rr
 			));
 
 			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
 		}
 
-		const U32 key[8] = { 0 };
+		const U32 zeroKey[8] = { 0 };
 		const Bool hasKey = Buffer_neq(
-			Buffer_createRefConst(settings->encryptionKey, sizeof(key)),
-			Buffer_createRefConst(key, sizeof(key))
+			Buffer_createRefConst(settings->encryptionKey, sizeof(zeroKey)),
+			Buffer_createRefConst(zeroKey, sizeof(zeroKey))
 		);
 
 		I32x4 tag = I32x4_zero();
 
-		gotoIfError3(clean, Buffer_encryptAuto(
-			NULL,
-			(const Buffer *restrict) &tmp,
-			!hasKey,
-			(U32 *restrict) settings->encryptionKey,
-			(I32x4 *restrict) &tag,
-			(I32x4 *restrict) &iv,
-			e_rr
+		//A generated master key lives in masterKey until the whole write succeeded, only then is it handed to the caller.
+		//A failed write therefore leaves the settings untouched and a retry generates a fresh key.
+
+		if (hasKey)
+			Buffer_memcpy(Buffer_createRef(masterKey, 32), Buffer_createRefConst(settings->encryptionKey, 32));
+
+		else {
+
+			if (!Buffer_csprng(Buffer_createRef(masterKey, sizeof(masterKey))))
+				retError(clean, Error_invalidState(0, "CAFile_write()::key generation failed"));
+
+			generatedKey = true;
+		}
+
+		Buffer_memcpy(Buffer_createRef(names.settings.encryptionKey, 32), Buffer_createRefConst(masterKey, 32));
+		Buffer_memcpy(Buffer_createRef(content.settings.encryptionKey, 32), Buffer_createRefConst(masterKey, 32));
+
+		if (!Buffer_csprng(Buffer_createRef(&iv, 12)))
+			retError(clean, Error_invalidState(0, "CAFile_write()::root IV generation failed"));
+
+		gotoIfError3(clean, Buffer_deriveEncryptionKey(
+			masterKey, iv, EEncryptionKeyDomain_CAHeader, headerKey, e_rr
 		));
+
+		BufferEncrypt encrypt = (BufferEncrypt) {
+			.target = NULL,
+			.additionalData = &tmp,
+			.type = EBufferEncryptionType_AES256GCM,
+			.flags = EBufferEncryptionFlags_StopCreateIv,
+			.nonConstEncrypt = { .key = headerKey, .tag = &tag, .iv = &iv }
+		};
+		gotoIfError3(clean, Buffer_encryptAdvanced(&encrypt, e_rr));
 
 		Buffer_free(&tmp, alloc);
 
-		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv,  3 * sizeof(U32),  alloc, e_rr));
-		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &tag, sizeof(I32x4),    alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &iv,  3 * sizeof(U32),  alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, &offset, &tag, sizeof(I32x4),    alloc, e_rr));
 
 		tag = I32x4_zero();
 	}
@@ -281,10 +320,10 @@ Bool CAFile_write(
 
 	{
 		U8 pad[16] = { 0 };
-		U64 utilized = *startOffset & 15;
+		U64 utilized = offset & 15;
 
 		if (utilized)
-			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, pad, 16 - utilized, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, pad, 16 - utilized, alloc, e_rr));
 	}
 
 	//Flush cursor before handing off to DLFile_write so it sees the header bytes
@@ -294,17 +333,20 @@ Bool CAFile_write(
 	//DLFile names
 
 	I32x4 nameIv = I32x4_xor(iv, I32x4_createFromU64x2(0, 1));
-	gotoIfError3(clean, DLFile_write(&caFile->names, alloc, result, encStreamType, nameIv, startOffset, e_rr));
+
+	gotoIfError3(clean, DLFile_write(&names, alloc, result, encStreamType, nameIv, &offset, e_rr));
 
 	//Pad to 16-byte alignment
 
 	{
-		U64 utilized = *startOffset & 15;
+
+		U64 utilized = offset & 15;
 
 		if (utilized) {
 			U8 pad[16] = { 0 };
 			gotoIfError3(clean, StreamCursor_createWithCache(result, &tmp, true, &cursor, e_rr));
-			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, pad, 16 - utilized, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, &offset, pad, 16 - utilized, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
 			StreamCursor_close(&cursor, alloc);
 		}
 	}
@@ -312,9 +354,22 @@ Bool CAFile_write(
 	//DLFile content
 
 	I32x4 contentIv = I32x4_xor(iv, I32x4_createFromU64x2(0, 2));
-	gotoIfError3(clean, DLFile_write(&caFile->content, alloc, result, encStreamType, contentIv, startOffset, e_rr));
+
+	gotoIfError3(clean, DLFile_write(&content, alloc, result, encStreamType, contentIv, &offset, e_rr));
+
+	if (generatedKey)
+		Buffer_memcpy(
+			Buffer_createRef((U32*) settings->encryptionKey, 32), Buffer_createRefConst(masterKey, sizeof(masterKey))
+		);
 
 clean:
+	if (s_uccess)
+		*startOffset = offset;
+
+	Buffer_clearAllSecure(Buffer_createRef(headerKey, sizeof(headerKey)));
+	Buffer_clearAllSecure(Buffer_createRef(masterKey, sizeof(masterKey)));
+	Buffer_clearAllSecure(Buffer_createRef(names.settings.encryptionKey, 32));
+	Buffer_clearAllSecure(Buffer_createRef(content.settings.encryptionKey, 32));
 	iv = I32x4_zero();
 	StreamCursor_close(&cursor, alloc);
 	Buffer_free(&tmp, alloc);

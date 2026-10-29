@@ -453,7 +453,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 			const Ns now = Time_now();
 
 			if (w->callbacks.onUpdate) {
-				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64) SECOND : 0;
 				w->callbacks.onUpdate(w, dt);
 			}
 
@@ -480,6 +480,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 		manager->monitorsDirty = false;
 
 		Error err = Error_none();
+
 		if(!WindowManager_updateMonitors(manager, &err))
 			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 	}
@@ -489,7 +490,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 	const Ns now = Time_now();
 
 	if(manager->callbacks.onUpdate) {
-		const F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
+		const F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64) SECOND : 0;
 		manager->callbacks.onUpdate(manager, dt);
 	}
 

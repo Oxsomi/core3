@@ -61,7 +61,7 @@ extern "C" void Test_graphicsDirtyRanges(oxc::c::Test *t, oxc::c::GraphicsDevice
 
 	gfx::CommandList emptyList;
 
-	if(
+	if (
 		!c::Test_assert(t, "dirtyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) ||
 		!c::Test_assert(t, "dirtyListBegin", emptyList.begin(true, e_rr)) ||
 		!c::Test_assert(t, "dirtyListEnd", emptyList.end(e_rr))

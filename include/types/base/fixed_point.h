@@ -22,12 +22,14 @@
 
 #pragma once
 #include "types/base/types.h"
+#include "types/base/constants.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-//Fixed point
+//Fixed point conversion truncates toward zero and saturates to the I64 backing range.
+//NaN converts to zero.
 		
 #define FixedPoint(frac, integ)                                                                          \
 																										\
@@ -41,10 +43,22 @@ static inline FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, 
 	return a - b;                                                                                        \
 }                                                                                                        \
 																										\
-static inline FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v) {                                \
-	return (FP##integ##f##frac)(v * ((FP##integ##f##frac)1 << frac));                                    \
-}                                                                                                        \
-																										\
+static inline FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v) {                                   \
+																											\
+	const F64 scaled = v * ((FP##integ##f##frac) 1 << frac);                                                \
+																											\
+	if(scaled != scaled)                                                                                    \
+		return 0;                                                                                           \
+																											\
+	if(scaled >= 0x1p63)                                                                                    \
+		return I64_MAX;                                                                                     \
+																											\
+	if(scaled <= -0x1p63)                                                                                   \
+		return I64_MIN;                                                                                     \
+																											\
+	return (FP##integ##f##frac) scaled;                                                                     \
+}                                                                                                           \
+																											\
 static inline F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value) {                              \
 	return (F64)value / ((FP##integ##f##frac)1 << frac);                                                 \
 }

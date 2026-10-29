@@ -46,14 +46,14 @@ extern const U32 CRC32C_SHORT_SHIFTS[4][256];
 
 static inline U32 CRC32C_shiftShort(U32 crc0) {
 	return
-		CRC32C_SHORT_SHIFTS[0][(U8) crc0] ^ CRC32C_SHORT_SHIFTS[1][(U8)(crc0 >> 8)] ^
-		CRC32C_SHORT_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_SHORT_SHIFTS[3][(U8)(crc0 >> 24)];
+		CRC32C_SHORT_SHIFTS[0][(U8) crc0] ^ CRC32C_SHORT_SHIFTS[1][(U8) (crc0 >> 8)] ^
+		CRC32C_SHORT_SHIFTS[2][(U8) (crc0 >> 16)] ^ CRC32C_SHORT_SHIFTS[3][(U8) (crc0 >> 24)];
 }
 
 static inline U32 CRC32C_shiftLong(U32 crc0) {
 	return
-		CRC32C_LONG_SHIFTS[0][(U8) crc0] ^ CRC32C_LONG_SHIFTS[1][(U8)(crc0 >> 8)] ^
-		CRC32C_LONG_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_LONG_SHIFTS[3][(U8)(crc0 >> 24)];
+		CRC32C_LONG_SHIFTS[0][(U8) crc0] ^ CRC32C_LONG_SHIFTS[1][(U8) (crc0 >> 8)] ^
+		CRC32C_LONG_SHIFTS[2][(U8) (crc0 >> 16)] ^ CRC32C_LONG_SHIFTS[3][(U8) (crc0 >> 24)];
 }
 
 static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
@@ -65,10 +65,10 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 	if(!bufLen)
 		return crc ^ U32_MAX;
 
-	U64 off = (U64)(void*)buf.ptr;
+	U64 off = (U64) (void*) buf.ptr;
 
 	U64 len = bufLen;
-	const U64 offNear8 = U64_min((U64)buf.ptr + bufLen, (off + 7) & ~7);
+	const U64 offNear8 = U64_min((U64) buf.ptr + bufLen, (off + 7) & ~7);
 
 	//Go to the nearest 8 byte boundary, smallest type first so every load is aligned for its own type: a U8
 	// when the address is odd, a U16 when it's 2 mod 4, a U32 when it's 4 mod 8.
@@ -78,19 +78,19 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 	if (off & 7) {
 
 		if ((off & 1) && off + sizeof(U8) <= offNear8) {
-			crc = SIMD_CRC32C_U8(crc, *(const U8*)(void*)off);
+			crc = SIMD_CRC32C_U8(crc, *(const U8*) (void*) off);
 			off += sizeof(U8);
 			len -= sizeof(U8);
 		}
 
 		if ((off & 2) && off + sizeof(U16) <= offNear8) {
-			crc = SIMD_CRC32C_U16(crc, *(const U16*)(void*)off);
+			crc = SIMD_CRC32C_U16(crc, *(const U16*) (void*) off);
 			off += sizeof(U16);
 			len -= sizeof(U16);
 		}
 
 		if ((off & 4) && off + sizeof(U32) <= offNear8) {
-			crc = SIMD_CRC32C_U32(crc, *(const U32*)(void*)off);
+			crc = SIMD_CRC32C_U32(crc, *(const U32*) (void*) off);
 			off += sizeof(U32);
 			len -= sizeof(U32);
 		}
@@ -110,7 +110,7 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 		while(len >= LONG_SHIFT * 3) {
 
 			U64 crc1 = 0, crc2 = 0;
-			U64 *offu64 = (U64*)(void*)off;
+			U64 *offu64 = (U64*) (void*) off;
 
 			for (U64 i = 0; i < LONG_SHIFT_U64; ++i) {
 				crc0 = SIMD_CRC32C_U64(crc0, offu64[i]);
@@ -132,7 +132,7 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 		while(len >= SHORT_SHIFT * 3) {
 
 			U64 crc1 = 0, crc2 = 0;
-			U64 *offu64 = (U64*)(void*)off;
+			U64 *offu64 = (U64*) (void*) off;
 
 			for (U64 i = 0; i < SHORT_SHIFT_U64; ++i) {
 				crc0 = SIMD_CRC32C_U64(crc0, offu64[i]);
@@ -153,25 +153,25 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 	//Process remaining U64s
 
 	while (len >= sizeof(U64)) {
-		crc = (U32) SIMD_CRC32C_U64(crc, *(U64*)(void*)off);
+		crc = (U32) SIMD_CRC32C_U64(crc, *(U64*) (void*) off);
 		off += sizeof(U64);
 		len -= sizeof(U64);
 	}
 
 	if (len >= sizeof(U32)) {
-		crc = SIMD_CRC32C_U32(crc, *(U32*)(void*)off);
+		crc = SIMD_CRC32C_U32(crc, *(U32*) (void*) off);
 		off += sizeof(U32);
 		len -= sizeof(U32);
 	}
 
 	if (len >= sizeof(U16)) {
-		crc = SIMD_CRC32C_U16(crc, *(U16*)(void*)off);
+		crc = SIMD_CRC32C_U16(crc, *(U16*) (void*) off);
 		off += sizeof(U16);
 		len -= sizeof(U16);
 	}
 
 	if (len >= sizeof(U8))
-		crc = SIMD_CRC32C_U8(crc, *(U8*)(void*)off);
+		crc = SIMD_CRC32C_U8(crc, *(U8*) (void*) off);
 
-	return (U32)crc ^ U32_MAX;
+	return (U32) crc ^ U32_MAX;
 }

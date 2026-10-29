@@ -24,3 +24,5 @@
 #include "types/test/test.h"
 
 void Test_jsonWriter(Test *test);   //JsonWriter: exact bytes, pretty layout, refused misuse
+void Test_jsonSingleRoot(Test *test);   //Exactly one root value per document
+void Test_jsonLocale(Test *test);       //A decimal point whatever LC_NUMERIC says

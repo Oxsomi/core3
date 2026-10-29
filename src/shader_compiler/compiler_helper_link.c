@@ -252,9 +252,9 @@ Bool Compiler_getLinkEntries(
 
 		//Go through all uniforms defined by the runtime, since there may be multiple
 
-		U16 shaderVersions = (U16)U64_max(entry.shaderVersions.length, 1);
-		U16 extensions = (U16)U64_max(entry.extensions.length, 1);
-		U16 defines = (U16)U64_max(entry.definesPerCompilation.length, 1);
+		U16 shaderVersions = (U16) U64_max(entry.shaderVersions.length, 1);
+		U16 extensions = (U16) U64_max(entry.extensions.length, 1);
+		U16 defines = (U16) U64_max(entry.definesPerCompilation.length, 1);
 		U64 uniformCombos = U64_safeDiv(entry.uniformData.length, entry.uniformStride);
 
 		for (U64 k = 0; k < U64_max(1, uniformCombos); ++k) {
@@ -276,7 +276,7 @@ Bool Compiler_getLinkEntries(
 
 			if (!isLibTarget) {
 
-				linkEntry.entrypointId = (U16)j;
+				linkEntry.entrypointId = (U16) j;
 
 				U64 l = 0;
 
@@ -320,14 +320,14 @@ Bool Compiler_getLinkEntries(
 
 				if (l != linkEntries->length) {
 					LinkEntry *shared = &linkEntries->ptrNonConst[l];
-					gotoIfError3(clean, ListU16_pushBack(&shared->runtimeEntries, (U16)j, alloc, e_rr));
-					gotoIfError3(clean, ListU16_pushBack(&shared->combinationIds, (U16)combinationId, alloc, e_rr));
+					gotoIfError3(clean, ListU16_pushBack(&shared->runtimeEntries, (U16) j, alloc, e_rr));
+					gotoIfError3(clean, ListU16_pushBack(&shared->combinationIds, (U16) combinationId, alloc, e_rr));
 					continue;
 				}
 
 				linkEntry.entrypointId = U16_MAX;
-				gotoIfError3(clean, ListU16_pushBack(&tmpEntries, (U16)j, alloc, e_rr));
-				gotoIfError3(clean, ListU16_pushBack(&tmpCombinations, (U16)combinationId, alloc, e_rr));
+				gotoIfError3(clean, ListU16_pushBack(&tmpEntries, (U16) j, alloc, e_rr));
+				gotoIfError3(clean, ListU16_pushBack(&tmpCombinations, (U16) combinationId, alloc, e_rr));
 				linkEntry.runtimeEntries = tmpEntries;
 				linkEntry.combinationIds = tmpCombinations;
 			}

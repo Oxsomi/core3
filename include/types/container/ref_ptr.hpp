@@ -133,6 +133,7 @@ namespace oxc {
 		//Adds a reference to a RefPtr* someone else owns.
 		[[nodiscard]] static RefPtr share(c::RefPtr *raw) noexcept {
 			RefPtr out;
+
 			if(raw && c::RefPtr_inc(raw))
 				out.ptr = raw;
 			return out;

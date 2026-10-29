@@ -415,7 +415,7 @@ void Test_plyParallelSerialFlagsFallBack(Test *t) {
 	Buffer bytes = Buffer_createNull();
 	JobQueue jobs = (JobQueue) { 0 };
 
-	if(
+	if (
 		!Test_assert(t, "build", Ply_genBuild(t, &spec, &bytes, &t->err)) ||
 		!Test_assert(t, "queue", JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err))
 	)
@@ -496,7 +496,7 @@ void Test_plyParallelFaceBeforeVertex(Test *t) {
 	JobQueue jobs = (JobQueue) { 0 };
 	const PlyGenSpec spec = { .vertexCount = 131, .faceCount = 43, .faceFirst = true };
 
-	if(
+	if (
 		!Test_assert(t, "build", Ply_genBuild(t, &spec, &bytes, &t->err)) ||
 		!Test_assert(t, "queue", JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err))
 	)
@@ -530,7 +530,7 @@ void Test_plyParallelTruncated(Test *t) {
 	JobQueue jobs = (JobQueue) { 0 };
 	const PlyGenSpec spec = { .vertexCount = 131, .faceCount = 43 };
 
-	if(
+	if (
 		!Test_assert(t, "build", Ply_genBuild(t, &spec, &bytes, &t->err)) ||
 		!Test_assert(t, "queue", JobQueue_create(PLY_TEST_THREADS, t->alloc, &jobs, &t->err))
 	)

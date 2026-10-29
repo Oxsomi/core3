@@ -135,7 +135,7 @@ static U64 HashIndex_capacityFor(U64 count) {
 
 	U64 capacity = HashIndex_minCapacity;
 
-	while(
+	while (
 		capacity < HashIndex_maxCapacity &&
 		count * HashIndex_maxLoadDenominator > capacity * HashIndex_maxLoadNumerator
 	)
@@ -197,7 +197,7 @@ static Bool HashIndex_resize(
 		else for (U64 i = 0; i < index->count; ++i) {
 
 			const U32 hash = HashIndex_hashKey(info, next.seed, HashIndex_keyOf(info, entries, i));
-			const U64 displacement = HashIndex_place(&next, (U64) hash & (capacity - 1), hash, (U32)(i + 1));
+			const U64 displacement = HashIndex_place(&next, (U64) hash & (capacity - 1), hash, (U32) (i + 1));
 
 			if(maxDisplacement < displacement)
 				maxDisplacement = displacement;
@@ -341,7 +341,7 @@ Bool HashIndex_insert(
 			pos = (U64) hash & (index->slots.length - 1);
 		}
 
-		const U64 maxDisplacement = HashIndex_place(index, pos, hash, (U32)(entryIndex + 1));
+		const U64 maxDisplacement = HashIndex_place(index, pos, hash, (U32) (entryIndex + 1));
 		++index->count;
 
 		//A run past the ceiling is the flooding case rather than a tuning miss, so it grows even though the
@@ -415,7 +415,7 @@ Bool HashIndex_eraseSwap(
 
 			//Repointing moves no slot, so the removal below still finds its own where it was located.
 
-			index->slots.ptrNonConst[tail].index = (U32)(entryIndex + 1);
+			index->slots.ptrNonConst[tail].index = (U32) (entryIndex + 1);
 		}
 
 		HashIndex_removeAt(index, hole);

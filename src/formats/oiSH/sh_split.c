@@ -120,18 +120,6 @@ Bool SHFile_split(const SHFile *a, EGfxBinaryType type, const Allocator *alloc, 
 
 			gotoIfError3(clean, SHRegisterRuntime_createCopy(&ai.registers.ptr[j], alloc, &tmpReg, e_rr));
 
-			//SHRegisterRuntime_createCopy leaves the hash for the caller to fill in.
-			//Everything it feeds on was copied as it was, so this lands back on the value the register already had.
-
-			gotoIfError3(clean, SHRegisterRuntime_hash(
-				&tmpReg.reg,
-				&tmpReg.name,
-				tmpReg.arrays.length ? &tmpReg.arrays : NULL,
-				tmpReg.shaderBuffer.vars.ptr ? &tmpReg.shaderBuffer : NULL,
-				&tmpReg.hash,
-				e_rr
-			));
-
 			gotoIfError3(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc, e_rr));
 			tmpReg = (SHRegisterRuntime) { 0 };
 		}

@@ -125,7 +125,7 @@ extern "C" void Test_graphicsIntegerDot(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 
 	CommandList commandList, emptyList;
 
-	if(
+	if (
 		!Test_assert(t, "listCreate", dev.createCommandList(4 * c::KIBI, 64, 16, commandList, true, e_rr)) ||
 		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
 	)

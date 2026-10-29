@@ -56,7 +56,7 @@ void Test_DLStreamAdd(Test *t) {
 		}
 
 		for (U64 i = 0; i < payloadLen; ++i)
-			payload.ptrNonConst[i] = (U8)i;
+			payload.ptrNonConst[i] = (U8) i;
 
 		if (!MemoryStream_create(payloadLen, EMemoryStreamFlags_IsWritable, &memType, &ms, &t->err)) {
 			Test_assert(t, "Streams: create MemoryStream", false);
@@ -157,7 +157,7 @@ static Bool buildStreamFile(Test *t, DLFile *f, U64 count, const RefPtrType *typ
 
 		MemoryStreamRef *ms = NULL;
 
-		if (!buildMemoryStream(t, (U8)i, i + 1, type, &ms)) {
+		if (!buildMemoryStream(t, (U8) i, i + 1, type, &ms)) {
 			DLFile_free(f, t->alloc);
 			return false;
 		}

@@ -181,6 +181,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	//The 4-byte magic dispatches; the image/audio parsers then read what they need straight from the same stream.
 
 	FileInfo info = (FileInfo) { 0 };
+
 	if (!File_getInfo(&path, &info, alloc, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
@@ -230,8 +231,8 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	//Image / audio formats are read via their own stream parsers rather than the oiXX header layout below
 
 	{
-		const U16 magic16 = *(const U16*)buf.ptr;
-		const U32 magic32 = *(const U32*)buf.ptr;
+		const U16 magic16 = *(const U16*) buf.ptr;
+		const U32 magic32 = *(const U32*) buf.ptr;
 
 		if (magic16 == BMP_MAGIC || magic32 == ddsMagic || magic32 == RIFFHeader_magic) {
 			success = CLI_inspectMediaHeader(stream, magic16, magic32, alloc, &err);
@@ -241,7 +242,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 
 	U64 reqLen = 0;
 
-	switch (*(const U32*)buf.ptr) {
+	switch (*(const U32*) buf.ptr) {
 
 		case CAHeader_MAGIC:    reqLen = sizeof(CAHeader);                    break;
 		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);      break;
@@ -260,7 +261,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 		goto clean;
 	}
 
-	switch (*(const U32*)buf.ptr) {
+	switch (*(const U32*) buf.ptr) {
 
 		//oiPL header
 
@@ -427,9 +428,9 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 				);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.headerExtensionSize);
-				Log_debugLnx("Extended per directory size: %"PRIu32, (U32)extraInfo.directoryExtensionSize);
-				Log_debugLnx("Extended per file size: %"PRIu32, (U32)extraInfo.fileExtensionSize);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32) extraInfo.headerExtensionSize);
+				Log_debugLnx("Extended per directory size: %"PRIu32, (U32) extraInfo.directoryExtensionSize);
+				Log_debugLnx("Extended per file size: %"PRIu32, (U32) extraInfo.fileExtensionSize);
 			}
 
 			//File and directory counts (their byte size depends on the *CountLong flags)
@@ -521,7 +522,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 
 			Log_debugLnx("Buffer size type uses %s", dataTypes[(dlHeader.sizeTypes >> 4) & 3]);
 
-			reqLen += (U64)1 << (dlHeader.sizeTypes & 3);
+			reqLen += (U64) 1 << (dlHeader.sizeTypes & 3);
 
 			if (Buffer_length(buf) < reqLen) {
 				Log_errorLnx("File wasn't the right size.");
@@ -553,8 +554,8 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 				);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.extendedHeader);
-				Log_debugLnx("Extended per entry size: %"PRIu32, (U32)extraInfo.perEntryExtendedData);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32) extraInfo.extendedHeader);
+				Log_debugLnx("Extended per entry size: %"PRIu32, (U32) extraInfo.perEntryExtendedData);
 			}
 
 			//Flags

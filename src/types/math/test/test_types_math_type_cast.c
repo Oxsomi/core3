@@ -21,6 +21,7 @@
 //types/math/test/test_types_math_type_cast.c
 
 #include "test_types_math_shared.h"
+#include "types/base/constants.h"
 #include "types/math/type_cast.h"
 #include "types/math/type_cast_safe.h"
 
@@ -86,7 +87,7 @@ void Test_typeCastFloatToInt(Test *test) {
 	I32 i32 = 0;
 	Test_assert(test, "I32_fromFloat",       I32_fromFloat(123.0f, &i32, NULL) && i32 == 123);
 	Test_assert(test, "I32_fromFloat",       !I32_fromFloat(122.5f, &i32, NULL) && i32 == 123);
-	Test_assert(test, "I32_fromFloat",       I32_fromFloat((F32)(1 << 25), &i32, NULL) && i32 == (I32)(1 << 25));
+	Test_assert(test, "I32_fromFloat",       I32_fromFloat((F32) (1 << 25), &i32, NULL) && i32 == (I32) (1 << 25));
 	Test_assert(test, "I32_fromFloat",       !I32_fromFloat(F32_fromU32Bits(nanBits), &i32, NULL));
 	Test_assert(test, "I32_fromFloat",       !I32_fromFloat(F32_fromU32Bits(nanBits - 1), &i32, NULL));
 
@@ -100,7 +101,7 @@ void Test_typeCastDoubleToInt(Test *test) {
 
 	Test_setModule(test, "double -> int");
 
-	static const I64 maxExact = (I64)9007199254740991;    //2^53 - 1, last exactly representable integer in F64
+	static const I64 maxExact = (I64) 9007199254740991;    //2^53 - 1, last exactly representable integer in F64
 
 	I64 i64 = 0;
 	Test_assert(test, "I64_fromDouble",      I64_fromDouble(9007199254740991.0, &i64, NULL) && i64 == maxExact);
@@ -123,6 +124,19 @@ void Test_typeCastIntToFloat(Test *test) {
 	F64 f64 = 0;
 	Test_assert(test, "F64_fromInt",         F64_fromInt(9007199254740992LL, &f64, NULL)  && f64 == 9007199254740992.0);
 	Test_assert(test, "F64_fromInt",         !F64_fromInt(9007199254740993LL, &f64, NULL) && f64 == 9007199254740992.0);
+
+	f32 = 123;
+	f64 = 123;
+
+	Test_assert(test, "F32 rejects rounded signed maximum", !F32_fromInt(I64_MAX, &f32, NULL) && f32 == 123);
+	Test_assert(test, "F32 rejects rounded unsigned maximum", !F32_fromUInt(U64_MAX, &f32, NULL) && f32 == 123);
+	Test_assert(test, "F64 rejects rounded signed maximum", !F64_fromInt(I64_MAX, &f64, NULL) && f64 == 123);
+	Test_assert(test, "F64 rejects rounded unsigned maximum", !F64_fromUInt(U64_MAX, &f64, NULL) && f64 == 123);
+	Test_assert(test, "F32 accepts signed minimum", F32_fromInt(I64_MIN, &f32, NULL) && f32 == (F32) I64_MIN);
+	Test_assert(test, "F64 accepts signed minimum", F64_fromInt(I64_MIN, &f64, NULL) && f64 == (F64) I64_MIN);
+	Test_assert(test, "F32 accepts high exact unsigned integer", F32_fromUInt((U64) 1 << 63, &f32, NULL));
+	Test_assert(test, "F64 accepts last exact unsigned integer", F64_fromUInt(U64_MAX - 2047, &f64, NULL));
+	Test_assert(test, "F64 accepts last exact signed integer", F64_fromInt(I64_MAX - 1023, &f64, NULL));
 }
 
 void Test_typeCastFloatDouble(Test *test) {

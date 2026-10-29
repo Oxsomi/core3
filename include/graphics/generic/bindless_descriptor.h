@@ -90,7 +90,7 @@ static inline I32x4 BindlessDescriptor_unpack3(U64 v) {
 }
 
 static inline U8 BindlessDescriptor_getBindlessType(BindlessDescriptor handle) {
-	return (U8)(handle >> 17);
+	return (U8) (handle >> 17);
 }
 
 static inline U32 BindlessDescriptor_getId(BindlessDescriptor handle) {

@@ -218,81 +218,86 @@
 		}
 
 		const bytes = st.bytes, ctl = st.ctl;
+		let posted = false, answered = false;
 
-		if (keyBytes) {
-			bytes.set(HEAPU8.subarray(Number(keyPtr), Number(keyPtr) + keyBytes), 0);
-			bytes.set(HEAPU8.subarray(Number(ivPtr), Number(ivPtr) + 12), 32);
-		}
+		try {
 
-		if (op === 3) //decrypt needs the tag going in
-			bytes.set(HEAPU8.subarray(Number(tagPtr), Number(tagPtr) + 16), 48);
-
-		if (aadLen)
-			bytes.set(HEAPU8.subarray(Number(aadPtr), Number(aadPtr) + aadLen), HEADER);
-
-		if (len)
-			bytes.set(HEAPU8.subarray(Number(dataPtr), Number(dataPtr) + len), dataOff);
-
-		Atomics.store(ctl, 0, 0);
-		Atomics.store(ctl, 1, 0);
-
-		st.worker.postMessage({ op: op, len: len, aadLen: aadLen, keyBytes: keyBytes, dataOff: dataOff });
-
-		//Bounded: an unbounded wait would hang the whole (single threaded) app forever
-		// if the helper worker never came up or died mid request.
-		//On timeout the caller falls back to OxC3's kernels.
-
-		const deadline = Date.now() + 30000;
-
-		while (Atomics.load(ctl, 0) === 0) {
-
-			Atomics.wait(ctl, 0, 0, 1000);
-
-			if (Date.now() > deadline) {
-				st.bytes.fill(0, 0, 64); //don't leave key material behind on the way out
-				return 0;
+			if (keyBytes) {
+				bytes.set(HEAPU8.subarray(Number(keyPtr), Number(keyPtr) + keyBytes), 0);
+				bytes.set(HEAPU8.subarray(Number(ivPtr), Number(ivPtr) + 12), 32);
 			}
-		}
 
-		const ok = Atomics.load(ctl, 1) === 1;
+			if (op === 3) //decrypt needs the tag going in
+				bytes.set(HEAPU8.subarray(Number(tagPtr), Number(tagPtr) + 16), 48);
 
-		//The staging buffer is long lived and reachable by every thread holding the SAB,
-		// so the key and IV must not outlive the call.
-		//Mirrors what Buffer_clearAllSecure does for OxC3's own buffers.
+			if (aadLen)
+				bytes.set(HEAPU8.subarray(Number(aadPtr), Number(aadPtr) + aadLen), HEADER);
 
-		if (!ok) {
-			st.bytes.fill(0, 0, 64);
-			return 0;
-		}
-
-		if (op === 1)
-			HEAPU8.set(bytes.subarray(0, 32), Number(tagPtr)); //digest has its own destination
-		else {
 			if (len)
-				HEAPU8.set(bytes.subarray(dataOff, dataOff + len), Number(dataPtr));
-			if (op === 2)
-				HEAPU8.set(bytes.subarray(48, 64), Number(tagPtr));
+				bytes.set(HEAPU8.subarray(Number(dataPtr), Number(dataPtr) + len), dataOff);
+
+			Atomics.store(ctl, 0, 0);
+			Atomics.store(ctl, 1, 0);
+
+			posted = true;
+			st.worker.postMessage({ op: op, len: len, aadLen: aadLen, keyBytes: keyBytes, dataOff: dataOff });
+
+			//Bounded: an unbounded wait would hang the whole (single threaded) app forever
+			// if the helper worker never came up or died mid request.
+			//On timeout the caller falls back to OxC3's kernels.
+
+			const deadline = Date.now() + 30000;
+
+			while (Atomics.load(ctl, 0) === 0) {
+
+				Atomics.wait(ctl, 0, 0, 1000);
+
+				if (Date.now() > deadline)
+					return 0;
+			}
+
+			answered = true;
+
+			if (Atomics.load(ctl, 1) !== 1)
+				return 0;
+
+			if (op === 1)
+				HEAPU8.set(bytes.subarray(0, 32), Number(tagPtr)); //digest has its own destination
+			else {
+
+				if (len)
+					HEAPU8.set(bytes.subarray(dataOff, dataOff + len), Number(dataPtr));
+				if (op === 2)
+					HEAPU8.set(bytes.subarray(48, 64), Number(tagPtr));
+			}
+
+			return 1;
+
+		} catch (e) {
+			return 0;
+		} finally {
+
+			//A timed out request must never race the next request on the same shared buffer.
+			//Retire its helper; the next availability check creates a new worker and staging buffer.
+			if (posted && !answered) {
+				delete Module._oxc3HostCrypto;
+				st.worker.terminate();
+			}
+
+			//Clear the whole used range, including plaintext, AAD and hash input, on every exit.
+			//The unused tail is already zero from allocation or an earlier call's cleanup.
+			bytes.fill(0, 0, needed);
 		}
-
-		bytes.fill(0, 0, 64); //wipe key + iv + tag from shared memory
-
-		return 1;
 	});
 
-	//The cache is per thread, not global, because the two sides of this bridge have different scopes.
-	//Wasm linear memory is shared between pthreads, so a plain static would be written by whichever
-	//thread got here first; the JS half lives on Module, and every emscripten pthread is its own Worker
-	//with its own Module. A shared flag would therefore tell thread B that the bridge is ready while
-	//B's Worker has no _oxc3HostCrypto at all, and the first sha256 or aesGcm call would fault in JS.
-	//Per thread also removes the data race on the flag itself.
+	//The readiness cache belongs to Module: every emscripten pthread is its own Worker with its own Module,
+	// whereas wasm linear memory is shared. A C static would incorrectly share readiness across threads.
+	//Checking the JS cache also notices retirement after a timeout and recreates the bridge on the next call.
 	//The cost is one helper Worker and one staging buffer per thread that actually uses host crypto,
 	//which is why the staging buffer starts small and grows on demand.
 
 	Bool HostCrypto_available() {
-		static _Thread_local I8 cached = -1;
-		if(cached < 0)
-			cached = (I8) oxc3_hostCryptoInit(HOST_CRYPTO_STAGING_INIT, HOST_CRYPTO_STAGING_MAX);
-		return cached == 1;
+		return oxc3_hostCryptoInit(HOST_CRYPTO_STAGING_INIT, HOST_CRYPTO_STAGING_MAX) == 1;
 	}
 
 	Bool HostCrypto_sha256(Buffer buf, U32 output[8]) {

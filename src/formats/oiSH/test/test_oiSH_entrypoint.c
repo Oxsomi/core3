@@ -85,7 +85,10 @@ void Test_SHFileAddEntryComputeInvalidGroup(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+	//An annotated binary is shared by entries of any name; a named one only belongs to the entry of that name.
+
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, NULL, true);
+
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
@@ -187,13 +190,17 @@ void Test_SHFileAddEntryWaveSizeOnNonCompute(Test *t) {
 	e.stage    = EGfxPipelineStage_Vertex;
 	e.waveSize = 0x0003;
 
-	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vsMain", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
 	Test_assert(t, "waveSize on vertex rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
+
+	e.waveSize = 0;
+	Test_assert(t, "vertex without waveSize accepted", SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+
 	SHFile_free(&sh, t->alloc);
 }
 
@@ -204,7 +211,8 @@ void Test_SHFileAddEntryWaveSizeInvalidNibbles(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, NULL, true);
+
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//A code is log2 of the lanes plus one, so 3 is 4 lanes and 8 is 128: 1, 2 and 9 name sizes HLSL can't.
@@ -431,7 +439,7 @@ void Test_SHFileAddEntryNonRTPayloadRejected(Test *t) {
 	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	info = makeBinaryInfo(EGfxPipelineStage_Compute, "comp", false);
+	info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	//Vertex + payload
@@ -444,6 +452,9 @@ void Test_SHFileAddEntryNonRTPayloadRejected(Test *t) {
 
 	Test_assert(t, "vertex + payload rejected", !SHFile_addEntrypoint(&sh, &ev, t->alloc, NULL));
 
+	ev.payloadSize = 0;
+	Test_assert(t, "vertex without payload accepted", SHFile_addEntrypoint(&sh, &ev, t->alloc, &t->err));
+
 	//Compute + payload
 	SHEntry ec = (SHEntry) { 0 };
 	ec.name = CharString_createRefCStrConst("cs"); ec.stage = EGfxPipelineStage_Compute;
@@ -451,9 +462,12 @@ void Test_SHFileAddEntryNonRTPayloadRejected(Test *t) {
 	ec.payloadSize = 16;
 
 	U16 binId0 = 1;
-	ev.binaryIds = (ListU16) { .ptr = &binId0, .length = 1, .capacityAndRefInfo = U64_MAX };
+	ec.binaryIds = (ListU16) { .ptr = &binId0, .length = 1, .capacityAndRefInfo = U64_MAX };
 
 	Test_assert(t, "compute + payload rejected", !SHFile_addEntrypoint(&sh, &ec, t->alloc, NULL));
+
+	ec.payloadSize = 0;
+	Test_assert(t, "compute without payload accepted", SHFile_addEntrypoint(&sh, &ec, t->alloc, &t->err));
 
 	SHFile_free(&sh, t->alloc);
 }
@@ -465,32 +479,38 @@ void Test_SHFileAddEntryIOOnlyGraphics(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "comp", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Compute, "cs", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	info = makeBinaryInfo(EGfxPipelineStage_RaygenExt, NULL, true);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
-	//Compute with non-zero output
+	//Compute with an output of a valid type, so only the stage refuses it
 	SHEntry ec = (SHEntry) { 0 };
 	ec.name = CharString_createRefCStrConst("cs"); ec.stage = EGfxPipelineStage_Compute;
 	ec.groupX = ec.groupY = ec.groupZ = 4;
-	ec.outputsU64[0] = 0x01;
+	ec.outputs[0] = ESBType_F32x4;
 
 	U16 binId = 0;
 	ec.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
 	Test_assert(t, "outputs on compute rejected", !SHFile_addEntrypoint(&sh, &ec, t->alloc, NULL));
 
-	//Raygen with non-zero input
+	ec.outputsU64[0] = 0;
+	Test_assert(t, "compute without outputs accepted", SHFile_addEntrypoint(&sh, &ec, t->alloc, &t->err));
+
+	//Raygen with an input of a valid type
 	SHEntry er = (SHEntry) { 0 };
 	er.name = CharString_createRefCStrConst("rgen"); er.stage = EGfxPipelineStage_RaygenExt;
-	er.inputsU64[0] = 0x01;
+	er.inputs[0] = ESBType_F32x4;
 
 	U16 binId0 = 1;
 	er.binaryIds = (ListU16) { .ptr = &binId0, .length = 1, .capacityAndRefInfo = U64_MAX };
 
 	Test_assert(t, "inputs on raygen rejected", !SHFile_addEntrypoint(&sh, &er, t->alloc, NULL));
+
+	er.inputsU64[0] = 0;
+	Test_assert(t, "raygen without inputs accepted", SHFile_addEntrypoint(&sh, &er, t->alloc, &t->err));
 
 	SHFile_free(&sh, t->alloc);
 }
@@ -502,8 +522,19 @@ void Test_SHFileAddEntryUniqueInputSemanticsLimit(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vsMain", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
+
+	//Sixteen distinct names, so the count is the only thing wrong at 16 and the most that fits is 15
+
+	static const C8 *names[16] = {
+		"S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S13", "S14", "S15"
+	};
+
+	CharString semantics[16];
+
+	for(U8 i = 0; i < 16; ++i)
+		semantics[i] = CharString_createRefCStrConst(names[i]);
 
 	SHEntry e = (SHEntry) { 0 };
 	e.name                 = CharString_createRefCStrConst("vsMain");
@@ -513,7 +544,15 @@ void Test_SHFileAddEntryUniqueInputSemanticsLimit(Test *t) {
 	U16 binId = 0;
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
+	Test_assert(t, "createRef semantics", ListCharString_createRefConst(semantics, 16, &e.semanticNames, NULL));
 	Test_assert(t, "uniqueInputSemantics = 16 rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
+
+	e.uniqueInputSemantics = 15;
+	e.semanticNames = (ListCharString) { 0 };
+
+	Test_assert(t, "createRef 15 semantics", ListCharString_createRefConst(semantics, 15, &e.semanticNames, NULL));
+	Test_assert(t, "uniqueInputSemantics = 15 accepted", SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+
 	SHFile_free(&sh, t->alloc);
 }
 
@@ -524,7 +563,7 @@ void Test_SHFileAddEntrySemanticNamesLessThanUniqueInputs(Test *t) {
 	SHFile sh = (SHFile) { 0 };
 	Test_assert(t, "create", Test_SHFileCreate(t, &sh));
 
-	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vs", false);
+	SHBinaryInfo info = makeBinaryInfo(EGfxPipelineStage_Vertex, "vsMain", false);
 	Test_assert(t, "addBinary", SHFile_addBinary(&sh, &info, t->alloc, &t->err));
 
 	SHEntry e = (SHEntry) { 0 };
@@ -536,9 +575,14 @@ void Test_SHFileAddEntrySemanticNamesLessThanUniqueInputs(Test *t) {
 	e.binaryIds = (ListU16) { .ptr = &binId, .length = 1, .capacityAndRefInfo = U64_MAX };
 
 	//Only 1 name but 2 unique inputs claimed
-	CharString sem = CharString_createRefCStrConst("TEXCOORD");
-	Test_assert(t, "createRef semantic", ListCharString_createRefConst(&sem, 1, &e.semanticNames, NULL));
+	CharString sem[2] = { CharString_createRefCStrConst("TEXCOORD"), CharString_createRefCStrConst("COLOR") };
+	Test_assert(t, "createRef semantic", ListCharString_createRefConst(sem, 1, &e.semanticNames, NULL));
 	Test_assert(t, "too-few semantic names rejected", !SHFile_addEntrypoint(&sh, &e, t->alloc, NULL));
+
+	e.semanticNames = (ListCharString) { 0 };
+	Test_assert(t, "createRef semantics", ListCharString_createRefConst(sem, 2, &e.semanticNames, NULL));
+	Test_assert(t, "two semantic names accepted", SHFile_addEntrypoint(&sh, &e, t->alloc, &t->err));
+
 	SHFile_free(&sh, t->alloc);
 }
 

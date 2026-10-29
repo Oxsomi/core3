@@ -345,7 +345,7 @@ static Bool SHValue_stringifyOne(
 				if(vi < 0)
 					gotoIfError3(clean, CharString_append(val, '-', alloc, e_rr));
 
-				number.v = vi < 0 ? ((~(U64)vi) + 1) : (U64)vi;
+				number.v = vi < 0 ? ((~(U64) vi) + 1) : (U64) vi;
 				gotoIfError3(clean, CharString_createDec(&number, e_rr));
 				break;
 			}
@@ -520,7 +520,7 @@ Bool SHValue_parse(CharString str, TypeId typeId, SHValue *value, Error *e_rr) {
 
 				if(bits != 64 && (v >> bits))
 					retError(clean, Error_outOfBounds(
-						0, v, ((U64)1 << bits) - 1, "SHValue_parse()::str doesn't fit the type"
+						0, v, ((U64) 1 << bits) - 1, "SHValue_parse()::str doesn't fit the type"
 					));
 
 				switch(stride) {
@@ -535,7 +535,7 @@ Bool SHValue_parse(CharString str, TypeId typeId, SHValue *value, Error *e_rr) {
 
 			//The magnitude may be one past the largest positive value, for the smallest negative one.
 
-			const U64 limit = (U64)1 << (bits - 1);
+			const U64 limit = (U64) 1 << (bits - 1);
 
 			if(neg ? v > limit : v >= limit)
 				retError(clean, Error_outOfBounds(0, v, limit, "SHValue_parse()::str doesn't fit the type"));

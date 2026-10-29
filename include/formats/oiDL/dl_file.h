@@ -124,7 +124,16 @@ static inline U64 DLFile_entrySize(const DLFile *file, U64 i) {
 		Buffer_length(file->entryBuffers.ptr[i]);
 }
 
+//Whether a default DLFile_read (forceKeepInStreams == false) would load every entry into memory.
+//Uses serialized entry sizes and order, regardless of the current cache or loaded state.
+//Predicts allocation policy only; entry contents are not validated.
+//Returns false for a null/unallocated file and true for an initialized empty file.
+Bool DLFile_canReadFullyLoaded(const DLFile *file);
+
 Bool DLFile_create(const DLSettings *settings, U64 cacheSize, const Allocator *alloc, DLFile *dlFile, Error *e_rr);
+//Frees the entries and cache the file owns (what DLFile_addEntry took over, or a read loaded), not refs to the caller's memory.
+//An encrypted file's entries are decrypted plaintext, so these are wiped before they go back to the allocator,
+// along with the key.
 void DLFile_free(DLFile *dlFile, const Allocator *alloc);
 
 Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *copy, Error *e_rr);

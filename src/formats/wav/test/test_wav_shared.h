@@ -23,23 +23,8 @@
 #pragma once
 #include "types/test/test.h"
 
-void Test_WAVCvtU8Identity(Test *t);
-void Test_WAVCvtI16Identity(Test *t);
-void Test_WAVCvtI16ToU8(Test *t);
-void Test_WAVCvtI24Identity(Test *t);
-void Test_WAVCvtI24ToI16(Test *t);
-void Test_WAVCvtF32Identity(Test *t);
-void Test_WAVCvtF32ToU8(Test *t);
-void Test_WAVCvtF32ToI16(Test *t);
-void Test_WAVCvtF64ToF32(Test *t);
-void Test_WAVCvtF64Identity(Test *t);
-void Test_WAVCvtIndexOffset(Test *t);
-
-void Test_WAVAvgU8(Test *t);
-void Test_WAVAvgI16(Test *t);
-void Test_WAVAvgF32(Test *t);
-void Test_WAVAvgF64(Test *t);
-void Test_WAVAvgI24(Test *t);
+void Test_WAVReadAdditionalChunksAndRates(Test *t);
+void Test_WAVWriteAdditionalRates(Test *t);
 
 void Test_WAVRoundTripStereo16(Test *t);
 void Test_WAVRoundTripMonoF32(Test *t);
@@ -57,11 +42,6 @@ void Test_WAVConvertStereoToMono(Test *t);
 void Test_WAVConvertStereoLeftOnly(Test *t);
 void Test_WAVConvertMisalignedSrc(Test *t);
 
-void Test_WAVCvtI32Identity(Test *t);
-void Test_WAVCvtI32ToI16(Test *t);
-void Test_WAVCvtI32ToI24(Test *t);
-void Test_WAVCvtI32ToF32(Test *t);
-void Test_WAVAvgI32(Test *t);
 void Test_WAVRoundTripMonoPCM32(Test *t);
 void Test_WAVRoundTripStereoPCM32(Test *t);
 void Test_WAVConvertPCM32ToF32(Test *t);
@@ -69,3 +49,17 @@ void Test_WAVConvertStereoPCM32ToMono(Test *t);
 
 void Test_WAVReadExtended(Test *t);
 void Test_WAVOddLengthPadding(Test *t);
+
+void Test_WAVCvtTable(Test *t);
+void Test_WAVCvtUnalignedIndex(Test *t);
+void Test_WAVAvgTable(Test *t);
+void Test_WAVConvertExpand(Test *t);
+void Test_WAVConvertFloatToPCM(Test *t);
+void Test_WAVConvertAverageExtremes(Test *t);
+void Test_WAVConvertInvalidInfo(Test *t);
+
+void Test_WAVReadOffsetAndTrailing(Test *t);
+void Test_WAVReadChunkBounds(Test *t);
+void Test_WAVReadFmtChunk(Test *t);
+void Test_WAVWriteFailedWrites(Test *t);
+void Test_WAVWriteLimits(Test *t);

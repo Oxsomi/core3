@@ -1,0 +1,5 @@
+# The independent consumer inherits link requirements for the producer's instrumented static archives.
+# Compile options deliberately come only from imported target interfaces.
+set(OXC3_TEST_LINK_OPTIONS [==[@consumerLinkOptions@]==])
+set(OXC3_TEST_LINK_DIRECTORIES [==[@consumerLinkDirectories@]==])
+set(OXC3_TEST_RUNTIME_FILES [==[@consumerRuntimeFiles@]==])

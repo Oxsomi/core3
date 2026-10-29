@@ -844,7 +844,7 @@ extern "C" void Test_graphicsBindfulSharedRegister(oxc::c::Test *t, oxc::c::Grap
 
 		const c::U32 visibility = layoutInfo.list.bindings.ptr[i].visibility;
 
-		if(
+		if (
 			(visibility & (1 << c::EGfxPipelineStage_Vertex)) &&
 			(visibility & (1 << c::EGfxPipelineStage_Pixel))
 		)
@@ -1846,7 +1846,7 @@ static void Test_bindfulStaticSamplerImpl(oxc::c::Test *t, oxc::c::GraphicsDevic
 	)))
 		return;
 
-	if(
+	if (
 		!Test_assert(t, "listCreate", dev.createCommandList(2 * c::KIBI, 32, 16, commandList, true, e_rr)) ||
 		!Test_assert(t, "emptyListCreate", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr))
 	)

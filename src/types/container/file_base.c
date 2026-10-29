@@ -45,8 +45,13 @@ Bool File_resolve(
 	Bool allocate = false;
 	ListCharString res = { 0 };
 
-	if(!locPtr || !isVirtual || !absoluteDirPtr)
-		retError(clean, Error_nullPointer(!locPtr ? 0 : (!isVirtual ? 1 : 3), "File_resolve()::isVirtual is required"));
+	if(!locPtr || !isVirtual || !absoluteDirPtr || !result)
+		retError(clean, Error_nullPointer(
+			!locPtr ? 0 : (!isVirtual ? 1 : (!absoluteDirPtr ? 3 : 5)), "File_resolve()::input and output pointers are required"
+		));
+
+	if(!maxFilePathLimit)
+		maxFilePathLimit = MAX_OXC_PATH;
 
 	CharString loc = CharString_createRefStrConst(*locPtr);
 	CharString absoluteDir = CharString_createRefStrConst(*absoluteDirPtr);
@@ -79,7 +84,9 @@ Bool File_resolve(
 
 	if (CharString_equalsStringSensitive(&loc, &absoluteDir)) {
 		gotoIfError3(clean, CharString_createCopy(loc, alloc, result, e_rr));
-		goto clean;
+		allocate = true;
+		*isVirtual = File_isVirtual(loc);
+		goto validateLength;
 	}
 
 	if (!CharString_isValidFilePath(loc))
@@ -144,7 +151,7 @@ Bool File_resolve(
 		//Having multiple // after each other means empty file this is invalid.
 		//So both empty file and . resolve to nothing
 
-		if(
+		if (
 			(CharString_isEmpty(res.ptr[i]) && i && !*isVirtual) ||
 			CharString_equalsSensitive(res.ptr[i], '.')
 		) {
@@ -267,7 +274,7 @@ Bool File_resolve(
 
 	if (isAbsolute) {
 
-		if(
+		if (
 			!abDirLen ||
 			!(
 				CharString_startsWithStringSensitive(result, &absoluteDir, 0) &&
@@ -286,9 +293,8 @@ Bool File_resolve(
 		gotoIfError3(clean, CharString_insertString(result, &absoluteDir, 0, alloc, e_rr));
 	}
 
-	//Ensure we can use stack allocated strings for example since we know the max size.
-
-	if(CharString_length(*result) > MAX_OXC_PATH)
+validateLength:
+	if(CharString_length(*result) > maxFilePathLimit)
 		retError(clean, Error_outOfBounds(
 			0, CharString_length(*result), maxFilePathLimit, "File_resolve()::loc resolved path is longer than max file limit"
 		));

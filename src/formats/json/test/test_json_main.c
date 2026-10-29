@@ -32,6 +32,8 @@ OXC3_TEST_MAIN(formats_json) {
 	t.alloc = &alloc;
 
 	Test_jsonWriter(&t);
+	Test_jsonSingleRoot(&t);
+	Test_jsonLocale(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

@@ -29,245 +29,7 @@
 
 //WAVFile_cvt, pure conversion, no I/O
 
-void Test_WAVCvtU8Identity(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: U8 -> U8 identity");
-
-	U8 buf[4] = { 0x00, 0x7F, 0x80, 0xFF };
-
-	Test_assert(t, "u8[0]", WAVFile_cvt(buf, 1, 1, 0, false, false) == 0x00);
-	Test_assert(t, "u8[1]", WAVFile_cvt(buf, 1, 1, 1, false, false) == 0x7F);
-	Test_assert(t, "u8[2]", WAVFile_cvt(buf, 1, 1, 2, false, false) == 0x80);
-	Test_assert(t, "u8[3]", WAVFile_cvt(buf, 1, 1, 3, false, false) == 0xFF);
-}
-
-void Test_WAVCvtI16Identity(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I16 -> I16 identity");
-
-	U16 buf[3] = { 0x0000, 0x1234, 0xFFFF };
-
-	Test_assert(t, "i16[0]", WAVFile_cvt(buf, 2, 2, 0, false, false) == 0x0000);
-	Test_assert(t, "i16[1]", WAVFile_cvt(buf, 2, 2, 1, false, false) == 0x1234);
-	Test_assert(t, "i16[2]", WAVFile_cvt(buf, 2, 2, 2, false, false) == 0xFFFF);
-}
-
-//I16 -> U8: high byte + 0x7F (documents current behaviour)
-void Test_WAVCvtI16ToU8(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I16 -> U8");
-
-	U16 zero   = 0;
-	U16 posMax = (U16)I16_MAX;
-	U16 negMax = (U16)I16_MIN;
-
-	Test_assert(t, "I16 zero -> U8", WAVFile_cvt(&zero,   2, 1, 0, false, false) == (U8)(0x00 + 0x7F));
-	Test_assert(t, "I16 max  -> U8", WAVFile_cvt(&posMax, 2, 1, 0, false, false) == (U8)(0x7F + 0x7F));
-	Test_assert(t, "I16 min  -> U8", WAVFile_cvt(&negMax, 2, 1, 0, false, false) == (U8)(0x80 + 0x7F));
-}
-
-void Test_WAVCvtI24Identity(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I24 -> I24 identity");
-
-	U8 buf[3] = { 0x56, 0x34, 0x12 };   //LE 0x123456
-
-	Test_assert(t, "i24 identity", WAVFile_cvt(buf, 3, 3, 0, false, false) == 0x123456);
-}
-
-//I24 -> I16: drops the LSB
-void Test_WAVCvtI24ToI16(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I24 -> I16 truncation");
-
-	U8 buf[3] = { 0x56, 0x34, 0x12 };   //bytes [1],[2] -> 0x1234
-	Test_assert(t, "i24 -> i16", WAVFile_cvt(buf, 3, 2, 0, false, false) == 0x1234);
-}
-
-//F32 -> F32: passthrough with clamping
-void Test_WAVCvtF32Identity(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: F32 -> F32 passthrough + clamp");
-
-	F32 samples[3] = { 0.5f, 2, -2 };
-
-	Test_assert(t, "f32  0.5 passthrough", F32_fromU32Bits((U32)WAVFile_cvt(samples, 4, 4, 0, false, false)) ==  0.5f);
-	Test_assert(t, "f32  2.0 -> +1.0",     F32_fromU32Bits((U32)WAVFile_cvt(samples, 4, 4, 1, false, false)) ==  1.0f);
-	Test_assert(t, "f32 -2.0 -> -1.0",     F32_fromU32Bits((U32)WAVFile_cvt(samples, 4, 4, 2, false, false)) == -1.0f);
-}
-
-//F32 -> U8: full-scale mapping
-void Test_WAVCvtF32ToU8(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: F32 -> U8 full-scale");
-
-	F32 samples[3] = { -1, 0, 1 };
-
-	Test_assert(t, "f32 -1 -> u8 0",   WAVFile_cvt(samples, 4, 1, 0, false, false) == 0);
-	Test_assert(t, "f32  0 -> u8 127", WAVFile_cvt(samples, 4, 1, 1, false, false) == 127);
-	Test_assert(t, "f32 +1 -> u8 255", WAVFile_cvt(samples, 4, 1, 2, false, false) == 255);
-}
-
-//F32 -> I16: 0.0 maps to 0
-void Test_WAVCvtF32ToI16(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: F32 -> I16 midpoint");
-
-	F32 mid[1] = { 0.0f };
-	Test_assert(t, "f32 0 -> i16 0", (I16)WAVFile_cvt(mid, 4, 2, 0, false, false) == 0);
-}
-
-//F64 -> F32 downcast
-void Test_WAVCvtF64ToF32(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: F64 -> F32 downcast");
-
-	F64 samples[2] = { 0.5, 2 };
-
-	F32 out0 = F32_fromU32Bits((U32)WAVFile_cvt(samples, 8, 4, 0, false, false));
-	Test_assert(t, "f64 0.5 -> f32 ~= 0.5", out0 > 0.4999f && out0 < 0.5001f);
-
-	F32 out1 = F32_fromU32Bits((U32)WAVFile_cvt(samples, 8, 4, 1, false, false));
-	Test_assert(t, "f64 2.0 clamped -> f32 1.0", out1 == 1.0f);
-}
-
-//F64 -> F64 identity
-void Test_WAVCvtF64Identity(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: F64 -> F64 identity");
-
-	F64 samples[1] = { -0.75 };
-	F64 out = F64_fromU64Bits(WAVFile_cvt(samples, 8, 8, 0, false, false));
-	Test_assert(t, "f64 -0.75 identity", out > -0.750001 && out < -0.749999);
-}
-
-//Index offset: reads the correct sample when i > 0
-void Test_WAVCvtIndexOffset(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: index offset");
-
-	U16 buf[2] = { 0x0010, 0x0020 };
-	Test_assert(t, "i16 index 0", WAVFile_cvt(buf, 2, 2, 0, false, false) == 0x0010);
-	Test_assert(t, "i16 index 1", WAVFile_cvt(buf, 2, 2, 1, false, false) == 0x0020);
-}
-
-//PCM32 identity
-void Test_WAVCvtI32Identity(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I32 -> I32 identity");
-
-	I32 buf[2] = { 0x12345678, (I32)0x80000000 };
-
-	Test_assert(t, "i32[0] identity", (I32)WAVFile_cvt(buf, 4, 4, 0, true, true) == 0x12345678);
-	Test_assert(t, "i32[1] identity", (I32)WAVFile_cvt(buf, 4, 4, 1, true, true) == (I32)0x80000000);
-}
-
-//PCM32 -> I16: high 2 bytes
-void Test_WAVCvtI32ToI16(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I32 -> I16 truncation");
-
-	//0x12345678 -> high U16 = 0x1234
-	I32 buf[1] = { 0x12345678 };
-	Test_assert(t, "i32 -> i16 high bytes", WAVFile_cvt(buf, 4, 2, 0, true, false) == 0x1234);
-}
-
-//PCM32 -> I24: high 3 bytes
-void Test_WAVCvtI32ToI24(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I32 -> I24 truncation");
-
-	//0x12345678 -> drop lowest byte -> 0x123456
-	I32 buf[1] = { 0x12345678 };
-	Test_assert(t, "i32 -> i24 high bytes", WAVFile_cvt(buf, 4, 3, 0, true, false) == 0x123456);
-}
-
-//PCM32 -> F32: I32_MAX maps to +1, 0 maps to 0, -I32_MAX maps to ~-1
-void Test_WAVCvtI32ToF32(Test *t) {
-
-	Test_setModule(t, "WAVFile_cvt: I32 -> F32 conversion");
-
-	I32 buf[3] = { I32_MAX, 0, -I32_MAX };
-
-	F32 out0 = F32_fromU32Bits((U32)WAVFile_cvt(buf, 4, 4, 0, true, false));
-	Test_assert(t, "i32 max -> f32 ~+1",  out0 > 0.9999f && out0 <= 1.0f);
-
-	F32 out1 = F32_fromU32Bits((U32)WAVFile_cvt(buf, 4, 4, 1, true, false));
-	Test_assert(t, "i32 zero -> f32 0",   out1 > -1e-6f && out1 < 1e-6f);
-
-	F32 out2 = F32_fromU32Bits((U32)WAVFile_cvt(buf, 4, 4, 2, true, false));
-	Test_assert(t, "i32 min -> f32 ~-1",  out2 >= -1.0f && out2 < -0.9999f);
-}
-
 //WAVFile_avg, pure math, no I/O
-
-void Test_WAVAvgU8(Test *t) {
-
-	Test_setModule(t, "WAVFile_avg: U8");
-
-	Test_assert(t, "u8 (10+20)/2 = 15",  WAVFile_avg(10,  20,  1, false) ==  15);
-	Test_assert(t, "u8 (0+0)/2   = 0",   WAVFile_avg(0,   0,   1, false) ==   0);
-	Test_assert(t, "u8 (0+255)/2 = 127", WAVFile_avg(0,   255, 1, false) == 127);
-	Test_assert(t, "u8 (255+255) = 255", WAVFile_avg(255, 255, 1, false) == 255);
-}
-
-void Test_WAVAvgI16(Test *t) {
-
-	Test_setModule(t, "WAVFile_avg: I16");
-
-	Test_assert(t, "i16 (0 + 0) / 2 = 0",         (I16)WAVFile_avg(0, 0, 2, false) == 0);
-	Test_assert(t, "i16 equal values",            (I16)WAVFile_avg((U16)500, (U16)500, 2, false) == 500);
-	Test_assert(t, "i16 symmetric around zero",   (I16)WAVFile_avg((U16)1000, (U16)(U16)(-1000), 2, false) == 0);
-}
-
-void Test_WAVAvgF32(Test *t) {
-
-	Test_setModule(t, "WAVFile_avg: F32");
-
-	U64 a = U32_fromF32Bits(-0.5f);
-	U64 b = U32_fromF32Bits( 0.5f);
-	F32 r = F32_fromU32Bits((U32)WAVFile_avg(a, b, 4, false));
-	Test_assert(t, "f32 (-0.5 + 0.5) / 2 = 0", r > -1e-6f && r < 1e-6f);
-
-	a = U32_fromF32Bits(0.25f);
-	b = U32_fromF32Bits(0.75f);
-	r = F32_fromU32Bits((U32)WAVFile_avg(a, b, 4, false));
-	Test_assert(t, "f32 (0.25 + 0.75) / 2 = 0.5", r > 0.4999f && r < 0.5001f);
-}
-
-void Test_WAVAvgF64(Test *t) {
-
-	Test_setModule(t, "WAVFile_avg: F64");
-
-	U64 a = U64_fromF64Bits(1.0);
-	U64 b = U64_fromF64Bits(3.0);
-	F64 r = F64_fromU64Bits(WAVFile_avg(a, b, 8, false));
-	Test_assert(t, "f64 (1 + 3) / 2 = 2", r > 1.9999999 && r < 2.0000001);
-}
-
-void Test_WAVAvgI24(Test *t) {
-
-	Test_setModule(t, "WAVFile_avg: I24");
-
-	Test_assert(t, "i24 (100 + 200) / 2 = 150", (WAVFile_avg(100, 200, 3, false) & 0xFFFFFF) == 150u);
-
-	U64 neg1000  = (U64)((U32)(-(I32)1000) & 0xFFFFFF);
-	U64 r        = WAVFile_avg(1000, neg1000, 3, false);
-	I32 signed_r = (I32)((r & 0x800000) ? (r | 0xFF000000) : r);
-	Test_assert(t, "i24 (+1000 + -1000)/2 = 0", signed_r == 0);
-}
-
-//PCM32 avg
-void Test_WAVAvgI32(Test *t) {
-
-	Test_setModule(t, "WAVFile_avg: I32 PCM");
-
-	Test_assert(t, "i32 (0 + 0) / 2 = 0",      (I32)WAVFile_avg(0, 0, 4, true) == 0);
-	Test_assert(t, "i32 equal values",           (I32)WAVFile_avg((U64)(U32)1000, (U64)(U32)1000, 4, true) == 1000);
-	Test_assert(t, "i32 symmetric around zero",
-		(I32)WAVFile_avg((U64)(U32)I32_MAX, (U64)(U32)(-I32_MAX), 4, true) == 0
-	);
-}
 
 //Build a MemoryStream backed by a caller-supplied byte buffer.
 //Caller owns *sr.
@@ -350,7 +112,7 @@ void Test_WAVRoundTripStereo16(Test *t) {
 		Test_assert(t, "stereo16 channels",      result.fmt.channels   == 2);
 		Test_assert(t, "stereo16 stride",        result.fmt.stride     == stride);
 		Test_assert(t, "stereo16 format PCM",    result.fmt.format     == ERIFFAudioFormat_PCM);
-		Test_assert(t, "stereo16 dataLength",    result.dataLength     == (U32)dataLen);
+		Test_assert(t, "stereo16 dataLength",    result.dataLength     == (U32) dataLen);
 		Test_assert(t, "stereo16 dataStart > 0", result.dataStart      >  0);
 	}
 
@@ -388,7 +150,7 @@ void Test_WAVRoundTripMonoF32(Test *t) {
 		Test_assert(t, "monoF32 channels",   result.fmt.channels  == 1);
 		Test_assert(t, "monoF32 stride",     result.fmt.stride    == 32);
 		Test_assert(t, "monoF32 format",     result.fmt.format    == ERIFFAudioFormat_IEEE754);
-		Test_assert(t, "monoF32 dataLen",    result.dataLength    == (U32)dataLen);
+		Test_assert(t, "monoF32 dataLen",    result.dataLength    == (U32) dataLen);
 	}
 
 doneMonoF32:
@@ -486,7 +248,7 @@ void Test_WAVRoundTripMonoPCM32(Test *t) {
 		Test_assert(t, "monoPCM32 channels",   result.fmt.channels  == 1);
 		Test_assert(t, "monoPCM32 stride",     result.fmt.stride    == 32);
 		Test_assert(t, "monoPCM32 format PCM", result.fmt.format    == ERIFFAudioFormat_PCM);
-		Test_assert(t, "monoPCM32 dataLen",    result.dataLength    == (U32)dataLen);
+		Test_assert(t, "monoPCM32 dataLen",    result.dataLength    == (U32) dataLen);
 	}
 
 doneMonoPCM32:
@@ -520,7 +282,7 @@ void Test_WAVRoundTripStereoPCM32(Test *t) {
 		Test_assert(t, "stereoPCM32 channels",   result.fmt.channels == 2);
 		Test_assert(t, "stereoPCM32 stride",     result.fmt.stride   == 32);
 		Test_assert(t, "stereoPCM32 format PCM", result.fmt.format   == ERIFFAudioFormat_PCM);
-		Test_assert(t, "stereoPCM32 dataLen",    result.dataLength   == (U32)dataLen);
+		Test_assert(t, "stereoPCM32 dataLen",    result.dataLength   == (U32) dataLen);
 	}
 
 doneStereoPCM32:
@@ -549,8 +311,9 @@ void Test_WAVWriteInvalidFreq(Test *t) {
 		goto doneInvalidFreq;
 	}
 
-	Test_assert(t, "bad freq fails",
-		!WAV_write(archiveSr, inputSr, 0, 0, 4, false, 12345, 16, true, NULL, t->alloc, NULL)
+	Test_assert(
+		t, "bad freq fails",
+		!WAV_write(archiveSr, inputSr, 0, 0, 4, false, 0, 16, true, NULL, t->alloc, NULL)
 	);
 
 doneInvalidFreq:
@@ -700,12 +463,13 @@ void Test_WAVConvertStereoToMono(Test *t) {
 
 		if (ok) {
 			WAVFile wf = { 0 };
+
 			if (Test_assert(t, "read back converted", WAV_read(outputSr, 0, 0, t->alloc, &wf, &t->err))) {
 				Test_assert(t, "mono channels", wf.fmt.channels == 1);
 				Test_assert(t, "mono dataLen",  wf.dataLength   == 4 * 2);
 
 				MemoryStream *s = RefPtr_data(outputSr, MemoryStream);
-				const I16 *out  = (const I16*)(s->data.ptr + wf.dataStart);
+				const I16 *out  = (const I16*) (s->data.ptr + wf.dataStart);
 
 				Test_assert(t, "avg sample[0] ==  150", out[0] ==  150);
 				Test_assert(t, "avg sample[1] == -200", out[1] == -200);
@@ -755,10 +519,11 @@ void Test_WAVConvertStereoLeftOnly(Test *t) {
 
 		if (ok) {
 			WAVFile wf = { 0 };
+
 			if (Test_assert(t, "read back left", WAV_read(outputSr, 0, 0, t->alloc, &wf, &t->err))) {
 				Test_assert(t, "left mono channels", wf.fmt.channels == 1);
 				MemoryStream *s  = RefPtr_data(outputSr, MemoryStream);
-				const I16 *out   = (const I16*)(s->data.ptr + wf.dataStart);
+				const I16 *out   = (const I16*) (s->data.ptr + wf.dataStart);
 				Test_assert(t, "left sample == 1000", out[0] == 1000);
 			}
 		}
@@ -845,6 +610,7 @@ void Test_WAVConvertPCM32ToF32(Test *t) {
 
 		if (ok) {
 			WAVFile wf = { 0 };
+
 			if (Test_assert(t, "read back f32", WAV_read(outputSr, 0, 0, t->alloc, &wf, &t->err))) {
 				Test_assert(t, "f32 format",   wf.fmt.format   == ERIFFAudioFormat_IEEE754);
 				Test_assert(t, "f32 stride",   wf.fmt.stride   == 32);
@@ -852,7 +618,7 @@ void Test_WAVConvertPCM32ToF32(Test *t) {
 				Test_assert(t, "f32 dataLen",  wf.dataLength   == 3 * 4);
 
 				MemoryStream *s  = RefPtr_data(outputSr, MemoryStream);
-				const F32 *out   = (const F32*)(s->data.ptr + wf.dataStart);
+				const F32 *out   = (const F32*) (s->data.ptr + wf.dataStart);
 
 				Test_assert(t, "pcm32 max -> f32 ~+1", out[0] > 0.9999f && out[0] <= 1.0f);
 				Test_assert(t, "pcm32 zero -> f32 0",  out[1] > -1e-6f  && out[1] < 1e-6f);
@@ -902,6 +668,7 @@ void Test_WAVConvertStereoPCM32ToMono(Test *t) {
 
 		if (ok) {
 			WAVFile wf = { 0 };
+
 			if (Test_assert(t, "read back mono pcm32", WAV_read(outputSr, 0, 0, t->alloc, &wf, &t->err))) {
 				Test_assert(t, "mono pcm32 channels", wf.fmt.channels == 1);
 				Test_assert(t, "mono pcm32 stride",   wf.fmt.stride   == 32);
@@ -909,7 +676,7 @@ void Test_WAVConvertStereoPCM32ToMono(Test *t) {
 				Test_assert(t, "mono pcm32 dataLen",  wf.dataLength   == 2 * 4);
 
 				MemoryStream *s  = RefPtr_data(outputSr, MemoryStream);
-				const I32 *out   = (const I32*)(s->data.ptr + wf.dataStart);
+				const I32 *out   = (const I32*) (s->data.ptr + wf.dataStart);
 
 				Test_assert(t, "pcm32 avg[0] == 0",    out[0] == 0);
 				Test_assert(t, "pcm32 avg[1] == 2000", out[1] == 2000);

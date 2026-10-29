@@ -127,7 +127,7 @@ static Bool Packager_hashBinary(const FileInfo *file, void *recursionGeneric, co
 	//The packager counts only when the compiler is linked INTO it; with a shader compiler module present that
 	//module is the authority and the packager's own relinks are noise.
 
-	if(
+	if (
 		!CharString_equalsStringInsensitive(&stem, &shaderCompiler) &&
 		!CharString_equalsStringInsensitive(&stem, &packager)
 	)
@@ -299,7 +299,7 @@ static Bool Packager_readSidecar(
 
 	//Both numbers are written as exactly 8 hex digits, so the fields are fixed width once located.
 
-	if(
+	if (
 		a != U64_MAX && b != U64_MAX &&
 		a + CharString_length(toolchainLine) + 8 <= CharString_length(text) &&
 		b + CharString_length(settingsLine) + 8 <= CharString_length(text)
@@ -413,7 +413,7 @@ static Bool Packager_cacheIsClean(
 
 		CharString_free(&resolved, alloc);
 
-		if(
+		if (
 			!CharString_createCopy(sourceDir, alloc, &resolved, NULL) ||
 			!CharString_append(&resolved, '/', alloc, NULL) ||
 			!CharString_appendString(&resolved, &inc.relativePath, alloc, NULL)
@@ -424,7 +424,7 @@ static Bool Packager_cacheIsClean(
 
 		Buffer_free(&includeBuf, alloc);
 
-		if(
+		if (
 			!File_hasFile(&resolved, alloc) ||
 			!File_read(&resolved, 100 * MS, 0, 0, NULL, &includeBuf, NULL)
 		) {
@@ -730,7 +730,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				CharString_free(&cachePath, alloc);
 				CharString_free(&sidecarPath, alloc);
 
-				if(
+				if (
 					!Packager_cachePath(&cacheRoot, &allOutputs.ptr[i], false, alloc, &cachePath, NULL) ||
 					!Packager_cachePath(&cacheRoot, &allOutputs.ptr[i], true, alloc, &sidecarPath, NULL)
 				)
@@ -779,7 +779,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 				U64 runEnd = i;
 
-				while(
+				while (
 					runEnd + 1 < allOutputs.length &&
 					CharString_equalsStringSensitive(&allOutputs.ptr[runEnd], &allOutputs.ptr[runEnd + 1])
 				)
@@ -840,7 +840,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 					CharString_free(&cachePath, alloc);
 					CharString_free(&sidecarPath, alloc);
 
-					if(
+					if (
 						!Packager_cachePath(&cacheRoot, &allOutputs.ptr[dst], false, alloc, &cachePath, NULL) ||
 						!Packager_cachePath(&cacheRoot, &allOutputs.ptr[dst], true, alloc, &sidecarPath, NULL)
 					)
@@ -860,7 +860,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 			if(!Buffer_length(allBuffers.ptrNonConst[i])) {
 
-				if(                                                            //Merged binaries contain empty buffers
+				if (                                                            //Merged binaries contain empty buffers
 					settings->merge &&
 					i + 1 != allOutputs.length &&
 					CharString_equalsStringSensitive(&allOutputs.ptr[i], &allOutputs.ptr[i + 1])
@@ -945,7 +945,7 @@ clean:
 	if(caSettings.encryptionType)
 		Buffer_clearAllSecure(Buffer_createRef(caSettings.encryptionKey, sizeof(caSettings.encryptionKey)));
 
-	F64 dt = (F64)(Time_now() - start) / SECOND;
+	F64 dt = (F64) (Time_now() - start) / SECOND;
 
 	if(settings && settings->enableLogging) {
 

@@ -379,7 +379,7 @@ extern "C" void Test_graphicsOverBudget(oxc::c::Test *t, oxc::c::GraphicsDeviceR
 			c::EMSAASamples_Off, nullptr, e_rr
 		));
 
-		if(
+		if (
 			created && shader && gfxtest::computePipelinePush(t, dev, file.list, pipeline, layout) &&
 			c::Test_assert(t, "forbiddenList", dev.createCommandList(4 * c::KIBI, 32, 8, commandList, true, e_rr)) &&
 			c::Test_assert(t, "forbiddenEmptyList", dev.createCommandList(c::KIBI, 16, 8, emptyList, true, e_rr)) &&

@@ -89,7 +89,7 @@ Bool MeshInputReader_create(
 		.quantized = !!(layout & EMeshFlags_QuantizePositions)
 	};
 
-	reader->positionStride = reader->quantized ? (U8)(sizeof(I16) * 4) : (U8)(sizeof(F32) * 3);
+	reader->positionStride = reader->quantized ? (U8) (sizeof(I16) * 4) : (U8) (sizeof(F32) * 3);
 	reader->attributeStride = reader->attributeLayout.stride;
 	reader->indexStride = (layout & EMeshFlags_NarrowIndices) ? (U8) sizeof(U16) : (U8) sizeof(U32);
 

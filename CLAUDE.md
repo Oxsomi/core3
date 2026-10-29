@@ -71,9 +71,10 @@ And run the suite, not just the build:
   `test_graphics_interface.cpp`.
 - The debug build's tracked allocator reports leaks with stacktraces at shutdown; tests stay clean,
   also under ASan.
-- Consumers fetch core3 from the github main branch through conan. A local edit is INVISIBLE to a
-  consumer build until pushed: a consumer links the cached library, not this tree. After a push the
-  consumer needs a fresh conan resolve, because conan caches the clone per recipe revision.
+- Keep `conanfile.py` and `conandata.yml` usable as a standalone pair copied into another project.
+  `conan create` fetches the source checkout specified in `conandata.yml`; it does not build local edits.
+  Use `conan build` followed by `conan export-pkg` to package changes from this working tree.
+  Headers and binaries must come from the same source tree.
 
 ## Error handling traps
 
@@ -95,9 +96,11 @@ And run the suite, not just the build:
   numbers, no dashes as punctuation. Continuation lines start with `//` and break at sentence
   boundaries.
 - Empty parameter lists are `()`, not `(void)`, matching the tree.
-- Wrapped calls and conditions close on their own line, at the indent of the line that opened them, never
-  trailing the last argument; a nested call closes on its own line too. A multi-line condition puts `if (`
-  alone, operands one level deeper, `)` back at the `if`'s indent. See docs/code_style.md.
+- Wrapped call arguments close on an aligned line; nested closers, a surrounding expression tail and
+  remaining outer arguments can share that line. Keep `if(call(...))` compact when only the call's
+  arguments wrap. Conditions that wrap across operands put `if (` alone, operands one level deeper,
+  `)` back at the `if`'s indent.
+  See docs/code_style.md for examples.
 - When in doubt, grep a neighbouring file and mirror it; consistency with the tree beats external
   convention.
 
@@ -117,8 +120,8 @@ And run the suite, not just the build:
 
 ## Numerics and shared helpers
 
-- `F32x4_normalize3` and relatives use the SSE `rsqrt` approximation (an axis normalizes to ~0.9998).
-  Where exactness matters, divide by the exact length instead.
+- `F32x4_normalize3` and relatives divide by the square-root length. The explicitly named
+  `normalizeFast` / `rsqrtFast` variants may use approximate reciprocal square roots.
 - CPU twins of shader helpers (packing, math) live in `types/math/` (e.g. `pack.h`) and are added as a
   PAIR with their HLSL counterpart, kept bit-identical.
 - Codecs are stream-to-stream on both sides; a convenience wrapper that materializes a whole buffer

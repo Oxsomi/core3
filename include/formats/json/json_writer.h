@@ -48,7 +48,8 @@ typedef struct JsonWriter {
 
 	U8 depth;
 	Bool pretty;
-	U8 pad[6];
+	Bool rootStarted;           //The one top level value was begun, so another is refused
+	U8 pad[5];
 
 } JsonWriter;
 

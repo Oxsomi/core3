@@ -45,7 +45,7 @@ void Test_crc32c(Test *test) {
 
 	for (U64 i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
 		const Buffer buf = Buffer_createRefConst(cases[i].str, CharString_calcStrLen(cases[i].str, U64_MAX));
-		const U32 want = *(const U32 *)cases[i].v;
+		const U32 want = *(const U32 *) cases[i].v;
 		const U32 got = Buffer_crc32c(buf);
 		Test_assert(test, cases[i].str, got == want);
 	}
@@ -62,7 +62,7 @@ void Test_crc32c(Test *test) {
 	C8 pattern[72];
 
 	for (U64 i = 0; i < sizeof(pattern); ++i)
-		pattern[i] = (C8)(i * 37 + 11);
+		pattern[i] = (C8) (i * 37 + 11);
 
 	U64 alignedStorage[9];
 	C8 *alignedC8 = (C8*) alignedStorage;

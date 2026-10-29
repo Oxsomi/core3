@@ -159,7 +159,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			4, 0, "DescriptorLayoutInfo_detect()::info was already defined, possible memleak"
 		));
 
-	if(
+	if (
 		(
 			(pushConstantName && CharString_length(*pushConstantName)) ||
 			(detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants)
@@ -170,7 +170,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			"DescriptorLayoutInfo_detect()::pushConstantName/AssumePushConstants can't be present without pushConstantOut"
 		));
 
-	if(
+	if (
 		((pushDescriptors && pushDescriptors->length) || (detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors)) !=
 		!!pushDescriptorInfo
 	)
@@ -309,14 +309,14 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 				if (CharString_equalsString(&info->bindingNames.ptr[k], &reg->name, EStringCase_Sensitive))
 					registerNameMatch = k;
 
-				if(
+				if (
 					anyBinding &&
 					DescriptorBinding_overlaps(
 						&info->bindings.ptr[k], reg->reg.registerType, regMatch, count, binaryType, false
 					)
 				) {
 
-					if(
+					if (
 						info->bindings.ptr[k].binding.binding != regMatch->binding ||
 						info->bindings.ptr[k].count != count
 					)
@@ -338,7 +338,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			U32 visibility = 0;
 
 			if ((reg->reg.isUsedFlag >> binaryType) & 1)
-				visibility |= (U32)1 << binary->entries.ptr[i].stage;
+				visibility |= (U32) 1 << binary->entries.ptr[i].stage;
 
 			//Unique register, create another
 
@@ -373,7 +373,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			if ((!hasPushConstants && isCBuffer) || isPushConstants) {
 
-				if(
+				if (
 					isPushConstants ||
 					(
 						(detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants) &&
@@ -455,7 +455,8 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			//Validate compatibility of primitive and format
 
-			else if (isTexture && (
+			else if (
+				isTexture && (
 				dk->textureFormat.primitive != reg->reg.texture.primitive ||
 				dk->textureFormat.formatId != reg->reg.texture.formatId
 			))
@@ -647,7 +648,7 @@ Bool DescriptorBinding_validate(
 
 	EGfxRegisterType type = b.registerType & EGfxRegisterType_TypeMask;
 
-	if(
+	if (
 		type == EGfxRegisterType_AccelerationStructure &&
 		!(device->info.capabilities.flags.features & EGraphicsFeatures_Raytracing)
 	)
@@ -715,7 +716,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(
+	if (
 		(info->flags & EDescriptorLayoutFlags_AllowBindlessAny) &&
 		!(device->info.capabilities.flags.features & EGraphicsFeatures_Bindless)
 	)

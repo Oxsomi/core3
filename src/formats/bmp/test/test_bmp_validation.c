@@ -43,21 +43,21 @@ static Bool makeRawBMPStream(
 	//2x2 BGRA8: stride = 8, pixel data = 16 bytes
 	const U32 w = 2, h = 2;
 	const U64 pixelStride = 4;
-	const U64 stride      = ((U64)w * pixelStride + 3) & ~3;
+	const U64 stride      = ((U64) w * pixelStride + 3) & ~3;
 	const U64 pixelData   = stride * h;
 	const U64 totalSize   = sizeof(BMPHeadersCombined) + pixelData;
 
 	BMPHeadersCombined hdr = {
 		.header = {
 			.fileType   = BMP_MAGIC,
-			.fileSize   = (U32)totalSize,
+			.fileSize   = (U32) totalSize,
 			.reserved   = 0,
 			.offsetData = sizeof(BMPHeadersCombined)
 		},
 		.info = {
 			.headerSize      = sizeof(BMPInfoHeader),
-			.width           = (I32)w,
-			.height          = (I32)h,        //positive -> isFlipped=true
+			.width           = (I32) w,
+			.height          = (I32) h,        //positive -> isFlipped=true
 			.planes          = 1,
 			.bitCount        = 32,
 			.compression     = 0,

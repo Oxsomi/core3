@@ -38,8 +38,8 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 	if(!streamRef || !off || !dataOffset || !info)
 		retError(clean, Error_nullPointer(
 			(!streamRef ? 0 : (!off ? 1 : (!dataOffset ? 2 : 3))),
-			"BMP_read()::stream, off ,dataOffset and info are required")
-		);
+			"BMP_read()::stream, off ,dataOffset and info are required"
+		));
 
 	if(streamRef->refPtrType->typeId != (TypeId) EContainerTypeId_Stream)
 		retError(clean, Error_invalidParameter(0, 0, "BMP_read()::stream needs to be the right type"));
@@ -52,11 +52,11 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 	BMPHeadersCombined bmp;
 	gotoIfError3(clean, stream->read(stream, *off, sizeof(bmp), Buffer_createRef(&bmp, sizeof(bmp)), alloc, e_rr));
 
-	if(
+	if (
 		bmp.info.planes != 1 ||
 		bmp.info.width <= 0 ||
 		!bmp.info.height ||
-		bmp.info.headerSize != sizeof(BMPInfoHeader) ||
+		(bmp.info.headerSize != sizeof(BMPInfoHeader) && bmp.info.headerSize != 108 && bmp.info.headerSize != 124) ||
 		bmp.info.colorsUsed ||
 		bmp.info.colorsImportant ||
 		bmp.info.xPixPerM < 0 ||
@@ -77,15 +77,42 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 			0, 0, "BMP_read()::stream contained unsupported format (only RGBA8/BGRA8 supported)"
 		));
 
+	//BI_BITFIELDS stores the masks after the 40 byte info header, either externally or within a V4/V5 header.
+	//The returned pixel layout is BGRA8, so other channel masks require a conversion this reader doesn't provide.
+
+	const Bool bitfields = bmp.info.compression == 3;
+	const U64 maskBytes = bitfields && bmp.info.headerSize == sizeof(BMPInfoHeader) ? 3 * sizeof(U32) : 0;
+	const U64 headerBytes = sizeof(BMPHeader) + bmp.info.headerSize + maskBytes;
+
+	if(bitfields) {
+
+		if(bmp.info.bitCount != 32)
+			retError(clean, Error_invalidParameter(0, 0, "BMP_read()::stream used BITFIELDS for something other than 32 bit"));
+
+		U32 masks[3];
+
+		if(*off > stream->size || stream->size - *off < sizeof(bmp) + sizeof(masks))
+			retError(clean, Error_outOfBounds(1, *off, stream->size, "BMP_read()::stream is too small for its channel masks"));
+
+		gotoIfError3(clean, stream->read(
+			stream, *off + sizeof(bmp), sizeof(masks), Buffer_createRef(masks, sizeof(masks)), alloc, e_rr
+		));
+
+		if(masks[0] != 0x00FF0000 || masks[1] != 0x0000FF00 || masks[2] != 0x000000FF)
+			retError(clean, Error_invalidParameter(0, 0, "BMP_read()::stream had channel masks that aren't BGRA8"));
+	}
+
 	U64 pixelStride = bmp.info.bitCount >> 3;
-	U64 stride = ((U64)bmp.info.width * pixelStride + 3) & ~3;        //Every line needs to be 4-byte aligned
+	U64 stride = ((U64) bmp.info.width * pixelStride + 3) & ~3;        //Every line needs to be 4-byte aligned
 
 	U64 expectedLength = stride * bmp.info.height;
+	const U64 requiredSize = (U64) bmp.header.offsetData + expectedLength;
+	const U64 fileSize = bmp.header.fileSize ? bmp.header.fileSize : requiredSize;
 
 	if (
 		bmp.header.fileType != BMP_MAGIC ||
-		bmp.header.offsetData < sizeof(BMPHeadersCombined) ||
-		bmp.header.fileSize != sizeof(bmp) + expectedLength ||
+		bmp.header.offsetData < headerBytes ||
+		fileSize < requiredSize ||
 		bmp.header.reserved
 	)
 		retError(clean, Error_invalidParameter(0, 0, "BMP_read()::stream didn't contain valid header"));
@@ -95,10 +122,7 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 			0, 0, "BMP_read()::buf had unexpected 'compressedSize'"
 		));
 
-	if (bmp.header.offsetData + expectedLength > bmp.header.fileSize)
-		retError(clean, Error_invalidParameter(0, 0, "BMP_read()::stream was out of bounds"));
-
-	if(*off + bmp.header.fileSize > stream->size)
+	if(*off > stream->size || fileSize > stream->size - *off)
 		retError(clean, Error_invalidParameter(0, 0, "BMP_read()::*off + fileSize out of bounds for stream"));
 
 	info->isFlipped = isFlipped;
@@ -110,7 +134,7 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 	info->textureFormatId = ETextureFormatId_BGRA8;
 
 	*dataOffset = *off + bmp.header.offsetData;
-	*off += bmp.header.fileSize;
+	*off += fileSize;
 
 clean:
 	return s_uccess;

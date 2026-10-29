@@ -48,7 +48,7 @@ static const U64 HashIndex_minCapacity = 64;
 //At 3/4 load that is about 3.2 billion entries in 32 GiB of slots; a table past that is sharded by the caller.
 
 static const U64 HashIndex_maxEntries = 0xFFFFFFFE;
-static const U64 HashIndex_maxCapacity = (U64)1 << 32;
+static const U64 HashIndex_maxCapacity = (U64) 1 << 32;
 
 //Mixes fnv1a's weak low bits into the range a mask reads, and nothing else: it is invertible, so it is worth
 // nothing against chosen keys.
@@ -130,7 +130,7 @@ typedef struct HashIndexInfo {
 static inline const void *HashIndex_keyOf(const HashIndexInfo *info, const void *entries, U64 index) {
 	return info->getKey ?
 		info->getKey(entries, index, info->context) :
-		(const void*)((const U8*) entries + index * info->stride + info->keyOffset);
+		(const void*) ((const U8*) entries + index * info->stride + info->keyOffset);
 }
 
 static inline U32 HashIndex_hashKey(const HashIndexInfo *info, U64 seed, const void *key) {

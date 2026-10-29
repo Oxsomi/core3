@@ -63,6 +63,7 @@ static Bool CLI_parseFloatInput(const CharString *in, EFloatType type, U64 *bits
 
 	if(CharString_startsWithStringInsensitive(in, &ox, 0)) {        //Raw bits of `type`
 		U64 raw = 0;
+
 		if(!CharString_parseHex(*in, &raw))
 			return false;
 		*bitsOut = raw;
@@ -84,6 +85,7 @@ Bool CLI_floatConvert(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString input = CharString_createNull();
+
 	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL)) {
 		Log_errorLnx("float convert requires -input <value>.");
 		return false;
@@ -149,6 +151,7 @@ Bool CLI_floatDissect(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString input = CharString_createNull();
+
 	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL)) {
 		Log_errorLnx("float dissect requires -input <value or 0xbits>.");
 		return false;
@@ -179,7 +182,7 @@ Bool CLI_floatDissect(const ParsedArgs *args) {
 
 	const U8 bytes = EFloatType_bytes(type);
 	const U64 exp = EFloatType_exponent(type, bits);
-	const I64 bias = ((I64)1 << (EFloatType_exponentBits(type) - 1)) - 1;
+	const I64 bias = ((I64) 1 << (EFloatType_exponentBits(type) - 1)) - 1;
 
 	Log_debugLnx(
 		"%.*s value 0x%0*"PRIx64"\n"
@@ -221,6 +224,7 @@ Bool CLI_timeConvert(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString input = CharString_createNull();
+
 	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL)) {
 		Log_errorLnx("time convert requires -input <epoch-ns or ISO-8601>.");
 		return false;
@@ -231,6 +235,7 @@ Bool CLI_timeConvert(const ParsedArgs *args) {
 	if(CharString_isDec(input)) {
 
 		U64 ns = 0;
+
 		if(!CharString_parseU64(input, &ns)) {
 			Log_errorLnx("time convert: couldn't parse epoch nanoseconds.");
 			return false;
@@ -249,6 +254,7 @@ Bool CLI_timeConvert(const ParsedArgs *args) {
 		tf[i] = input.ptr[i];
 
 	Ns ns = 0;
+
 	if(!Time_parseFormat(&ns, tf, false)) {
 		Log_errorLnx("time convert: couldn't parse ISO 8601 (expected e.g. 2026-07-26T00:00:00.000000000Z).");
 		return false;

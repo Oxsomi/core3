@@ -426,7 +426,7 @@ def emitClass(spec, funcs):
 			continue
 
 		short = func.name[len(typeName) + 1:]
-		method = short[0].lower() + short[1:]
+		method = spec.get("methodNames", {}).get(short, short[0].lower() + short[1:])
 
 		isMethod = kind == "method"
 		isCtor = kind == "constructor"

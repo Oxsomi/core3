@@ -82,3 +82,12 @@ void Test_SBFileCombineTypeMismatch(Test *t);
 void Test_SBFileCombineUnflatten(Test *t);
 void Test_SBFileCombineFlatSizeMismatch(Test *t);
 void Test_SBFileHashConsistency(Test *t);
+
+void Test_SBFileOffsetOverflow(Test *t);
+void Test_SBFileChildInsideParent(Test *t);
+void Test_SBFileSelfAlignment(Test *t);
+void Test_SBFileHashUnchangedOnFailure(Test *t);
+void Test_SBFileCombineHash(Test *t);
+void Test_SBFileCombineReadBack(Test *t);
+void Test_SBFileWriteFailures(Test *t);
+void Test_SBFileReadHugeCounts(Test *t);

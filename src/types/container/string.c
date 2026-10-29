@@ -26,6 +26,7 @@
 #include "types/base/allocator.h"
 #include "types/base/string_read.h"
 #include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/base/c8.h"
 #include "types/base/constants.h"
 
@@ -67,22 +68,22 @@ Bool CharString_create(C8 c, U64 size, const Allocator *alloc, CharString *resul
 
 	//Quick fill (is okay, allocator is guaranteed to align 8-byte)
 
-	const U16 cc2 = ((U16)c << 8) | ((U16)c << 0);
-	const U32 cc4 = ((U32)cc2 << 16) | cc2;
-	const U64 cc8 = ((U64)cc4 << 32) | cc4;
+	const U16 cc2 = ((U16) c << 8) | ((U16) c << 0);
+	const U32 cc4 = ((U32) cc2 << 16) | cc2;
+	const U64 cc8 = ((U64) cc4 << 32) | cc4;
 
 	for (U64 i = 0; i < size >> 3; ++i)
-		*((U64*)b.ptrNonConst + i) = cc8;
+		*((U64*) b.ptrNonConst + i) = cc8;
 
 	size &= 7;
 
 	if (size & 4) {
-		*(U32*)(b.ptrNonConst + (realSize >> 3 << 3)) = cc4;
+		*(U32*) (b.ptrNonConst + (realSize >> 3 << 3)) = cc4;
 		size &= 3;
 	}
 
 	if (size & 2) {
-		*(U16*)(b.ptrNonConst + (realSize >> 2 << 2)) = cc2;
+		*(U16*) (b.ptrNonConst + (realSize >> 2 << 2)) = cc2;
 		size &= 1;
 	}
 
@@ -90,9 +91,9 @@ Bool CharString_create(C8 c, U64 size, const Allocator *alloc, CharString *resul
 		b.ptrNonConst[realSize - 1] = c;
 
 	*result = (CharString) {
-		.lenAndNullTerminated = (realSize | ((U64)1 << 63)),
+		.lenAndNullTerminated = (realSize | ((U64) 1 << 63)),
 		.capacityAndRefInfo = realSize + 1,
-		.ptrNonConst = (C8*)b.ptr
+		.ptrNonConst = (C8*) b.ptr
 	};
 
 clean:
@@ -124,7 +125,7 @@ Bool CharString_createCopy(const CharString str, const Allocator *alloc, CharStr
 
 	*result = (CharString) {
 		.ptrNonConst = (C8*) b.ptrNonConst,
-		.lenAndNullTerminated = (strl | ((U64)1 << 63)),
+		.lenAndNullTerminated = (strl | ((U64) 1 << 63)),
 		.capacityAndRefInfo = strl + 1
 	};
 
@@ -138,7 +139,7 @@ void CharString_free(CharString *str, const Allocator *alloc) {
 		return;
 
 	if(!CharString_isRef(*str))
-		alloc->free(alloc->ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacityAndRefInfo));
+		alloc->free(alloc->ptr, Buffer_createManagedPtr((U8*) str->ptr, str->capacityAndRefInfo));
 
 	*str = CharString_createNull();
 }
@@ -271,14 +272,14 @@ Bool CharString_splitLine(const CharString s, const Allocator *alloc, ListCharSt
 	if (result->ptr)
 		retError(clean, Error_invalidParameter(2, 1, "CharString_splitLine()::result wasn't empty, might indicate memleak"));
 
-	U64 v = 0, lastLineEnd = U64_MAX;
+	U64 v = 0, lastLineEnd = 0;
 	const U64 strl = CharString_length(s);
 
 	for(U64 i = 0; i < strl; ++i)
 
 		if (s.ptr[i] == '\n') {            //Unix line endings
 			++v;
-			lastLineEnd = i;
+			lastLineEnd = i + 1;
 			continue;
 		}
 
@@ -288,7 +289,7 @@ Bool CharString_splitLine(const CharString s, const Allocator *alloc, ListCharSt
 				++i;
 
 			++v;
-			lastLineEnd = i;
+			lastLineEnd = i + 1;
 			continue;
 		}
 
@@ -352,7 +353,7 @@ Bool CharString_reserve(CharString *str, U64 length, const Allocator *alloc, Err
 	if (!alloc || !alloc->alloc || !alloc->free)
 		retError(clean, Error_nullPointer(2, "CharString_reserve()::alloc is required"));
 
-	if (length + 1 <= str->capacityAndRefInfo)
+	if (length + 1 <= CharString_capacity(*str))
 		goto clean;
 
 	Buffer b = Buffer_createNull();
@@ -360,10 +361,10 @@ Bool CharString_reserve(CharString *str, U64 length, const Allocator *alloc, Err
 
 	Buffer_memcpy(b, CharString_bufferConst(*str));
 
-	b.ptrNonConst[length] = '\0';
-	str->lenAndNullTerminated |= (U64)1 << 63;
+	b.ptrNonConst[CharString_length(*str)] = '\0';
+	str->lenAndNullTerminated |= (U64) 1 << 63;
 
-	if (str->capacityAndRefInfo)
+	if (CharString_capacity(*str))
 		alloc->free(alloc->ptr, Buffer_createManagedPtr(str->ptrNonConst, str->capacityAndRefInfo));
 
 	str->capacityAndRefInfo = Buffer_length(b);
@@ -397,7 +398,7 @@ Bool CharString_resize(CharString *str, U64 length, C8 defaultChar, const Alloca
 	//Simple resize; we cut off the tail
 
 	if (length < strl) {
-		str->lenAndNullTerminated = ((U64)1 << 63) | length;
+		str->lenAndNullTerminated = ((U64) 1 << 63) | length;
 		str->ptrNonConst[length] = '\0';
 		goto clean;
 	}
@@ -405,7 +406,7 @@ Bool CharString_resize(CharString *str, U64 length, C8 defaultChar, const Alloca
 	//Resize that triggers buffer resize
 	//Reserve 50% more to ensure we don't resize too many times
 
-	if (length + 1 > str->capacityAndRefInfo)
+	if (length + 1 > CharString_capacity(*str))
 		gotoIfError3(clean, CharString_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc, e_rr));
 
 	//Our capacity is big enough to handle it:
@@ -414,7 +415,7 @@ Bool CharString_resize(CharString *str, U64 length, C8 defaultChar, const Alloca
 		str->ptrNonConst[i] = defaultChar;
 
 	str->ptrNonConst[length] = '\0';
-	str->lenAndNullTerminated = length | ((U64)1 << 63);
+	str->lenAndNullTerminated = length | ((U64) 1 << 63);
 
 clean:
 	return s_uccess;
@@ -435,8 +436,11 @@ Bool CharString_findAll(const CharStringFind *find, C8 c, EStringCase caseSensit
 	const U64 off = find->off;
 	const U64 len = find->len;
 
-	if(off >= strl || off + len > strl)
+	if(off > strl || len > strl - off)
 		retError(clean, Error_invalidParameter(4, 0, "CharString_findAll()::off or len out of bounds"));
+
+	if(off == strl)
+		goto clean;
 
 	const C8 *sPtr = find->s->ptr;
 
@@ -486,8 +490,11 @@ Bool CharString_findAllString(const CharStringFind *find, const CharString *othe
 	if(!otherl)
 		retError(clean, Error_invalidParameter(1, 0, "CharString_findAllString()::other is empty"));
 
-	if(off >= strl || off + len > strl)
+	if(off > strl || len > strl - off)
 		retError(clean, Error_invalidParameter(4, 0, "CharString_findAllString()::off or len is out of bounds"));
+
+	if(off == strl)
+		goto clean;
 
 	const C8 *sPtr = find->s->ptr;
 	const C8 *otherPtr = other->ptr;
@@ -660,7 +667,7 @@ U64 CharString_hashSeededInsensitive(const void *key, U64 seed, void *context) {
 	U64 hash = Buffer_fnv1a64Single(len, seed ^ Buffer_fnv1a64Offset);
 
 	for(U64 i = 0; i < len; ++i)
-		hash = Buffer_fnv1a64Single((U64)(U8) C8_toLower(s.ptr[i]), hash);
+		hash = Buffer_fnv1a64Single((U64) (U8) C8_toLower(s.ptr[i]), hash);
 
 	return hash;
 }
@@ -783,7 +790,7 @@ Bool CharString_formatVariadic(const Allocator *alloc, CharString *result, Error
 
 	gotoIfError3(clean, CharString_create('\0', (U64) len, alloc, result, e_rr));
 
-	if(vsnprintf((C8*)result->ptr, len + 1, format, args) < 0) {
+	if(vsnprintf((C8*) result->ptr, len + 1, format, args) < 0) {
 		CharString_free(result, alloc);
 		retError(clean, Error_stderr(0, "CharString_formatVariadic() vsnprintf failed"));
 	}
@@ -808,6 +815,57 @@ Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, 
 
 clean:
 	return s_uccess;
+}
+
+Bool CharString_formatDecimal(F64 v, U8 precision, C8 out[CharString_decimalLen]) {
+
+	if(!out || !precision || precision > 17)
+		return false;
+
+	//Spelled out because the C libraries disagree on these ("-nan(ind)" on MSVC), and "(" is not a decimal point.
+
+	if(F64_isNaN(v) || F64_isInf(v)) {
+
+		const C8 *text = F64_isNaN(v) ? "nan" : (v < 0 ? "-inf" : "inf");
+		const U64 textLen = CharString_calcStrLen(text, 4) + 1;
+
+		Buffer_memcpy(Buffer_createRef(out, textLen), Buffer_createRefConst(text, textLen));
+		return true;
+	}
+
+	C8 tmp[64];
+	const int len = snprintf(tmp, sizeof(tmp), "%.*g", (int) precision, v);
+
+	if(len < 0 || (U64) len >= sizeof(tmp))
+		return false;
+
+	//"%g" writes a sign, digits, the decimal point, digits, an exponent "e+dd", or the letters of inf and nan.
+	//Every other byte belongs to the locale's decimal point, which can be more than one byte, so a run of them
+	// becomes a single '.'.
+
+	U64 j = 0;
+
+	for(U64 i = 0; i < (U64) len; ) {
+
+		if(j + 1 >= CharString_decimalLen)
+			return false;
+
+		const C8 c = tmp[i];
+
+		if(C8_isAlphaNumeric(c) || c == '-' || c == '+') {
+			out[j++] = c;
+			++i;
+			continue;
+		}
+
+		out[j++] = '.';
+
+		while(i < (U64) len && !C8_isAlphaNumeric(tmp[i]) && tmp[i] != '-' && tmp[i] != '+')
+			++i;
+	}
+
+	out[j] = '\0';
+	return true;
 }
 
 Bool CharString_appendFormatVariadic(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, va_list args) {
@@ -936,6 +994,7 @@ Bool CharString_createFromETypeIdHLSL(
 
 	Bool s_uccess = true;
 	const C8 *ptr = NULL;
+	Bool created = false;
 
 	switch (dataType) {
 
@@ -1017,6 +1076,7 @@ Bool CharString_createFromETypeIdHLSL(
 	}
 
 	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result, e_rr));
+	created = true;
 
 	if(w == 1 && h == 1)
 		goto clean;
@@ -1030,6 +1090,9 @@ Bool CharString_createFromETypeIdHLSL(
 	gotoIfError3(clean, CharString_append(result, C8_createDec(h), alloc, e_rr));
 
 clean:
+	if(created && !s_uccess)
+		CharString_free(result, alloc);
+
 	return s_uccess;
 }
 
@@ -1037,7 +1100,7 @@ TypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeSt
 
 	U64 strl = CharString_length(str);
 
-	if(str.ptr[off] != 'x' || (strl != ((U64)off + 2) && strl != ((U64)off + 4)))
+	if(str.ptr[off] != 'x' || (strl != ((U64) off + 2) && strl != ((U64) off + 4)))
 		return (TypeId) ETypeId_Undefined;
 
 	U8 w = C8_dec(str.ptr[off + 1]);
@@ -1047,7 +1110,7 @@ TypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeSt
 
 	Bool needsMatrix = w == 1;
 
-	Bool isMatrix = strl == ((U64)off + 4);
+	Bool isMatrix = strl == ((U64) off + 4);
 	U8 h = 1;
 
 	if (isMatrix) {

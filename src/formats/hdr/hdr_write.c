@@ -41,8 +41,10 @@
 //One texel, float triple to RGBE. The BRIGHTEST channel sets the shared exponent, so it lands in [128,
 // 256) after scaling and the other two keep whatever precision that leaves them.
 //
-//Mirrors the decoder's scale of 2^(e - 136) exactly: a byte written as c * 2^(8 - e) reads back as c * 2^(8 - e) * 2^(e -
-// 136 + 128), which is c.
+//Mirrors the decoder's scale of 2^(e - 136) exactly. The decoder reconstructs a byte c as c + 0.5 steps, the midpoint of
+// the step the truncation here floors to, so a value reads back to within half a step of the brightest channel (2^-9
+// relative) and not bit for bit: 1.0 comes back as 1.0039. What is exact is the second trip: the value a read
+// returns encodes back to the same bytes, so writing what was read changes nothing.
 
 static void HDR_encodeTexel(F32 r, F32 g, F32 b, U8 *out) {
 
@@ -63,7 +65,7 @@ static void HDR_encodeTexel(F32 r, F32 g, F32 b, U8 *out) {
 	//frexp's exponent, straight off the bits: v is mantissa * 2^e with the mantissa in [0.5, 1),
 	// so a bias of 126 rather than 127.
 
-	I32 e = (I32)((U32_fromF32Bits(v) >> 23) & 0xFF) - 126;
+	I32 e = (I32) ((U32_fromF32Bits(v) >> 23) & 0xFF) - 126;
 
 	//e + 128 has to fit a byte. Real radiance never reaches either end, but a stray infinity would.
 
@@ -75,7 +77,7 @@ static void HDR_encodeTexel(F32 r, F32 g, F32 b, U8 *out) {
 	//The field cannot leave its range here: e is clamped to 127 above, and the 1e-32 floor keeps it over -106,
 	// so 135 - e stays inside 8 to 241.
 
-	const F32 scale = F32_fromU32Bits((U32)(135 - e) << 23);
+	const F32 scale = F32_fromU32Bits((U32) (135 - e) << 23);
 
 	//Clamped in the FLOAT domain, before the cast: converting an out-of-range float to an integer is undefined,
 	// and the brightest channel is only guaranteed to land inside the range by construction.
@@ -83,7 +85,7 @@ static void HDR_encodeTexel(F32 r, F32 g, F32 b, U8 *out) {
 	out[0] = (U8) F32_clamp(r * scale, 0, 255);
 	out[1] = (U8) F32_clamp(g * scale, 0, 255);
 	out[2] = (U8) F32_clamp(b * scale, 0, 255);
-	out[3] = (U8)(e + 128);
+	out[3] = (U8) (e + 128);
 }
 
 //One channel plane of one scanline. A run repeats one byte and is worth it from four up;
@@ -98,11 +100,11 @@ static U64 HDR_writePlane(const U8 *src, U32 w, U64 stride, U8 *dst) {
 
 		U32 run = 1;
 
-		while(x + run < w && run < 127 && src[(U64)(x + run) * stride] == src[(U64) x * stride])
+		while(x + run < w && run < 127 && src[(U64) (x + run) * stride] == src[(U64) x * stride])
 			++run;
 
 		if(run >= 4) {
-			dst[at++] = (U8)(128 + run);
+			dst[at++] = (U8) (128 + run);
 			dst[at++] = src[(U64) x * stride];
 			x += run;
 			continue;
@@ -116,7 +118,7 @@ static U64 HDR_writePlane(const U8 *src, U32 w, U64 stride, U8 *dst) {
 
 			U32 ahead = 1;
 
-			while(x + lit + ahead < w && ahead < 4 && src[(U64)(x + lit + ahead) * stride] == src[(U64)(x + lit) * stride])
+			while(x + lit + ahead < w && ahead < 4 && src[(U64) (x + lit + ahead) * stride] == src[(U64) (x + lit) * stride])
 				++ahead;
 
 			if(ahead >= 4)
@@ -128,7 +130,7 @@ static U64 HDR_writePlane(const U8 *src, U32 w, U64 stride, U8 *dst) {
 		dst[at++] = (U8) lit;
 
 		for(U32 i = 0; i < lit; ++i)
-			dst[at++] = src[(U64)(x + i) * stride];
+			dst[at++] = src[(U64) (x + i) * stride];
 
 		x += lit;
 	}
@@ -141,7 +143,7 @@ static U64 HDR_writePlane(const U8 *src, U32 w, U64 stride, U8 *dst) {
 
 Bool HDR_writeExposed(
 	StreamRef *streamRef,
-	U64 *off,
+	U64 *startOffset,
 	EHDRWriteFlags flags,
 	U32 w,
 	U32 h,
@@ -153,13 +155,16 @@ Bool HDR_writeExposed(
 ) {
 
 	Bool s_uccess = true;
+	U64 off = 0;
 	ListF32 rowF32 = (ListF32) { 0 };
 	ListU8 rgbe = (ListU8) { 0 };
 	ListU8 enc = (ListU8) { 0 };
 	CharString header = CharString_createNull();
 
-	if(!streamRef || !inputStreamRef || !off)
+	if(!streamRef || !inputStreamRef || !startOffset)
 		retError(clean, Error_nullPointer(0, "HDR_write() requires both streams and off"));
+
+	off = *startOffset;
 
 	if(!w || !h || w > HDR_MAX_DIM || h > HDR_MAX_DIM)
 		retError(clean, Error_invalidParameter(2, 0, "HDR_write() resolution out of range"));
@@ -188,9 +193,20 @@ Bool HDR_writeExposed(
 			alloc, &header, e_rr, "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y %u +X %u\n", h, w
 		));
 
-	else gotoIfError3(clean, CharString_format(
-		alloc, &header, e_rr, "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nEXPOSURE=%.9g\n\n-Y %u +X %u\n", (F64) exposure, h, w
-	));
+	//The exposure is formatted by CharString_formatDecimal: printf follows the C locale's decimal separator, which a host
+	// that called setlocale can have as a comma, and "1,5" in a header reads back as a different (or no) exposure.
+
+	else {
+
+		C8 exposureStr[CharString_decimalLen];
+
+		if(!CharString_formatDecimal((F64) exposure, 9, exposureStr))
+			retError(clean, Error_invalidParameter(5, 0, "HDR_writeExposed()::exposure couldn't be formatted"));
+
+		gotoIfError3(clean, CharString_format(
+			alloc, &header, e_rr, "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\nEXPOSURE=%s\n\n-Y %u +X %u\n", exposureStr, h, w
+		));
+	}
 
 	const U64 headerLen = CharString_length(header);
 
@@ -203,13 +219,13 @@ Bool HDR_writeExposed(
 	const U64 perLine = adaptive ? 4 + 4 * ((U64) w + (w + 127) / 128) : (U64) w * 4;
 
 	if(stream->reserve)
-		gotoIfError3(clean, stream->reserve(stream, *off + headerLen + perLine * h, alloc, e_rr));
+		gotoIfError3(clean, stream->reserve(stream, off + headerLen + perLine * h, alloc, e_rr));
 
 	gotoIfError3(clean, stream->write(
-		stream, *off, headerLen, Buffer_createRefConst(header.ptr, headerLen), alloc, e_rr
+		stream, off, headerLen, Buffer_createRefConst(header.ptr, headerLen), alloc, e_rr
 	));
 
-	*off += headerLen;
+	off += headerLen;
 
 	if(!srcIsRGBE)
 		gotoIfError3(clean, ListF32_create((U64) w * 4, alloc, &rowF32, e_rr));
@@ -241,8 +257,8 @@ Bool HDR_writeExposed(
 
 			dst[at++] = 2;
 			dst[at++] = 2;
-			dst[at++] = (U8)(w >> 8);
-			dst[at++] = (U8)(w & 0xFF);
+			dst[at++] = (U8) (w >> 8);
+			dst[at++] = (U8) (w & 0xFF);
 
 			for(U32 ch = 0; ch < 4; ++ch)
 				at += HDR_writePlane(line + ch, w, 4, dst + at);
@@ -252,13 +268,15 @@ Bool HDR_writeExposed(
 			dst[at++] = line[i];
 
 		gotoIfError3(clean, stream->write(
-			stream, *off, at, Buffer_createRefConst(dst, at), alloc, e_rr
+			stream, off, at, Buffer_createRefConst(dst, at), alloc, e_rr
 		));
 
-		*off += at;
+		off += at;
 	}
 
 clean:
+	if(s_uccess)
+		*startOffset = off;
 
 	CharString_free(&header, alloc);
 	ListU8_free(&enc, alloc);

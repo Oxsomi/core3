@@ -133,6 +133,7 @@ static inline Bool CharString_isValidAscii(const CharString str) {
 static inline U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
 	if (!ptr) return 0;
 	U64 i = 0;
+
 	for (; i < maxSize && ptr[i]; ++i) (void) 0;
 	return i;
 }
@@ -237,7 +238,7 @@ static inline Bool CharString_clear(CharString *str) {
 	if(CharString_isNullTerminated(*str))                    //If null terminated, we want to keep it null terminated
 		str->ptrNonConst[0] = '\0';
 
-	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);        //Clear size
+	str->lenAndNullTerminated &= ~(((U64) 1 << 63) - 1);        //Clear size
 	return true;
 }
 

@@ -78,6 +78,8 @@ typedef struct CharStringSplit {
 Bool CharString_split(const CharStringSplit *split, C8 c, EStringCase casing, Error *e_rr);
 Bool CharString_splitString(const CharStringSplit *split, const CharString *other, EStringCase casing, Error *e_rr);
 
+//Splits LF, CRLF or CR lines; a trailing terminator does not add an extra empty line.
+
 Bool CharString_splitLine(const CharString s, const Allocator *alloc, ListCharString *result, Error *e_rr);
 
 //This will operate on this string, so it will need a heap allocated string
@@ -170,6 +172,16 @@ Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, 
 
 Bool CharString_appendFormatVariadic(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, va_list args);
 Bool CharString_appendFormat(const Allocator *alloc, CharString *s, Error *e_rr, const C8 *format, ...);
+
+//Writes v as "%.*g" with '.' as the decimal point whatever LC_NUMERIC the host set, because the C library takes it
+// from the locale and a file another program reads back must not change with the machine that wrote it.
+//Text formats (JSON, OBJ, PLY, HDR) print their floats through this, passing the result as "%s".
+//NaN and infinity come out as "nan", "inf" and "-inf" on every platform.
+//Fails if precision is not in [1, 17]; out holds the longest result, "-1.2345678901234567e-308", with room to spare.
+
+#define CharString_decimalLen 32
+
+Bool CharString_formatDecimal(F64 v, U8 precision, C8 out[CharString_decimalLen]);
 
 //Parsing and stringifying TypeId (as long as it's a basic OxC3 base type)
 

@@ -122,14 +122,14 @@ void Test_CASetTime(Test *t) {
 			goto doneSetTime;
 		}
 
-		Ns ts = (Ns)1234567 * MS;        //Must be expressible in the 48-bit ms field
+		Ns ts = (Ns) 1234567 * MS;        //Must be expressible in the 48-bit ms field
 		CAHandle hf = addFile(t, &ca, root, "timed.txt", ts, false);
 
 		Test_assert(t, "initial time preserved", CAFile_fileTime(&ca, hf) == ts);
 
 		//Update time
 
-		Ns ts2 = (Ns)9999999 * MS;
+		Ns ts2 = (Ns) 9999999 * MS;
 		Test_assert(t, "setTime ok",             CAFile_setTime(&ca, hf, ts2, &t->err));
 		Test_assert(t, "time updated",           CAFile_fileTime(&ca, hf) == ts2);
 
@@ -164,7 +164,7 @@ void Test_CASetTime(Test *t) {
 		// either 0 (unchanged) or the requested value, never an uninitialised
 		// or out-of-range garbage number.
 
-		Ns ts = (Ns)5000 * MS;
+		Ns ts = (Ns) 5000 * MS;
 		Bool ok = CAFile_setTime(&ca, hf, ts, NULL);
 		Ns got  = CAFile_fileTime(&ca, hf);
 
@@ -204,6 +204,7 @@ void Test_CASetStream(Test *t) {
 		//Create a MemoryStream of 8 bytes
 
 		StreamRef *sr = NULL;
+
 		if (!MemoryStream_create(8, EMemoryStreamFlags_None, &type, &sr, &t->err)) {
 			Test_assert(t, "MemoryStream_create", false);
 			goto doneStream;
@@ -279,6 +280,7 @@ void Test_CASetStream(Test *t) {
 		CAHandle hf = addFile(t, &src, root, "streamed.bin", 0, false);
 
 		StreamRef *sr = NULL;
+
 		if (!MemoryStream_create(4, EMemoryStreamFlags_None, &type, &sr, &t->err)) {
 			Test_assert(t, "MemoryStream_create for stream copy", false);
 			goto doneStreamCopy;
