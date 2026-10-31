@@ -79,4 +79,29 @@ if(NOT ANDROID AND NOT EMSCRIPTEN)
 	configure_icon(OxC3_package "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 	apply_dependencies(OxC3_package)
 
+	# Without a shader compiler module the shader cache stamps OxC3_package, so that has to be next to the test.
+	# It runs from its own folder because that stamp walks the app directory, which OxC3 can only read from inside the
+	# working directory.
+
+	if(EnableTests AND OxC3TestExecutables AND EnableShaderCompiler)
+
+		oxc3_add_test(
+			NAME        OxC3_package_test
+			FOLDER      Oxsomi/test/CLI
+			LIBS        OxC3_package_CLI OxC3_platforms OxC3_types_test
+			WORKING_DIR "$<TARGET_FILE_DIR:OxC3_package_test>"
+		)
+
+		add_dependencies(OxC3_package_test OxC3_package)
+
+		# DXC's allocations left to process exit, see OxC3_shader_compiler_test.
+
+		if(EnableASAN)
+			oxc3_test_env(OxC3_package_test
+				"LSAN_OPTIONS=string_append:,suppressions=${CMAKE_SOURCE_DIR}/cmake/lsan_suppressions.txt"
+			)
+		endif()
+
+	endif()
+
 endif()

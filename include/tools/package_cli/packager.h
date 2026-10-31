@@ -58,6 +58,8 @@ typedef struct PackageSettings {
 	Bool keepShaderSource;
 	U8 pad[1];
 
+	U64 *shadersReused;        //Optional, gets how many shaders came out of the previous package rather than a compile
+
 } PackageSettings;
 
 Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, Error *e_rr);

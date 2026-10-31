@@ -367,6 +367,49 @@ static VkBool32 VKAPI_PTR onAddressBinding(
 	return VK_FALSE;
 }
 
+//Listens for address bindings only, which a device reports once it enabled VK_EXT_device_address_binding_report.
+//Made by the first device found with that extension, since the validation layer refuses a messenger that asks for address
+// bindings when no physical device has it (lavapipe), and nothing could report to it anyway.
+//A failure only costs a lost device the names of the images its fault addresses fall in.
+
+static Bool VkGraphicsInstance_createBindingMessenger(const GraphicsInstance *inst) {
+
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
+
+	if(!instanceExt->createMessenger || !instanceExt->destroyMessenger)
+		return false;
+
+	const ELockAcquire acq = SpinLock_lock(&instanceExt->bindingLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return false;
+
+	if (!instanceExt->bindingMessenger) {
+
+		const VkDebugUtilsMessengerCreateInfoEXT messengerInfo = (VkDebugUtilsMessengerCreateInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+			.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
+			.pfnUserCallback = onAddressBinding,
+			.pUserData = (void*) inst
+		};
+
+		const VkResult result = instanceExt->createMessenger(
+			instanceExt->instance, &messengerInfo, NULL, &instanceExt->bindingMessenger
+		);
+
+		if(result != VK_SUCCESS)
+			instanceExt->bindingMessenger = VK_NULL_HANDLE;
+	}
+
+	const Bool created = !!instanceExt->bindingMessenger;
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&instanceExt->bindingLock);
+
+	return created;
+}
+
 U64 VkGraphicsInstance_nearestBindings(
 	VkGraphicsInstance *instanceExt, U64 address, VkAddressBinding *below, VkAddressBinding *above
 ) {
@@ -728,30 +771,15 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 		), e_rr));
 	}
 
-	//Listens for address bindings only, which a device reports once it enabled VK_EXT_device_address_binding_report.
-	//A failure only costs a lost device the names of the images its fault addresses fall in.
+	//The address binding messenger is made once a device turns out to have the extension, see getDeviceInfos.
 
 	if(supportsDebugUtils) {
 
-		PFN_vkCreateDebugUtilsMessengerEXT createMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)
+		instanceExt->createMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)
 			instanceExt->getInstanceProcAddr(instanceExt->instance, "vkCreateDebugUtilsMessengerEXT");
 
 		instanceExt->destroyMessenger = (PFN_vkDestroyDebugUtilsMessengerEXT)
 			instanceExt->getInstanceProcAddr(instanceExt->instance, "vkDestroyDebugUtilsMessengerEXT");
-
-		const VkDebugUtilsMessengerCreateInfoEXT messengerInfo = (VkDebugUtilsMessengerCreateInfoEXT) {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-			.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
-			.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT,
-			.pfnUserCallback = onAddressBinding,
-			.pUserData = instance
-		};
-
-		if (
-			!createMessenger || !instanceExt->destroyMessenger ||
-			createMessenger(instanceExt->instance, &messengerInfo, NULL, &instanceExt->bindingMessenger) != VK_SUCCESS
-		)
-			instanceExt->bindingMessenger = VK_NULL_HANDLE;
 	}
 
 	instance->api = EGraphicsApi_Vulkan;
@@ -1759,7 +1787,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		if (
 			optExtensions[EOptExtensions_DeviceAddressBindingReport] && bindingReportFeat.reportAddressBinding &&
-			instanceExt->bindingMessenger
+			VkGraphicsInstance_createBindingMessenger(inst)
 		)
 			capabilities.flags.featuresExt |= EVkGraphicsFeatures_AddressBindingReport;
 

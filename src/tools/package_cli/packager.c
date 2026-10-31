@@ -27,6 +27,7 @@
 #include "formats/oiSH/sh_file.h"
 #include "types/container/memory_stream.h"
 #include "formats/oiCA/ca_lookup.h"
+#include "formats/oiCA/ca_props.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/file_base.h"
 #include "types/container/buffer.h"
@@ -50,7 +51,7 @@
 //An oiSH already records almost all of that itself: sourceHash is the CRC32C of the source, and every include it
 // pulled in is listed with its own CRC32C (with '\r' stripped first, so a CRLF flip doesn't read as a change).
 //
-//Two things it does NOT record, which is what the sidecar next to each cached oiSH carries:
+//Two things it does NOT record, which is what the stamp next to the package carries:
 //
 // 1. The settings the compile ran under.
 //    Include dirs matter beyond their contents, since a different search path can resolve a DIFFERENT file
@@ -72,6 +73,11 @@
 //The version is folded in on top.
 //It is bumped by hand per release, so it cannot see a local edit, but it does separate two trees whose
 // stamps happen to agree.
+//
+//The cache is the previous package, which already holds every compiled oiSH, so a run overwrites at most the package
+// and its stamp, however many shaders it recompiled.
+//It used to be a folder with a copy and a sidecar per shader, and a moved toolchain rewrote all of those in place:
+// about a hundred files in a fraction of a second, which Malwarebytes' anti-ransomware module kills a process for.
 
 typedef struct ToolchainHashRecursion {
 	U32 hash;
@@ -117,20 +123,21 @@ static Bool Packager_hashBinary(const FileInfo *file, void *recursionGeneric, co
 	if(CharString_startsWithStringSensitive(&stem, &libPrefix, 0))
 		stem = CharString_createRefSizedConst(stem.ptr + 3, CharString_length(stem) - 3, false);
 
-	const CharString shaderCompiler = CharString_createRefCStrConst("OxC3_shader_compiler");
-	const CharString packager = CharString_createRefCStrConst("OxC3_package");
 	const CharString pdb = CharString_createRefCStrConst(".pdb");
 
 	if(CharString_endsWithStringInsensitive(&name, &pdb, 0))
 		goto clean;
 
-	//The packager counts only when the compiler is linked INTO it; with a shader compiler module present that
-	//module is the authority and the packager's own relinks are noise.
+	//The packager counts only when the compiler is linked INTO it; with a shader compiler module that module is
+	//the authority and the packager's own relinks are noise.
 
-	if (
-		!CharString_equalsStringInsensitive(&stem, &shaderCompiler) &&
-		!CharString_equalsStringInsensitive(&stem, &packager)
-	)
+	#ifdef SHADER_COMPILER_DYNAMIC
+		const CharString toolchain = CharString_createRefCStrConst("OxC3_shader_compiler");
+	#else
+		const CharString toolchain = CharString_createRefCStrConst("OxC3_package");
+	#endif
+
+	if(!CharString_equalsStringInsensitive(&stem, &toolchain))
 		goto clean;
 
 	//Size and timestamp rather than contents: a rebuild moves both, and hashing the binaries themselves
@@ -207,44 +214,20 @@ static U32 Packager_settingsHash(const PackageSettings *settings, U32 toolchain)
 	return hash;
 }
 
-//<cacheRoot>/<archive relative output> is the previously compiled binary, with its sidecar beside it.
+//The stamp next to a package: what built it, and the CRC32C of the package as it was written.
+//That last one is what ties the two files together, so a package this stamp was not written for (the run died between
+// the two writes, or something else replaced it) is a miss rather than binaries from another toolchain.
 
-static Bool Packager_cachePath(
-	const CharString *cacheRoot,
-	const CharString *outputRel,
-	Bool isSidecar,
-	const Allocator *alloc,
-	CharString *result,
-	Error *e_rr
-) {
+typedef struct PackagerStamp {
+	U32 toolchain, settings, package;
+} PackagerStamp;
 
-	Bool s_uccess = true;
+//Plain text so it can be read when something goes wrong.
+//Only the numbers are load bearing; the rest is there to make a stale stamp explicable rather than mysterious.
 
-	gotoIfError3(clean, CharString_createCopy(*cacheRoot, alloc, result, e_rr));
-	gotoIfError3(clean, CharString_append(result, '/', alloc, e_rr));
-	gotoIfError3(clean, CharString_appendString(result, outputRel, alloc, e_rr));
-
-	if(isSidecar) {
-		const CharString ext = CharString_createRefCStrConst(".txt");
-		gotoIfError3(clean, CharString_appendString(result, &ext, alloc, e_rr));
-	}
-
-clean:
-
-	if(!s_uccess)
-		CharString_free(result, alloc);
-
-	return s_uccess;
-}
-
-//The sidecar is plain text so it can be read when something goes wrong.
-//Only the first two numbers are load bearing; the rest is there to make a stale entry explicable rather than
-// mysterious.
-
-static Bool Packager_writeSidecar(
+static Bool Packager_writeStamp(
 	const CharString *path,
-	U32 toolchain,
-	U32 settingsHash,
+	PackagerStamp stamp,
 	const CharString *includeDir,
 	const Allocator *alloc,
 	Error *e_rr
@@ -256,8 +239,8 @@ static Bool Packager_writeSidecar(
 
 	gotoIfError3(clean, CharString_format(
 		alloc, &text, e_rr,
-		"oxc3-shader-cache 1\ntoolchain %08X\nsettings %08X\nincludeDir %.*s\n",
-		toolchain, settingsHash,
+		"oxc3-shader-cache 2\ntoolchain %08X\nsettings %08X\npackage %08X\nincludeDir %.*s\n",
+		stamp.toolchain, stamp.settings, stamp.package,
 		(int) CharString_length(*includeDir), includeDir->ptr ? includeDir->ptr : ""
 	));
 
@@ -269,19 +252,31 @@ clean:
 	return s_uccess;
 }
 
-//Reads back the two load bearing numbers.
-//A sidecar that is missing, truncated or from another version is simply "not a hit"; it is never an error, since the
+static Bool Packager_readStampField(const CharString *text, const C8 *field, U32 *value) {
+
+	const CharString name = CharString_createRefCStrConst(field);
+	const U64 at = CharString_findFirstStringSensitive(text, &name, 0, 0);
+
+	//Written as exactly 8 hex digits, so the field is fixed width once located.
+
+	if(at == U64_MAX || at + CharString_length(name) + 8 > CharString_length(*text))
+		return false;
+
+	U64 parsed = 0;
+
+	if(!CharString_parseHex(CharString_createRefSizedConst(text->ptr + at + CharString_length(name), 8, false), &parsed))
+		return false;
+
+	*value = (U32) parsed;
+	return true;
+}
+
+//A stamp that is missing, truncated or from another version is simply "not a hit"; it is never an error, since the
 // answer is always "compile it".
 
-static Bool Packager_readSidecar(
-	const CharString *path,
-	U32 *toolchain,
-	U32 *settingsHash,
-	const Allocator *alloc
-) {
+static Bool Packager_readStamp(const CharString *path, PackagerStamp *stamp, const Allocator *alloc) {
 
 	Buffer data = Buffer_createNull();
-	Bool ok = false;
 
 	if(!File_hasFile(path, alloc))        //A miss is normal; opening a missing file RETRIES
 		return false;
@@ -289,39 +284,87 @@ static Bool Packager_readSidecar(
 	if(!File_read(path, 100 * MS, 0, 0, NULL, &data, NULL))
 		return false;
 
-	CharString text = CharString_createRefSizedConst((const C8*) data.ptr, Buffer_length(data), false);
+	const CharString text = CharString_createRefSizedConst((const C8*) data.ptr, Buffer_length(data), false);
 
-	CharString toolchainLine = CharString_createRefCStrConst("toolchain ");
-	CharString settingsLine = CharString_createRefCStrConst("settings ");
-
-	const U64 a = CharString_findFirstStringSensitive(&text, &toolchainLine, 0, 0);
-	const U64 b = CharString_findFirstStringSensitive(&text, &settingsLine, 0, 0);
-
-	//Both numbers are written as exactly 8 hex digits, so the fields are fixed width once located.
-
-	if (
-		a != U64_MAX && b != U64_MAX &&
-		a + CharString_length(toolchainLine) + 8 <= CharString_length(text) &&
-		b + CharString_length(settingsLine) + 8 <= CharString_length(text)
-	) {
-
-		const CharString aVal = CharString_createRefSizedConst(text.ptr + a + CharString_length(toolchainLine), 8, false);
-		const CharString bVal = CharString_createRefSizedConst(text.ptr + b + CharString_length(settingsLine), 8, false);
-
-		U64 av = 0, bv = 0;
-
-		if(CharString_parseHex(aVal, &av) && CharString_parseHex(bVal, &bv)) {
-			*toolchain = (U32) av;
-			*settingsHash = (U32) bv;
-			ok = true;
-		}
-	}
+	const Bool ok =
+		Packager_readStampField(&text, "toolchain ", &stamp->toolchain) &&
+		Packager_readStampField(&text, "settings ", &stamp->settings) &&
+		Packager_readStampField(&text, "package ", &stamp->package);
 
 	Buffer_free(&data, alloc);
 	return ok;
 }
 
-//Is the cached binary at cachePath still valid for this source?
+//Opens the previous package as the cache, if it is the one the stamp was written for.
+//previous and stream have to outlive cache, which can read its entries through them.
+
+static Bool Packager_loadCache(
+	const PackageSettings *settings,
+	U32 packageHash,
+	const Allocator *alloc,
+	Buffer *previous,
+	MemoryStreamRef **stream,
+	CAFile *cache
+) {
+
+	if (
+		!File_hasFile(&settings->output, alloc) ||
+		!File_read(&settings->output, 100 * MS, 0, 0, NULL, previous, NULL) ||
+		Buffer_crc32c(*previous) != packageHash
+	)
+		return false;
+
+	if(!MemoryStream_createFromBufferRegion(
+		Buffer_createRefFromBuffer(*previous, true), 0, Buffer_length(*previous), EMemoryStreamFlags_None,
+		&Platform_instance->types.memoryStream, stream, NULL
+	) || !*stream)
+		return false;
+
+	return CAFile_read(
+		(StreamRef*) *stream, &Platform_instance->types.encryptionStream, 0,
+		settings->encryptionKey ? *settings->encryptionKey : NULL,
+		alloc, cache, NULL
+	);
+}
+
+//A copy of what the previous package holds at an output path, which an archive keeps either loaded or in a stream.
+
+static Bool Packager_readCached(const CAFile *cache, const CharString *output, const Allocator *alloc, Buffer *result) {
+
+	const CAHandle handle = CAFile_resolveFile(cache, *output);
+
+	if(handle == CAHandle_Invalid)
+		return false;
+
+	U64 streamOff = U64_MAX;
+	StreamRef *streamRef = CAFile_getDataStream(cache, handle, &streamOff);
+
+	if(streamRef && streamOff != U64_MAX) {
+
+		OxStream *stream = RefPtr_data(streamRef, OxStream);
+		const U64 size = CAFile_fileSize(cache, handle);
+
+		const Bool ok =
+			Buffer_createUninitializedBytes(size, alloc, result, NULL) &&
+			stream->read(stream, streamOff, size, *result, alloc, NULL);
+
+		RefPtr_dec(&streamRef);
+
+		if(!ok)
+			Buffer_free(result, alloc);
+
+		return ok;
+	}
+
+	RefPtr_dec(&streamRef);
+
+	Bool isValid = false;
+	const Buffer loaded = CAFile_getDataConst(cache, handle, &isValid);
+
+	return isValid && Buffer_createCopy(loaded, alloc, result, NULL);
+}
+
+//Is what the previous package holds for this output still valid for this source?
 //The oiSH answers for its own inputs: sourceHash against the source we just read, and every include's
 //CRC32C against the file on disk. '\r' is stripped for includes because that is how the compiler hashed
 //them, so a CRLF checkout does not read as a change.
@@ -329,7 +372,8 @@ static Bool Packager_readSidecar(
 //toolchain hash is what covers those.
 
 static Bool Packager_cacheIsClean(
-	const CharString *cachePath,
+	const CAFile *cache,
+	const CharString *output,
 	const CharString *sourcePath,
 	const CharString *sourceText,
 	Buffer *cached,
@@ -344,10 +388,7 @@ static Bool Packager_cacheIsClean(
 	CharString includeData = CharString_createNull();
 	Buffer includeBuf = Buffer_createNull();
 
-	if(!File_hasFile(cachePath, alloc))
-		return false;
-
-	if(!File_read(cachePath, 100 * MS, 0, 0, NULL, &data, NULL))
+	if(!Packager_readCached(cache, output, alloc, &data))
 		return false;
 
 	U64 streamOffset = 0;
@@ -592,9 +633,17 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	Buffer packaged = Buffer_createNull();
 	Buffer previous = Buffer_createNull();
 
-	CharString cacheRoot = CharString_createNull();
-	CharString cachePath = CharString_createNull();
-	CharString sidecarPath = CharString_createNull();
+	//What the output already held, as the shader cache, and the stamp saying what built it.
+
+	CAFile cache = (CAFile) { 0 };
+	MemoryStreamRef *cacheStream = NULL;
+	CharString stampPath = CharString_createNull();
+
+	#ifdef CLI_SHADER_COMPILER
+		PackagerStamp stamp = (PackagerStamp) { 0 };
+		PackagerStamp storedStamp = (PackagerStamp) { 0 };
+	#endif
+
 	ListCharString includeDirs = (ListCharString) { 0 };
 
 	Ns start = Time_now();
@@ -603,6 +652,9 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	if(!settings)
 		retError(clean, Error_nullPointer(0, "Packager_package()::settings is required"));
+
+	if(settings->shadersReused)
+		*settings->shadersReused = 0;
 
 	if(settings->encryptionKey)
 		caSettings.encryptionType = EXXEncryptionType_AES256GCM;
@@ -689,13 +741,13 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 			//
 			//A shader only has to be recompiled when something it was built FROM changed, and the oiSH records almost all of
 			// that itself (see Packager_cacheIsClean).
-			//What it does not record is the toolchain and the settings, which the sidecar beside each cached binary carries.
+			//What it does not record is the toolchain and the settings, which the stamp beside the package carries.
 			//
 			//The unit is the OUTPUT path, not the source: with merge on, several consecutive entries share one output and only
 			// the LAST carries data, the earlier ones being deliberately empty (see the archive loop below).
 			//So a run is reused or recompiled whole, never half.
 
-			const CharString cacheSuffix = CharString_createRefCStrConst(".cache");
+			const CharString stampSuffix = CharString_createRefCStrConst(".stamp");
 
 			U32 toolchainHash = 0;
 			(void) Packager_toolchainHash(&toolchainHash, alloc, NULL);
@@ -707,14 +759,25 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 			const Bool cacheUsable = toolchainHash != 0;
 
-			gotoIfError3(clean, CharString_createCopy(settings->output, alloc, &cacheRoot, e_rr));
-			gotoIfError3(clean, CharString_appendString(&cacheRoot, &cacheSuffix, alloc, e_rr));
+			gotoIfError3(clean, CharString_createCopy(settings->output, alloc, &stampPath, e_rr));
+			gotoIfError3(clean, CharString_appendString(&stampPath, &stampSuffix, alloc, e_rr));
+
+			if(cacheUsable)
+				stamp = (PackagerStamp) { .toolchain = toolchainHash, .settings = settingsHash };
+
+			const Bool hasStamp = cacheUsable && Packager_readStamp(&stampPath, &storedStamp, alloc);
+			const Bool toolchainMoved = hasStamp && storedStamp.toolchain != toolchainHash;
+			const Bool settingsMoved = hasStamp && storedStamp.settings != settingsHash;
+
+			const Bool hasCache =
+				hasStamp && !toolchainMoved && !settingsMoved &&
+				Packager_loadCache(settings, storedStamp.package, alloc, &previous, &cacheStream, &cache);
 
 			gotoIfError3(clean, ListBuffer_resize(&allBuffers, allOutputs.length, alloc, e_rr));
 			gotoIfError3(clean, ListU8_resize(&reused, allOutputs.length, alloc, e_rr));
 
 			U64 hits = 0, misses = 0;
-			U64 missNoSidecar = 0, missToolchain = 0, missSettings = 0, missContent = 0;
+			U64 missUncached = 0, missToolchain = 0, missSettings = 0, missContent = 0;
 
 			for (U64 i = 0; i < allOutputs.length; ++i) {
 
@@ -727,36 +790,25 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				if(!isLastOfRun || !cacheUsable)
 					continue;
 
-				CharString_free(&cachePath, alloc);
-				CharString_free(&sidecarPath, alloc);
-
-				if (
-					!Packager_cachePath(&cacheRoot, &allOutputs.ptr[i], false, alloc, &cachePath, NULL) ||
-					!Packager_cachePath(&cacheRoot, &allOutputs.ptr[i], true, alloc, &sidecarPath, NULL)
-				)
-					continue;
-
-				U32 storedToolchain = 0, storedSettings = 0;
-
-				if(!Packager_readSidecar(&sidecarPath, &storedToolchain, &storedSettings, alloc)) {
-					++missNoSidecar;                        //Nothing cached yet, or the cache was wiped
-					continue;
-				}
-
-				if(storedToolchain != toolchainHash) {
+				if(toolchainMoved) {
 					++missToolchain;                        //A shader compiler or DXC binary moved
 					continue;
 				}
 
-				if(storedSettings != settingsHash) {
+				if(settingsMoved) {
 					++missSettings;                         //Include dirs or compile flags differ
+					continue;
+				}
+
+				if(!hasCache) {
+					++missUncached;                         //Nothing built yet, or not the stamped package
 					continue;
 				}
 
 				Buffer cached = Buffer_createNull();
 
 				if(!Packager_cacheIsClean(
-					&cachePath, &allFiles.ptr[i], &allShaderText.ptr[i], &cached, alloc
+					&cache, &allOutputs.ptr[i], &allFiles.ptr[i], &allShaderText.ptr[i], &cached, alloc
 				)) {
 					++missContent;                          //The source or one of its includes changed
 					continue;
@@ -798,13 +850,16 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				++misses;
 			}
 
+			if(settings->shadersReused)
+				*settings->shadersReused = hits;
+
 			if(settings->enableLogging && cacheUsable)
 				Log_debugLnx(
 					"-- Shader cache: %"PRIu64" reused, %"PRIu64" to compile "
 					"(toolchain %08X, settings %08X; missed: %"PRIu64" uncached, %"PRIu64" toolchain, "
 					"%"PRIu64" settings, %"PRIu64" content)",
 					hits, misses, toolchainHash, settingsHash,
-					missNoSidecar, missToolchain, missSettings, missContent
+					missUncached, missToolchain, missSettings, missContent
 				);
 
 			if (dirtyOutputs.length) {
@@ -824,8 +879,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 					e_rr
 				));
 
-				//Splice the freshly compiled binaries back onto the indices they came from, and record each one
-				//in the cache for next time.
+				//Splice the freshly compiled binaries back onto the indices they came from.
 
 				for (U64 i = 0; i < dirtyIndices.length && i < dirtyBuffers.length; ++i) {
 
@@ -833,25 +887,6 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 					allBuffers.ptrNonConst[dst] = dirtyBuffers.ptrNonConst[i];
 					dirtyBuffers.ptrNonConst[i] = Buffer_createNull();        //Ownership moved
-
-					if(!cacheUsable || !Buffer_length(allBuffers.ptr[dst]))
-						continue;
-
-					CharString_free(&cachePath, alloc);
-					CharString_free(&sidecarPath, alloc);
-
-					if (
-						!Packager_cachePath(&cacheRoot, &allOutputs.ptr[dst], false, alloc, &cachePath, NULL) ||
-						!Packager_cachePath(&cacheRoot, &allOutputs.ptr[dst], true, alloc, &sidecarPath, NULL)
-					)
-						continue;
-
-					//A cache that fails to write is not an error: the build is still correct, just not faster.
-
-					if(File_write(&allBuffers.ptr[dst], &cachePath, 0, 0, 100 * MS, true, NULL, NULL))
-						(void) Packager_writeSidecar(
-							&sidecarPath, toolchainHash, settingsHash, &settings->includeDir, alloc, NULL
-						);
 				}
 			}
 		}
@@ -931,15 +966,31 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	//An output that is already byte identical is left alone, timestamp included.
 	//A failed read just means it gets rewritten, which is the old behaviour.
 
-	Bool unchanged = false;
+	if(!previous.ptr && File_hasFile(&settings->output, alloc))        //Already read if there was a stamp to check
+		(void) File_read(&settings->output, 100 * MS, 0, 0, NULL, &previous, NULL);
 
-	if (File_hasFile(&settings->output, alloc))
-		unchanged =
-			File_read(&settings->output, 100 * MS, 0, 0, NULL, &previous, NULL) &&
-			Buffer_eq(previous, packaged);
-
-	if(!unchanged)
+	if(!previous.ptr || !Buffer_eq(previous, packaged))
 		gotoIfError3(clean, File_write(&packaged, &settings->output, 0, 0, 100 * MS, true, NULL, e_rr));
+
+	//After the package, so a run that dies in between leaves a stamp that no longer matches it.
+	//Left alone when nothing moved, and a stamp that fails to write is not an error: the build is still correct, just
+	// not faster.
+
+	#ifdef CLI_SHADER_COMPILER
+
+		if(stamp.toolchain) {
+
+			stamp.package = Buffer_crc32c(packaged);
+
+			if (
+				stamp.toolchain != storedStamp.toolchain ||
+				stamp.settings != storedStamp.settings ||
+				stamp.package != storedStamp.package
+			)
+				(void) Packager_writeStamp(&stampPath, stamp, &settings->includeDir, alloc, NULL);
+		}
+
+	#endif
 
 clean:
 	if(caSettings.encryptionType)
@@ -970,12 +1021,15 @@ clean:
 	ListBuffer_freeUnderlying(&dirtyBuffers, alloc);
 	ListU8_free(&reused, alloc);
 
+	//The cache can read through the stream, and the stream through the previous package, so they go in that order.
+
+	CAFile_free(&cache, alloc);
+	RefPtr_dec(&cacheStream);
+
 	Buffer_free(&packaged, alloc);
 	Buffer_free(&previous, alloc);
 
-	CharString_free(&sidecarPath, alloc);
-	CharString_free(&cachePath, alloc);
-	CharString_free(&cacheRoot, alloc);
+	CharString_free(&stampPath, alloc);
 	ListCharString_freeUnderlying(&allFiles, alloc);
 	ListCharString_freeUnderlying(&allShaderText, alloc);
 	ListCharString_freeUnderlying(&allOutputs, alloc);

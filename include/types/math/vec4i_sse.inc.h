@@ -30,13 +30,14 @@
 
 //Loads
 
-//cvttps2dq gives INT_MIN for NaN and anything out of range, but gcc 14 folds it on constants as a saturating
-// conversion instead (+inf to INT_MAX, NaN to 0), so there those lanes are selected explicitly, as NEON and WASM do.
+//cvttps2dq gives INT_MIN for NaN and anything out of range, but gcc 7.1 to 14.4 fold it on constants as a saturating
+// conversion instead (+inf to INT_MAX, NaN to 0), from -O1 on; there those lanes are selected explicitly, as NEON and
+// WASM do. gcc 6 and 15 on, every clang and MSVC give INT_MIN.
 //|a| < 2^31 converts; -2^31 is INT_MIN either way.
 
 static inline I32x4 I32x4_fromF32x4(F32x4 a) {
 
-	#if _COMPILER == COMPILER_GCC && __GNUC__ == 14
+	#if _COMPILER == COMPILER_GCC && __GNUC__ >= 7 && __GNUC__ < 15
 		const F32x4 inRange = _mm_cmplt_ps(_mm_andnot_ps(_mm_set1_ps(-0.f), a), _mm_set1_ps(2147483648.0f));
 		return _mm_blendv_epi8(_mm_set1_epi32(-2147483647 - 1), _mm_cvttps_epi32(a), _mm_castps_si128(inRange));
 	#else

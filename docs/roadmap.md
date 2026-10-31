@@ -4,24 +4,28 @@ Living document: open problems, backlog and hard-won debugging knowledge that sh
 person's (or agent's) memory. Update it when an item lands or a new one appears; the per-feature details
 belong in graphics_api.md / graphics_spec.md, not here.
 
+Only what is still open belongs here. When an item, or part of one, lands, delete it in the same change rather
+than marking it done, dating it or describing the fix; a lesson worth keeping moves to Debugging lore.
+
 Last full revision: 2026-09-02.
 
 ## Open issues
 
-- **lavapipe 26.x: Shaders/draw (pixelsMatch) fails on the indexed, instanced draw, 335/336.** Every texel reads 0:
-  the draw produces nothing. lavapipe 24.2.8 and RADV 26.2.3 pass it; lavapipe 26.2.3 (LLVM 19) and a server's
-  newer lavapipe (LLVM 21) fail it. Reproduce with `python tools/mesa.py build 26.2.3` and `-mesa 26.2.3`.
-  Established: the validation layer, synchronization validation included, reports nothing; the index bind and the
-  draw are in the same command buffer; and an instrumented lavapipe executes the draw with the right parameters
-  (6 U16 indices, 2 instances, whole buffer, offset 0) and reads the right indices (0 1 2 2 1 3) at draw time.
-  A non indexed draw with the same pipeline and vertex buffer works, and so does the same draw in a standalone
-  program, with the same memory offsets (up to 136 MB into one allocation), maintenance5, buffer device address,
-  2 instances, this test's own compiled vertex shader and an exactly sized vertex buffer. So it takes more of
-  OxC3's state to trigger: dynamic rendering with synchronization2 barriers, the pixel shader's push constants
-  and layout, device local buffers filled by transfer, or the other enabled extensions.
-  Next, either: bisect Mesa between 24.2.8 and 26.2.3 with tools/mesa.py and this test as the oracle, which names
-  the commit (about 14 steps); or capture the run with gfxreconstruct and trim it to the failing draw, which is
-  a reproducer Mesa takes as is. Nothing found so far points at OxC3, but nothing clears it yet either.
+- **lavapipe 25.1 and later read every push constant at offset 0 in llvmpipe's linear path, so CI runs with
+  `LP_PERF=no_rast_linear`.** It is a Mesa bug, and the fix is not upstream yet. Shaders/draw's indexed, instanced
+  draw is two half screen quads, which llvmpipe rasterizes as rectangles through its linear (AoS) shaders, and it
+  wrote (0,0,0,0) instead of the pushed color (335/336). Mesa d9db40208dd (lavapipe: Lower push constants in
+  NIR) turned push constants into a `load_ubo` of buffer 0, which the linear path accepts, but that path builds
+  every NIR constant as a unorm8 color, the UBO's byte offset included, so the offset becomes 0
+  (lp_bld_nir_aos.c, visit_load_ubo). Bisected from 24.2 to 26.0 with this test; main still had it on
+  2026-10-30. A two file fix (take the offset from `nir_src_as_uint`, and have lp_state_fs_analysis.c require a
+  constant offset) passes the whole suite on 26.0.8 and main. Once it is upstream and the runner's Mesa has it,
+  drop `LP_PERF` from the lavapipe step in _build.yml.
+
+- **A buffer with a bindless handle can be bigger than its descriptor may span.** Creating one writes a descriptor
+  for the whole buffer, and nothing checks that against maxStorageBufferRange (128 MiB on lavapipe), so a bigger
+  buffer writes an invalid descriptor. It should be refused at creation, which needs that limit in the device's
+  capabilities first.
 
 - **Linux mesa: Shaders/draw (entryFound) fails on arm64 and x64 static Vulkan.** Deterministic on both
   arches, so it is code or driver capability, not flake. Eliminated already: the DynamicSamplers refusal
@@ -30,11 +34,9 @@ Last full revision: 2026-09-02.
   `GraphicsDeviceRef_getFirstShaderEntry(): skipped entry N binary M: <reason>` right above the failure
   (pipeline.c). If no such line exists the binary fell through a silent filter (no SPIRV blob,
   require/disallow, uniforms/defines matching), which points at packaging of the multi-entry files
-  (test_draw_mrt_ps / test_logicop_ps / test_draw_dualsrc_ps). Confirmed adjacent on isa_and_sr_file: several
-  graphics stages in one file DO compile to a single SPIR-V module carrying several OpEntryPoints, and the
-  Vulkan backend was binding whichever came first instead of the stage's own (fixed in vk_graphics_pipeline.c
-  by preferring the name the oiSH recorded, then the stage's execution model). That is a later layer than
-  getFirstShaderEntry so it is not this bug, but the multi-entry premise itself is no longer a guess.
+  (test_draw_mrt_ps / test_logicop_ps / test_draw_dualsrc_ps). Confirmed on isa_and_sr_file: several graphics
+  stages in one file DO compile to a single SPIR-V module carrying several OpEntryPoints, so the multi-entry
+  premise is no longer a guess.
 - **AMD's driver fail-fasts tearing a virtual GPU down.** Targeting another ASIC for DXIL ISA works
   (`-asic <name>` resolves the name, hands it to the driver and re-runs itself so the adapter initializes as
   the target), but the second process dies with STATUS_STACK_BUFFER_OVERRUN on the way out, after the
@@ -337,8 +339,7 @@ Roughly ordered by how often the gap bites.
   workers wait on a counter `JobQueue_push` bumps and wakes, and the waiter on `pending` the same way.
 - **D3D12 / Vulkan surface loss:** `VK_ERROR_OUT_OF_DATE_KHR` and monitor reconnects have no recreate logic
   (vulkan.c ~71 maps it to Error_invalidState; GitHub #167). Vulkan flicker when dragging a window on Windows (#168).
-  #171 is partly fixed (LoadImageW/LoadCursorW fallbacks done); CS_HREDRAW | CS_VREDRAW is still set at
-  wwindow_manager.c ~123.
+  #171: wwindow_manager.c ~123 still sets CS_HREDRAW | CS_VREDRAW.
 
 ### Tracked upstream, not yet local (Oxsomi/core3)
 

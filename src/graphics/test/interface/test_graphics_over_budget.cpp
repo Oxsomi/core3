@@ -24,7 +24,7 @@
 //The forbids are counted: every take is given back by its own give back, a give back that was never taken does nothing and
 // never forbids a later allocation.
 //The budget is forced to one byte (GraphicsDevice::budgetOverride), so any new memory block is over it, and the buffer is
-// bigger than half a block of either kind, so it needs a block of its own whatever the shared ones have free.
+// half a block of the larger kind, so it needs a block of its own whatever the shared ones have free.
 //Vulkan on a dedicated device: by default the block falls back to host memory, forbidden it stays in video memory.
 //D3D12: by default the heap is created past the budget, forbidden the create is refused with out of memory and leaves the
 // device as it was; on a dedicated device a render target and a depth stencil of 1024 x 1024 (committed resources of their
@@ -54,10 +54,11 @@ using namespace oxc;
 
 namespace {
 
-	//Bigger than half a block of either kind
+	//Half a block of the larger kind and no more, since a 256 MiB block's half is all a storage buffer can span on lavapipe
+	// and these buffers are read through a bindless handle
 
 	c::U64 overBudgetBytes(const c::GraphicsDevice *device) noexcept {
-		return (device->blockSizeGpu > device->blockSizeCpu ? device->blockSizeGpu : device->blockSizeCpu) / 2 + c::KIBI;
+		return (device->blockSizeGpu > device->blockSizeCpu ? device->blockSizeGpu : device->blockSizeCpu) / 2;
 	}
 
 	//The block of a buffer sits in video memory (bit 0 of its allocationTypeExt, on both backends)
