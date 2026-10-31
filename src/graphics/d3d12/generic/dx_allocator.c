@@ -293,7 +293,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	if(asHeap)
 		heapType |= 0x20;
 
-	//A resource over half a block gets a heap of exactly its own size (rounded to the heap's alignment).
+	//A resource of half a block or more gets a heap of exactly its own size (rounded to the heap's alignment).
 	//A shared block could hold at most one more like it, and sizing one to twice the request instead reserves
 	// slack that a few large resources (acceleration structures, big meshes) turn into gigabytes of nothing.
 	//Below that it shares a standard block, which keeps the number of heaps down.
@@ -303,7 +303,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	const Bool inVideoMemory = DxGraphicsDevice_heapInVideoMemory(device, &heapDesc);
 
 	const U64 blockSize = inVideoMemory ? device->blockSizeGpu : device->blockSizeCpu;
-	const Bool isDedicated = req.length > blockSize / 2;
+	const Bool isDedicated = req.length >= blockSize / 2;
 
 	//Blocks share any alignment up to the heap's own, but render targets, depth stencils and swapchain images keep
 	// blocks of their own: on some drivers, memory one of them used gave a buffer placed there later wrong results, and

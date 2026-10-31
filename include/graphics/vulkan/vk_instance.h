@@ -198,12 +198,13 @@ typedef struct VkGraphicsInstance {
 
 	//The messenger VK_EXT_device_address_binding_report reports through, and what it reported, for a lost device to
 	// name an image by a fault address. Instance wide, since a report does not say which device it came from.
-	//Created whenever VK_EXT_debug_utils is there; it only listens for bindings, so nothing is named or validated.
+	//Created by the first device with that extension; it only listens for bindings, so nothing is named or validated.
 
 	VkDebugUtilsMessengerEXT bindingMessenger;
+	PFN_vkCreateDebugUtilsMessengerEXT createMessenger;
 	PFN_vkDestroyDebugUtilsMessengerEXT destroyMessenger;
 	HashSetVkAddressBinding bindings;
-	U8 padding0[40];
+	U8 padding0[32];
 
 	SpinLock bindingLock;
 

@@ -241,6 +241,9 @@ jobs:
         run: |
           sudo apt-get install --no-install-recommends -y mesa-vulkan-drivers vulkan-tools
           vulkaninfo --summary || echo "vulkaninfo failed; the graphics suite will report what it found"
+          # From Mesa 25.1 on, llvmpipe's linear rasterizer reads every push constant at offset 0, so the
+          # indexed quad in Shaders/draw comes out black. Off until the runner's Mesa has the fix (docs/roadmap.md).
+          echo "LP_PERF=no_rast_linear" >> "$GITHUB_ENV"
 
       # macOS has no lavapipe equivalent, so the driver is MoltenVK on top of Metal.
       # Two things the linux path doesn't need. vk_instance.c dlopens "libvulkan.dylib" by bare name, and

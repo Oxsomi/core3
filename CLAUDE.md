@@ -24,6 +24,8 @@ A change also has to carry what belongs with it:
 - The documentation that describes it, updated in the same change, including the places that described the
   behaviour you just replaced. Changelog.md is NOT currently maintained and is years behind; leave it alone
   rather than adding one entry that implies the rest is current.
+- docs/roadmap.md lists only what is still open: delete what the change completes, in the same change,
+  rather than marking it done, dating it or describing the fix.
 
 Against the standards:
 

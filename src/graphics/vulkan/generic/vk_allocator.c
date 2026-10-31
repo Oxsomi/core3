@@ -187,13 +187,13 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)    //Ensure everything gets placed in cpu space
 		cpuSided = true;
 
-	//A resource over half a block gets a block of exactly its own size.
+	//A resource of half a block or more gets a block of exactly its own size.
 	//A shared block could hold at most one more like it, and sizing one to twice the request instead reserves
 	// slack that a few large resources (acceleration structures, big meshes) turn into gigabytes of nothing.
 	//Below that it shares a standard block, which keeps the number of memory objects down.
 
 	const U64 blockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
-	isDedicated |= memReq.size > blockSize / 2;
+	isDedicated |= memReq.size >= blockSize / 2;
 
 	if (
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
@@ -345,7 +345,7 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				//Host blocks can be smaller than device local ones, so what was shared there may need its own here
 
 				cpuSided = true;
-				isDedicated |= memReq.size > allocator->device->blockSizeCpu / 2;
+				isDedicated |= memReq.size >= allocator->device->blockSizeCpu / 2;
 				continue;
 			}
 		}
