@@ -1,4 +1,4 @@
 sources:
   "2026.08.06":
     url: "https://github.com/Oxsomi/openal-soft.git"
-    checkout: "master"
+    checkout: "c2a15a0c7c5ec8dc774b110de1cbe54b26fe0c3f"

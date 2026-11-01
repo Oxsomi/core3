@@ -8,7 +8,7 @@ required_conan_version = ">=2.0"
 class vulkan_headers(ConanFile):
 
 	name = "vulkan_headers"
-	version = "2026.10.02"
+	version = "2026.11.01"
 
 	license = "Apache-2.0"
 	author = "The Khronos Group (original) & Oxsomi (fork)"

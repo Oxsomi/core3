@@ -1,5 +1,4 @@
-//The output UAV is normally bound: structured/byte buffers via non-emulated heaps aren't lowered yet on SPIRV
-// (fork emits "UAV support not implemented with non-emulated heaps"), so the heap side sticks to SRV + sampler.
+//The output UAV is normally bound, so the heap side only reads a texture and a sampler.
 
 RWStructuredBuffer<float4> outBuf : register(u0);
 

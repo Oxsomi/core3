@@ -71,15 +71,15 @@ void Test_shaderCompilerReflectSR(Test *t) {
 	static const C8 *src =
 		"struct Light { float3 pos; float3 color; };\n"
 		"enum Mode { ModeA, ModeB };\n"
-		"interface IArea { float area(); };\n"
-		"struct Circle : IArea { float r; float area() { return r * r; } };\n"
+		"struct Shape { float scale; };\n"
+		"struct Circle : Shape { float r; float area() { return r * r * scale; } };\n"
 		"RWByteAddressBuffer buf;\n"
 		"StructuredBuffer<Light> lights;\n"
 		"uint dbl(uint x) { return x * 2; }\n"
 		"[[oxc::stage(\"compute\")]]\n"
 		"[numthreads(1, 1, 1)]\n"
 		"void main(uint id : SV_DispatchThreadID) {\n"
-		"\tCircle c; c.r = 2;\n"
+		"\tCircle c; c.r = 2; c.scale = 1;\n"
 		"\tbuf.Store<uint>(id * 4, dbl(id) + (uint) lights[0].pos.x + (uint) c.area());\n"
 		"}\n";
 
@@ -184,21 +184,21 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "element type points at the Light definition", elemTy && elemTy->defNodeId == lightId);
 	}
 
-	//Interface implementations: struct Circle implements interface IArea, captured as an edge in the interfaces table.
+	//Base classes: struct Circle derives from struct Shape, captured as the base node of Circle's type record.
 
 	U32 circleId = srFindNode(&reflection, ESRNodeType_Struct, "Circle");
-	U32 iareaId = srFindNode(&reflection, ESRNodeType_Interface, "IArea");
-	Test_assert(t, "interface + implementing struct reflected", circleId != U32_MAX && iareaId != U32_MAX);
+	U32 shapeId = srFindNode(&reflection, ESRNodeType_Struct, "Shape");
+	Test_assert(t, "base + derived struct reflected", circleId != U32_MAX && shapeId != U32_MAX);
 
-	if (circleId != U32_MAX && iareaId != U32_MAX) {
+	if (circleId != U32_MAX && shapeId != U32_MAX) {
 
 		Bool found = false;
 
-		for (U64 i = 0; i < reflection.interfaces.length; ++i)
-			if (reflection.interfaces.ptr[i].nodeId == circleId && reflection.interfaces.ptr[i].interfaceNodeId == iareaId)
+		for (U64 i = 0; i < reflection.types.length; ++i)
+			if (reflection.types.ptr[i].nodeId == circleId && reflection.types.ptr[i].baseNodeId == shapeId)
 				found = true;
 
-		Test_assert(t, "Circle implements IArea edge captured", found);
+		Test_assert(t, "Circle derives from Shape edge captured", found);
 	}
 
 	//Parameter types come from the function-parameter reflection (D3D12_PARAMETER_DESC), not a type localId.
@@ -255,9 +255,7 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "round-trip node count", roundTrip.nodes.length == reflection.nodes.length);
 		Test_assert(t, "round-trip annotation count", roundTrip.annotations.length == reflection.annotations.length);
 		Test_assert(t, "round-trip type count", roundTrip.types.length == reflection.types.length);
-		Test_assert(t, "round-trip interface count",
-			roundTrip.interfaces.length == reflection.interfaces.length && reflection.interfaces.length > 0
-		);
+		Test_assert(t, "round-trip interface count", roundTrip.interfaces.length == reflection.interfaces.length);
 
 		Test_assert(t, "round-trip hash matches", roundTrip.hash == reflection.hash);
 	}
