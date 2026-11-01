@@ -273,9 +273,10 @@ jobs:
             || echo "vulkaninfo failed; the graphics suite will report what it found"
 
       # The Khronos validation layer, pinned near the header version conanfile.py pins (vulkan_headers is
-      # 1.4.365 today; bump both together). Ubuntu's vulkan-validationlayers package is far too old and an old
-      # layer silently weakens validation. Khronos only publishes Android prebuilts, so the layer comes out of
-      # the LunarG SDK tarball; only the two layer files are extracted, the rest of the SDK stays untouched.
+      # 1.4.367 today; the LunarG tarball stays at 1.4.363.0 because LunarG has published nothing newer).
+      # Ubuntu's vulkan-validationlayers package is far too old and an old layer silently weakens validation.
+      # Khronos only publishes Android prebuilts, so the layer comes out of the LunarG SDK tarball; only the two
+      # layer files are extracted, the rest of the SDK stays untouched.
       # The graphics suite enables the layer by name in debug builds and counts every message it reports;
       # a single validation error or warning turns the run red, which is the entire point of installing this.
       # arm64 has no LunarG tarball, so this stays x64 only until the layer is built from source there.

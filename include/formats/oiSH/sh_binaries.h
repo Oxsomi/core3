@@ -98,7 +98,7 @@ typedef enum ESHExtension {
 	//Full bindless: direct descriptor heap indexing from shaders (requires the DescriptorHeap device feature).
 	//DXIL: SM6.6 dynamic resources (ResourceDescriptorHeap/SamplerDescriptorHeap), detected via the
 	// RESOURCE/SAMPLER_DESCRIPTOR_HEAP_INDEXING requires flags.
-	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability), detected but not compiled, see ESHExtension_NoSpirvCompile.
+	//SPIRV: SPV_EXT_descriptor_heap (DescriptorHeapEXT capability), compiled at vulkan1.3.
 	ESHExtension_DescriptorHeap              = 1 << 25,
 
 	//Subgroup quad ops: QuadReadAcrossX/Y/Diagonal and QuadReadLaneAt.
@@ -206,13 +206,11 @@ typedef enum ESHExtension {
 		ESHExtension_UnsafeExperimentExecution,
 
 	//DXIL-only to compile. PAQ and WriteMSTexture have SPIR-V forms, but DXC's SPIR-V backend refuses both.
-	//DescriptorHeap has one too, but DXC leaves the heap array without the stride SPV_EXT_descriptor_heap requires.
 
 	ESHExtension_NoSpirvCompile =
 		ESHExtension_MeshTaskTexDeriv |
 		ESHExtension_PAQ |
-		ESHExtension_WriteMSTexture |
-		ESHExtension_DescriptorHeap,
+		ESHExtension_WriteMSTexture,
 
 	//Full: 1 << ESHExtension_Count has to stay an int, so an extension past these goes in ESHExtension2.
 

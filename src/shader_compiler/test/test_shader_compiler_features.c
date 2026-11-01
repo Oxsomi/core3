@@ -184,8 +184,10 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//natively detected on SPIRV (see SHEntryRuntime_getSupportedBinaryTypes).
 		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       B_BOTH },
 
+		//SM6.6 dynamic resources (full bindless): native on DXIL, lowered to SPV_EXT_descriptor_heap on SPIRV.
+		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_BOTH },
+
 		//DXIL-only: DXC's SPIR-V backend genuinely fails to compile these (verified: SPIRV compile error)
-		{ "features/descriptor_heap.hlsl",     ESHExtension_DescriptorHeap,     B_DXIL },
 		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   B_DXIL },
 		{ "features/paq.hlsl",                 ESHExtension_PAQ,                B_DXIL },
 		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     B_DXIL },
@@ -529,21 +531,22 @@ void Test_shaderCompilerFeatures(Test *t) {
 		err = Error_none();
 	}
 
-	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on DXIL ---
+	//--- Full bindless (DescriptorHeap): active vs dormant + register reflection, on both backends ---
 	//The table above already asserts the used shader reflects the bit; this block additionally asserts
 	// 1) using the heaps does NOT mark the extension dormant (native detection sees the usage),
 	// 2) heap accesses create no named register entries (full bindless bypasses the binding table),
-	// 3) declaring the extension without using it DOES mark it dormant (no requires flags emitted).
-	//DescriptorHeap is in ESHExtension_NoSpirvCompile, so compiling it for SPIRV alone succeeds and writes nothing.
+	// 3) declaring the extension without using it DOES mark it dormant (native detection on both backends).
 
-	{
+	for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
+
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile shFile = (SHFile) { 0 };
+		CharString label = CharString_createNull();
 
 		//Used: active extension; the only register is the normally bound output UAV (heap accesses create none)
 
-		const Bool usedOk =
-			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_DXIL, true, false, &out, &err) &&
+		Bool usedOk =
+			compileFileShader(alloc, "features/descriptor_heap.hlsl", backends[b].mode, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
 			(shFile.binaries.ptr[0].identifier.extensions & ESHExtension_DescriptorHeap) &&
@@ -553,37 +556,39 @@ void Test_shaderCompilerFeatures(Test *t) {
 		if (!usedOk)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		Test_assert(t, "descriptor heap used stays active (dxil)", usedOk);
+		if (!CharString_format(alloc, &label, &err, "descriptor heap used stays active (%s)", backends[b].name))
+			label = CharString_createRefCStrConst("descriptor heap used stays active");
 
+		Test_assert(t, label.ptr, usedOk);
+
+		CharString_free(&label, alloc);
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 
-		const Bool unusedOk =
-			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", EGfxBinaryType_DXIL, true, false, &out, &err) &&
+		//Declared but unused: demoted to dormant by native detection on DXIL (no requires flags emitted).
+		//On SPIRV the heap mode declares the DescriptorHeapEXT capability even without a heap access,
+		// so the binary genuinely requires the feature and the extension stays active there.
+
+		Bool expectDormant = backends[b].mode == EGfxBinaryType_DXIL;
+
+		Bool unusedOk =
+			compileFileShader(alloc, "features/descriptor_heap_unused.hlsl", backends[b].mode, true, false, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1 &&
 			(shFile.binaries.ptr[0].identifier.extensions & ESHExtension_DescriptorHeap) &&
-			(shFile.binaries.ptr[0].dormantExtensions & ESHExtension_DescriptorHeap);
+			!(shFile.binaries.ptr[0].dormantExtensions & ESHExtension_DescriptorHeap) == !expectDormant;
 
 		if (!unusedOk)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		Test_assert(t, "descriptor heap unused goes dormant (dxil)", unusedOk);
+		if (!CharString_format(alloc, &label, &err, "descriptor heap unused goes dormant (%s)", backends[b].name))
+			label = CharString_createRefCStrConst("descriptor heap unused goes dormant");
 
+		Test_assert(t, label.ptr, unusedOk);
+
+		CharString_free(&label, alloc);
 		SHFile_free(&shFile, alloc);
-		ListBuffer_freeUnderlying(&out, alloc);
-		err = Error_none();
-
-		const Bool spirvSkipped =
-			compileFileShader(alloc, "features/descriptor_heap.hlsl", EGfxBinaryType_SPIRV, true, false, &out, &err) &&
-			(!out.length || !Buffer_length(out.ptr[0]));
-
-		if (!spirvSkipped)
-			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
-
-		Test_assert(t, "descriptor heap skips spirv", spirvSkipped);
-
 		ListBuffer_freeUnderlying(&out, alloc);
 		err = Error_none();
 	}

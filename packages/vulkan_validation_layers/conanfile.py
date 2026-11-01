@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class vulkan_validation_layers(ConanFile):
 
 	name = "vulkan_validation_layers"
-	version = "2026.10.11"
+	version = "2026.11.01"
 
 	license = "Apache"
 	author = "KhronosGroup"

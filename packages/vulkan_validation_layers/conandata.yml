@@ -1,4 +1,4 @@
 sources:
-  "2026.10.11":
+  "2026.11.01":
     url: "https://github.com/Oxsomi/Vulkan-ValidationLayers.git"
-    checkout: "926ac86c85aeb2cc316df9aa14754da7b3dd6f77"
+    checkout: "6ba0a9cea1013ee66c88f8989e98a1e14ce724fe"

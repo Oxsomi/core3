@@ -244,8 +244,8 @@ class oxc3(ConanFile):
 			# feeds a Windows sanitized DXC unsanitized tablegen binaries via user.dxc:tablegen_dir (the same
 			# split the android/web cross builds use). That conf is not part of the package id, so the graph
 			# still just asks for a sanitized DXC here regardless of where its tablegen came from.
-			self.requires("dxc/2026.10.12", options=sanitized)
-			self.requires("spirv_reflect/2026.10.11", options=sanitized)
+			self.requires("dxc/2026.11.01", options=sanitized)
+			self.requires("spirv_reflect/2026.11.01", options=sanitized)
 
 			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
 			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
@@ -265,12 +265,12 @@ class oxc3(ConanFile):
 		usesVulkan = usesVulkan and self.settings.os != "Emscripten"
 
 		if usesVulkan:
-			self.requires("vulkan_headers/2026.10.02")
+			self.requires("vulkan_headers/2026.11.01")
 
 		# Validation layers must be built manually for Android; not needed elsewhere.
 		# Pinned near the vulkan_headers version, since an old layer silently weakens validation.
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
-			self.requires("vulkan_validation_layers/2026.10.11")
+			self.requires("vulkan_validation_layers/2026.11.01")
 
 		# emscripten ships its own OpenAL (WebAudio-backed); openal_soft has no web backend.
 		if self.settings.os != "Emscripten":

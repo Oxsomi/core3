@@ -194,7 +194,9 @@ Bool Compiler_compile(
 
 			const C8 *targetEnvArg;
 
-			switch(Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask)) {
+			Bool isDescriptorHeap = !!(toCompile->extensions & ESHExtension_DescriptorHeap);
+
+			switch(Compiler_requiredSpirvVersion(isRt, isCoop, isMeshTask, isDescriptorHeap)) {
 				case ESpirvVersion_1_6:    targetEnvArg = "-fspv-target-env=vulkan1.3";          break;    //SPIR-V 1.6
 				case ESpirvVersion_1_4:    targetEnvArg = "-fspv-target-env=vulkan1.1spirv1.4";  break;    //SPIR-V 1.4
 				default:                   targetEnvArg = "-fspv-target-env=vulkan1.1";          break;    //SPIR-V 1.3

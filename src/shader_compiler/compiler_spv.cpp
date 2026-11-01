@@ -152,6 +152,10 @@ extern "C" Bool Compiler_processSPIRV(
 
 	Bool isLinalg = !!(toCompile->extensions & linalg);
 
+	//Descriptor heaps (SPV_EXT_descriptor_heap) need SPIR-V 1.6 as well.
+
+	Bool isDescriptorHeap = !!(toCompile->extensions & ESHExtension_DescriptorHeap);
+
 	//Nothing in an unsafe experiment's module is validated (ESHExtension_UnsafeExperimentExecution), and capabilities
 	// oiSH has no extension for pass for a binary that uses unrecognized extensions (UnsafeExtensionExecution)
 
@@ -648,7 +652,7 @@ extern "C" Bool Compiler_processSPIRV(
 	//Strip debug and optimize
 
 	{
-		ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
+		ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask, isDescriptorHeap);
 		spvtools::Optimizer &optimizer =
 			spvVer == ESpirvVersion_1_6 ? optimizerLinalg : (spvVer == ESpirvVersion_1_4 ? optimizerRt : optimizerNoRt);
 
@@ -918,8 +922,9 @@ extern "C" Bool Compiler_linkSPIRV(
 		!!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
 
 	Bool isMeshTask = stage == EGfxPipelineStage_MeshExt || stage == EGfxPipelineStage_TaskExt;
+	Bool isDescriptorHeap = !!(exts & ESHExtension_DescriptorHeap);
 
-	ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask);
+	ESpirvVersion spvVer = Compiler_requiredSpirvVersion(isRt, isLinalg, isMeshTask, isDescriptorHeap);
 	spv_target_env env = SPV_ENV_UNIVERSAL_1_3;
 
 	//Link (or just use the already linked binary)
