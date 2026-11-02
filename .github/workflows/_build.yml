@@ -507,7 +507,7 @@ jobs:
       # and could go red on a host failure that says nothing about the target it exists to test.
 
       # packages/agility_sdk ships the preview Agility SDK, whose D3D12Core.dll is internally named
-      # D3D12CoreRequireDevMode.dll and exports only D3D12SDKVersion 721.
+      # D3D12CoreRequireDevMode.dll and exports only D3D12SDKVersion 722.
       # Without Developer Mode CreateDeviceFactory fails for every version dx_instance.c tries, so
       # GraphicsInstance_create gives up before enumerating a single adapter and the graphics suite skips.
       # With it, the runner's Microsoft Basic Render Driver shows up and binds the WARP we already deploy next
