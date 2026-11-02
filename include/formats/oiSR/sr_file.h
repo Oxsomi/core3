@@ -50,7 +50,7 @@ typedef enum ESRFeature {
 	ESRFeature_Basics      = 1 << 0,        //cbuffer and registers only
 	ESRFeature_Functions   = 1 << 1,
 	ESRFeature_Namespaces  = 1 << 2,
-	ESRFeature_UserTypes   = 1 << 3,        //struct, enum, typedef, union, interface
+	ESRFeature_UserTypes   = 1 << 3,        //struct, enum, typedef, union
 	ESRFeature_Scopes      = 1 << 4,        //variables, structs, functions defined inside functions (control flow)
 
 	ESRFeature_SymbolInfo  = 1 << 16,       //Names and file/line/column info
@@ -78,7 +78,7 @@ typedef enum ESRNodeType {
 
 	ESRNodeType_StaticVariable,
 
-	ESRNodeType_Interface,
+	ESRNodeType_Interface,                  //Only kept to match DXC's enum, never valid in a file (HLSL has no interfaces)
 	ESRNodeType_Parameter,
 
 	//Control flow, for full inspection of what variables exist where and in which scope
@@ -331,25 +331,12 @@ typedef struct SRType {
 
 } SRType;
 
-//One interface a struct/union implements.
-//A struct can implement several, so these are edges in their own table (keyed by the implementing node) rather than a
-// field on SRType.
-//The concrete base class stays on SRType.baseNodeId.
-
-typedef struct SRInterface {
-
-	U32 nodeId;                             //The Struct/Union node that implements the interface
-	U32 interfaceNodeId;                    //The Interface node it implements
-
-} SRInterface;
-
 TList(SRNode);
 TList(SRSymbol);
 TList(SRAnnotation);
 TList(SRRegister);
 TList(SREnumValue);
 TList(SRType);
-TList(SRInterface);
 
 typedef enum ESRSettingsFlags {
 	ESRSettingsFlags_None             = 0,
@@ -371,7 +358,6 @@ typedef struct SRFile {
 	ListSREnumValue enumValues;  //Enumerators for Enum nodes
 	ListSRType types;            //Resolved types for value nodes (Variable/Parameter/Typedef/Struct/...)
 	ListU32 arrayDims;           //Shared pool of multi-dimensional array lengths, referenced by SRType/SRRegister
-	ListSRInterface interfaces;  //Interface-implementation edges (struct/union node -> interface node)
 
 	ESRSettingsFlags flags;
 	U32 features;                //ESRFeature bitset: which reflection tiers this file carries
@@ -402,7 +388,7 @@ Bool SRFile_addString(SRFile *srFile, CharString *str, const Allocator *alloc, U
 
 //Index of the first node named `name` whose type is `type` (Struct/Union both match ESRNodeType_Struct, they're the
 // record kinds), or U32_MAX.
-//Resolves a type/base/interface name back to its defining node (references are by name because the frontend reflector
+//Resolves a type/base name back to its defining node (references are by name because the frontend reflector
 // reuses type indices across uses of the same type).
 U32 SRFile_findNodeByName(const SRFile *srFile, CharString name, ESRNodeType type);
 
@@ -456,7 +442,6 @@ typedef struct SRHeader {
 
 	U32 typeCount;             //Per-node type records (Variable/Typedef/Struct/Union)
 	U32 arrayDimCount;         //Shared multi-dimensional array-length pool
-	U32 interfaceCount;        //Interface-implementation edges
 
 } SRHeader;
 

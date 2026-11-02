@@ -255,7 +255,6 @@ void Test_shaderCompilerReflectSR(Test *t) {
 		Test_assert(t, "round-trip node count", roundTrip.nodes.length == reflection.nodes.length);
 		Test_assert(t, "round-trip annotation count", roundTrip.annotations.length == reflection.annotations.length);
 		Test_assert(t, "round-trip type count", roundTrip.types.length == reflection.types.length);
-		Test_assert(t, "round-trip interface count", roundTrip.interfaces.length == reflection.interfaces.length);
 
 		Test_assert(t, "round-trip hash matches", roundTrip.hash == reflection.hash);
 	}
