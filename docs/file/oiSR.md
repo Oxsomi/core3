@@ -2,7 +2,7 @@
 
 *The oiSR format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported, since oiSR is most often packaged inside of an oiSH, which itself lives inside an oiCA/oiDL file).*
 
-oiSR stores the **source-level (pre-codegen) symbol AST** of a shader: the entrypoints, functions, user types (struct/enum/union/interface/typedef), resources, namespaces, parameters and control-flow scopes as they appear in the HLSL *before* DXIL/SPIR-V is generated, together with (optionally) their source locations. It is a compiler-*frontend* reflection, complementing oiSB (buffer layouts) and the oiSH register reflection (backend bindings).
+oiSR stores the **source-level (pre-codegen) symbol AST** of a shader: the entrypoints, functions, user types (struct/enum/union/typedef), resources, namespaces, parameters and control-flow scopes as they appear in the HLSL *before* DXIL/SPIR-V is generated, together with (optionally) their source locations. It is a compiler-*frontend* reflection, complementing oiSB (buffer layouts) and the oiSH register reflection (backend bindings).
 
 It exists to power editor intelligence: semantic highlighting, document outline, go-to-definition and hover, on the web frontend and in tooling.
 
@@ -35,7 +35,6 @@ typedef struct SRHeader {		//Should be aligned to 4-byte
 
 	U32 typeCount;				//Per-node type records (for Variable/Typedef/Struct/Union nodes)
 	U32 arrayDimCount;			//Shared multi-dimensional array-length pool
-	U32 interfaceCount;			//Interface-implementation edges
 
 } SRHeader;					//Note: unlike SBHeader the magic + header aren't a single struct on disk;
 							// when magic is present it's a separate U32 written before SRHeader.
@@ -47,7 +46,7 @@ typedef enum ESRFeature {
 	ESRFeature_Basics      = 1 << 0,	//cbuffer and registers only
 	ESRFeature_Functions   = 1 << 1,
 	ESRFeature_Namespaces  = 1 << 2,
-	ESRFeature_UserTypes   = 1 << 3,	//struct, enum, typedef, union, interface
+	ESRFeature_UserTypes   = 1 << 3,	//struct, enum, typedef, union
 	ESRFeature_Scopes      = 1 << 4,	//variables/structs/functions defined inside functions (control flow)
 	ESRFeature_SymbolInfo  = 1 << 16,	//names and file/line/column info
 	ESRFeature_All         = ESRFeature_SymbolInfo - 1
@@ -59,7 +58,7 @@ typedef enum ESRNodeType {
 	ESRNodeType_Variable, ESRNodeType_Typedef,			//localId points to the type
 	ESRNodeType_Struct, ESRNodeType_Union,				//child variables like buffers; localId = typeId (if not fwd decl)
 	ESRNodeType_StaticVariable,
-	ESRNodeType_Interface, ESRNodeType_Parameter,
+	ESRNodeType_Interface, ESRNodeType_Parameter,		//Interface is only kept to match DXC's enum; a reader refuses it
 	ESRNodeType_IfRoot, ESRNodeType_Scope, ESRNodeType_Do, ESRNodeType_Switch,	//control flow
 	ESRNodeType_While, ESRNodeType_For,
 	ESRNodeType_GroupsharedVariable,
@@ -186,14 +185,6 @@ typedef struct SRType {
 //Shared pool of multi-dimensional array lengths (a plain U32[]), referenced by SRType / SRRegister via
 //(arrayDimStart, arrayDimCount) for arrays of 2+ dimensions; the flattened total stays in elements / bindCount.
 
-//One interface a struct/union implements. A struct can implement several, so these are edges in their own table keyed
-//by the implementing node (not a field on SRType). Like baseNodeId, they're recorded on the type DEFINITION only; a
-//variable of the type reaches its base/interfaces through defNodeId.
-typedef struct SRInterface {
-	U32 nodeId;					//The Struct/Union node that implements the interface
-	U32 interfaceNodeId;		//The Interface node it implements
-} SRInterface;					//8 bytes
-
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
 //Verify if SRFile includes any invalid data.
@@ -212,7 +203,6 @@ SRFile {		//Has to be 16-byte aligned
 	SREnumValue enumValues[header.enumValueCount];
 	SRType types[header.typeCount];
 	U32 arrayDims[header.arrayDimCount];	//Shared multi-dimensional array-length pool
-	SRInterface interfaces[header.interfaceCount];	//Interface-implementation edges
 
 	U8[N] pad;								//Padding to align to 16-byte
 
@@ -236,7 +226,8 @@ The magic number can only be absent if embedded in another file. The intended ho
 - `HasSymbols` (header flag) and `ESRFeature_SymbolInfo` (features) must agree, and when set `symbols[]` has exactly `nodeCount` entries. When clear, `symbols[]` is absent (0 bytes).
 - All `nameId`/`semanticId`/`fileNameId`/`annotation.nameId` must be `U32_MAX` or `< strings.length`; `type < ESRNodeType_Count`; `interpolation < ESRInterpolation_Count`.
 - `parent` must be `U32_MAX` (root) or `< i` — parents strictly precede their children, so the tree is acyclic and topologically ordered (node 0 is always a root). `i + childCount <= nodeCount`.
-- `fwdBckDeclareNode` must be `U32_MAX` or reference a node of the same `type` and (when symbols present) the same name; a forward declaration (`IsFwdDeclare`) points forward to its non-forward definition, a definition's back-link points backward to its forward declaration. The `IsFwdDeclare` flag is only valid on Function/Enum/Struct/Union/Interface nodes.
+- `fwdBckDeclareNode` must be `U32_MAX` or reference a node of the same `type` and (when symbols present) the same name; a forward declaration (`IsFwdDeclare`) points forward to its non-forward definition, a definition's back-link points backward to its forward declaration. The `IsFwdDeclare` flag is only valid on Function/Enum/Struct/Union nodes.
+- `type` must be below `ESRNodeType_Count` and not `ESRNodeType_Interface`.
 - Each `registers[k].nodeId` references a `Register` node; each `enumValues[k].nodeId` references an `EnumValue` node; their `type`/`dimension`/`returnType`/`enumType` are `< ` their respective `_Count`.
 
 ## Hashing & comparing
@@ -258,4 +249,4 @@ This hash is refreshed by `SRFile_finalize` (and on read). It can be used for qu
 
 ## Changelog
 
-1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Each `SRType` also carries the type graph: `defNodeId` links a value to the Struct/Union node defining its type (go-to-definition; members are child nodes so their types + go-to-def come for free), `baseNodeId` links a struct to its single base class, and the separate `SRInterface` table (`header.interfaceCount`) records each interface a struct implements. Base class + interfaces are recorded on the type DEFINITION only (a variable reaches them via `defNodeId`). Multi-dimensional value/resource arrays list their per-dim lengths in the shared `arrayDims` pool (`header.arrayDimCount`) referenced by `SRType`/`SRRegister`. Deferred: constant-buffer byte layouts (backend-specific packing -> oiSH/oiSB), and struct/object parameter type names (`D3D12_PARAMETER_DESC` exposes only the class for them, no name).
+1.1: Initial format specification (no shipped file predates it, so it evolves in place rather than versioning). Carries the node tree (kinds, parent/child topology, names, semantics, forward-declaration links, annotations), the optional per-node source-location tier, and the detail tiers: per-Register frontend bind info, per-EnumValue enumerator values, a `HasReturn` flag on Function nodes, per-Parameter direction (`ParamReturn`/`ParamIn`/`ParamOut`, `in`+`out` = `inout`), and the per-node type tier (`SRType`, `header.typeCount`) giving each value node a serialized type (underlying name + display/alias name + class + rows/cols + array elements; a tooltip shows the alias, e.g. `Variable pos (myvec)`, with verbose adding `aka float3`). Types are resolved for `Variable`/`Typedef`/`Struct`/`Union`/`StaticVariable`/`GroupsharedVariable` nodes (whose `localId` indexes the frontend type table) and for `Parameter` nodes including the return slot (typed from the function-parameter reflection; builtin scalar/vector/matrix names are reconstructed, struct/object parameters carry only their class). Each `SRType` also carries the type graph: `defNodeId` links a value to the Struct/Union node defining its type (go-to-definition; members are child nodes so their types + go-to-def come for free), `baseNodeId` links a struct to its single base class. HLSL has no interfaces (the producer rejects the keyword), so there is no interface table; `ESRNodeType_Interface` stays only so the enum matches the producer's and is never valid in a file. The base class is recorded on the type DEFINITION only (a variable reaches it via `defNodeId`). Multi-dimensional value/resource arrays list their per-dim lengths in the shared `arrayDims` pool (`header.arrayDimCount`) referenced by `SRType`/`SRRegister`. Deferred: constant-buffer byte layouts (backend-specific packing -> oiSH/oiSB), and struct/object parameter type names (`D3D12_PARAMETER_DESC` exposes only the class for them, no name).

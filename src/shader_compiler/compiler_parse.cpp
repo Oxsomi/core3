@@ -1373,6 +1373,11 @@ static Bool Compiler_reflectNode(
 	if (srNode.type >= ESRNodeType_Count)
 		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node had an unrecognized type"));
 
+	//HLSL has no interface keyword anymore; the value only exists to stay aligned with DXC's enum.
+
+	if (srNode.type == ESRNodeType_Interface)
+		retError(clean, Error_invalidState(1, "Compiler_reflectNode() interface nodes are not supported"));
+
 	gotoIfError3(clean, ListSRNode_pushBack(&reflection->nodes, srNode, alloc, e_rr));
 
 	//Symbol (kept parallel to nodes)
@@ -1727,12 +1732,9 @@ static Bool Compiler_reflectDetails(
 			ty.defNodeId = defNode == (U32) i ? U32_MAX : defNode;
 		}
 
-		//Base class (single inheritance) + implemented interfaces: GetBaseClass / GetInterfaceByIndex report types,
-		// resolved to their defining nodes by name.
-		//The concrete base goes on the SRType; each interface is an edge in the separate interfaces table (a struct
-		// can implement several).
-		//These are properties of the type DEFINITION, so only the Struct/Union node itself records them; a variable
-		// of the type reaches them through defNodeId.
+		//Base class (single inheritance): GetBaseClass reports a type, resolved to its defining node by name.
+		//This is a property of the type DEFINITION, so only the Struct/Union node itself records it; a variable
+		// of the type reaches it through defNodeId.
 
 		if ((nt == ESRNodeType_Struct || nt == ESRNodeType_Union) && d.Desc.Class == D3D_SVC_STRUCT) {
 
@@ -1742,28 +1744,6 @@ static Bool Compiler_reflectDetails(
 			if (baseT && !FAILED(baseT->GetDesc(&bd)) && bd.Name) {
 				CharString bn = CharString_createRefCStrConst(bd.Name);
 				ty.baseNodeId = SRFile_findNodeByName(reflection, bn, ESRNodeType_Struct);
-			}
-
-			UINT numInterfaces = rt->GetNumInterfaces();
-
-			for (UINT k = 0; k < numInterfaces; ++k) {
-
-				ID3D12ShaderReflectionType *it = rt->GetInterfaceByIndex(k);
-				D3D12_SHADER_TYPE_DESC id = {};
-
-				if (!it || FAILED(it->GetDesc(&id)) || !id.Name)
-					continue;
-
-				CharString in = CharString_createRefCStrConst(id.Name);
-				U32 ifaceNode = SRFile_findNodeByName(reflection, in, ESRNodeType_Interface);
-
-				if (ifaceNode == U32_MAX)
-					continue;
-
-				SRInterface itf = SRInterface{};
-				itf.nodeId = (U32) i;
-				itf.interfaceNodeId = ifaceNode;
-				gotoIfError3(clean, ListSRInterface_pushBack(&reflection->interfaces, itf, alloc, e_rr));
 			}
 		}
 

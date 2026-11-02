@@ -545,7 +545,7 @@ clean:
 		op.ThreadVectorMatrixMultiply.VectorResultType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(
-			device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT, &op, sizeof(op)
+			device, D3D12_FEATURE_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT, &op, sizeof(op)
 		)))
 			return false;
 
@@ -1123,7 +1123,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					if (
 						SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
-							device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
+							device, D3D12_FEATURE_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
 							&outer, sizeof(outer)
 						)) &&
 						outer.ThreadOuterProductSupport.Supported
@@ -1148,7 +1148,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					if (
 						SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
-							device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
+							device, D3D12_FEATURE_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
 							&wave, sizeof(wave)
 						)) &&
 						(wave.WaveMatrixMultiply.SupportFlags & D3D12_LINEAR_ALGEBRA_MULTIPLICATION_SUPPORT_FLAG_SUPPORTED)
@@ -1161,12 +1161,13 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			}
 
 			//Batched asynchronous command list submission (D3D12_FEATURE_ASYNC_COMMANDS, Agility 1.720-preview).
+			//The query reports Impl (not supported, runtime fallback or native); both of the latter accept the API.
 			D3D12_FEATURE_DATA_ASYNC_COMMANDS asyncCmds = (D3D12_FEATURE_DATA_ASYNC_COMMANDS) { 0 };
 
 			if (
 				SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 					device, D3D12_FEATURE_ASYNC_COMMANDS, &asyncCmds, sizeof(asyncCmds)
-				)) && asyncCmds.Supported
+				)) && asyncCmds.Impl != D3D12_ASYNC_COMMANDS_IMPL_NOT_SUPPORTED
 			)
 				caps.flags.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
 		#endif

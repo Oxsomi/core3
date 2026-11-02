@@ -38,7 +38,6 @@ TListImpl(SRAnnotation);
 TListImpl(SRRegister);
 TListImpl(SREnumValue);
 TListImpl(SRType);
-TListImpl(SRInterface);
 TListImpl(SRFile);
 
 const C8 *ESRNodeType_name(ESRNodeType type) {
@@ -173,7 +172,6 @@ Bool SRFile_createCopy(const SRFile *src, const Allocator *alloc, SRFile *srFile
 	gotoIfError3(clean, ListSREnumValue_createCopy(src->enumValues, alloc, &srFile->enumValues, e_rr));
 	gotoIfError3(clean, ListSRType_createCopy(src->types, alloc, &srFile->types, e_rr));
 	gotoIfError3(clean, ListU32_createCopy(src->arrayDims, alloc, &srFile->arrayDims, e_rr));
-	gotoIfError3(clean, ListSRInterface_createCopy(src->interfaces, alloc, &srFile->interfaces, e_rr));
 
 	srFile->flags = src->flags;
 	srFile->features = src->features;
@@ -200,7 +198,6 @@ void SRFile_free(SRFile *srFile, const Allocator *alloc) {
 	ListSREnumValue_free(&srFile->enumValues, alloc);
 	ListSRType_free(&srFile->types, alloc);
 	ListU32_free(&srFile->arrayDims, alloc);
-	ListSRInterface_free(&srFile->interfaces, alloc);
 
 	*srFile = (SRFile) { 0 };
 }
@@ -314,7 +311,6 @@ Bool SRFile_finalize(SRFile *srFile, const Allocator *alloc, Error *e_rr) {
 	hash = Buffer_fnv1a64(ListSREnumValue_bufferConst(srFile->enumValues), hash);
 	hash = Buffer_fnv1a64(ListSRType_bufferConst(srFile->types), hash);
 	hash = Buffer_fnv1a64(ListU32_bufferConst(srFile->arrayDims), hash);
-	hash = Buffer_fnv1a64(ListSRInterface_bufferConst(srFile->interfaces), hash);
 
 	for(U64 i = 0; i < srFile->names.entryStrings.length; ++i)
 		hash = Buffer_fnv1a64(CharString_bufferConst(srFile->names.entryStrings.ptr[i]), hash);
@@ -550,10 +546,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 					Log_debug(alloc, ELogOptions_None, ")");
 				}
 
-				//Inheritance, shown in both modes after the type as ": Base, IFace1, IFace2" (concrete base first, then
-				// each implemented interface).
-
-				Bool printedColon = false;
+				//Inheritance, shown in both modes after the type as ": Base".
 
 				if(ty.baseNodeId != U32_MAX && ty.baseNodeId < srFile->nodes.length) {
 					U32 baseName = srFile->nodes.ptr[ty.baseNodeId].nameId;
@@ -561,27 +554,7 @@ void SRFile_print(const SRFile *srFile, U64 indenting, Bool isVerbose, Bool coll
 					if(baseName != U32_MAX) {
 						CharString bn = srFile->names.entryStrings.ptr[baseName];
 						Log_debug(alloc, ELogOptions_None, " : %.*s", (int) CharString_length(bn), bn.ptr);
-						printedColon = true;
 					}
-				}
-
-				for(U64 iF = 0; iF < srFile->interfaces.length; ++iF) {
-
-					if(srFile->interfaces.ptr[iF].nodeId != i)
-						continue;
-
-					U32 ifaceNode = srFile->interfaces.ptr[iF].interfaceNodeId;
-
-					if(ifaceNode >= srFile->nodes.length || srFile->nodes.ptr[ifaceNode].nameId == U32_MAX)
-						continue;
-
-					CharString iName = srFile->names.entryStrings.ptr[srFile->nodes.ptr[ifaceNode].nameId];
-					Log_debug(
-						alloc, ELogOptions_None, printedColon ? ", %.*s" : " : %.*s",
-						(int) CharString_length(iName), iName.ptr
-					);
-
-					printedColon = true;
 				}
 
 				break;

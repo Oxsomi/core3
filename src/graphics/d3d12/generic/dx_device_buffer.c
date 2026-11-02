@@ -122,7 +122,10 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	if(!(buf->resource.flags & EGraphicsResourceFlag_ShaderRead))
+	//Agility 1.722's runtime rejects an acceleration structure resource that also denies shader resource,
+	// so an AS buffer never gets the flag.
+
+	if(!(buf->resource.flags & EGraphicsResourceFlag_ShaderRead) && !(buf->usage & EDeviceBufferUsage_ASExt))
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
 	if(buf->usage & EDeviceBufferUsage_ScratchExt)
@@ -194,9 +197,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 	// 128 (D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_BYTE_ALIGNMENT).
 	//Debug layers before stable 620 and preview 722 enforce 256 while citing that constant (fixed in the
 	// 1.619.5 stable point release, but the point release is invisible to D3D12SDKVersion and the engine only
-	// ever requests its header's stable/preview constants, so the line is gated per SDK version instead; see
-	// build/reports/d3d12_debug_layer_omm_input_alignment.md). Those runtimes get a 256 floor to stay
-	// validation clean, which only costs alignment.
+	// ever requests its header's stable/preview constants, so the line is gated per SDK version instead).
+	//Those runtimes get a 256 floor to stay validation clean, which only costs alignment.
 
 	//Any ASRead buffer may hold a TLAS's instance descs, which have to be 16 byte aligned
 	// (D3D12_RAYTRACING_INSTANCE_DESCS_BYTE_ALIGNMENT); tight alignment can place one at 8.

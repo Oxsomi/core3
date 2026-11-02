@@ -139,6 +139,10 @@ void Test_SRReadNodeFieldBounds(Test *t) {
 	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].type = ESRNodeType_Count;
 		srExpectReadFails(t, &sr, &type, "invalid node type rejected"); } SRFile_free(&sr, t->alloc); }
 
+	//Interface only exists to match DXC's enum; no table is behind it, so a file can't carry one
+	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].type = ESRNodeType_Interface;
+		srExpectReadFails(t, &sr, &type, "interface node rejected"); } SRFile_free(&sr, t->alloc); }
+
 	{ SRFile sr = { 0 }; if(srBuildMinimal(t, &sr)) { sr.nodes.ptrNonConst[1].interpolation = ESRInterpolation_Count;
 		srExpectReadFails(t, &sr, &type, "invalid interpolation rejected"); } SRFile_free(&sr, t->alloc); }
 
@@ -656,10 +660,10 @@ void Test_SRReadHugeCounts(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	//[magic 4][SRHeader: version, flags, pad, features @8, then nodeCount @12 up to interfaceCount @36]
+	//[magic 4][SRHeader: version, flags, pad, features @8, then nodeCount @12 up to arrayDimCount @32]
 	//Every list gets its own turn at being the one that is too big, then all of them at once.
 
-	for (U32 which = 0; which <= 7; ++which) {
+	for (U32 which = 0; which <= 6; ++which) {
 
 		SRFile sr = { 0 };
 		StreamRef *s = NULL;
@@ -674,8 +678,8 @@ void Test_SRReadHugeCounts(Test *t) {
 
 			MemoryStream *ms = RefPtr_data(s, MemoryStream);
 
-			for (U32 field = 0; field < 7; ++field)
-				if (which == 7 || field == which) {
+			for (U32 field = 0; field < 6; ++field)
+				if (which == 6 || field == which) {
 					const U32 count = 0x7FFFFFFF;
 					Buffer_memcpy(Buffer_createRef(ms->data.ptrNonConst + 12 + field * 4, 4), Buffer_createRefConst(&count, 4));
 				}

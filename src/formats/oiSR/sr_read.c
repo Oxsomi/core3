@@ -44,7 +44,6 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	ListSREnumValue enumValues = (ListSREnumValue) { 0 };
 	ListSRType types = (ListSRType) { 0 };
 	ListU32 arrayDims = (ListU32) { 0 };
-	ListSRInterface interfaces = (ListSRInterface) { 0 };
 	DLFile names = (DLFile) { 0 };
 
 	if(!offset || !srFile)
@@ -95,8 +94,7 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		(U64) header.registerCount * sizeof(SRRegister) +
 		(U64) header.enumValueCount * sizeof(SREnumValue) +
 		(U64) header.typeCount * sizeof(SRType) +
-		(U64) header.arrayDimCount * sizeof(U32) +
-		(U64) header.interfaceCount * sizeof(SRInterface);
+		(U64) header.arrayDimCount * sizeof(U32);
 
 	if(*offset > stream->size || stream->size - *offset < recordBytes)
 		retError(clean, Error_outOfBounds(
@@ -127,9 +125,6 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, ListU32_resize(&arrayDims, header.arrayDimCount, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListU32_buffer(arrayDims), alloc, e_rr));
-
-	gotoIfError3(clean, ListSRInterface_resize(&interfaces, header.interfaceCount, alloc, e_rr));
-	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListSRInterface_buffer(interfaces), alloc, e_rr));
 
 	//Align 16-byte then read the names oiDL.
 	//Consume the pad bytes through the cursor rather than only advancing the offset, so a forward-only stream (file data
@@ -201,12 +196,17 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		if(node.fwdBckDeclareNode != U32_MAX && node.fwdBckDeclareNode >= nodes.length)
 			retError(clean, Error_invalidState(0, "SRFile_read() node.fwdBckDeclareNode out of bounds"));
 
+		//Interface exists only to keep ESRNodeType aligned with DXC's; there is no table behind it, so it can't be in a file.
+
+		if(node.type == ESRNodeType_Interface)
+			retError(clean, Error_invalidState(0, "SRFile_read() node.type Interface is not supported"));
+
 		//The forward-declaration flag is only meaningful on declarable symbols (matches the producer's allowFwdDeclare).
 
 		if (
 			(node.flags & ESRNodeFlag_IsFwdDeclare) &&
 			node.type != ESRNodeType_Function && node.type != ESRNodeType_Enum &&
-			node.type != ESRNodeType_Struct && node.type != ESRNodeType_Union && node.type != ESRNodeType_Interface
+			node.type != ESRNodeType_Struct && node.type != ESRNodeType_Union
 		)
 			retError(clean, Error_invalidState(0, "SRFile_read() forward-declare flag on a non-declarable node type"));
 
@@ -372,24 +372,6 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			retError(clean, Error_invalidState(0, "SRFile_read() type.arrayDim range out of bounds"));
 	}
 
-	//Interface edges must go from a Struct/Union node to an Interface node
-
-	for(U64 i = 0; i < interfaces.length; ++i) {
-
-		SRInterface itf = interfaces.ptr[i];
-
-		if (
-			itf.nodeId >= nodes.length ||
-			(nodes.ptr[itf.nodeId].type != ESRNodeType_Struct && nodes.ptr[itf.nodeId].type != ESRNodeType_Union)
-		)
-			retError(clean, Error_invalidState(0, "SRFile_read() interface.nodeId doesn't reference a Struct/Union node"));
-
-		if(itf.interfaceNodeId >= nodes.length || nodes.ptr[itf.interfaceNodeId].type != ESRNodeType_Interface)
-			retError(clean, Error_invalidState(
-				0, "SRFile_read() interface.interfaceNodeId doesn't reference an Interface node"
-			));
-	}
-
 	if(!isSubFile && *offset != stream->size)
 		retError(clean, Error_invalidState(0, "SRFile_read() file had unrecognized data at the end"));
 
@@ -409,7 +391,6 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	srFile->enumValues = enumValues;
 	srFile->types = types;
 	srFile->arrayDims = arrayDims;
-	srFile->interfaces = interfaces;
 	srFile->flags = flags;
 	srFile->features = header.features;
 
@@ -421,7 +402,6 @@ Bool SRFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	enumValues = (ListSREnumValue) { 0 };
 	types = (ListSRType) { 0 };
 	arrayDims = (ListU32) { 0 };
-	interfaces = (ListSRInterface) { 0 };
 
 	gotoIfError3(clean, SRFile_finalize(srFile, alloc, e_rr));
 
@@ -438,7 +418,6 @@ clean:
 	ListSREnumValue_free(&enumValues, alloc);
 	ListSRType_free(&types, alloc);
 	ListU32_free(&arrayDims, alloc);
-	ListSRInterface_free(&interfaces, alloc);
 	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }
