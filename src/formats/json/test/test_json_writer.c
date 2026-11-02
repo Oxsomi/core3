@@ -115,6 +115,59 @@ void Test_jsonWriter(Test *t) {
 		Test_assert(t, "as two lowercase characters a byte", jsonEquals(&out, "{\"b\":\"000fa5ff\",\"empty\":\"\"}"));
 	}
 
+	//Valid UTF-8 is copied as it is; every byte that doesn't start a valid code point becomes \ufffd: a stray
+	//continuation byte, an overlong form, a surrogate, a lead byte above U+10FFFF and a code point cut short
+
+	CharString_free(&out, t->alloc);
+
+	{
+		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
+
+		Test_assert(t, "UTF-8 strings write", (
+			JsonWriter_beginArray(&w, &t->err) &&
+			JsonWriter_cstr(&w, "\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80", &t->err) &&
+			JsonWriter_cstr(&w, "\x80", &t->err) &&
+			JsonWriter_cstr(&w, "\xC0\xAF", &t->err) &&
+			JsonWriter_cstr(&w, "\xED\xA0\x80", &t->err) &&
+			JsonWriter_cstr(&w, "\xF5", &t->err) &&
+			JsonWriter_cstr(&w, "a\xE2\x82", &t->err) &&
+			JsonWriter_endArray(&w, &t->err) && JsonWriter_isComplete(&w)
+		));
+
+		Test_assert(t, "valid code points stay, each invalid byte becomes U+FFFD", jsonEquals(
+			&out,
+			"[\"\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80\",\"\\ufffd\",\"\\ufffd\\ufffd\",\"\\ufffd\\ufffd\\ufffd\","
+			"\"\\ufffd\",\"a\\ufffd\\ufffd\"]"
+		));
+	}
+
+	//Floats get the fewest digits that read back as the same value: 0.1 stays short, 0.1 + 0.2 needs all 17, and
+	//an F32 is shortest as an F32 (0.1f widened to F64 needs 17)
+
+	CharString_free(&out, t->alloc);
+
+	{
+		JsonWriter w = JsonWriter_create(&out, false, t->alloc);
+
+		Test_assert(t, "floats write", (
+			JsonWriter_beginArray(&w, &t->err) &&
+			JsonWriter_f64(&w, 0.1, &t->err) &&
+			JsonWriter_f64(&w, 0.1 + 0.2, &t->err) &&
+			JsonWriter_f64(&w, 1.0 / 3, &t->err) &&
+			JsonWriter_f64(&w, 100, &t->err) &&
+			JsonWriter_f64(&w, 1e21, &t->err) &&
+			JsonWriter_f32(&w, 0.1f, &t->err) &&
+			JsonWriter_f32(&w, 1.0f / 3, &t->err) &&
+			JsonWriter_f64(&w, (F64) 0.1f, &t->err) &&
+			JsonWriter_endArray(&w, &t->err) && JsonWriter_isComplete(&w)
+		));
+
+		Test_assert(t, "with the fewest digits that round trip", jsonEquals(
+			&out,
+			"[0.1,0.30000000000000004,0.3333333333333333,100,1e+21,0.1,0.33333334,0.10000000149011612]"
+		));
+	}
+
 	//Misuse is refused rather than emitted, since a document that is not JSON helps nobody downstream
 
 	CharString_free(&out, t->alloc);
