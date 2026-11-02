@@ -151,6 +151,27 @@ static c::Bool Test_wantsAdapter(const c::GraphicsDeviceInfo *info, const c::All
 	return wanted;
 }
 
+//What a run with OXC3_TEST_GPU set has to account for: it asked for a device, so a run that tested none is a failure,
+// not a skip. Without the filter a machine may have no usable device and stays green.
+//Every adapter the run saw is noted with why it went untested, to print when nothing matched.
+//An adapter the API turned down as unsupported never reaches the list, so only the device selection log names that one.
+
+typedef struct Test_adapterReport {
+	c::U64 tested;
+	c::CharString text;
+} Test_adapterReport;
+
+static void Test_noteAdapter(
+	Test_adapterReport *report, const c::Allocator *alloc, const c::C8 *api, const c::C8 *name, const c::C8 *why
+) {
+	c::CharString line = c::CharString_createNull();
+
+	if(c::CharString_format(alloc, &line, NULL, "\t%s: %s: %s\n", api, name, why)) {
+		c::CharString_appendString(&report->text, &line, alloc, NULL);
+		c::CharString_free(&line, alloc);
+	}
+}
+
 // -- 1. GraphicsInterface ------------------------------------------------------
 
 static void Test_graphicsInterface(c::Test *t) {
@@ -744,7 +765,7 @@ static void Test_graphicsDisabledQueries(
 	c::ListGraphicsDeviceInfo_free(&derivedMasked, t->alloc);
 }
 
-static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
+static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api, Test_adapterReport *report) {
 
 	c::Test_setModule(t, "GraphicsDevice");
 	c::Test_print(t, c::EGraphicsApi_name[api]);        //Marks which graphics API this device-test run targets
@@ -772,6 +793,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
 	if (!c::GraphicsInstance_create(&appInfo, api, instanceFlags, alloc, &type, &instRef, &t->err)) {
 		c::Test_print(t, "No compatible graphics driver, skipping device tests");
+		Test_noteAdapter(report, alloc, c::EGraphicsApi_name[api], "(instance)", "no compatible graphics driver");
 		t->err = c::Error_none();
 		return;
 	}
@@ -801,6 +823,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
 		if (t->err.genericError == c::EGenericError_NotFound) {
 			c::Test_print(t, "No graphics adapter present, skipping device tests");
+			Test_noteAdapter(report, alloc, c::EGraphicsApi_name[api], "(none)", "the api enumerated no adapter");
 			t->err = c::Error_none();
 			goto clean;
 		}
@@ -826,6 +849,7 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 			!c::File_hasFile(&prebuiltShader, alloc)
 		) {
 			c::Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");
+			Test_noteAdapter(report, alloc, c::EGraphicsApi_name[api], "(all)", "prebuilt shaders unavailable");
 			goto clean;
 		}
 	}
@@ -865,9 +889,13 @@ static void Test_graphicsDeviceForApi(c::Test *t, c::EGraphicsApi api) {
 
 		if(!Test_wantsAdapter(&infos.ptr[i], t->alloc)) {
 			c::Test_print(t, "OXC3_TEST_GPU leaves this adapter out");
+			Test_noteAdapter(report, alloc, c::EGraphicsApi_name[api], infos.ptr[i].name, "left out by OXC3_TEST_GPU");
 			continue;
 		}
 
+		//A device that matches but fails to create is already a failed deviceCreate assert, so it counts as tested.
+
+		++report->tested;
 		Test_graphicsDeviceSingle(t, instRef, &infos.ptr[i]);
 	}
 
@@ -893,6 +921,7 @@ static void Test_graphicsDevice(c::Test *t) {
 	c::Test_setModule(t, "GraphicsDevice");
 
 	c::Bool any = false;
+	Test_adapterReport report = { .text = c::CharString_createNull() };
 
 	//Counted in the underlying type: C++ has no ++ for an enum, and 0 is not one either.
 
@@ -904,11 +933,33 @@ static void Test_graphicsDevice(c::Test *t) {
 			continue;
 
 		any = true;
-		Test_graphicsDeviceForApi(t, api);
+		Test_graphicsDeviceForApi(t, api, &report);
 	}
 
-	if(!any)
+	if(!any) {
 		c::Test_print(t, "No supported graphics api, skipping device tests");
+		Test_noteAdapter(&report, t->alloc, "(any)", "(none)", "no supported graphics api");
+	}
+
+	//A filter that no tested adapter satisfied would otherwise end in Success with the adapter never exercised.
+
+	c::CharString filter = c::CharString_createNull();
+	c::Platform_getEnv(c::CharString_createRefCStrConst("OXC3_TEST_GPU"), t->alloc, &filter, NULL);
+
+	if(c::CharString_length(filter) && !report.tested) {
+
+		c::Test_setModule(t, "GraphicsDevice/filter");
+
+		Log::errorLn(
+			*t->alloc, "OXC3_TEST_GPU=\"%.*s\" matched no adapter that could be tested. Adapters seen:\n%s",
+			(int) c::CharString_length(filter), filter.ptr, c::CharString_length(report.text) ? report.text.ptr : "\tnone\n"
+		);
+
+		Test_assert(t, "OXC3_TEST_GPU matched a tested adapter", false);
+	}
+
+	c::CharString_free(&filter, t->alloc);
+	c::CharString_free(&report.text, t->alloc);
 }
 
 // -- 15. Null device rejection ---------------------------------------------------
