@@ -42,6 +42,19 @@ add_custom_target(check_generated_hpp ALL
 
 set_target_properties(check_generated_hpp PROPERTIES FOLDER Oxsomi/tools)
 
+# A suite run after building is judged by cmake/run_test.cmake, so its verdicts get a test of their own.
+# It runs under ctest only, since a test runs after building only when it hangs off a target and this one has none.
+
+if(EnableTests AND OxC3TestExecutables)
+    oxc3_add_test_command(
+        NAME        OxC3_run_test_test
+        FOLDER      Oxsomi/test/tools
+        WORKING_DIR ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND     ${CMAKE_COMMAND} -DPYTHON=${Python3_EXECUTABLE} -DSKIP_CODE=${OXC3_TEST_SKIPPED}
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/test/run_test_verdicts.cmake
+    )
+endif()
+
 if(EnableOxC3CLI)
     add_subdirectory(oxc3_cli)
 endif()

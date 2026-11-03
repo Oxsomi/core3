@@ -94,6 +94,16 @@ int Test_end(Test *test) {
 	return test->totalSucceeded != test->totalTests;
 }
 
+int Test_skip(Test *test, const C8 *reason) {
+
+	if (test && test->totalSucceeded != test->totalTests)
+		return Test_end(test);
+
+	printf("-- Skipped: %s\n", !reason ? "???" : reason);
+	fflush(stdout);
+	return OXC3_TEST_SKIPPED;
+}
+
 Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64 line, const C8 *source) {
 
 	if (!test)

@@ -6,12 +6,16 @@
 # and Test_logOOM deliberately logs under OOM.
 # Run directly as a POST_BUILD command, those passing tests fail the build.
 #
-# Output is captured and only printed when the test actually fails.
+# Output is captured and only printed when the test fails or skips.
 # That keeps a successful build's log readable (one line per suite instead of thousands), and a failing one still shows
 # everything.
 #
+# Exit 0 passes and touches TEST_STAMP, TEST_SKIP_CODE skips, and any other code fails.
+# A skip or a failure leaves no stamp, so the next build runs the suite again instead of taking it as passed.
+#
 #   cmake -DTEST_EXE=<path> | -DTEST_COMMAND=<arg|arg|...>
-#        [-DTEST_NAME=<name>] [-DTEST_WORKING_DIR=<dir>] [-DTEST_ENV_FILE=<file>] -P run_test.cmake
+#        [-DTEST_NAME=<name>] [-DTEST_WORKING_DIR=<dir>] [-DTEST_ENV_FILE=<file>]
+#        [-DTEST_STAMP=<file>] [-DTEST_SKIP_CODE=<code>] -P run_test.cmake
 #
 # TEST_COMMAND is | separated, because a ; separated list would be split by -D itself.
 
@@ -92,6 +96,10 @@ if(TEST_ENV_FILE AND EXISTS "${TEST_ENV_FILE}")
 
 endif()
 
+if(TEST_STAMP)
+	file(REMOVE "${TEST_STAMP}")
+endif()
+
 execute_process(
 	COMMAND ${testCommand}
 	WORKING_DIRECTORY "${TEST_WORKING_DIR}"
@@ -108,7 +116,16 @@ if(NOT testResult EQUAL 0)
 		message("${testError}")
 	endif()
 
+	if(TEST_SKIP_CODE AND testResult EQUAL TEST_SKIP_CODE)
+		message(STATUS "${TEST_NAME} skipped")
+		return()
+	endif()
+
 	message(FATAL_ERROR "${TEST_NAME} FAILED (exit ${testResult})")
+endif()
+
+if(TEST_STAMP)
+	file(TOUCH "${TEST_STAMP}")
 endif()
 
 message(STATUS "${TEST_NAME} passed")

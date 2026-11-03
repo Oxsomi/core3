@@ -52,6 +52,15 @@ void Test_setModule(Test *test, const C8 *moduleName);
 
 int Test_end(Test *test);
 
+//The exit code of a suite that cannot run on this machine, such as one that needs a device the machine lacks.
+//oxc3_add_test registers it as ctest's SKIP_RETURN_CODE, so a skip is reported as one and never as a pass.
+//The Android and web bundles count it as a failure.
+#define OXC3_TEST_SKIPPED 77
+
+//Prints why the suite cannot run and returns OXC3_TEST_SKIPPED, for its entry to return.
+//A failed assert outranks the skip: the suite then ends as Test_end ends it.
+int Test_skip(Test *test, const C8 *reason);
+
 //Every suite is its own executable on desktop. Android has no exec, so the whole set runs as one .so inside an
 // APK, and the web build bundles the same way rather than shipping a wasm module per suite.
 //Under _OXC3_TEST_BUNDLED each "main" becomes a named int (*)(void*) that the bundle's own entry point calls in

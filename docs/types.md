@@ -80,7 +80,9 @@ buffers and an acceleration structure never needs to know which format the bytes
 ## types/test
 
 The test framework every suite uses: modules, named asserts, a summary with counts, and one entry point that runs
-as its own executable on desktop and inside the bundled test app on Android and the web.
+as its own executable on desktop and inside the bundled test app on Android and the web. Every package carries the
+library, so a consumer writes its own suites against it through `oxc3_add_test`. A suite that cannot run on the
+machine returns `Test_skip`, which ctest reports as skipped rather than passed.
 
 ## Nytodecimal
 

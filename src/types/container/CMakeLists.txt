@@ -77,20 +77,22 @@ elseif(ANDROID)
 	target_link_libraries(OxC3_types_container PUBLIC android log)
 endif()
 
+# Built whatever EnableTests says, because a consumer links it to write its own suites.
+
+file(GLOB typesContainerTestfH CONFIGURE_DEPENDS "../../../include/types/container/test/*.h")
+file(GLOB typesContainerTestfC CONFIGURE_DEPENDS "test/shared/*.c")
+
+add_library(
+	OxC3_types_container_test_util STATIC
+	${typesContainerTestfH}
+	${typesContainerTestfC}
+	CMakeLists.txt
+)
+
+target_link_libraries(OxC3_types_container_test_util PUBLIC OxC3_types_container OxC3_types_test)
+set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
+
 if(EnableTests)
-
-	file(GLOB typesContainerTestfH CONFIGURE_DEPENDS "../../../include/types/container/test/*.h")
-	file(GLOB typesContainerTestfC CONFIGURE_DEPENDS "test/shared/*.c")
-
-	add_library(
-		OxC3_types_container_test_util STATIC
-		${typesContainerTestfH}
-		${typesContainerTestfC}
-		CMakeLists.txt
-	)
-
-	target_link_libraries(OxC3_types_container_test_util PUBLIC OxC3_types_container OxC3_types_test)
-	set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
 
 	# Executables can't link on android (Platform_defineEntrypoint gives android_main, not main), and an
 	# APK can't run one regardless; src/CMakeLists.txt bundles the suites into OxC3_atest instead, which

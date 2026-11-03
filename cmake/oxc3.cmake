@@ -789,8 +789,8 @@ endmacro()
 #
 #   oxc3_add_test(
 #       NAME        OxC3_formats_bmp_test
-#       FOLDER      Oxsomi/test/formats
 #       LIBS        OxC3_types_container_test_util OxC3_formats_bmp
+#       [FOLDER     Oxsomi/test/formats] # the IDE folder
 #       [DIR        test]                # source dir, relative to the caller
 #       [INCLUDES   ../../../include]
 #       [WORKING_DIR <dir>]              # for a test that reads data relative to itself
@@ -856,7 +856,11 @@ function(oxc3_add_test)
 		set_target_properties(${T_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${T_WORKING_DIR}")
 	endif()
 
-	set(runArgs NAME ${T_NAME} FOLDER "${T_FOLDER}")
+	set(runArgs NAME ${T_NAME})
+
+	if(T_FOLDER)
+		list(APPEND runArgs FOLDER "${T_FOLDER}")
+	endif()
 
 	if(T_WORKING_DIR)
 		list(APPEND runArgs WORKING_DIR "${T_WORKING_DIR}")
@@ -866,7 +870,7 @@ function(oxc3_add_test)
 		list(APPEND runArgs NO_AUTORUN)
 	endif()
 
-	# Appended only when non empty, like the two above: an empty list would pass the keyword with no value,
+	# Appended only when non empty, like the ones above: an empty list would pass the keyword with no value,
 	# which is what a caller writing DATA and then forgetting the files looks like.
 
 	if(T_DATA)
@@ -881,9 +885,14 @@ function(oxc3_add_test)
 
 endfunction()
 
+# The exit code of a suite that cannot run on this machine, OXC3_TEST_SKIPPED in types/test/test.h.
+# ctest reports it as skipped, and the run after building neither fails nor writes the suite's stamp.
+
+set(OXC3_TEST_SKIPPED 77)
+
 # The run half on its own, for a target built by hand because it needs more than the wrapper does (a package attached
 # to it, a dylib it dlopens).
-# Registers with ctest, and runs it after building unless OxC3TestAutoRun is off.
+# Registers with ctest, and runs it after building when OxC3TestAutoRun is on, which a consumer sets itself.
 
 function(oxc3_add_test_run)
 
@@ -913,6 +922,8 @@ function(oxc3_add_test_run)
 		add_test(NAME ${T_NAME} COMMAND ${T_NAME})
 	endif()
 
+	set_tests_properties(${T_NAME} PROPERTIES SKIP_RETURN_CODE ${OXC3_TEST_SKIPPED})
+
 	if(NOT OxC3TestAutoRun OR T_NO_AUTORUN OR CMAKE_CROSSCOMPILING)
 		return()
 	endif()
@@ -932,7 +943,10 @@ function(oxc3_add_test_run)
 
 	set(envFile "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.env")
 
-	set(runArgs -DTEST_EXE=$<TARGET_FILE:${T_NAME}> -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile})
+	set(runArgs
+		-DTEST_EXE=$<TARGET_FILE:${T_NAME}> -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile}
+		-DTEST_STAMP=${stamp} -DTEST_SKIP_CODE=${OXC3_TEST_SKIPPED}
+	)
 
 	if(T_WORKING_DIR)
 		list(APPEND runArgs -DTEST_WORKING_DIR=${T_WORKING_DIR})
@@ -948,7 +962,6 @@ function(oxc3_add_test_run)
 	add_custom_command(
 		OUTPUT "${stamp}"
 		COMMAND ${CMAKE_COMMAND} ${runArgs} -P "${runScript}"
-		COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
 		DEPENDS ${T_NAME} ${T_DATA} ${T_DEPS}
 		COMMENT "Running ${T_NAME}"
 		VERBATIM
@@ -1039,6 +1052,8 @@ function(oxc3_add_test_command)
 		add_test(NAME ${T_NAME} COMMAND ${T_COMMAND})
 	endif()
 
+	set_tests_properties(${T_NAME} PROPERTIES SKIP_RETURN_CODE ${OXC3_TEST_SKIPPED})
+
 	if(OxC3TestAutoRun AND NOT T_NO_AUTORUN AND NOT CMAKE_CROSSCOMPILING AND TARGET ${T_TARGET})
 
 		set(stamp "${CMAKE_CURRENT_BINARY_DIR}/${T_NAME}.passed")
@@ -1055,8 +1070,8 @@ function(oxc3_add_test_command)
 			OUTPUT "${stamp}"
 			COMMAND ${CMAKE_COMMAND}
 				"-DTEST_COMMAND=${commandLine}" -DTEST_NAME=${T_NAME} -DTEST_ENV_FILE=${envFile}
+				-DTEST_STAMP=${stamp} -DTEST_SKIP_CODE=${OXC3_TEST_SKIPPED}
 				-DTEST_WORKING_DIR=${T_WORKING_DIR} -P "${runScript}"
-			COMMAND ${CMAKE_COMMAND} -E touch "${stamp}"
 			DEPENDS ${T_TARGET} ${T_DATA} ${T_DEPS}
 			WORKING_DIRECTORY ${T_WORKING_DIR}
 			COMMENT "Running ${T_NAME}"

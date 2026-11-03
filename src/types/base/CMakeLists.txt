@@ -64,21 +64,23 @@ source_group("Source Files (${platform})" FILES ${typesBasePlatformSources})
 set_target_properties(OxC3_types_base PROPERTIES FOLDER Oxsomi/types)
 target_include_directories(OxC3_types_base PUBLIC "../../../include")
 
+# Built whatever EnableTests says, because a consumer links it to write its own suites.
+
+file(GLOB typesTestHeaders CONFIGURE_DEPENDS "../../../include/types/test/*.h")
+file(GLOB testsSharedC CONFIGURE_DEPENDS "test/shared/*.c")
+
+add_library(
+	OxC3_types_test
+	STATIC
+	${typesTestHeaders}
+	${testsSharedC}
+	CMakeLists.txt
+)
+
+set_target_properties(OxC3_types_test PROPERTIES FOLDER Oxsomi/test/types)
+target_include_directories(OxC3_types_test PUBLIC "../../../include")
+
 if(EnableTests)
-
-	file(GLOB typesTestHeaders CONFIGURE_DEPENDS "../../../include/types/test/*.h")
-	file(GLOB testsSharedC CONFIGURE_DEPENDS "test/shared/*.c")
-
-	add_library(
-		OxC3_types_test
-		STATIC
-		${typesTestHeaders}
-		${testsSharedC}
-		CMakeLists.txt
-	)
-
-	set_target_properties(OxC3_types_test PROPERTIES FOLDER Oxsomi/test/types)
-	target_include_directories(OxC3_types_test PUBLIC "../../../include")
 
 	# The per-suite executables can't link on android: Platform_defineEntrypoint gives android_main
 	# rather than main, and an APK can't run an exec anyway. src/CMakeLists.txt builds the suites into
