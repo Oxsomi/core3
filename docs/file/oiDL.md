@@ -27,7 +27,7 @@ typedef enum EDLFlags {
 
 	EDLFlags_None 					= 0,
 
-	EDLFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+	EDLFlags_Reserved				= 1 << 0,
 
     EDLFlags_IsString				= 1 << 1,		//If true; string must contain valid UTF8 characters
 

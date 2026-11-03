@@ -464,7 +464,7 @@ The following define the requirements of binaries embedded in oiSH files.
 ### SPIRV spec
 
 - Main entrypoint should be called "main" unless it's compiled as a lib file (raytracing, etc.).
-- SPV1.3 is used by default but SPV1.4 is used when RT is present (RT stage or RayQuery).
+- A binary is SPV1.3 unless its features need more: SPV1.4 for ray tracing (an RT stage or RayQuery) and for mesh and task shaders, and SPV1.6 (Vulkan 1.3) for cooperative vectors and matrices (CoopVec, CoopMat, CoopFP8, CoopVecTraining) and DescriptorHeap. The highest requirement wins (`Compiler_requiredSpirvVersion`).
 - Capabilities:
   - Always supported:
     - Shader
@@ -641,7 +641,7 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 
 1.2(.5): No major bump, no oiSH files exist in the wild yet. Added SHHeader::extensionCount (the writer's ESHExtension_Count), so readers that know about newer native extensions can automatically mark them dormant for files written before those extensions existed. Added the DescriptorHeap extension (full bindless: SM6.6 dynamic resources on DXIL, SPV_EXT_descriptor_heap on SPIRV), natively detected on both backends.
 
-1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
+1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see shader_compiler.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (`RWStructuredBuffer<float4>` whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
 
 1.2(.6): No major bump, no oiSH files exist in the wild yet. Repurposed the trailing `SHHeader::padding` U16 as `flags`, persisting `ESHSettingsFlags` (see Header flags section). This adds `ESHSettingsFlags_ReflectionOnly`, marking an oiSH that carries reflection but no compiled binaries; it is what `OxC3 shader reflect` emits and what lets such a file load even though `SHFile_isComplete` is false. Backwards compatible: existing files wrote the padding as zero, which reads back as `ESHSettingsFlags_None`. The field is inside the hashed range, so the reflection-only state is integrity-checked.
 

@@ -22,7 +22,7 @@
 Runs on Windows, Linux and macOS; everything host specific goes through build_common, which build.py
 uses too, so a host build made here is the same one a normal build.py run would produce.
 
-An android build can't run its own packager (the shader compiler is off, and the binaries wouldn't be
+An android build can't run its own packager (the shader compiler is off by default, and the binaries wouldn't be
 runnable on the host anyway), so it tool_requires a host oxc3 that has OxC3_package in it. That host
 package is built first, from this working tree; see build_common.buildHostToolPackage.
 """

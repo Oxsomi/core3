@@ -1158,10 +1158,9 @@ Bool Compiler_parse(
 						"Compiler_parse() one of the non compute/mesh/task stages uses ComputeDeriv, which isn't supported"
 					));
 
-				//No shader model check here any more: an extension needing a newer one than the entry declared
-				// is resolved rather than refused, by promoting that combination's model in
-				// SHEntryRuntime_asBinaryIdentifier. Rejecting it was what forced an entry to declare the
-				// highest model any of its extensions needed and pulled every other permutation up with it.
+				//An extension needing a newer shader model than the entry declared isn't refused here:
+				// SHEntryRuntime_asBinaryIdentifier raises that combination's model,
+				// so the other extension lines keep theirs.
 			}
 
 			//Validate groups with stage
@@ -1373,7 +1372,7 @@ static Bool Compiler_reflectNode(
 	if (srNode.type >= ESRNodeType_Count)
 		retError(clean, Error_invalidState(0, "Compiler_reflectNode() node had an unrecognized type"));
 
-	//HLSL has no interface keyword anymore; the value only exists to stay aligned with DXC's enum.
+	//HLSL has no interface keyword; the value only exists to stay aligned with DXC's enum.
 
 	if (srNode.type == ESRNodeType_Interface)
 		retError(clean, Error_invalidState(1, "Compiler_reflectNode() interface nodes are not supported"));

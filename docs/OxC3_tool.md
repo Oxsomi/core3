@@ -221,137 +221,19 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
 
-`@myFile.hlsl` specifies builtin shaders, such as `@types.hlsl` and `@resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target and the `extension` annotation is used.
-
 ### Compile
 
-Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the defines, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
-
-#### Include limits
-Includes use OxC3 file paths, as such, escaping out of the working directory is prohibited. Any resolved file path that doesn't start with the working directory is illegal. And any tool that may read these includes (such as a file watcher) should have a similar protection mechanism.
-This gives a logical limit to how far back an include can go. Such a limit is also very useful to prevent any tooling from reading into files that weren't intentional or don't exist within the scope of the program (such as embedding a fictional include file which could read any file the program has access to). It will also enforce relative files, rather than allowing absolute files in the includes for some reason.
-
-#### Built-in defines
-
-The following defines are set by OxC3 during compilation or preprocess:
-
-- `__OXC` to indicate that OxC3 is compiling or parsing the shader.
-- `__OXC_PREPROCESS` to indicate that OxC3 is parsing the entrypoints (useful for ensuring OxC3 sees all entrypoints even if some get hidden in other compilations).
-  - When this happens, all extensions are turned on but no uniforms or defines are set. This means that your shader should gracefully handle a uniform or define not being present. As well as too many extensions being available while `__OXC_PREPROCESS` is used; these extensions won't make it into the final binary. For example, defines should check `#ifdef $$UNIFORM` before using them, just like normal defines.
-
-- `__OXC_MAJOR`, `__OXC_MINOR` and `__OXC_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
-- `__OXC_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
-- `__OXC_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC_EXT_F16`, `__OXC_EXT_F64`, `__OXC_EXT_RAYQUERY`, etc.
-  - `__OXC_EXT_RAYTRACING` is set when raytracing shaders are used.
-
-#### Semantics
-
-Semantics for input(s) and output(s) for shaders get parsed and have the following restrictions:
-
-- SV_ is reserved for HLSL semantic values.
-- Other semantic values should follow TEXCOORD[n], for optimal compatibility and storage. These can be bound through Vulkan as binding n or in D3D12 as TEXCOORD with id n. Semantics for input/output layouts are compatible with the OxC3 shader compiler, but are stored less efficiently and could experience less compatibility for non DirectX pipelines.
-
-#### Entrypoint annotations
-
-Each entrypoint can have annotations on top of the ones used by DXC (have to be before the DXC annotations). The ones introduced in OxC3's pre-processor are the following:
-
-- `[[oxc::stage("vertex")]]` similar to DXC's `[shader("vertex")]` but instead of implying a library compilation (for use in StateObjects), it signals a standalone compilation for this entrypoint. Essentially allowing pixel and vertex shaders to be compiled and packaged as a single oiSH file.
-  - Defining stages is only allowed for stages that have to be separately compiled. For raytracing shaders, the shader annotation should still be used.
-  - Type must be one of vertex, pixel, compute, geometry, hull, domain, mesh, task.
-  - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type.
-  - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
-  - Note: Please prefer the use of `[shader("type")]` since stage is deprecated. It's there to support backwards compatibility, but introduces extra compile time compared to the 'shader' annotation. This is required for oxc::uniforms.
-- `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI, GOGL, MESA. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
-- `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint.
-  - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
-  - `__OXC_EXT_<X>` can be used to see which extension is enabled. For example `__OXC_EXT_ATOMICI64`.
-  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayTriPosition, Barycentrics, RayReorder, Multiview, ComputeDeriv, PAQ, MeshTaskTexDeriv, WriteMSTexture, SubgroupOperations, CoopVec, CoopMat, CoopFP8, CoopVecTraining, DescriptorHeap, SubgroupQuad, DynamicSamplers, UnsafeExperimentExecution, UnsafeExtensionExecution, ExperimentTier1, ExperimentTier2, IntegerDot4x8.
-    - **Note**: RayReorder is currently only available for raygeneration shaders.
-    - **Note**: UnsafeExperimentExecution marks a binary its author vouches for rather than one OxC3 checks: it compiles to SPIR-V only and unvalidated, and only runs on a device created with `EGraphicsDeviceFlags_AllowUnsafeExperimentExecution` (see "Unsafe experiment execution" in graphics_api.md).
-    - **Note**: UnsafeExtensionExecution lets in extensions oiSH doesn't recognize, on both backends: SPIR-V capabilities and DXIL requirement flags it has no extension for, and any SPIR-V extension DXC knows. It only runs on a device created with `EGraphicsDeviceFlags_AllowUnsafeExtensionExecution` (see "Unsafe extension execution" in graphics_api.md).
-    - **Note**: ExperimentTier1 and ExperimentTier2 (ESHExtension2) declare an experiment tier the device's driver has to claim (`EGraphicsFeatures2_ExperimentTier1`), which every binary declaring one is held to, an UnsafeExperimentExecution binary included. The compile sees `__OXC_EXT_EXPERIMENTTIER1` or `__OXC_EXT_EXPERIMENTTIER2`. OxC3 gives the tiers no meaning.
-    - **Note**: IntegerDot4x8 (ESHExtension2) declares the packed 4 x 8 bit integer dot products (`dot4add_i8packed`, `dot4add_u8packed`), which need `EGraphicsFeatures2_IntegerDot4x8`; the compile sees `__OXC_EXT_INTEGERDOT4X8`. A SPIR-V compile refuses a shader that uses them without declaring it.
-    - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[[extension()]]` and `[[extension("16BitTypes")]]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
-      - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[[extension("RayReorder")]]` while the rest such as non NV and Pascal, Turing, Ampere would need `[[extension()]]`. This will force a recompile.
-      - If multiple extensions are available, it will pick from top to bottom if they're all available. So `[[extension("16BitTypes")]]` and `[[extension("RayReorder")]]` would for example only pick the second one if the first one isn't available.
-- `[[oxc::uniforms(U32 x = 45, F32 y = 90.f)]]` Creates either 2 spec constants (spv) or 2 library exports (dxil) that contain these values. These are only accessible as functions and not as static const at compile time, but they will be fossilized in a subsequent linking step internally to reduce compile time (but keep runtime performance).
-  - Please try to use uniforms if possible and avoid defines, since defines cause a full HLSL compile, while uniforms will only cause DXIL/SPV to be fossilized into the right shader. Each unique uniform combo will cause DXIL/SPV linking to happen.
-  - The types are scalars: `(U/I)(8/16/32/64)`, `F(16/32/64)` and `B1`. Vectors and matrices are refused, since SPIR-V has no spec constant of either; make one out of several scalars. Each is stored at its width (a B1 as one bit).
-    - In HLSL `$$X` has the type the binary's extensions give it, as with any declaration: `uint16_t` for a U16 with 16-bit types and `uint` without, a U8 widening to the same, an F16 being `float16_t` or `float` alike, and 64-bit types needing I64 or F64. On SPIR-V an 8 or 16-bit uniform is a 32-bit spec constant underneath (DXC has none narrower) that `$$X` casts back, so its value is the same on both backends: signed ones sign extended, a half the float of its value.
-    - A value is exact: the binary holds the value's bits (`asfloat(0x3DFCD6EAu)` in DXIL's export for `F32 f = 0.123456789`), not a decimal rounded on the way.
-  - Reserved syntax for defining vectors is `(1, 2, 3, 4)` for example and matrices are `((1, 2, 3), (4, 5, 6), (7, 8, 9))`, for when they're supported.
-  - Since the uniform becomes a function or variable, it must not include symbols or spaces (excluding _). 
-  - The application is in charge of picking the uniform & define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models which is handled by the runtime; though extensions can be explicitly required or disabled at runtime.
-  - Uniforms types, ordering and names must stay the same for the same compilation unit (source file). This ensures consistent behavior between compiles and clearly defines values of uniforms (rather than assuming they'd be defined as zero). For example: `[[oxc::uniforms(B1 value = true)]] [[oxc::uniforms()]]` this would be invalid, as the first one defines B1 value but the 2nd doesn't. Another invalid would be if the uniform is defined, but the type mismatches; only the value can change. Another would be if the order isn't consistent between others.
-  - Uniforms require the use of the DXC `[shader("type")]` intrinsics (lib compilation), whereafter this will be turned into a specialized shader afterwards. Every stage takes them this way: ray tracing stages link one library a row, and a mesh or amplification entry is written `[shader("mesh")]` or `[shader("amplification")]`, DXC's name for the task stage (`[[oxc::stage("task")]]` still spells it task).
-  - If a compilation unit has uniforms that are used by only one entrypoint, it still has to be available and they can't change types. This is because every compilation unit is only compiled once per combination (defines, shader models, extensions).
-  - Each entrypoint has rows of its own: two entrypoints of one file may give the same uniform different values, and each gets a binary a row of its own (one compile of the file serves both).
-  - The app finds a binary by its uniforms' values (`GraphicsDeviceRef_getFirstShaderEntry`'s `uniforms`, name and value pairs): each value is read as the uniform's type and compared as a value, so `3` and `+3`, or `1.5` and `1.50`, find the same binary, and a float written with more digits than it holds finds the binary its annotation rounded to the same value.
-- `[[oxc::defines("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")]]` Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
-  - Try to avoid defines in favor of uniforms to reduce compilation time (each unique define combo will cause an additional full HLSL compile).
-  - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
-  - Only defining the define but no assign will just see it as a define that can be checked with #ifdef.
-  - Define name must not indicate symbols or spaces (excluding _).
-- The application is in charge of picking the define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models and extensions which are handled by the runtime.
-- `[[oxc::model("6.8")]]`
-  - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
-    - Minimum must be 6.5+ since that's the minimum OxC3 supports (the maximum is 6.10).
-    - AtomicI64, ComputeDeriv and PAQ (Payload Access Qualifiers) require SM6.6.
-    - WaveSize requires SM6.6.
-    - WaveSize with 2 or 3 arguments (min, max, preferred) requires SM6.8.
-    - WaveSize is read off the source with the entry (through the HLSL reflector, which hands it over as a builtin annotation), so the entry carries it for every binary type: SPIR-V can't hold a wave size, and a Vulkan pipeline asks for it instead (graphics_api.md, Wave size). A DXIL compile's reflected size has to be the same one, and WaveSize is for compute entries only.
-    - WriteMSTexture (writable multisampled textures) requires SM6.7.
-    - RayReorder (Shader Execution Reordering / SER) and RayMicromapOpacity (Opacity Micromaps / OMM) require SM6.9.
-    - DescriptorHeap requires SM6.6 (dynamic resources).
-    - CoopVec, CoopMat, CoopFP8, CoopVecTraining and RayTriPosition require SM6.10.
-    - Stage type always has to be compatible with specified models.
-    - If extensions are defined, one of the pair of extensions/models has to be compatible with the minimum requirement. If this is the case, that one is used as fallback.
-      - Example: `[[model("6.2")]]` and `[[model("6.0")]]` is possible with `[[extensions("16BitTypes")]]` only if there's another `[[extensions()]]` available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on). Do note that OxC3's minimum is 6.5, so 6.0 and 6.2 are unsupported.
-    - If multiple models are available, the runtime will choose from highest shader model to lowest shader model available.
-  - If not defined, will use minimum for the detected feature set.
-  - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled.
-- `[[oxc::binary("spv", "dxil")]]`
-  - Restricts which binary backends this entrypoint is emitted for. Accepts `spv` (or `spirv`) and `dxil` (case insensitive). Unlike models/defines/extensions this does **not** introduce extra compiles; it only narrows which of the already-requested backends this entrypoint ends up in.
-  - If not defined, the entrypoint is emitted for every requested backend its stage + extensions can actually be expressed on.
-  - The effective set is an AND of three things: the backends passed to `-compile-output`, this annotation (or all backends if it's absent), and the backends the entrypoint's stage + extensions support. Example: compiling with `all` a shader whose entrypoint can only be expressed in SPIRV will only emit SPIRV for it.
-  - Stage / extension support is auto-restricted even without the annotation: AtomicF32/F64 are SPIRV-only, since DXIL has no float atomic intrinsic; MeshTaskTexDeriv, PAQ and WriteMSTexture are DXIL-only, since DXC's SPIR-V backend refuses them. Everything else compiles on both, including RayMicromapOpacity and RayReorder (SPIR-V reaches them through inline SPIR-V). Listing a backend the stage/extension can't target simply drops it (that's the AND) rather than erroring; when that leaves no entrypoint at all, no oiSH is written and a warning says so.
-  - A single annotation lists the full set (e.g. `[[oxc::binary("spv", "dxil")]]`); duplicate binary types within one annotation are rejected.
-  - **NOTE** (current limitation): this only filters the oiSH *reflection*, an excluded entrypoint is not reported for that backend, but when it shares a library compile with a kept entrypoint the emitted DXIL/SPIRV blob can still physically contain its code. Explicitly stripping the entrypoint and re-running DCE per backend is planned, after which reflection and the binary will fully agree.
-
-**NOTE**: Since multiple models, defines and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of defines + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints). Please prefer uniforms rather than defines to keep compile times low, this is because uniforms are specialization constants under the hood (or libraries in DXIL) and this in turn means that they get fossilized after HLSL has been compiled to DXIL/SPIRV, which is way cheaper than processing the entire file.
-
-#### Disabling combinations
-
-An entry's binaries are the full cross product of its models, extension lines, define lines and uniform rows. Where some of those combinations can't or shouldn't exist (a define set meaningless under one extension line, a uniform row one family of entries never uses), `@variants.hlsli` drops them while the annotations stay a cross product, in two ways that work alike on SPIR-V and DXIL:
-
-- `OXC_DISABLE_COMBINATION`, written under an `#if` on what a combination is made of (its defines, `$NAME`, its extensions, `__OXC_EXT_NAME`, or `__spirv__`), drops the combination. The marker expands to a type DXC doesn't know, so a combination that reaches it fails its compile with that name in the error, which OxC3 takes as the combination being disabled instead of a failure: nothing is compiled for it, every uniform row of it included. It has to be written at global scope, and in the discovery pass, which only reads the entrypoints, it expands to nothing.
-  ```hlsl
-  #include "@variants.hlsli"
-
-  #if defined(__OXC_EXT_EXPERIMENTTIER1) && $FAMILY == 0
-  	OXC_DISABLE_COMBINATION        //The experiment line only means something to the other family
-  #endif
-  ```
-- `oxcDisableBinary()`, called on a path only a uniform (or a define) decides, drops each binary whose specialized code still reaches it, decided after the link. It writes to a marker resource (`_oxcDisableBinary`, in register space and descriptor set 196, `OXC3_DISABLE_SPACE`), which survives in a binary exactly where the call does: OxC3 drops the binaries whose reflection uses it and removes the register from the rest, `--keep-registers` included, so no binary it writes declares it.
-  ```hlsl
-  #ifdef $$FORMAT
-  	if($$FORMAT == 2 && $FAMILY == 1)
-  		oxcDisableBinary();        //Format 2 has nothing to write in family 1
-  #endif
-  ```
-  Only call it under a condition the specialization folds: under one it can't, such as a value read at run time, every binary keeps the call and every one is dropped.
-
-Each dropped combination and binary is logged ("Disabled at compile", "Disabled after link"). An entry keeps the binaries left, and the oiSH format doesn't change: its entries list their binaries, so a lookup naming a disabled combination moves on to the next extension line, as it does where a binary isn't supported. An entry with none left isn't written, and a file with none writes nothing, with a warning.
+How a compile runs, and the HLSL it reads (built-in includes, include limits, built-in defines, semantics, entrypoint annotations and disabling combinations), is described in [shader_compiler.md](shader_compiler.md#shader-source). The flags below change it.
 
 #### Special flags
 
-- `--debug` is used to toggle debug info in the binary.
-- `--ignore-empty-files` is used to hide the error when no entrypoints are found to compile. This is off by default because include files should be named as .hlsli, but to support both use cases, this can be used to silence the error.
+- `--debug` is used to toggle debug info in the binary. See [Debug info and unused registers](shader_compiler.md#debug-info-and-unused-registers).
+- `--ignore-empty-files` is used to hide the error when no entrypoints are found to compile. This is off by default because include files should be named as .hlsli, but to support both use cases, this can be used to silence the error. See [Batches and threads](shader_compiler.md#batches-and-threads).
 - `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
-- `--keep-registers` keeps declared but unused resources bound and reflected (DXIL `-fhlsl-unused-resource-bindings=keep-all`, SPIRV additionally `-fspv-preserve-bindings`). Useful for stable register layouts across shader variants; off by default so unused resources are stripped (their slots are still reserved via reserve-all).
-- `--warn-unused-registers` registers that were unused spawn a compile warning. Off by default because techniques like bindless might expose lots of registers that are unused.
-- `--warn-unused-constants` variables that are unused in a constant buffer cause a compile warning. Off by default because constant buffers might be re-used and might require a specific buffer layout to be compatible. Only goes 1 level deep (doesn't go inside of structs, unless it's a structured buffer).
-- `--warn-buffer-padding`  warns about padding being introduced between variables that the user might not be expecting. Useful when debugging mismatching buffer layouts between C/C++ and HLSL or other languages.
+- `--keep-registers` keeps declared but unused resources bound and reflected (DXIL `-fhlsl-unused-resource-bindings=keep-all`, SPIRV additionally `-fspv-preserve-bindings`). Useful for stable register layouts across shader variants; off by default so unused resources are stripped (their slots are still reserved via reserve-all). See [Debug info and unused registers](shader_compiler.md#debug-info-and-unused-registers).
+- `--warn-unused-registers` registers that were unused spawn a compile warning. Off by default because techniques like bindless might expose lots of registers that are unused. See [Errors and warnings](shader_compiler.md#errors-and-warnings).
+- `--warn-unused-constants` variables that are unused in a constant buffer cause a compile warning. Off by default because constant buffers might be re-used and might require a specific buffer layout to be compatible. Only goes 1 level deep (doesn't go inside of structs, unless it's a structured buffer). See [Errors and warnings](shader_compiler.md#errors-and-warnings).
+- `--warn-buffer-padding`  warns about padding being introduced between variables that the user might not be expecting. Useful when debugging mismatching buffer layouts between C/C++ and HLSL or other languages. See [Errors and warnings](shader_compiler.md#errors-and-warnings).
 
 ## Shader category
 
@@ -359,11 +241,12 @@ Alongside the older `OxC3 compile shaders` operation (which still exists and is 
 
 - `OxC3 shader compile -input <src> -output <file.oiSH>`: Compile a shader to an oiSH; the source format is detected from the input extension (.hlsl). Accepts `-threads`, `-include-dir`, `-compile-type` and `-compile-output`.
 - `OxC3 shader reflect -input <src> -output <file.oiSH>`: Produce a reflection-only oiSH from a shader source (no compiled binary; not usable for a pipeline). Accepts `-threads` and `-include-dir`.
+- `OxC3 shader reflect-symbols -input <src> [-output <file.oiSR>]`: Reflect a shader source's symbol AST (entrypoints, user types, resources, scopes) into an [oiSR](file/oiSR.md). Prints the tree to stdout, or writes the oiSR with `-output`. Accepts `-threads` and `-include-dir`, and `--verbose`.
 - `OxC3 shader entrypoints -input <file.oiSH>`: List the entrypoints (name + stage) declared in an oiSH shader. `--verbose` prints full details.
 - `OxC3 shader includes -input <file.oiSH>`: List the include files (relative path + CRC32C) an oiSH shader was compiled from.
 - `OxC3 shader feature_set -input <file.oiSH>`: Show the extensions, shader models and binary types used across an oiSH shader's binaries.
 - `OxC3 shader disassemble -input <file.spv|.dxil>`: Disassemble a standalone .spv or .dxil binary to text (stdout, or `-output <file>`).
-- `OxC3 shader assemble -input <file.spv.txt> -output <file.spv>`: Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.
+- `OxC3 shader assemble -input <file.txt> -output <file.spv|.dxil>`: Assemble SPIR-V text into a .spv binary, or DXIL (LLVM IR) text into a .dxil one; the output's extension picks which.
 
 ## Show GPU/graphics device info
 

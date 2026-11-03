@@ -37,6 +37,24 @@ if(EnableTests AND Python3_Interpreter_FOUND)
 	)
 endif()
 
+add_custom_target(check_docs ALL
+	COMMAND ${CMAKE_COMMAND} -E echo "-- Running OxC3 docs check..."
+	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_check_docs.py
+	COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_docs.py ${CMAKE_SOURCE_DIR}
+	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+	COMMENT "OxC3 docs check"
+	VERBATIM
+)
+
+set_target_properties(check_docs PROPERTIES FOLDER Oxsomi/tools)
+
+if(EnableTests AND Python3_Interpreter_FOUND)
+	add_test(
+		NAME OxC3_docs_test
+		COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_check_docs.py"
+	)
+endif()
+
 # The generated oxc:: wrappers are committed, so nobody needs the generator to read them.
 # This catches the case where the C header they're derived from changed and they weren't regenerated.
 

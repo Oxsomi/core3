@@ -781,7 +781,7 @@ void Operations_init() {
 		Operation_values[EOperation_ShaderAssemble] = (Operation) {
 			.category = EOperationCategory_Shader,
 			.name = "assemble",
-			.desc = "Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.",
+			.desc = "Assemble SPIR-V text into a .spv or DXIL (LLVM IR) text into a .dxil; the output extension picks which.",
 			.func = &CLI_shaderAssemble,
 			.isFormatLess = true,
 			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
