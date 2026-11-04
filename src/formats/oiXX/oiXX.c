@@ -70,7 +70,7 @@ Bool StreamCursor_consumeSizeType(
 
 	if ((U64) type >= (U64) EXXDataSizeType_Count)
 		retError(clean, Error_invalidEnum(
-			1, (U64) type, (U64) EXXDataSizeType_Count,
+			2, (U64) type, (U64) EXXDataSizeType_Count,
 			"StreamCursor_consumeSizeType()::type out of bounds"
 		));
 
@@ -106,12 +106,12 @@ Bool StreamCursor_appendSizeType(
 
 	if (!cursor || !it)
 		retError(clean, Error_nullPointer(
-			!cursor ? 0 : 1, "StreamCursor_appendSizeType()::cursor, it and result are required"
+			!cursor ? 0 : 1, "StreamCursor_appendSizeType()::cursor and it are required"
 		));
 
 	if ((U64) type >= (U64) EXXDataSizeType_Count)
 		retError(clean, Error_invalidEnum(
-			1, (U64) type, (U64) EXXDataSizeType_Count,
+			3, (U64) type, (U64) EXXDataSizeType_Count,
 			"StreamCursor_appendSizeType()::type out of bounds"
 		));
 

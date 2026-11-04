@@ -30,7 +30,7 @@
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
 
-ECompareResult SubResourceData_sort(const void *aRaw, const void *bRaw, void *context) {
+static ECompareResult SubResourceData_sort(const void *aRaw, const void *bRaw, void *context) {
 
 	(void) context;
 
@@ -67,34 +67,40 @@ Bool DDS_write(
 	Buffer cache = Buffer_createNull();
 
 	if(!buf || !buf->length || !info)
-		retError(clean, Error_nullPointer(!buf || !buf->length ? 0 : 1, "DDS_write()::buf and info are required"));
+		retError(clean, Error_nullPointer(!buf || !buf->length ? 2 : 3, "DDS_write()::buf and info are required"));
 
 	if(!startOffset)
-		retError(clean, Error_nullPointer(1, "DDS_write()::streamOffset are required"));
+		retError(clean, Error_nullPointer(1, "DDS_write()::streamOffset is required"));
 
 	offset = *startOffset;
 
 	if(streamRef && streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
-		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is of invalid type"));
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::streamRef is of invalid type"));
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if(stream && !stream->write)
-		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is not writable"));
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::streamRef is not writable"));
 
 	if(!info->w || !info->h || !info->l || !info->mips || !info->layers || !info->textureFormatId)
 		retError(clean, Error_invalidParameter(
-			1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required"
+			3, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required"
 		));
 
 	if(info->type >= ETextureType_Count || info->textureFormatId >= ETextureFormatId_Count)
-		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid"));
+		retError(clean, Error_invalidParameter(3, 1, "DDS_write()::info.type and textureFormatId have to be valid"));
+
+	//ETextureFormat_getSize leaves bounding the extents to the caller, and the first mip is the largest.
+	//Within this bound no slice's size can wrap; the sums over mips and layers are checked as they're formed.
+
+	if((U64) info->w * info->h >= ((U64) 1 << 57) / info->l)
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::info size is too large"));
 
 	const U32 biggestSize2 = U32_max(U32_max(info->w, info->h), info->l);
 	const U32 mips = U32_max(1, (U32) F64_floor(F64_log2((F64) biggestSize2)) + 1);
 
 	if(info->mips > mips)
-		retError(clean, Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds"));
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::info.mips out of bounds"));
 
 	//For a 3D texture the depth halves each mip (like width/height),
 	// so the subresource count is the sum of the per-mip depths, not mips * l.
@@ -108,30 +114,30 @@ Bool DDS_write(
 	}
 
 	if(totalSubResources > U64_MAX / info->layers)
-		retError(clean, Error_invalidParameter(1, 0, "DDS_write()::info's subresource count overflows"));
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::info's subresource count overflows"));
 
 	totalSubResources *= info->layers;
 
 	if(totalSubResources != buf->length)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info's subresource count and buf.length mismatched"));
+		retError(clean, Error_invalidParameter(2, 0, "DDS_write()::info's subresource count and buf.length mismatched"));
 
 	if(info->type == ETextureType_Cube && info->layers % 6)
 		retError(clean, Error_invalidParameter(
-			0, 0, "DDS_write()::info specifies a cubemap, but its layers aren't a multiple of 6 faces"
+			3, 0, "DDS_write()::info specifies a cubemap, but its layers aren't a multiple of 6 faces"
 		));
 
 	if(info->l > 1 && info->type != ETextureType_3D)
 		retError(clean, Error_invalidParameter(
-			0, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified"
+			3, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified"
 		));
 
 	if(info->layers > 1 && info->type == ETextureType_3D)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used"));
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used"));
 
 	const DXFormat format = ETextureFormatId_toDXFormat(info->textureFormatId);
 
 	if(!format)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info.textureFormatId isn't supported as a DDS texture"));
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::info.textureFormatId isn't supported as a DDS texture"));
 
 	const ETextureFormat formatOxC = ETextureFormatId_unpack[info->textureFormatId];
 	const Bool isCompressed = ETextureFormat_getIsCompressed(formatOxC);
@@ -185,14 +191,19 @@ Bool DDS_write(
 				const SubResourceData dat = buf->ptr[l++];
 
 				if(dat.layerId != i || dat.mipId != j || dat.z != k)
-					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained duplicate data"));
+					retError(clean, Error_invalidParameter(2, 0, "DDS_write()::buf contained duplicate data"));
 
 				if(dat.streamLen != len)
-					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained invalid stream length"));
-
-				if(offset + len < offset)
-					retError(clean, Error_overflow(0, bufLen + len, bufLen, "DDS_write() write failed, overflow!"));
+					retError(clean, Error_invalidParameter(2, 0, "DDS_write()::buf contained invalid stream length"));
 			}
+
+			//Every sum is checked before it is formed, so neither the file's size nor its end in the stream can wrap
+
+			if (len && currL > U64_MAX / len)
+				retError(clean, Error_overflow(2, len, U64_MAX / currL, "DDS_write()::buf's mip size overflows"));
+
+			if (bufLen > U64_MAX - len * currL)
+				retError(clean, Error_overflow(2, bufLen, U64_MAX - len * currL, "DDS_write()::buf's size overflows"));
 
 			bufLen += len * currL;
 			currW = U32_max(1, currW >> 1);
@@ -200,6 +211,9 @@ Bool DDS_write(
 			currL = U32_max(1, currL >> 1);
 		}
 	}
+
+	if (offset > U64_MAX - bufLen)
+		retError(clean, Error_overflow(1, offset, U64_MAX - bufLen, "DDS_write()::streamOffset + the file's size overflows"));
 
 	if (!streamRef) {
 		offset += bufLen;
@@ -221,7 +235,7 @@ Bool DDS_write(
 	const U64 pitchOrLinear = isCompressed ? linearSize : stride;
 
 	if(pitchOrLinear >> 32)
-		retError(clean, Error_overflow(0, pitchOrLinear, U32_MAX, "DDS_write() pitch/linear size overflow"));
+		retError(clean, Error_overflow(3, pitchOrLinear, U32_MAX, "DDS_write() pitch/linear size overflow"));
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 

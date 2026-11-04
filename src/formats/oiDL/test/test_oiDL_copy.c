@@ -445,7 +445,24 @@ void Test_DLCreateCopyPlain(Test *t) {
 	}
 }
 
+static void Test_DLCopyEmptyWithCache(Test *t) {
+
+	Test_setModule(t, "DLFile_createCopy: a copy of an empty file with a cache is freed completely");
+
+	DLFile src = { 0 }, copy = { 0 };
+
+	Test_assert(t, "create", DLFile_create(&kSettingsStr, KIBI, t->alloc, &src, &t->err));
+	Test_assert(t, "copy", DLFile_createCopy(&src, t->alloc, &copy, &t->err));
+	Test_assert(t, "copy owns a cache", copy.cache.ptr != NULL);
+
+	DLFile_free(&copy, t->alloc);
+	Test_assert(t, "cache freed", copy.cache.ptr == NULL);
+
+	DLFile_free(&src, t->alloc);
+}
+
 void Test_DLCopy(Test *t) {
+	Test_DLCopyEmptyWithCache(t);
 	Test_DLCreateCopyPlain(t);
 	Test_DLCreateCopyCacheRefs(t);
 }

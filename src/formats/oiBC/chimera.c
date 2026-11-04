@@ -25,7 +25,7 @@
 #include "types/base/error.h"
 #include "types/base/mathf.h"
 
-void Chimera_swapF32(F32 *a, F32 *b) {
+static void Chimera_swapF32(F32 *a, F32 *b) {
 	const F32 tmp = *a;
 	*a = *b;
 	*b = tmp;
@@ -37,6 +37,10 @@ static void Chimera_setCompare(Chimera *chim, const ECompareResult res) {
 }
 
 void Chimera_cmp(Chimera *chim, const F32 v) {
+
+	if(!chim)
+		return;
+
 	Chimera_setCompare(chim, F32_isNaN(v) ? ECompareResult_Unordered : (
 		v < 0 ? ECompareResult_Lt : (v > 0 ? ECompareResult_Gt : ECompareResult_Eq)
 	));

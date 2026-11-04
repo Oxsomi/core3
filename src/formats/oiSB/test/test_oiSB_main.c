@@ -97,6 +97,12 @@ OXC3_TEST_MAIN(formats_oiSB) {
 	Test_SBFileCombineReadBack(&t);
 	Test_SBFileWriteFailures(&t);
 	Test_SBFileReadHugeCounts(&t);
+	Test_SBFileArraysKeptOnFailure(&t);
+	Test_SBFileFreeZeroes(&t);
+	Test_SBFileCreateRefusesFilled(&t);
+	Test_SBFileSettingsFlags(&t);
+	Test_SBFileStructNameLength(&t);
+	Test_SBFilePrintMalformed(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

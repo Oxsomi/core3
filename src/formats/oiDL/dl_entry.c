@@ -225,6 +225,10 @@ Bool DLFile_insertStream(DLFile *dlFile, U64 id, DLEntryStream *stream, const Al
 		goto clean;
 	}
 
+	//Both lists have to grow or neither, so the room is reserved before either is touched (the inserts then can't fail)
+
+	gotoIfError3(clean, DLFile_reserve(dlFile, dlFile->entryStreams.length + 1, alloc, e_rr));
+
 	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, *stream, alloc, e_rr));
 	*stream = (DLEntryStream) { 0 };
 
@@ -256,6 +260,8 @@ Bool DLFile_insertEntry(DLFile *dlFile, U64 id, Buffer *buf, const Allocator *al
 		goto clean;
 	}
 
+	gotoIfError3(clean, DLFile_reserve(dlFile, dlFile->entryStreams.length + 1, alloc, e_rr));
+
 	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, (DLEntryStream) { 0 }, alloc, e_rr));
 	gotoIfError3(clean, ListBuffer_insert(&dlFile->entryBuffers, id, *buf, alloc, e_rr));
 	*buf = Buffer_createNull();
@@ -281,6 +287,8 @@ Bool DLFile_insertEntryString(DLFile *dlFile, U64 id, CharString *str, const All
 		gotoIfError3(clean, DLFile_addEntryString(dlFile, str, alloc, e_rr));
 		goto clean;
 	}
+
+	gotoIfError3(clean, DLFile_reserve(dlFile, dlFile->entryStreams.length + 1, alloc, e_rr));
 
 	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, (DLEntryStream) { 0 }, alloc, e_rr));
 	gotoIfError3(clean, ListCharString_insert(&dlFile->entryStrings, id, *str, alloc, e_rr));

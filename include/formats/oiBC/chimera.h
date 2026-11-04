@@ -43,6 +43,8 @@ typedef struct Chimera {
 		I32x2 v2i[8];
 	};
 
+	//d, f and h alias one another, so f[0..7] covers d[0..3]. Af is f[4] and Afv is vf[4].
+
 	union {
 		F64 d[8];
 		F32 f[8];
@@ -71,10 +73,16 @@ typedef struct Chimera {
 
 } Chimera;
 
-//Sets the compare register from the sign of v: Lt below 0, Gt above, Eq at 0 and Unordered for a NaN
+//Sets the compare register from the sign of v: Lt below 0, Gt above, Eq at 0 and Unordered for a NaN.
+//A NULL chim is ignored.
 void Chimera_cmp(Chimera *chim, const F32 v);
 
+//Executes one op on Af (f[4]) with f[reg] as the second operand, or f[0] for div, mod, max and min.
+//isfinite, isnan, anyFv and allFv write the compare register as a bool: Gt for true and Eq for false.
+//Ops without an implementation, every vector (v) op among them, leave chim untouched, and so does a NULL chim.
 void Chimera_stepFidiA(Chimera *chim, const EFidiA op);
+
+//Eq for a NULL chim
 ECompareResult Chimera_getLastCompare(const Chimera *chim);
 
 #ifdef __cplusplus

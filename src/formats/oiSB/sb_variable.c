@@ -79,7 +79,7 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const
 			2, 0, "SBFile_addStruct()::sbStruct.stride is required"
 		));
 
-	if (CharString_length(*name) >= 128)
+	if (CharString_length(*name) > 128)
 		retError(clean, Error_invalidParameter(1, 0, "SBFile_addStruct()::*name must be leq 128 bytes"));
 
 	if (sbFile->structs.length >= (U16) (U16_MAX - 1))
@@ -326,7 +326,6 @@ Bool SBFile_addVariableAsType(
 		if (useInlineArray) {
 			reuseArray = true;
 			arrayDimOrArrayId = (U16) arrays->ptr[0];
-			ListU32_free(arrays, alloc);
 		}
 
 		else {
@@ -335,14 +334,13 @@ Bool SBFile_addVariableAsType(
 				if (ListU32_eq(*arrays, sbFile->arrays.ptr[i])) {
 					arrayDimOrArrayId = (U16) i | (U16) I16_MIN;
 					reuseArray = true;
-					ListU32_free(arrays, alloc);
 					break;
 				}
 
 			if (!reuseArray) {
 
 				if(sbFile->arrays.length >= (U16) I16_MAX)
-					retError(clean, Error_invalidState(0, "SBFile_addVariableAsStruct() no arrays left"));
+					retError(clean, Error_invalidState(0, "SBFile_addVariableAsType() no arrays left"));
 
 				arrayDimOrArrayId = (U16) sbFile->arrays.length | (U16) I16_MIN;
 			}
@@ -385,6 +383,11 @@ Bool SBFile_addVariableAsType(
 			*arrays = tmpArray = (ListU32) { 0 };
 		}
 	}
+
+	//Nothing past this point can fail, so this is where the caller's list is given up
+
+	if(reuseArray)
+		ListU32_free(arrays, alloc);
 
 	sbFile->hash = hash;
 
@@ -507,7 +510,6 @@ Bool SBFile_addVariableAsStruct(
 		if (useInlineArray) {
 			reuseArray = true;
 			arrayDimOrArrayId = (U16) arrays->ptr[0];
-			ListU32_free(arrays, alloc);
 		}
 
 		else {
@@ -516,7 +518,6 @@ Bool SBFile_addVariableAsStruct(
 				if (ListU32_eq(*arrays, sbFile->arrays.ptr[i])) {
 					arrayDimOrArrayId = (U16) i | (U16) I16_MIN;
 					reuseArray = true;
-					ListU32_free(arrays, alloc);
 					break;
 				}
 
@@ -566,6 +567,11 @@ Bool SBFile_addVariableAsStruct(
 			*arrays = tmpArray = (ListU32) { 0 };
 		}
 	}
+
+	//Nothing past this point can fail, so this is where the caller's list is given up
+
+	if(reuseArray)
+		ListU32_free(arrays, alloc);
 
 	sbFile->hash = hash;
 

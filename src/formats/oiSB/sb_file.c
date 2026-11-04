@@ -30,6 +30,19 @@
 
 TListImpl(SBFile);
 
+Bool SBFile_isFilled(const SBFile *sbFile) {
+
+	return sbFile && (
+		sbFile->bufferSize || sbFile->flags || sbFile->hash ||
+		sbFile->structs.ptr || sbFile->structs.length ||
+		sbFile->vars.ptr || sbFile->vars.length ||
+		sbFile->arrays.ptr || sbFile->arrays.length ||
+		sbFile->names.entryStrings.ptr || sbFile->names.entryStrings.length ||
+		sbFile->names.entryStreams.ptr || sbFile->names.entryStreams.length ||
+		sbFile->names.cache.ptr
+	);
+}
+
 Bool SBFile_create(
 	ESBSettingsFlags flags,
 	U32 bufferSize,
@@ -43,7 +56,7 @@ Bool SBFile_create(
 	if (!sbFile)
 		retError(clean, Error_nullPointer(0, "SBFile_create()::sbFile is required"));
 
-	if(sbFile->vars.length)
+	if(SBFile_isFilled(sbFile))
 		retError(clean, Error_invalidOperation(0, "SBFile_create()::sbFile isn't empty, might indicate memleak"));
 
 	Bool avoidReserve = flags & ESBSettingsFlags_CreateNoReserve;
@@ -110,7 +123,7 @@ Bool SBFile_createCopy(
 	if (!sbFile || !src)
 		retError(clean, Error_nullPointer(!src ? 0 : 2, "SBFile_createCopy()::sbFile and src are required"));
 
-	if(sbFile->bufferSize)
+	if(SBFile_isFilled(sbFile))
 		retError(clean, Error_invalidParameter(2, 0, "SBFile_createCopy()::sbFile is filled, indicates memleak"));
 
 	gotoIfError3(clean, ListSBStruct_createCopy(src->structs, alloc, &sbFile->structs, e_rr));
@@ -189,6 +202,8 @@ void SBFile_free(SBFile *sbFile, const Allocator *alloc) {
 	ListSBVar_free(&sbFile->vars, alloc);
 	DLFile_free(&sbFile->names, alloc);
 	ListListU32_freeUnderlying(&sbFile->arrays, alloc);
+
+	*sbFile = (SBFile) { 0 };
 }
 
 void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc) {
@@ -224,6 +239,20 @@ void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecurs
 
 		if(var.parentId != parent)
 			continue;
+
+		//A parent is always added before its children, so a parent at or past the child is a cycle
+
+		if (
+			(var.parentId != U16_MAX && var.parentId >= i) ||
+			sbFile->structs.length + i >= sbFile->names.entryStrings.length ||
+			(var.structId != U16_MAX && (
+				var.structId >= sbFile->structs.length || var.structId >= sbFile->names.entryStrings.length
+			)) ||
+			((var.arrayDimOrArrayId >> 15) && (var.arrayDimOrArrayId & (U16) I16_MAX) >= sbFile->arrays.length)
+		) {
+			Log_errorLn(alloc, "SBFile_print() variable %"PRIu64" is malformed, skipped", i);
+			continue;
+		}
 
 		CharString varName = sbFile->names.entryStrings.ptr[sbFile->structs.length + i];
 		Bool isArray = var.arrayDimOrArrayId;

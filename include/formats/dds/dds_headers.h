@@ -33,6 +33,9 @@
 // https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header
 // https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide
 
+//DDS_read refuses any flag outside the *_Supported values of these enums, and Pitch together with LinearSize.
+//Sizes are recomputed from the format and extents, so pitchOrLinearSize is written but never read.
+//Width and height are always required, the Mips flag is ignored and depth is only used with Depth.
 typedef enum EDDSFlag {
 
 	EDDSFlag_Caps                         = 1 <<  0,
@@ -66,7 +69,7 @@ typedef enum EDDSCapsFlags2 {
 typedef struct DDSCaps2 {
 	EDDSCapsFlags1 flag1;
 	EDDSCapsFlags2 flag2;
-	U32 padding[3];
+	U32 padding[3];                      //Ignored by DDS_read
 } DDSCaps2;
 
 typedef enum EDDSPixelFormatFlag {
@@ -104,9 +107,9 @@ typedef struct DDSPixelFormat {
 	U32 size;                   //sizeof(DDSPixelFormat) = 32
 	EDDSPixelFormatFlag flags;
 	U32 magicNumber;            //EDDSFormatMagic or DXFormat if EDDSPixelFormatFlag_MagicNumber
-	U32 rgbBitCount;
+	U32 rgbBitCount;            //Only 32 bit RGB is recognized without a magic number
 
-	U32 masks[4];
+	U32 masks[4];               //Compared whole against RG16, RGB10A2, RGBA8 and BGRA8; any other set fails
 
 } DDSPixelFormat;
 
@@ -129,6 +132,7 @@ typedef struct DDSHeader {
 
 } DDSHeader;
 
+//DDS_read treats 1D as a 2D texture of height 1.
 typedef enum EDX10Dim {
 	EDX10Dim_1D = 2,
 	EDX10Dim_2D,
@@ -153,13 +157,13 @@ typedef struct DDSHeaderDXT10 {
 	DXFormat format;
 	EDX10Dim dim;
 	EDX10Misc miscFlag;
-	U32 arraySize;
-	EDX10AlphaMode miscFlags2;
+	U32 arraySize;                  //Counts cubes (not faces) if EDX10Misc_IsCube; 3D has to use 1
+	EDX10AlphaMode miscFlags2;      //Refused if >= EDX10AlphaMode_Count, otherwise ignored
 } DDSHeaderDXT10;
 
 typedef struct DDSHeaderMax {
 	DDSHeader header;
-	DDSHeaderDXT10 header10;        //Not always present
+	DDSHeaderDXT10 header10;        //Only present in the file if format.magicNumber is EDDSFormatMagic_DX10
 } DDSHeaderMax;
 
 static const U32 ddsMagic = C8x4('D', 'D', 'S', ' ');

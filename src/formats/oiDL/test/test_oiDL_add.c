@@ -23,6 +23,7 @@
 #include "test_oiDL_shared.h"
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiDL/dl_entry.h"
+#include "types/base/allocator.h"
 
 void Test_DLAddEntries(Test *t) {
 
@@ -591,8 +592,105 @@ void Test_DLRemoveInsertRoundtrip(Test *t) {
 	}
 }
 
+//An insert that can't get the memory for both of its lists changes neither
+
+typedef struct DLBudgetAlloc {
+	const Allocator *inner;
+	U64 remaining;        //Allocations left before every further one is refused
+} DLBudgetAlloc;
+
+static Bool dlBudgetAlloc(void *ctx, U64 length, Buffer *output, Error *e_rr) {
+
+	DLBudgetAlloc *budget = (DLBudgetAlloc*) ctx;
+
+	if (!budget->remaining) {
+		if (e_rr) *e_rr = Error_outOfMemory(0, "dlBudgetAlloc() budget is spent");
+		return false;
+	}
+
+	--budget->remaining;
+	return budget->inner->alloc(budget->inner->ptr, length, output, e_rr);
+}
+
+static void dlBudgetFree(void *ctx, Buffer buf) {
+	DLBudgetAlloc *budget = (DLBudgetAlloc*) ctx;
+	budget->inner->free(budget->inner->ptr, buf);
+}
+
+static void Test_DLInsertAllocFailure(Test *t) {
+
+	Test_setModule(t, "DLFile insert: a failed allocation leaves the lists in step");
+
+	for (U32 isString = 0; isString < 2; ++isString) {
+
+		DLFile f = { 0 };
+
+		const DLSettings *settings = isString ? &kSettingsStr : &kSettingsData;
+
+		//The file has room for 4 entries, so a fifth needs both of its lists to grow
+
+		Test_assert(t, "create", DLFile_create(settings, 0, t->alloc, &f, &t->err));
+
+		for (U32 i = 0; i < 4; ++i) {
+
+			U8 byte = (U8) ('a' + i);
+
+			if (isString) {
+				CharString str = CharString_createNull();
+				CharString ref = CharString_createRefSizedConst((const C8*) &byte, 1, false);
+				Test_assert(t, "string", CharString_createCopy(ref, t->alloc, &str, &t->err));
+				Test_assert(t, "add string", DLFile_addEntryString(&f, &str, t->alloc, &t->err));
+				CharString_free(&str, t->alloc);
+			}
+
+			else {
+				Buffer buf = Buffer_createNull();
+				Test_assert(t, "buffer", Buffer_createCopy(Buffer_createRefConst(&byte, 1), t->alloc, &buf, &t->err));
+				Test_assert(t, "add buffer", DLFile_addEntry(&f, &buf, t->alloc, &t->err));
+				Buffer_free(&buf, t->alloc);
+			}
+		}
+
+		//One allocation is enough for the first list to grow, but not for the second
+
+		DLBudgetAlloc budget = (DLBudgetAlloc) { .inner = t->alloc, .remaining = 1 };
+		Allocator limited = (Allocator) { .ptr = &budget, .alloc = dlBudgetAlloc, .free = dlBudgetFree };
+
+		const U64 lengthBefore = f.entryStreams.length;
+
+		if (isString) {
+
+			CharString str = CharString_createNull();
+			CharString ref = CharString_createRefCStrConst("z");
+			Test_assert(t, "insert string", CharString_createCopy(ref, t->alloc, &str, &t->err));
+			Test_assert(t, "insertEntryString fails", !DLFile_insertEntryString(&f, 1, &str, &limited, NULL));
+			Test_assert(t, "string is still the caller's", str.ptr && CharString_length(str) == 1);
+			Test_assert(t, "strings unchanged", f.entryStrings.length == lengthBefore);
+			CharString_free(&str, t->alloc);
+		}
+
+		else {
+
+			Buffer buf = Buffer_createNull();
+			U8 byte = 'z';
+
+			Test_assert(t, "insert buffer", Buffer_createCopy(Buffer_createRefConst(&byte, 1), t->alloc, &buf, &t->err));
+			Test_assert(t, "insertEntry fails", !DLFile_insertEntry(&f, 1, &buf, &limited, NULL));
+			Test_assert(t, "buffer is still the caller's", buf.ptr && Buffer_length(buf) == 1);
+			Test_assert(t, "buffers unchanged", f.entryBuffers.length == lengthBefore);
+			Buffer_free(&buf, t->alloc);
+		}
+
+		Test_assert(t, "streams unchanged", f.entryStreams.length == lengthBefore);
+		Test_assert(t, "entry count unchanged", DLFile_entryCount(&f) == lengthBefore);
+
+		DLFile_free(&f, t->alloc);
+	}
+}
+
 void Test_DLInsertEntries(Test *t) {
 	Test_DLInsertEntry(t);
 	Test_DLInsertEntryString(t);
 	Test_DLRemoveInsertRoundtrip(t);
+	Test_DLInsertAllocFailure(t);
 }

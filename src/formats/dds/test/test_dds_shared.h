@@ -49,3 +49,5 @@ void Test_DDSLegacyMasks(Test *t);
 void Test_DDSDepthOnNonVolume(Test *t);
 void Test_DDSSortComparator(Test *t);
 void Test_DDSWriteFailedWrites(Test *t);
+void Test_DDSWriteOffsetOverflow(Test *t);
+void Test_DDSWriteHugeExtents(Test *t);
