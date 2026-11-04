@@ -150,7 +150,7 @@ CAHandle CAFile_resolveSubFolder(const CAFile *caFile, CAHandle parentDir, CharS
 		CAHandle handle = CAHandle_makeFolder(folder->dirOffset + i);
 		CharString name = CAFile_getName(caFile, handle);
 
-		if (CharString_equalsStringSensitive(&name, &fileName))
+		if (CharString_equalsStringInsensitive(&name, &fileName))
 			return handle;
 	}
 
@@ -172,7 +172,7 @@ CAHandle CAFile_resolveSubFile(const CAFile *caFile, CAHandle parentDir, CharStr
 		CAHandle handle = CAHandle_makeFile(folder->fileOffset + i);
 		CharString name = CAFile_getName(caFile, handle);
 
-		if (CharString_equalsStringSensitive(&name, &fileName))
+		if (CharString_equalsStringInsensitive(&name, &fileName))
 			return handle;
 	}
 

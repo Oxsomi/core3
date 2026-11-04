@@ -915,6 +915,178 @@ void Test_CARenameSubtree(Test *t) {
 	}
 }
 
+//A move checks the whole subtree it carries, not just the folder's direct children: a grandchild that would pass
+// 192 chars at the destination refuses the move, one that lands exactly on 192 doesn't.
+
+void Test_CAMoveSubtreePaths(Test *t) {
+
+	Test_setModule(t, "CAFile_move descendant paths");
+
+	for (U8 folderChild = 0; folderChild < 2; ++folderChild)
+		for (U8 fits = 0; fits < 2; ++fits) {
+
+			CAFile ca = { 0 };
+			C8 destinationName[97], leafName[97];
+
+			//destination(96) / a / b / leaf: 96 + 2 + 2 + 1 + leaf, so a 92 char leaf is 193 and 91 is 192
+
+			fillBytes((U8*) destinationName, 'c', 96);
+			fillBytes((U8*) leafName, 'f', 92);
+			destinationName[96] = 0;
+			leafName[fits ? 91 : 92] = 0;
+
+			if (!Test_assert(t, "move subtree: create", CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)))
+				goto clean;
+
+			CAHandle destination = addFolder(t, &ca, CAHandle_Root, destinationName, false);
+			CAHandle a = addFolder(t, &ca, CAHandle_Root, "a", false);
+			addFolder(t, &ca, a, "b", false);
+
+			CAHandle b = resolveStr(&ca, "a/b", true);
+
+			if (folderChild)
+				addFolder(t, &ca, b, leafName, false);
+			else addFile(t, &ca, b, leafName, 0, false);
+
+			a = resolveStr(&ca, "a", true);
+			destination = resolveStr(&ca, destinationName, true);
+
+			const Bool moved = CAFile_move(&ca, a, destination, t->alloc, fits ? &t->err : NULL);
+
+			if (fits)
+				Test_assert(t, "move subtree: 192-char grandchild accepted", moved);
+
+			else Test_assert(t, "move subtree: 193-char grandchild rejected", !moved);
+
+			const CAHandle stayed = fits ? CAHandle_Invalid : a;
+			Test_assert(t, "move subtree: a is where the result says", resolveStr(&ca, "a", true) == stayed);
+
+		clean:
+			CAFile_free(&ca, t->alloc);
+		}
+}
+
+//Writes the archive, swaps the one stored copy of 'from' for 'to' (same length) and reports whether it still reads.
+//Returns false if any of that setup failed.
+
+static Bool readsAfterPatch(Test *t, CAFile *ca, const RefPtrType *memType, const C8 *from, const C8 *to, Bool *read) {
+
+	StreamRef *stream = NULL, *patched = NULL;
+	Buffer bytes = Buffer_createNull();
+	CAFile back = { 0 };
+	Bool ok = false;
+
+	const U64 length = CharString_calcStrLen(from, 64);
+
+	if (!writeToMemory(t, ca, memType, NULL, &stream))
+		goto clean;
+
+	const MemoryStream *written = RefPtr_data(stream, MemoryStream);
+	const U64 size = written->parent.size;
+
+	if (!Buffer_createUninitializedBytes(size, t->alloc, &bytes, &t->err))
+		goto clean;
+
+	Buffer_memcpy(bytes, Buffer_createRefConst(written->data.ptr, size));
+
+	U64 found = 0, at = 0;
+
+	for (U64 i = 0; i + length <= size; ++i)
+		if (Buffer_eq(Buffer_createRefConst(bytes.ptr + i, length), Buffer_createRefConst(from, length))) {
+			++found;
+			at = i;
+		}
+
+	if (found != 1)
+		goto clean;
+
+	Buffer_memcpy(Buffer_createRef(bytes.ptrNonConst + at, length), Buffer_createRefConst(to, length));
+
+	if (!MemoryStream_createFromBufferRegion(
+		Buffer_createRefConst(bytes.ptr, size), 0, 0, EMemoryStreamFlags_None, memType, &patched, &t->err
+	))
+		goto clean;
+
+	*read = CAFile_read(patched, NULL, 0, NULL, t->alloc, &back, NULL);
+	ok = true;
+
+clean:
+	CAFile_free(&back, t->alloc);
+	RefPtr_dec(&patched);
+	RefPtr_dec(&stream);
+	Buffer_free(&bytes, t->alloc);
+	return ok;
+}
+
+//Names compare case folded: a folder can't hold two names that differ only by case, a path resolves in any case,
+// renaming to another case of the same name is allowed, and a read refuses an archive whose names collide.
+
+void Test_CACaseFolding(Test *t) {
+
+	Test_setModule(t, "CAFile case folded names");
+
+	const RefPtrType memType = MemoryStream_makeType(t->alloc);
+	CAFile ca = { 0 }, plain = { 0 };
+
+	if (!Test_assert(t, "case: create", CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)))
+		goto clean;
+
+	CAHandle folder = addFolder(t, &ca, CAHandle_Root, "Dir", false);
+	addFile(t, &ca, folder, "b.txt", 0, false);
+	addFile(t, &ca, CAHandle_Root, "a.txt", 0, false);
+	addFile(t, &ca, CAHandle_Root, "c.txt", 0, false);
+	addFile(t, &ca, CAHandle_Root, "\xC3\xA9" ".txt", 0, false);
+
+	Test_assert(t, "case: ascii duplicate refused", addFile(t, &ca, CAHandle_Root, "A.TXT", 0, true) == CAHandle_Invalid);
+	Test_assert(t, "case: folder duplicate refused", addFolder(t, &ca, CAHandle_Root, "dIR", true) == CAHandle_Invalid);
+
+	Test_assert(t, "case: unicode duplicate refused", addFile(
+		t, &ca, CAHandle_Root, "\xC3\x89" ".TXT", 0, true
+	) == CAHandle_Invalid);
+
+	Test_assert(t, "case: path resolves in any case", resolveStr(&ca, "dir/B.TXT", false) != CAHandle_Invalid);
+
+	CAHandle a = resolveStr(&ca, "a.txt", false);
+	CharString name = CharString_createRefCStrConst("A.txt");
+
+	if (Test_assert(t, "case: rename to another case", CAFile_rename(&ca, a, t->alloc, &name, &t->err))) {
+		CharString renamed = CAFile_getName(&ca, resolveStr(&ca, "a.txt", false));
+		Test_assert(t, "case: rename keeps the new case", CharString_equalsCStringSensitive(&renamed, "A.txt"));
+	}
+
+	name = CharString_createRefCStrConst("C.TXT");
+	Test_assert(t, "case: rename onto a sibling refused", !CAFile_rename(
+		&ca, resolveStr(&ca, "a.txt", false), t->alloc, &name, NULL
+	));
+
+	//Archives whose stored names are patched after writing: two files that collide, a folder and a file that collide,
+	// and a control whose patch collides with nothing, so the refusals come from the names and not the patching
+
+	Bool read = false;
+
+	if (
+		!Test_assert(t, "case: plain create", CAFile_create(&kCASettings, 0, 0, t->alloc, &plain, &t->err)) ||
+		addFile(t, &plain, CAHandle_Root, "a.txt", 0, false) == CAHandle_Invalid ||
+		addFile(t, &plain, CAHandle_Root, "b.txt", 0, false) == CAHandle_Invalid ||
+		addFolder(t, &plain, CAHandle_Root, "dir", false) == CAHandle_Invalid ||
+		addFile(t, &plain, CAHandle_Root, "fil", 0, false) == CAHandle_Invalid
+	)
+		goto clean;
+
+	if (Test_assert(t, "case: patch control", readsAfterPatch(t, &plain, &memType, "b.txt", "c.txt", &read)))
+		Test_assert(t, "case: patched archive reads", read);
+
+	if (Test_assert(t, "case: patch files", readsAfterPatch(t, &plain, &memType, "b.txt", "A.TXT", &read)))
+		Test_assert(t, "case: colliding files refused on read", !read);
+
+	if (Test_assert(t, "case: patch folder", readsAfterPatch(t, &plain, &memType, "fil", "DIR", &read)))
+		Test_assert(t, "case: a file colliding with a folder refused on read", !read);
+
+clean:
+	CAFile_free(&plain, t->alloc);
+	CAFile_free(&ca, t->alloc);
+}
+
 void Test_CAEmptyStreamCompare(Test *t) {
 
 	Test_setModule(t, "CAFile_dataEqual empty stream entries");

@@ -65,6 +65,8 @@ OXC3_TEST_MAIN(formats_oiCA) {
 	Test_CAWriteFailures(&t);
 	Test_CAReadLargeNames(&t);
 	Test_CARenameSubtree(&t);
+	Test_CAMoveSubtreePaths(&t);
+	Test_CACaseFolding(&t);
 	Test_CAEmptyStreamCompare(&t);
 	Test_CAReadBigHeader(&t);
 	Test_CAWriteCursorSize(&t);

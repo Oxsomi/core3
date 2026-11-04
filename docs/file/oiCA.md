@@ -145,7 +145,10 @@ CAFile {			//Must be 16-byte aligned
     //	Entry 0 is the root folder's name: written empty and ignored when read.
     //	directory names are defined at [1, dirCount] and file names at [dirCount + 1, dirCount + fileCount]
     //DLFile also doesn't include a leading magicNumber, context already implies it.
-    //File paths are insensitive; it can't have duplicates.
+    //File paths are case insensitive; a folder can't hold two names that compare equal.
+    //	Names compare by Unicode simple case folding (CaseFolding.txt statuses C and S, Unicode 18.0) with U+0131
+    //	(dotless i) folding to i as well, so an archive extracts the same on Windows (NTFS), macOS and Linux.
+    //	Unicode normalization isn't applied: a precomposed and a decomposed name are different names.
     //Implementations SHOULD keep these names in memory since they may not exceed 96 bytes each.
     //The aggregate name size is not limited by oiDL's 1 MiB cache; names outside the cache are loaded separately.
     // Names are relative, not absolute.
