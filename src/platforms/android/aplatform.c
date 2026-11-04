@@ -118,7 +118,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 			CharString oiCA = CharString_createRefCStrConst(".oiCA");
 
-			if(CharString_endsWithStringInsensitive(&tmpStr2, &oiCA, 0))
+			if(CharString_endsWithStringInsensitiveAscii(&tmpStr2, &oiCA, 0))
 				gotoIfError3(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA"), e_rr));    //sizeof("oiCA") == 5
 
 			asset = AAssetManager_open(assetManager, tmpStr1.ptr, AASSET_MODE_STREAMING);

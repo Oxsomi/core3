@@ -125,7 +125,7 @@ static Bool Packager_hashBinary(const FileInfo *file, void *recursionGeneric, co
 
 	const CharString pdb = CharString_createRefCStrConst(".pdb");
 
-	if(CharString_endsWithStringInsensitive(&name, &pdb, 0))
+	if(CharString_endsWithStringInsensitiveAscii(&name, &pdb, 0))
 		goto clean;
 
 	//The packager counts only when the compiler is linked INTO it; with a shader compiler module that module is
@@ -137,7 +137,7 @@ static Bool Packager_hashBinary(const FileInfo *file, void *recursionGeneric, co
 		const CharString toolchain = CharString_createRefCStrConst("OxC3_package");
 	#endif
 
-	if(!CharString_equalsStringInsensitive(&stem, &toolchain))
+	if(!CharString_equalsStringInsensitiveAscii(&stem, &toolchain))
 		goto clean;
 
 	//Size and timestamp rather than contents: a rebuild moves both, and hashing the binaries themselves

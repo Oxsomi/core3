@@ -25,6 +25,7 @@
 #include "types/base/string_read.h"
 #include "types/base/string_mut.h"
 #include "types/base/c8.h"
+#include "types/base/unicode.h"
 #include "types/base/constants.h"
 
 Bool CharString_append(CharString *s, C8 c, const Allocator *allocator, Error *e_rr) {
@@ -155,11 +156,23 @@ clean:
 	return s_uccess;
 }
 
+//How many bytes of s the match findAllString found at at covers
+
+static U64 CharString_matchLengthAt(const CharString *s, U64 at, U64 end, const CharString *search, EStringCase stringCase) {
+
+	const CharStringSensOffLen window = { s, stringCase, at, end - at };
+	U64 matchLen = 0;
+
+	CharString_findFirstStringMatch(&window, search, &matchLen);
+	return matchLen;
+}
+
 Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase caseSensitive, Error *e_rr) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = NULL;
 	ListU64 finds = { 0 };
+	CharString rebuilt = CharString_createNull();
 
 	if (!replace || !replace->s || !replace->search || !replace->replace)
 		retError(clean, Error_nullPointer(0, "CharString_replaceAllString()::replace is required"));
@@ -176,10 +189,70 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 		goto clean;
 
 	const U64 *ptr = finds.ptr;
-	const U64 searchl = CharString_length(*replace->search);
 	const U64 replacel = CharString_length(*replace->replace);
 	const U64 strl = CharString_length(*replace->s);
 	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
+
+	//Folding can make a match longer or shorter than the search (U+212A Kelvin sign matches k).
+	//When every match still has the same length the moves below work; otherwise they would have to go both ways at
+	// once, so the result is built anew.
+
+	U64 searchl = CharString_length(*replace->search);
+
+	if (caseSensitive == EStringCase_Insensitive) {
+
+		const U64 end = replace->len ? replace->off + replace->len : strl;
+		U64 matched = 0;
+		Bool uniform = true;
+
+		for (U64 i = 0; i < finds.length; ++i) {
+
+			const U64 matchLen = CharString_matchLengthAt(replace->s, ptr[i], end, replace->search, caseSensitive);
+
+			uniform &= !i || matchLen == searchl;
+			searchl = matchLen;
+			matched += matchLen;
+		}
+
+		if (!uniform) {
+
+			const U64 newLen = strl - matched + replacel * finds.length;
+			gotoIfError3(clean, CharString_reserve(&rebuilt, newLen, alloc, e_rr));
+
+			C8 *out = rebuilt.ptrNonConst;
+			U64 read = 0, write = 0;
+
+			for (U64 i = 0; i < finds.length; ++i) {
+
+				Buffer_memcpy(
+					Buffer_createRef(out + write, ptr[i] - read),
+					Buffer_createRefConst(replace->s->ptr + read, ptr[i] - read)
+				);
+
+				write += ptr[i] - read;
+
+				Buffer_memcpy(Buffer_createRef(out + write, replacel), replaceBuf);
+				write += replacel;
+
+				read = ptr[i] + CharString_matchLengthAt(replace->s, ptr[i], end, replace->search, caseSensitive);
+			}
+
+			Buffer_memcpy(
+				Buffer_createRef(out + write, strl - read),
+				Buffer_createRefConst(replace->s->ptr + read, strl - read)
+			);
+
+			write += strl - read;
+
+			out[write] = '\0';
+			rebuilt.lenAndNullTerminated = write | ((U64) 1 << 63);
+
+			CharString_free(replace->s, alloc);
+			*replace->s = rebuilt;
+			rebuilt = CharString_createNull();
+			goto clean;
+		}
+	}
 
 	//Same size; overwrite in place, no resize and no moving
 
@@ -254,8 +327,10 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 
 clean:
 
-	if(alloc)
+	if(alloc) {
 		ListU64_free(&finds, alloc);
+		CharString_free(&rebuilt, alloc);
+	}
 
 	return s_uccess;
 }
@@ -271,14 +346,14 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 		retError(clean, Error_constData(0, 0, "CharString_replaceString()::s must use managed memory"));
 
 	const CharStringSensOffLen find = { replace->s, caseSensitive, replace->off, replace->len };
+	U64 searchl = 0;        //The match's length, which folding can make differ from the search's
 
-	const U64 res = isFirst ? CharString_findFirstString(&find, replace->search) :
-		CharString_findLastString(&find, replace->search);
+	const U64 res = isFirst ? CharString_findFirstStringMatch(&find, replace->search, &searchl) :
+		CharString_findLastStringMatch(&find, replace->search, &searchl);
 
 	if (res == U64_MAX)
 		goto clean;
 
-	const U64 searchl = CharString_length(*replace->search);
 	const U64 replacel = CharString_length(*replace->replace);
 	const U64 strl = CharString_length(*replace->s);
 	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
@@ -333,6 +408,116 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 	}
 
 clean:
+	return s_uccess;
+}
+
+static inline UnicodeCodePoint UnicodeCodePoint_transform(UnicodeCodePoint c, EStringTransform transform) {
+	return transform == EStringTransform_Lower ? UnicodeCodePoint_toLower(c) : UnicodeCodePoint_toUpper(c);
+}
+
+//Maps str into out (which may be str, when no code point changes length) and returns how many bytes it wrote.
+//Invalid UTF-8 is copied as it is. It stops at the first code point that wouldn't fit in outLen.
+
+static U64 CharString_transformInto(const C8 *str, U64 len, EStringTransform transform, C8 *out, U64 outLen) {
+
+	U64 written = 0;
+
+	for (U64 i = 0; i < len && written < outLen; ) {
+
+		if ((U8) str[i] < 0x80) {
+			out[written++] = C8_transform(str[i++], transform);
+			continue;
+		}
+
+		UnicodeCodePoint c = 0;
+		const U8 bytes = UnicodeCodePoint_fromUTF8(str + i, len - i, &c);
+
+		if (!bytes) {
+			out[written++] = str[i++];
+			continue;
+		}
+
+		const UnicodeCodePoint mapped = UnicodeCodePoint_transform(c, transform);
+		const U8 mappedBytes = UnicodeCodePoint_toUTF8(mapped, out + written, outLen - written);
+
+		if (!mappedBytes)
+			break;
+
+		written += mappedBytes;
+		i += bytes;
+	}
+
+	return written;
+}
+
+Bool CharString_transform(CharString *str, EStringTransform transform, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString result = CharString_createNull();
+
+	if (!str)
+		retError(clean, Error_nullPointer(0, "CharString_transform()::str is required"));
+
+	if (CharString_isConstRef(*str))
+		retError(clean, Error_constData(0, 0, "CharString_transform()::str should be writable"));
+
+	if (transform == EStringTransform_None)
+		goto clean;
+
+	//What the mapped string's length is, and whether any code point changes its UTF-8 length on the way.
+	//Nearly always none does, and then it's mapped in place.
+
+	const U64 strl = CharString_length(*str);
+	U64 newLen = 0;
+	Bool sameLength = true;
+
+	for (U64 i = 0; i < strl; ) {
+
+		if ((U8) str->ptr[i] < 0x80) {
+			++i;
+			++newLen;
+			continue;
+		}
+
+		UnicodeCodePoint c = 0;
+		const U8 bytes = UnicodeCodePoint_fromUTF8(str->ptr + i, strl - i, &c);
+
+		if (!bytes) {
+			++i;
+			++newLen;
+			continue;
+		}
+
+		const U8 mapped = UnicodeCodePoint_lengthUTF8(UnicodeCodePoint_transform(c, transform));
+
+		sameLength &= mapped == bytes;
+		newLen += mapped;
+		i += bytes;
+	}
+
+	if (sameLength) {
+		CharString_transformInto(str->ptr, strl, transform, str->ptrNonConst, strl);
+		goto clean;
+	}
+
+	if (CharString_isRef(*str))
+		retError(clean, Error_invalidOperation(0, "CharString_transform()::str is a ref, but mapping it changes its length"));
+
+	gotoIfError3(clean, CharString_reserve(&result, newLen, alloc, e_rr));
+
+	const U64 written = CharString_transformInto(str->ptr, strl, transform, result.ptrNonConst, newLen);
+	result.ptrNonConst[written] = '\0';
+	result.lenAndNullTerminated = written | ((U64) 1 << 63);
+
+	CharString_free(str, alloc);
+	*str = result;
+	result = CharString_createNull();
+
+clean:
+
+	if (alloc)
+		CharString_free(&result, alloc);
+
 	return s_uccess;
 }
 

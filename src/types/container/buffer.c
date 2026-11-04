@@ -360,79 +360,24 @@ Bool Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint, Error
 	if(i >= Buffer_length(buf))
 		retError(clean, Error_outOfBounds(0, i, Buffer_length(buf), "Buffer_readAsUTF8() out of bounds"));
 
-	//Ascii
+	const C8 lead = (C8) buf.ptr[i];
+	const U64 left = Buffer_length(buf) - i;
 
-	const U8 v0 = buf.ptr[i++];
+	if((U8) lead < 0x80 && !C8_isValidAscii(lead))
+		retError(clean, Error_invalidParameter(0, 0, "Buffer_readAsUTF8()::buf[i] didn't contain valid ascii"));
 
-	if (!(v0 >> 7)) {
+	UnicodeCodePoint c = 0;
+	const U8 bytes = UnicodeCodePoint_fromUTF8((const C8*) buf.ptr + i, left, &c);
 
-		if(!C8_isValidAscii((C8) v0))
-			retError(clean, Error_invalidParameter(0, 0, "Buffer_readAsUTF8()::buf[i] didn't contain valid ascii"));
+	//A sequence the buffer cuts off is out of bounds, whatever its bytes say
 
-		*codepoint = (UnicodeCodePointInfo) { .chars = 1, .bytes = 1, .index = v0 };
-		goto clean;
-	}
-
-	if(v0 < 0xC2 || v0 > 0xF4)
-		retError(clean, Error_invalidParameter(0, 1, "Buffer_readAsUTF8()::buf[i] didn't contain valid UTF8"));
-
-	//2-4 bytes
-
-	if(i + 1 > Buffer_length(buf))
+	if(!bytes && UnicodeCodePoint_leadLengthUTF8(lead) > left)
 		retError(clean, Error_outOfBounds(1, i, Buffer_length(buf), "Buffer_readAsUTF8()::buf UTF8 ended unexpectedly"));
 
-	const U8 v1 = buf.ptr[i++];
+	if(!bytes)
+		retError(clean, Error_invalidParameter(0, 1, "Buffer_readAsUTF8()::buf[i] didn't start valid UTF8"));
 
-	if(v1 < 0x80 || v1 >= 0xC0)
-		retError(clean, Error_invalidParameter(0, 2, "Buffer_readAsUTF8()::buf[i + 1] had invalid encoding"));
-
-	if (
-		(v0 == 0xE0 && v1 < 0xA0) || (v0 == 0xED && v1 >= 0xA0) ||
-		(v0 == 0xF0 && v1 < 0x90) || (v0 == 0xF4 && v1 >= 0x90)
-	)
-		retError(clean, Error_invalidParameter(0, 2, "Buffer_readAsUTF8()::buf contains an invalid Unicode scalar"));
-
-	//2 bytes
-
-	if (v0 < 0xE0) {
-		*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 2, .index = (((U16) v0 & 0x1F) << 6) | (v1 & 0x3F) };
-		goto clean;
-	}
-
-	//3 bytes
-
-	if(i + 1 > Buffer_length(buf))
-		retError(clean, Error_outOfBounds(2, i, Buffer_length(buf), "Buffer_readAsUTF8()::buf UTF8 ended unexpectedly"));
-
-	const U8 v2 = buf.ptr[i++];
-
-	if(v2 < 0x80 || v2 >= 0xC0)
-		retError(clean, Error_invalidParameter(0, 3, "Buffer_readAsUTF8()::buf[i + 2] had invalid encoding"));
-
-	if (v0 < 0xF0) {
-
-		*codepoint = (UnicodeCodePointInfo) {
-			.chars = 3, .bytes = 3, .index = (((U32) v0 & 0xF) << 12) | (((U32) v1 & 0x3F) << 6) | (v2 & 0x3F)
-		};
-
-		goto clean;
-	}
-
-	//4 bytes
-
-	if(i + 1 > Buffer_length(buf))
-		retError(clean, Error_outOfBounds(3, i, Buffer_length(buf), "Buffer_readAsUTF8()::buf UTF8 ended unexpectedly"));
-
-	const U8 v3 = buf.ptr[i++];
-
-	if(v3 < 0x80 || v3 >= 0xC0)
-		retError(clean, Error_invalidParameter(0, 4, "Buffer_readAsUTF8()::buf[i + 3] had invalid encoding"));
-
-	*codepoint = (UnicodeCodePointInfo) {
-		.chars = 4,
-		.bytes = 4,
-		.index = (((U32) v0 & 0x7) << 18) | (((U32) v1 & 0x3F) << 12) | (((U32) v2 & 0x3F) << 6) | (v3 & 0x3F)
-	};
+	*codepoint = (UnicodeCodePointInfo) { .chars = bytes, .bytes = bytes, .index = c };
 
 clean:
 	return s_uccess;
@@ -448,61 +393,18 @@ Bool Buffer_writeAsUTF8(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 
 	if(codepoint >= 0xD800 && codepoint <= 0xDFFF)
 		retError(clean, Error_invalidParameter(2, 0, "Buffer_writeAsUTF8()::codepoint is a surrogate"));
 
-	if ((codepoint & 0x7F) == codepoint) {
+	if(codepoint > 0x10FFFF)
+		retError(clean, Error_invalidParameter(2, 0, "Buffer_writeAsUTF8()::codepoint out of bounds (>0x10FFFF)"));
 
-		if(i >= Buffer_length(buf))
-			retError(clean, Error_outOfBounds(0, i + 1, Buffer_length(buf), "Buffer_writeAsUTF8()::i out of bounds"));
+	const U8 length = UnicodeCodePoint_lengthUTF8(codepoint);
 
-		if(bytes)
-			*bytes = 1;
+	if(i > Buffer_length(buf) || Buffer_length(buf) - i < length)
+		retError(clean, Error_outOfBounds(0, i + length, Buffer_length(buf), "Buffer_writeAsUTF8()::i out of bounds"));
 
-		buf.ptrNonConst[i] = (U8) codepoint;
-		goto clean;
-	}
+	UnicodeCodePoint_toUTF8(codepoint, (C8*) buf.ptrNonConst + i, length);
 
-	if ((codepoint & 0x7FF) == codepoint) {
-
-		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 2)
-			retError(clean, Error_outOfBounds(0, i + 2, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 1 out of bounds"));
-
-		if(bytes)
-			*bytes = 2;
-
-		buf.ptrNonConst[i]        = 0xC0 | (U8) (codepoint >> 6);
-		buf.ptrNonConst[i + 1]    = 0x80 | (U8) (codepoint & 0x3F);
-		goto clean;
-	}
-
-	if ((codepoint & 0xFFFF) == codepoint) {
-
-		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 3)
-			retError(clean, Error_outOfBounds(0, i + 3, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 2 out of bounds"));
-
-		if(bytes)
-			*bytes = 3;
-
-		buf.ptrNonConst[i]        = 0xE0 | (U8) (codepoint >> 12);
-		buf.ptrNonConst[i + 1]    = 0x80 | (U8) ((codepoint >> 6) & 0x3F);
-		buf.ptrNonConst[i + 2]    = 0x80 | (U8) (codepoint & 0x3F);
-		goto clean;
-	}
-
-	if (codepoint <= 0x10FFFF) {
-
-		if(i > Buffer_length(buf) || Buffer_length(buf) - i < 4)
-			retError(clean, Error_outOfBounds(0, i + 4, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 3 out of bounds"));
-
-		if(bytes)
-			*bytes = 4;
-
-		buf.ptrNonConst[i]        = 0xF0 | (U8) (codepoint >> 18);
-		buf.ptrNonConst[i + 1]    = 0x80 | (U8) ((codepoint >> 12) & 0x3F);
-		buf.ptrNonConst[i + 2]    = 0x80 | (U8) ((codepoint >> 6) & 0x3F);
-		buf.ptrNonConst[i + 3]    = 0x80 | (U8) (codepoint & 0x3F);
-		goto clean;
-	}
-
-	retError(clean, Error_invalidParameter(2, 0, "Buffer_writeAsUTF8()::codepoint out of bounds (>0x10FFFF)"));
+	if(bytes)
+		*bytes = length;
 
 clean:
 	return s_uccess;

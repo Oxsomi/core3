@@ -77,10 +77,10 @@ Bool Platform_parseEnvBool(CharString value, Bool *result) {
 	if(!result)
 		return false;
 
-	if(CharString_equalsCStringSensitive(&value, "1") || CharString_equalsCStringInsensitive(&value, "true"))
+	if(CharString_equalsCStringSensitive(&value, "1") || CharString_equalsCStringInsensitiveAscii(&value, "true"))
 		*result = true;
 
-	else if(CharString_equalsCStringSensitive(&value, "0") || CharString_equalsCStringInsensitive(&value, "false"))
+	else if(CharString_equalsCStringSensitive(&value, "0") || CharString_equalsCStringInsensitiveAscii(&value, "false"))
 		*result = false;
 
 	else return false;
@@ -97,7 +97,7 @@ Bool Platform_parseEnvU64(CharString value, U64 *result) {
 	if(!result)
 		return false;
 
-	if(CharString_startsWithCStringInsensitive(&value, "0x", 0)) {
+	if(CharString_startsWithCStringInsensitiveAscii(&value, "0x", 0)) {
 		if(CharString_length(value) <= 2 || !CharString_parseHex(value, &parsed))
 			return false;
 	}

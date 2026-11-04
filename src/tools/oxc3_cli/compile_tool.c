@@ -121,7 +121,7 @@
 			Bool match = false;
 
 			for(U64 j = 0; j < modeCount; ++j)
-				if (CharString_equalsCStringInsensitive(&splits.ptr[i], modes[j])) {
+				if (CharString_equalsCStringInsensitiveAscii(&splits.ptr[i], modes[j])) {
 
 					if(j == modeCount - 1) {
 						compileModeU64 = (1 << EGfxBinaryType_Count) - 1;
@@ -212,7 +212,7 @@
 
 			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr, e_rr));
 
-			if (CharString_equalsCStringInsensitive(&compileTypeStr, "compile"))
+			if (CharString_equalsCStringInsensitiveAscii(&compileTypeStr, "compile"))
 				compileType = ECompileType_Compile;
 
 			else {

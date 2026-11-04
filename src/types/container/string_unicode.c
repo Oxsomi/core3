@@ -20,7 +20,7 @@
 
 //types/container/string_unicode.c
 
-#include "types/container/string.h"
+#include "types/container/string_unicode.h"
 #include "types/container/list_basic_types.h"
 
 Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allocator, CharString *result, Error *e_rr) {

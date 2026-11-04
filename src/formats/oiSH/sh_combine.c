@@ -550,7 +550,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			));
 
 		for(U64 k = 0; k < entry.semanticNames.length; ++k)
-			if(!CharString_equalsStringInsensitive(&entry.semanticNames.ptr[k], &entryj.semanticNames.ptr[k]))
+			if(!CharString_equalsStringInsensitiveAscii(&entry.semanticNames.ptr[k], &entryj.semanticNames.ptr[k]))
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have mismatching semanticNames[k]"
 				));

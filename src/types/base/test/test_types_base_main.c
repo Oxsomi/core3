@@ -45,6 +45,7 @@ OXC3_TEST_MAIN(types_base) {
 	Test_stringMut(&t);
 	Test_stringRead(&t);
 	Test_stringToken(&t);
+	Test_unicode(&t);
 
 	return Test_end(&t);
 }

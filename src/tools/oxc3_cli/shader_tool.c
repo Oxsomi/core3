@@ -43,7 +43,7 @@
 
 	static EGfxBinaryType CLI_shaderBinaryType(CharString path) {
 		const CharString dxil = CharString_createRefCStrConst(".dxil");
-		return CharString_endsWithStringInsensitive(&path, &dxil, 0) ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
+		return CharString_endsWithStringInsensitiveAscii(&path, &dxil, 0) ? EGfxBinaryType_DXIL : EGfxBinaryType_SPIRV;
 	}
 
 	//Read a raw file (the -input, unless a specific path is given) into a Buffer.
@@ -244,7 +244,7 @@
 		return s_uccess;
 	}
 
-	//shader assemble: assemble SPIR-V text into a .spv binary (DXIL assembly isn't supported yet).
+	//shader assemble: assemble SPIR-V or DXIL text into a binary, the backend picked by the output's extension.
 
 	Bool CLI_shaderAssemble(const ParsedArgs *args) {
 

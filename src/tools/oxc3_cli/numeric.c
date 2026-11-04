@@ -47,7 +47,7 @@ static Bool CLI_parseFloatType(const CharString *s, EFloatType *out) {
 	};
 
 	for(U64 i = 0; i < sizeof(types) / sizeof(types[0]); ++i)
-		if(CharString_equalsCStringInsensitive(s, types[i].name)) {
+		if(CharString_equalsCStringInsensitiveAscii(s, types[i].name)) {
 			*out = types[i].type;
 			return true;
 		}
@@ -61,7 +61,7 @@ static Bool CLI_parseFloatInput(const CharString *in, EFloatType type, U64 *bits
 
 	const CharString ox = CharString_createRefCStrConst("0x");
 
-	if(CharString_startsWithStringInsensitive(in, &ox, 0)) {        //Raw bits of `type`
+	if(CharString_startsWithStringInsensitiveAscii(in, &ox, 0)) {        //Raw bits of `type`
 		U64 raw = 0;
 
 		if(!CharString_parseHex(*in, &raw))

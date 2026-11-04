@@ -344,7 +344,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 
 	if (
 		(
-			CharString_endsWithStringInsensitive(convert->output, &txt, 0) ||
+			CharString_endsWithStringInsensitiveAscii(convert->output, &txt, 0) ||
 			(convert->args->parameters & EOperationHasParameter_SplitBy)
 		) &&
 		file.settings.dataType == EDLDataType_String

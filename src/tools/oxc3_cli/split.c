@@ -69,7 +69,7 @@ static Bool CLI_splitTypes(const ParsedArgs *args, U8 *mask, Bool *explicitTypes
 
 	for (U64 i = 0; i < splits.length; ++i) {
 
-		if (CharString_equalsCStringInsensitive(&splits.ptr[i], "all")) {
+		if (CharString_equalsCStringInsensitiveAscii(&splits.ptr[i], "all")) {
 			*mask = (U8) ((1 << EGfxBinaryType_Count) - 1);
 			*explicitTypes = false;
 			break;
@@ -78,7 +78,7 @@ static Bool CLI_splitTypes(const ParsedArgs *args, U8 *mask, Bool *explicitTypes
 		U8 j = 0;
 
 		for(; j < EGfxBinaryType_Count; ++j)
-			if(CharString_equalsCStringInsensitive(&splits.ptr[i], EGfxBinaryType_names[j]))
+			if(CharString_equalsCStringInsensitiveAscii(&splits.ptr[i], EGfxBinaryType_names[j]))
 				break;
 
 		if(j == EGfxBinaryType_Count)
@@ -138,7 +138,7 @@ Bool CLI_fileSplit(const ParsedArgs *args) {
 	const CharString oiSHSuffix = CharString_createRefCStrConst(".oiSH");
 	U64 baseLen = CharString_length(outputArg);
 
-	if(CharString_endsWithStringInsensitive(&outputArg, &oiSHSuffix, 0))
+	if(CharString_endsWithStringInsensitiveAscii(&outputArg, &oiSHSuffix, 0))
 		baseLen -= CharString_length(oiSHSuffix);
 
 	if(!baseLen)

@@ -28,6 +28,7 @@
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
 #include "types/base/c8.h"
+#include "types/base/unicode.h"
 #include "types/base/constants.h"
 
 #include <ctype.h>
@@ -165,7 +166,6 @@ Bool CharString_split(const CharStringSplit *split, C8 c, EStringCase casing, Er
 	C8 *sPtrNonConst = s->ptrNonConst;
 
 	const ListCharString str = *split->result;
-	EStringTransform transform = (EStringTransform) casing;
 
 	if (!length) {
 
@@ -175,12 +175,13 @@ Bool CharString_split(const CharStringSplit *split, C8 c, EStringCase casing, Er
 		goto clean;
 	}
 
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, casing, &lower, &upper);
 
 	U64 count = 0, last = 0;
 
 	for (U64 i = 0; i < strl; ++i)
-		if (C8_transform(sPtr[i], transform) == c) {
+		if (sPtr[i] == lower || sPtr[i] == upper) {
 
 			str.ptrNonConst[count++] =
 				isConstRef ? CharString_createRefSizedConst(sPtr + last, i - last, false) :
@@ -213,14 +214,11 @@ Bool CharString_splitString(const CharStringSplit *split, const CharString *othe
 
 	const Bool b = CharString_isNullTerminated(*s);
 	const U64 strl = CharString_length(*s);
-	const U64 otherl = CharString_length(*other);
 	const Bool isConstRef = CharString_isConstRef(*s);
 
-	const C8 *otherPtr = other->ptr;
 	const C8 *sPtr = s->ptr;
 	C8 *sPtrNonConst = s->ptrNonConst;
 
-	EStringTransform transform = (EStringTransform) casing;
 	const ListCharString str = *split->result;
 
 	if (!length) {
@@ -231,27 +229,25 @@ Bool CharString_splitString(const CharStringSplit *split, const CharString *othe
 		goto clean;
 	}
 
+	//The same matches CharString_countAllString counted: the first from each point on, never overlapping
+
 	U64 count = 0, last = 0;
 
-	for (U64 i = 0; i < strl - otherl + 1; ++i) {
+	while (last < strl) {
 
-		Bool match = true;
+		const CharStringSensOffLen at = { s, casing, last, 0 };
+		U64 matchLen = 0;
 
-		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
-			if (C8_transform(sPtr[j], transform) != C8_transform(otherPtr[k], transform)) {
-				match = false;
-				break;
-			}
+		const U64 find = CharString_findFirstStringMatch(&at, other, &matchLen);
 
-		if (match) {
+		if (find == U64_MAX)
+			break;
 
-			str.ptrNonConst[count++] =
-				isConstRef ? CharString_createRefSizedConst(sPtr + last, i - last, false) :
-				CharString_createRefSized(sPtrNonConst + last, i - last, false);
+		str.ptrNonConst[count++] =
+			isConstRef ? CharString_createRefSizedConst(sPtr + last, find - last, false) :
+			CharString_createRefSized(sPtrNonConst + last, find - last, false);
 
-			last = i + otherl;
-			i += otherl - 1;
-		}
+		last = find + matchLen;
 	}
 
 	str.ptrNonConst[count++] =
@@ -451,12 +447,11 @@ Bool CharString_findAll(const CharStringFind *find, C8 c, EStringCase caseSensit
 	gotoIfError3(clean, ListU64_reserve(&l, (strl - off) / 25 + 16, find->alloc, e_rr));
 	alloc = find->alloc;
 
-	EStringTransform transform = (EStringTransform) caseSensitive;
-
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, caseSensitive, &lower, &upper);
 
 	for (U64 i = off; i < strl; ++i)
-		if (c == C8_transform(sPtr[i], transform))
+		if (sPtr[i] == lower || sPtr[i] == upper)
 			gotoIfError3(clean, ListU64_pushBack(&l, i, alloc, e_rr));
 
 	*find->result = l;
@@ -496,38 +491,26 @@ Bool CharString_findAllString(const CharStringFind *find, const CharString *othe
 	if(off == strl)
 		goto clean;
 
-	const C8 *sPtr = find->s->ptr;
-	const C8 *otherPtr = other->ptr;
-
 	if(len)
 		strl = off + len;
 
 	ListU64 l = (ListU64) { 0 };
 
-	if((strl - off) < otherl) {
-		*find->result = l;
-		goto clean;
-	}
-
 	gotoIfError3(clean, ListU64_reserve(&l, (strl - off) / otherl / 25 + 16, find->alloc, e_rr));
 	alloc = find->alloc;
 
-	EStringTransform transform = (EStringTransform) caseSensitive;
+	for (U64 i = off; i < strl; ) {
 
-	for (U64 i = off; i < strl; ++i) {
+		const CharStringSensOffLen at = { find->s, caseSensitive, i, strl - i };
+		U64 matchLen = 0;
 
-		Bool match = true;
+		const U64 found = CharString_findFirstStringMatch(&at, other, &matchLen);
 
-		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
-			if (C8_transform(sPtr[j], transform) != C8_transform(otherPtr[k], transform)) {
-				match = false;
-				break;
-			}
+		if (found == U64_MAX)
+			break;
 
-		if (match) {
-			gotoIfError3(clean, ListU64_pushBack(&l, i, alloc, e_rr));
-			i += otherl - 1;
-		}
+		gotoIfError3(clean, ListU64_pushBack(&l, found, alloc, e_rr));
+		i = found + matchLen;
 	}
 
 	*find->result = l;
@@ -664,12 +647,15 @@ U64 CharString_hashSeededInsensitive(const void *key, U64 seed, void *context) {
 	const CharString s = *(const CharString*) key;
 	const U64 len = CharString_length(s);
 
-	U64 hash = Buffer_fnv1a64Single(len, seed ^ Buffer_fnv1a64Offset);
+	//Strings equal under EStringCase_Insensitive can differ in byte length (U+212A Kelvin sign is k), so this hashes
+	// the folded code points and how many there are, never the bytes
 
-	for(U64 i = 0; i < len; ++i)
-		hash = Buffer_fnv1a64Single((U64) (U8) C8_toLower(s.ptr[i]), hash);
+	U64 hash = seed ^ Buffer_fnv1a64Offset, count = 0;
 
-	return hash;
+	for(U64 i = 0; i < len; ++count)
+		hash = Buffer_fnv1a64Single(UnicodeCodePoint_readFolded(s.ptr, &i, len), hash);
+
+	return Buffer_fnv1a64Single(count, hash);
 }
 
 U64 CharString_hash(const CharString s) {

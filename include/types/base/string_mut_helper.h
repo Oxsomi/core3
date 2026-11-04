@@ -55,6 +55,11 @@ static inline Bool CharString_eraseAllInsensitive(CharString *s, C8 c, U64 off, 
 	return CharString_eraseAll(&erase, c);
 }
 
+static inline Bool CharString_eraseAllInsensitiveAscii(CharString *s, C8 c, U64 off, U64 len) {
+	const CharStringReplaceErase erase = { s, EStringCase_InsensitiveAscii, off, len };
+	return CharString_eraseAll(&erase, c);
+}
+
 static inline Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst, U64 off, U64 len) {
 	const CharStringReplaceErase erase = { s, EStringCase_Sensitive, off, len };
 	return CharString_erase(&erase, c, isFirst);
@@ -62,6 +67,11 @@ static inline Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst, 
 
 static inline Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst, U64 off, U64 len) {
 	const CharStringReplaceErase erase = { s, EStringCase_Insensitive, off, len };
+	return CharString_erase(&erase, c, isFirst);
+}
+
+static inline Bool CharString_eraseInsensitiveAscii(CharString *s, C8 c, Bool isFirst, U64 off, U64 len) {
+	const CharStringReplaceErase erase = { s, EStringCase_InsensitiveAscii, off, len };
 	return CharString_erase(&erase, c, isFirst);
 }
 
@@ -73,12 +83,20 @@ static inline Bool CharString_eraseLastInsensitive(CharString *s, C8 c, U64 off,
 	return CharString_eraseInsensitive(s, c, false, off, len);
 }
 
+static inline Bool CharString_eraseLastInsensitiveAscii(CharString *s, C8 c, U64 off, U64 len) {
+	return CharString_eraseInsensitiveAscii(s, c, false, off, len);
+}
+
 static inline Bool CharString_eraseFirstSensitive(CharString *s, C8 c, U64 off, U64 len) {
 	return CharString_eraseSensitive(s, c, true, off, len);
 }
 
 static inline Bool CharString_eraseFirstInsensitive(CharString *s, C8 c, U64 off, U64 len) {
 	return CharString_eraseInsensitive(s, c, true, off, len);
+}
+
+static inline Bool CharString_eraseFirstInsensitiveAscii(CharString *s, C8 c, U64 off, U64 len) {
+	return CharString_eraseInsensitiveAscii(s, c, true, off, len);
 }
 
 static inline Bool CharString_eraseAllStringSensitive(CharString *s, const CharString *other, U64 off, U64 len) {
@@ -88,6 +106,11 @@ static inline Bool CharString_eraseAllStringSensitive(CharString *s, const CharS
 
 static inline Bool CharString_eraseAllStringInsensitive(CharString *s, const CharString *other, U64 off, U64 len) {
 	const CharStringReplaceErase erase = { s, EStringCase_Insensitive, off, len };
+	return CharString_eraseAllString(&erase, other);
+}
+
+static inline Bool CharString_eraseAllStringInsensitiveAscii(CharString *s, const CharString *other, U64 off, U64 len) {
+	const CharStringReplaceErase erase = { s, EStringCase_InsensitiveAscii, off, len };
 	return CharString_eraseAllString(&erase, other);
 }
 
@@ -101,6 +124,13 @@ static inline Bool CharString_eraseStringInsensitive(CharString *s, const CharSt
 	return CharString_eraseString(&erase, other, isFirst);
 }
 
+static inline Bool CharString_eraseStringInsensitiveAscii(
+	CharString *s, const CharString *other, Bool isFirst, U64 off, U64 len
+) {
+	const CharStringReplaceErase erase = { s, EStringCase_InsensitiveAscii, off, len };
+	return CharString_eraseString(&erase, other, isFirst);
+}
+
 static inline Bool CharString_eraseLastStringSensitive(CharString *s, const CharString *other, U64 off, U64 len) {
 	return CharString_eraseStringSensitive(s, other, false, off, len);
 }
@@ -109,12 +139,20 @@ static inline Bool CharString_eraseLastStringInsensitive(CharString *s, const Ch
 	return CharString_eraseStringInsensitive(s, other, false, off, len);
 }
 
+static inline Bool CharString_eraseLastStringInsensitiveAscii(CharString *s, const CharString *other, U64 off, U64 len) {
+	return CharString_eraseStringInsensitiveAscii(s, other, false, off, len);
+}
+
 static inline Bool CharString_eraseFirstStringSensitive(CharString *s, const CharString *other, U64 off, U64 len) {
 	return CharString_eraseStringSensitive(s, other, true, off, len);
 }
 
 static inline Bool CharString_eraseFirstStringInsensitive(CharString *s, const CharString *other, U64 off, U64 len) {
 	return CharString_eraseStringInsensitive(s, other, true, off, len);
+}
+
+static inline Bool CharString_eraseFirstStringInsensitiveAscii(CharString *s, const CharString *other, U64 off, U64 len) {
+	return CharString_eraseStringInsensitiveAscii(s, other, true, off, len);
 }
 
 //Replace
@@ -137,6 +175,11 @@ static inline Bool CharString_replaceAllInsensitive(CharString *s, C8 c, C8 v, U
 	return CharString_replaceAll(&erase, c, v);
 }
 
+static inline Bool CharString_replaceAllInsensitiveAscii(CharString *s, C8 c, C8 v, U64 off, U64 len) {
+	const CharStringReplaceErase erase = { s, EStringCase_InsensitiveAscii, off, len };
+	return CharString_replaceAll(&erase, c, v);
+}
+
 static inline Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off, U64 len) {
 	const CharStringReplaceErase erase = { s, EStringCase_Sensitive, off, len };
 	return CharString_replace(&erase, c, v, isFirst);
@@ -144,6 +187,11 @@ static inline Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool i
 
 static inline Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off, U64 len) {
 	const CharStringReplaceErase erase = { s, EStringCase_Insensitive, off, len };
+	return CharString_replace(&erase, c, v, isFirst);
+}
+
+static inline Bool CharString_replaceInsensitiveAscii(CharString *s, C8 c, C8 v, Bool isFirst, U64 off, U64 len) {
+	const CharStringReplaceErase erase = { s, EStringCase_InsensitiveAscii, off, len };
 	return CharString_replace(&erase, c, v, isFirst);
 }
 
@@ -155,12 +203,20 @@ static inline Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v, 
 	return CharString_replaceInsensitive(s, c, v, false, off, len);
 }
 
+static inline Bool CharString_replaceLastInsensitiveAscii(CharString *s, C8 c, C8 v, U64 off, U64 len) {
+	return CharString_replaceInsensitiveAscii(s, c, v, false, off, len);
+}
+
 static inline Bool CharString_replaceFirstSensitive(CharString *s, C8 c, C8 v, U64 off, U64 len) {
 	return CharString_replaceSensitive(s, c, v, true, off, len);
 }
 
 static inline Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v, U64 off, U64 len) {
 	return CharString_replaceInsensitive(s, c, v, true, off, len);
+}
+
+static inline Bool CharString_replaceFirstInsensitiveAscii(CharString *s, C8 c, C8 v, U64 off, U64 len) {
+	return CharString_replaceInsensitiveAscii(s, c, v, true, off, len);
 }
 
 #ifdef __cplusplus

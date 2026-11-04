@@ -33,8 +33,6 @@ Bool CharString_erase(const CharStringReplaceErase *erase, C8 c, Bool isFirst) {
 	if (!s || CharString_isRef(*s))
 		return false;
 
-	c = C8_transform(c, (EStringTransform) erase->caseSensitive);
-
 	//Skipping first match
 
 	CharStringSensOffLen strSensOffLen = {
@@ -119,18 +117,20 @@ Bool CharString_eraseString(const CharStringReplaceErase *erase, const CharStrin
 		erase->len
 	};
 
-	const U64 find =
-		isFirst ? CharString_findFirstString(&strSensOffLen, other) : CharString_findLastString(&strSensOffLen, other);
+	U64 matchLen = 0;
+
+	const U64 find = isFirst ? CharString_findFirstStringMatch(&strSensOffLen, other, &matchLen) :
+		CharString_findLastStringMatch(&strSensOffLen, other, &matchLen);
 
 	if (find == U64_MAX)
 		return false;
 
 	Buffer_memmove(
-		Buffer_createRef(s->ptrNonConst + find, strl - find - otherl),
-		Buffer_createRef(s->ptrNonConst + find + otherl, strl - find - otherl)
+		Buffer_createRef(s->ptrNonConst + find, strl - find - matchLen),
+		Buffer_createRef(s->ptrNonConst + find + matchLen, strl - find - matchLen)
 	);
 
-	const U64 end = strl - otherl;
+	const U64 end = strl - matchLen;
 	s->ptrNonConst[end] = '\0';
 	s->lenAndNullTerminated = end | ((U64) 1 << 63);
 	return true;
@@ -146,7 +146,6 @@ Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c) {
 	U64 realStrl = strl;
 	U64 off = erase->off;
 	U64 len = erase->len;
-	EStringTransform transform = (EStringTransform) erase->caseSensitive;
 
 	if (!s || CharString_isRef(*s) || off >= strl || len > strl - off)
 		return false;
@@ -154,13 +153,14 @@ Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c) {
 	if (len)
 		strl = off + len;
 
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, erase->caseSensitive, &lower, &upper);
 
 	U64 out = off;
 
 	for (U64 i = off; i < strl; ++i) {
 
-		if (C8_transform(s->ptr[i], transform) == c)
+		if (s->ptr[i] == lower || s->ptr[i] == upper)
 			continue;
 
 		s->ptrNonConst[out++] = s->ptr[i];
@@ -187,7 +187,6 @@ Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharSt
 	const U64 realStrl = strl;
 	U64 off = erase->off;
 	U64 len = erase->len;
-	EStringTransform transform = (EStringTransform) erase->caseSensitive;
 
 	const U64 otherl = !other ? 0 : CharString_length(*other);
 
@@ -199,22 +198,27 @@ Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharSt
 
 	U64 out = off;
 
-	for (U64 i = off; i < strl; ++i) {
+	//Searching ahead only reads bytes from i on, and everything kept so far was written before i
 
-		Bool match = strl - i >= otherl;
+	for (U64 i = off; i < strl; ) {
 
-		for (U64 j = i, k = 0; match && k < otherl; ++j, ++k)
-			if (C8_transform(s->ptr[j], transform) != C8_transform(other->ptr[k], transform)) {
-				match = false;
-				break;
-			}
+		const CharStringSensOffLen at = { s, erase->caseSensitive, i, strl - i };
+		U64 matchLen = 0;
 
-		if (match) {
-			i += otherl - 1;    //-1 because we increment by 1 every time
-			continue;
-		}
+		const U64 find = CharString_findFirstStringMatch(&at, other, &matchLen);
+		const U64 keepEnd = find == U64_MAX ? strl : find;
 
-		s->ptrNonConst[out++] = s->ptr[i];
+		Buffer_memmove(
+			Buffer_createRef(s->ptrNonConst + out, keepEnd - i),
+			Buffer_createRef(s->ptrNonConst + i, keepEnd - i)
+		);
+
+		out += keepEnd - i;
+
+		if (find == U64_MAX)
+			break;
+
+		i = find + matchLen;
 	}
 
 	if (out == strl)
@@ -237,7 +241,6 @@ Bool CharString_replaceAll(const CharStringReplaceErase *replace, C8 c, C8 v) {
 	U64 strl = s ? CharString_length(*s) : 0;
 	U64 off = replace->off;
 	U64 len = replace->len;
-	EStringTransform transform = (EStringTransform) replace->caseSensitive;
 
 	if (!s || CharString_isConstRef(*s) || off >= strl || len > strl - off)
 		return false;
@@ -245,10 +248,11 @@ Bool CharString_replaceAll(const CharStringReplaceErase *replace, C8 c, C8 v) {
 	if (!len)
 		len = strl - off;
 
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, replace->caseSensitive, &lower, &upper);
 
 	for (U64 i = off; i < off + len; ++i)
-		if (C8_transform(s->ptr[i], transform) == c)
+		if (s->ptr[i] == lower || s->ptr[i] == upper)
 			s->ptrNonConst[i] = v;
 
 	return true;
@@ -279,7 +283,7 @@ Bool CharString_replace(const CharStringReplaceErase *replace, C8 c, C8 v, Bool 
 	return true;
 }
 
-Bool CharString_transform(CharString *str, EStringTransform stringTransform) {
+Bool CharString_transformAscii(CharString *str, EStringTransform stringTransform) {
 
 	if (!str || CharString_isConstRef(*str))
 		return false;

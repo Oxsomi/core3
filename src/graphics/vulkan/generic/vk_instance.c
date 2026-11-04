@@ -245,8 +245,8 @@ VkBool32 onDebugReport(
 
 		if (
 			instance &&
-			!CharString_containsStringInsensitive(&messageStr, &adjusting, 0, 0) &&
-			!CharString_containsStringInsensitive(&messageStr, &multiEntry, 0, 0)
+			!CharString_containsStringInsensitiveAscii(&messageStr, &adjusting, 0, 0) &&
+			!CharString_containsStringInsensitiveAscii(&messageStr, &multiEntry, 0, 0)
 		)
 			AtomicI64_inc(&instance->validationWarnings);
 

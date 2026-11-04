@@ -145,7 +145,7 @@ static c::Bool Test_wantsAdapter(const c::GraphicsDeviceInfo *info, const c::All
 	c::Platform_getEnv(c::CharString_createRefCStrConst("OXC3_TEST_GPU"), alloc, &filter, NULL);
 
 	const c::CharString name = c::CharString_createRefCStrConst(info->name);
-	const c::Bool wanted = !c::CharString_length(filter) || c::CharString_containsStringInsensitive(&name, &filter, 0, 0);
+	const c::Bool wanted = !c::CharString_length(filter) || c::CharString_containsStringInsensitiveAscii(&name, &filter, 0, 0);
 
 	c::CharString_free(&filter, alloc);
 	return wanted;

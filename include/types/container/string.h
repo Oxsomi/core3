@@ -75,6 +75,8 @@ typedef struct CharStringSplit {
 	ListCharString *result;
 } CharStringSplit;
 
+//A C8 overload matches one byte, and either insensitive case only folds A-Z there (see EStringCase).
+
 Bool CharString_split(const CharStringSplit *split, C8 c, EStringCase casing, Error *e_rr);
 Bool CharString_splitString(const CharStringSplit *split, const CharString *other, EStringCase casing, Error *e_rr);
 
@@ -112,6 +114,21 @@ typedef struct CharStringReplace2 {
 
 Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase caseSensitive, Error *e_rr);
 Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, EStringCase caseSensitive, Error *e_rr);
+
+//Maps every code point through UnicodeCodePoint_toLower or toUpper; invalid UTF-8 stays as it is.
+//In place while every code point keeps its UTF-8 length, which is nearly always; otherwise (U+023A lowers from 2 bytes
+// to 3) str is rebuilt through alloc, which a ref can't be. Nothing changes on failure.
+//CharString_toLowerAscii / toUpperAscii only map A-Z or a-z, always in place.
+
+Bool CharString_transform(CharString *str, EStringTransform transform, const Allocator *alloc, Error *e_rr);
+
+static inline Bool CharString_toLower(CharString *str, const Allocator *alloc, Error *e_rr) {
+	return CharString_transform(str, EStringTransform_Lower, alloc, e_rr);
+}
+
+static inline Bool CharString_toUpper(CharString *str, const Allocator *alloc, Error *e_rr) {
+	return CharString_transform(str, EStringTransform_Upper, alloc, e_rr);
+}
 
 typedef struct CharStringFind {
 	const CharString *s;

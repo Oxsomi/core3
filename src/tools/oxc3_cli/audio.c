@@ -84,7 +84,7 @@ Bool CLI_audioConvertFind(const FileInfo *info, void *dataGeneric, const Allocat
 	CharString wav = CharString_createRefCStrConst(".wav");
 	Bool s_uccess = true;
 
-	if (info->type == EFileType_File && CharString_endsWithStringInsensitive(&info->path, &wav, 0)) {
+	if (info->type == EFileType_File && CharString_endsWithStringInsensitiveAscii(&info->path, &wav, 0)) {
 
 		CharString cut = CharString_createNull();
 
@@ -135,13 +135,13 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 			goto clean2;
 		}
 		
-		if(CharString_equalsCStringInsensitive(&str, "average"))
+		if(CharString_equalsCStringInsensitiveAscii(&str, "average"))
 			splitType = ESplitType_Average;
 
-		else if(CharString_equalsCStringInsensitive(&str, "left"))
+		else if(CharString_equalsCStringInsensitiveAscii(&str, "left"))
 			splitType = ESplitType_Left;
 
-		else if(CharString_equalsCStringInsensitive(&str, "right"))
+		else if(CharString_equalsCStringInsensitiveAscii(&str, "right"))
 			splitType = ESplitType_Right;
 
 		else {

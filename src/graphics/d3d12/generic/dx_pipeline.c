@@ -160,7 +160,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_selectShaderTarget)(
 
 	for (U64 i = 0; i < gpus.length; ++i) {
 
-		if(!CharString_equalsStringInsensitive(&gpus.ptr[i].name, name))
+		if(!CharString_equalsStringInsensitiveAscii(&gpus.ptr[i].name, name))
 			continue;
 
 		if(!DxAmdShaderAnalyzer_selectVirtualGpu(gpus.ptr[i].gpuId))

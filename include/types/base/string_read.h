@@ -31,7 +31,9 @@
 Bool CharString_isValidFileName(const CharString str);
 Bool CharString_isValidFilePath(CharString str);
 
-//Compares unsigned bytes after applying the requested ASCII case transform.
+//Sensitive and InsensitiveAscii compare unsigned bytes (A-Z folded under InsensitiveAscii).
+//Insensitive compares folded code points; a byte that doesn't start valid UTF-8 compares as itself, after every
+// code point.
 ECompareResult CharString_compare(const CharString *a, const CharString *b, EStringCase caseSensitive);
 
 static inline ECompareResult CharString_compareSensitive(const CharString *a, const CharString *b) {
@@ -42,18 +44,20 @@ static inline ECompareResult CharString_compareInsensitive(const CharString *a, 
 	return CharString_compare(a, b, EStringCase_Insensitive);
 }
 
+static inline ECompareResult CharString_compareInsensitiveAscii(const CharString *a, const CharString *b) {
+	return CharString_compare(a, b, EStringCase_InsensitiveAscii);
+}
+
+//A C8 overload matches one byte, and either insensitive case only folds A-Z there (see EStringCase).
+
 static inline Bool CharString_startsWith(const CharString str, C8 c, EStringCase caseSensitive, U64 off) {
-	return
-		CharString_length(str) > off && str.ptr &&
-		C8_transform(str.ptr[off], (EStringTransform)caseSensitive) ==
-		C8_transform(c, (EStringTransform) caseSensitive);
+	return CharString_length(str) > off && str.ptr && C8_matches(str.ptr[off], c, caseSensitive);
 }
 
 static inline Bool CharString_endsWith(const CharString str, C8 c, EStringCase caseSensitive, U64 off) {
 	return
 		CharString_length(str) > off && str.ptr &&
-		C8_transform(str.ptr[CharString_length(str) - 1 - off], (EStringTransform) caseSensitive) ==
-		C8_transform(c, (EStringTransform) caseSensitive);
+		C8_matches(str.ptr[CharString_length(str) - 1 - off], c, caseSensitive);
 }
 
 typedef struct CharStringSensOff {
@@ -80,6 +84,13 @@ U64 CharString_findLast(const CharStringSensOffLen *strSensOffLen, C8 c);
 
 U64 CharString_findFirstString(const CharStringSensOffLen *strSensOffLen, const CharString *other);
 U64 CharString_findLastString(const CharStringSensOffLen *strSensOffLen, const CharString *other);
+
+//Also writes how many bytes of str the match covers to *matchLen (if found and matchLen isn't NULL).
+//Under EStringCase_Insensitive that can differ from other's length (U+212A Kelvin sign matches k), so whatever
+// consumes a match (erase, replace, split, cut) has to take its length from here.
+
+U64 CharString_findFirstStringMatch(const CharStringSensOffLen *strSensOffLen, const CharString *other, U64 *matchLen);
+U64 CharString_findLastStringMatch(const CharStringSensOffLen *strSensOffLen, const CharString *other, U64 *matchLen);
 
 static inline Bool CharString_contains(const CharStringSensOffLen *strSensOffLen, C8 c) {
 	return CharString_findFirst(strSensOffLen, c) != U64_MAX;
@@ -131,7 +142,7 @@ Bool CharString_parseU64(const CharString s, U64 *result);
 	CharString other = CharString_createRefCStrConst(num);                        \
 	CharString_matchesPattern(                                                    \
 		testFunc,                                                                 \
-		CharStringSensOff strSensOff = { &s, EStringCase_Insensitive, 0 };        \
+		CharStringSensOff strSensOff = { &s, EStringCase_InsensitiveAscii, 0 };   \
 		U64 start = CharString_startsWithString(                                  \
 			&strSensOff, &other                                                   \
 		) ? CharString_length(other) : 0                                          \

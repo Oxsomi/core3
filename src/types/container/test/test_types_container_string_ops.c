@@ -195,8 +195,8 @@ static void Test_stringMutate(Test *t) {
 
 	//transform + trim
 	Test_assert(t, "seed", CharString_createCopy(S("MiXeD"), t->alloc, &s, &t->err));
-	Test_assert(t, "toLower", CharString_toLower(&s) && Test_strEq(s, "mixed"));
-	Test_assert(t, "toUpper", CharString_toUpper(&s) && Test_strEq(s, "MIXED"));
+	Test_assert(t, "toLower", CharString_toLower(&s, t->alloc, &t->err) && Test_strEq(s, "mixed"));
+	Test_assert(t, "toUpper", CharString_toUpper(&s, t->alloc, &t->err) && Test_strEq(s, "MIXED"));
 	CharString_free(&s, t->alloc);
 
 	Test_assert(t, "trim both ends", Test_strEq(CharString_trim(S("  pad  ")), "pad"));

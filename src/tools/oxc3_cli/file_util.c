@@ -82,7 +82,7 @@ static Bool CLI_aesDecodeHex(CharString hex, U32 outKey[8], Error *e_rr) {
 	if(!CharString_isHex(hex))
 		retError(clean, Error_invalidState(0, "AES key must be a hex key (32 bytes / 64 hex chars)."));
 
-	const U64 off = CharString_startsWithStringInsensitive(&hex, &ox, 0) ? 2 : 0;
+	const U64 off = CharString_startsWithStringInsensitiveAscii(&hex, &ox, 0) ? 2 : 0;
 
 	if(CharString_length(hex) - off != 64)
 		retError(clean, Error_invalidState(1, "AES key must be exactly 32 bytes (64 hex chars)."));

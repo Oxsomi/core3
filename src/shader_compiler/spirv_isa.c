@@ -175,7 +175,7 @@ static Bool SpvISA_gfxipArg(CharString target, const Allocator *alloc, CharStrin
 
 	const CharString gfx = CharString_createRefCStrConst("gfx");
 
-	if(!CharString_startsWithStringInsensitive(&target, &gfx, 0) || len < 3 + 3)
+	if(!CharString_startsWithStringInsensitiveAscii(&target, &gfx, 0) || len < 3 + 3)
 		retError(clean, Error_invalidParameter(
 			0, 0, "SpvISA_gfxipArg() target must be a gfx target (e.g. gfx1100) or a major.minor.step (e.g. 11.0.0); "
 			"offline ISA supports gfx11xx (RDNA3) and gfx12xx (RDNA4)"
@@ -420,8 +420,8 @@ static Bool SpvISA_clean(Buffer raw, const Allocator *alloc, Buffer *out, Error 
 				const CharString lbl = CharString_createRefSizedConst(l, e, false);
 
 				keep =
-					CharString_startsWithStringInsensitive(&lbl, &amdgpuPfx, 0) &&
-					!CharString_endsWithStringInsensitive(&lbl, &symendSfx, 0);
+					CharString_startsWithStringInsensitiveAscii(&lbl, &amdgpuPfx, 0) &&
+					!CharString_endsWithStringInsensitiveAscii(&lbl, &symendSfx, 0);
 
 				if(keep)
 					codeLen = e;

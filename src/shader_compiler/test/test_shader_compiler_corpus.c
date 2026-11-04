@@ -263,14 +263,14 @@ static void shCrossCheckReflection(Test *t, const Allocator *alloc, Buffer spvBu
 
 			if(se->inputs[s] || de->inputs[s]) {
 				const CharString sn = shSemanticName(se, false, s), dn = shSemanticName(de, false, s);
-				Test_assert(t, "cross-check: same input semantic", CharString_equalsStringInsensitive(&sn, &dn) &&
+				Test_assert(t, "cross-check: same input semantic", CharString_equalsStringInsensitiveAscii(&sn, &dn) &&
 					(se->inputSemanticNames[s] & 0xF) == (de->inputSemanticNames[s] & 0xF)
 				);
 			}
 
 			if(se->outputs[s] || de->outputs[s]) {
 				const CharString sn = shSemanticName(se, true, s), dn = shSemanticName(de, true, s);
-				Test_assert(t, "cross-check: same output semantic", CharString_equalsStringInsensitive(&sn, &dn) &&
+				Test_assert(t, "cross-check: same output semantic", CharString_equalsStringInsensitiveAscii(&sn, &dn) &&
 					(se->outputSemanticNames[s] & 0xF) == (de->outputSemanticNames[s] & 0xF)
 				);
 			}

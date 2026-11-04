@@ -61,7 +61,6 @@ Bool CharString_toUTF32(const CharString s, const Allocator *allocator, ListU32 
 //TODO: CharString_cut(Before/After)Codepoint
 //TODO: CharString_eraseCodepoint
 //TODO: CharString_replaceCodepoint
-//TODO: UTF8 toLower/toUpper.
 //TODO: CharString_replaceCodepoint
 //TODO: CharString_countCodepoint/endsWithCodepoint/startsWithCodepoint
 //TODO: CharString_resizeCodepoint?

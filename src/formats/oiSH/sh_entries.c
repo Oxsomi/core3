@@ -319,14 +319,14 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 
 	for(U64 i = 0; i < entry->uniqueInputSemantics; ++i)
 		for(U64 j = 0; j < i; ++j)
-			if(CharString_equalsStringInsensitive(&entry->semanticNames.ptr[i], &entry->semanticNames.ptr[j]))
+			if(CharString_equalsStringInsensitiveAscii(&entry->semanticNames.ptr[i], &entry->semanticNames.ptr[j]))
 				retError(clean, Error_invalidOperation(
 					0, "SHFile_addEntrypoint() found duplicate in input unique semantic names"
 				));
 
 	for(U64 i = entry->uniqueInputSemantics; i < entry->semanticNames.length; ++i)
 		for(U64 j = entry->uniqueInputSemantics; j < i; ++j)
-			if(CharString_equalsStringInsensitive(&entry->semanticNames.ptr[i], &entry->semanticNames.ptr[j]))
+			if(CharString_equalsStringInsensitiveAscii(&entry->semanticNames.ptr[i], &entry->semanticNames.ptr[j]))
 				retError(clean, Error_invalidOperation(
 					0, "SHFile_addEntrypoint() found duplicate in output unique semantic names"
 				));

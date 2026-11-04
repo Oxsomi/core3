@@ -34,9 +34,17 @@
 	extern "C" {
 #endif
 
+//How a string function matches.
+//Insensitive folds by Unicode (UnicodeCodePoint_caseFold), so a match can be longer or shorter than what it matched:
+// U+212A Kelvin sign matches k. InsensitiveAscii only folds A-Z, byte for byte; it's faster and right for keywords
+// and protocol tokens, which must not match look-alikes such as U+017F long s for s.
+//Functions that take a C8 fold it as ASCII under either, since one byte can't hold anything else.
+//The helper wrappers come as *Insensitive for names a file system compares and *InsensitiveAscii for keywords.
+
 typedef enum EStringCase {
 	EStringCase_Sensitive,            //Prefer when possible; avoids transforming the character
-	EStringCase_Insensitive
+	EStringCase_Insensitive,
+	EStringCase_InsensitiveAscii
 } EStringCase;
 
 typedef enum EStringTransform {
@@ -58,6 +66,18 @@ static inline C8 C8_transform(C8 c, EStringTransform transform) {
 		transform == EStringTransform_Lower ? C8_toLower(c) :
 		C8_toUpper(c)
 	);
+}
+
+//The two bytes that match c under stringCase: c twice when sensitive, its lower and upper case otherwise.
+//Comparing a byte against both beats folding every byte of a haystack.
+
+static inline void C8_caseVariants(C8 c, EStringCase stringCase, C8 *lower, C8 *upper) {
+	*lower = stringCase == EStringCase_Sensitive ? c : C8_toLower(c);
+	*upper = stringCase == EStringCase_Sensitive ? c : C8_toUpper(c);
+}
+
+static inline Bool C8_matches(C8 x, C8 c, EStringCase stringCase) {
+	return x == c || (stringCase != EStringCase_Sensitive && C8_toLower(x) == C8_toLower(c));
 }
 
 static inline Bool C8_isBin(C8 c) { return c == '0' || c == '1'; }
