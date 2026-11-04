@@ -1317,6 +1317,109 @@ static void Test_virtualEdgeCases(Test *t) {
 	Test_assert(t, "rootEmpty", File_queryFileObjectCountAll(&vRoot, true, &count, t->alloc, &t->err) && count == 0);
 }
 
+// -- 5d. Virtual - section names compare case folded, whatever their byte length -------------------
+
+//U+017F (long s, 2 bytes) folds onto s, so "te<U+017F>tdata" names the testdata section with a different byte count.
+//The sub path has to be cut where the match ends rather than where the section name ends.
+
+static const char *vFoldedFileHello = "//" _OXC3_TEST_VFS_TARGET "/te\xC5\xBF" "tdata/hello.txt";
+static const char *vFoldedFolderSub = "//" _OXC3_TEST_VFS_TARGET "/te\xC5\xBF" "tdata/sub";
+static const char *vFoldedAccess    = "//acce\xC5\xBF\xC5\xBF" "/x";
+static const char *vPlainAccess     = "//access/x";
+
+static Bool Test_foldedCountCallback(const FileInfo *info, void *userData, const Allocator *alloc, Error *e_rr) {
+	(void) info; (void) alloc; (void) e_rr;
+	++*(U64*) userData;
+	return true;
+}
+
+//Not in a public header: the leftover of the cut is the only place the sub path's exact bytes show, since the archive lookup
+// tolerates a leading slash.
+
+Bool File_resolveVirtual(
+	const CharString *loc, CharString *subPath, const VirtualSection **section, const Allocator *alloc, Error *e_rr
+);
+
+static void Test_virtualFoldedSection(Test *t) {
+
+	Test_setModule(t, "Virtual/FoldedSection");
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+	RefPtrType fhType = FileHandle_makeType(alloc);
+
+	CharString secPath    = CharString_createRefCStrConst(vSection);
+	CharString helloPlain = CharString_createRefCStrConst(vFileHello);
+	CharString helloFold  = CharString_createRefCStrConst(vFoldedFileHello);
+	CharString subPlain   = CharString_createRefCStrConst("//" _OXC3_TEST_VFS_TARGET "/testdata/sub");
+	CharString subFold    = CharString_createRefCStrConst(vFoldedFolderSub);
+	Buffer plain = Buffer_createNull(), folded = Buffer_createNull();
+
+	if(!Test_assert(t, "loadVirtual", File_loadVirtual(&secPath, &memStreamType, NULL, NULL, alloc, &t->err)))
+		return;
+
+	Test_assert(t, "hasFolded", File_has(&helloFold, alloc));
+
+	//The sub path is exactly what follows the section, in the caller's bytes
+
+	{
+		const CharString locFold = CharString_createRefCStrConst(vFoldedFileHello + 2);
+		const CharString expected = CharString_createRefCStrConst("hello.txt");
+
+		CharString subOut = CharString_createNull();
+		const VirtualSection *sectionOut = NULL;
+
+		const ELockAcquire acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
+
+		const Bool resolved = acq >= ELockAcquire_Success &&
+			File_resolveVirtual(&locFold, &subOut, &sectionOut, alloc, &t->err);
+
+		if(acq >= ELockAcquire_Success)
+			SpinLock_unlock(&Platform_instance->virtualSectionsLock);
+
+		Test_assert(t, "resolveFolded", resolved && sectionOut);
+		Test_assert(t, "subPathExact", CharString_equalsStringSensitive(&subOut, &expected));
+		CharString_free(&subOut, alloc);
+	}
+
+	if (
+		Test_assert(t, "readPlain",  File_read(&helloPlain, 50 * MS, 0, 0, &fhType, &plain,  &t->err)) &&
+		Test_assert(t, "readFolded", File_read(&helloFold,  50 * MS, 0, 0, &fhType, &folded, &t->err))
+	)
+		Test_assert(t, "sameBytes", Buffer_length(plain) && Buffer_eq(plain, folded));
+
+	Buffer_free(&plain, alloc);
+	Buffer_free(&folded, alloc);
+
+	U64 plainCount = 0, foldedCount = 0;
+
+	Test_assert(t, "foreachPlain", File_foreach(
+		&subPlain, !Platform_instance->useWorkingDir, Test_foldedCountCallback, &plainCount, true, alloc, &t->err
+	));
+
+	Test_assert(t, "foreachFolded", File_foreach(
+		&subFold, !Platform_instance->useWorkingDir, Test_foldedCountCallback, &foldedCount, true, alloc, &t->err
+	));
+
+	Test_assert(t, "sameEntries", plainCount && plainCount == foldedCount);
+
+	File_unloadVirtual(&secPath, alloc, NULL);
+
+	//The //access/ prefix is a protocol token: it only matches byte for byte (ASCII case aside).
+	//The folded spelling is an ordinary virtual path that doesn't exist.
+
+	CharString plainAccess  = CharString_createRefCStrConst(vPlainAccess);
+	CharString foldedAccess = CharString_createRefCStrConst(vFoldedAccess);
+
+	Error err = Error_none();
+	Test_assert(t, "accessRefused", !File_read(&plainAccess, 50 * MS, 0, 0, &fhType, &plain, &err));
+	Test_assert(t, "accessUnimplemented", err.genericError == EGenericError_Unimplemented);
+
+	err = Error_none();
+	Test_assert(t, "foldedAccessRefused", !File_read(&foldedAccess, 50 * MS, 0, 0, &fhType, &plain, &err));
+	Test_assert(t, "foldedAccessNotFound", err.genericError == EGenericError_NotFound);
+}
+
 // -- 5c. Virtual - the platform's stream type and allocator ----------------------------------------
 
 //Counts the allocations a caller's allocator still holds, to show that a mount keeps none of them.
@@ -1942,6 +2045,7 @@ OXC3_TEST_ENTRY(platforms_interface) {
 	Test_platformsFileVirtual(&t);
 	Test_virtualForeachRoundTrip(&t);
 	Test_virtualEdgeCases(&t);
+	Test_virtualFoldedSection(&t);
 	Test_virtualPlatformOwned(&t);
 
 	Test_dynamicLibrary(&t);

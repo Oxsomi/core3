@@ -20,6 +20,7 @@
 
 //formats/oiCA/ca_edit.c
 
+#include "ca_internal.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/mathi.h"
@@ -62,55 +63,33 @@ static inline U64 CAFile_computePathLen(const CAFile *caFile, CAHandle parent, U
 
 //Whether everything below a folder keeps a legal path and depth once the folder sits at depth 'depth' with a path of
 // 'pathLen' chars (its own path after a move or rename).
+//Walks only the folder's subtree, down through each folder's child ranges; the depth limit bounds the recursion.
 
-static Bool CAFile_checkSubtreeFits(const CAFile *caFile, U64 srcId, U64 pathLen, U64 depth, Error *e_rr) {
+static Bool CAFile_checkSubtreeFits(const CAFile *caFile, U64 folderId, U64 pathLen, U64 depth, Error *e_rr) {
 
 	Bool s_uccess = true;
+	const CAFolderInfo *folder = &caFile->folders.ptr[folderId];
 
-	for (U64 i = 1; i < caFile->folders.length; ++i) {
+	if (depth + 1 >= CAFile_maxRecursionSize && (folder->fileCount || folder->dirCount))
+		retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's depth out of recursion"));
 
-		if (i == srcId)
-			continue;
+	for (U64 i = 0; i < folder->fileCount; ++i) {
 
-		U64 len = 0, levels = 0, cur = i;
+		const CharString name = CAFile_getName(caFile, CAHandle_makeFile(folder->fileOffset + i));
 
-		while (cur && cur != srcId) {
-
-			len += CharString_length(CAFile_getName(caFile, CAHandle_makeFolder(cur))) + 1;
-			++levels;
-			cur = caFile->folders.ptr[cur].parent;
-		}
-
-		if (cur != srcId)
-			continue;
-
-		if (pathLen + len > CAFile_maxFilePathSize)
+		if (pathLen + 1 + CharString_length(name) > CAFile_maxFilePathSize)
 			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's path would exceed 192 chars"));
-
-		if (depth + levels >= CAFile_maxRecursionSize)
-			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's depth out of recursion"));
 	}
 
-	for (U64 i = 0; i < caFile->files.length; ++i) {
+	for (U64 i = 0; i < folder->dirCount; ++i) {
 
-		U64 len = CharString_length(CAFile_getName(caFile, CAHandle_makeFile(i))) + 1, levels = 0;
-		U64 cur = CAFileInfo_getParent(caFile->files.ptr[i]);
+		const U64 child = folder->dirOffset + i;
+		const U64 childPathLen = pathLen + 1 + CharString_length(CAFile_getName(caFile, CAHandle_makeFolder(child)));
 
-		while (cur && cur != srcId) {
-
-			len += CharString_length(CAFile_getName(caFile, CAHandle_makeFolder(cur))) + 1;
-			++levels;
-			cur = caFile->folders.ptr[cur].parent;
-		}
-
-		if (cur != srcId)
-			continue;
-
-		if (pathLen + len > CAFile_maxFilePathSize)
+		if (childPathLen > CAFile_maxFilePathSize)
 			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's path would exceed 192 chars"));
 
-		if (depth + 1 + levels >= CAFile_maxRecursionSize)
-			retError(clean, Error_invalidParameter(1, 0, "CAFile_checkSubtreeFits()::a child's depth out of recursion"));
+		gotoIfError3(clean, CAFile_checkSubtreeFits(caFile, child, childPathLen, depth + 1, e_rr));
 	}
 
 clean:
@@ -154,13 +133,9 @@ static void CAFile_permuteEntries(DLFile *dlFile, U64 base, const U64 *src, U64 
 	);
 }
 
-//Rebuilds the order of folders and files from the parent links alone.
-//Folders are ordered breadth first: the root, then its folders, then theirs; so a folder always precedes its children
-// and the folders of one parent are contiguous. Files are grouped by folder in that same order.
-//Within a parent the previous relative order is kept. Handles are invalidated.
-//Nothing is changed unless the whole rebuild can be done.
+//Folders are ordered breadth first: the root, then its folders, then theirs. See ca_internal.h.
 
-static Bool CAFile_relayout(CAFile *caFile, const Allocator *alloc, Error *e_rr) {
+Bool CAFile_relayout(CAFile *caFile, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Buffer work = Buffer_createNull();
@@ -253,6 +228,9 @@ static Bool CAFile_relayout(CAFile *caFile, const Allocator *alloc, Error *e_rr)
 
 		U64 count = fileStart[q];
 
+		if (count > U16_MAX)
+			retError(clean, Error_outOfBounds(0, count, U16_MAX, "CAFile_relayout() a folder holds more than 65535 files"));
+
 		newFolders[q].fileCount = (U16) count;
 		newFolders[q].fileOffset = count ? offset : 0;
 		newFolders[q].parent = q ? (U16) newOf[caFile->folders.ptr[order[q]].parent] : 0;
@@ -339,7 +317,11 @@ Bool CAFile_rename(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, 
 	if (CAHandle_isFolder(fileHandle))
 		gotoIfError3(clean, CAFile_checkSubtreeFits(caFile, CAHandle_getId(fileHandle), pathLen, depth, e_rr));
 
-	if (CAFile_hasSubObject(caFile, parent, *name))
+	//Names compare case folded, so the entry itself matches when only the case changes, which is allowed
+
+	const CAHandle existing = CAFile_resolveSubObject(caFile, parent, *name);
+
+	if (existing != CAHandle_Invalid && existing != fileHandle)
 		retError(clean, Error_alreadyDefined(0, "CAFile_rename()::name already exists in parent"));
 
 	U64 nameIdx =

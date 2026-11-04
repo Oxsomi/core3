@@ -873,7 +873,7 @@ gotoIfError3(clean, GraphicsDeviceRef_createSwapchain(
 
 //onResize: Window callback to make sure format + size stays the same:
 
-if(!(w->flags & EWindowFlags_IsVirtual))
+if(w->type != EWindowType_Virtual)
 	SwapchainRef_resize(swapchain, e_rr);
 
 //onDestroy: Window callback; the swapchain MUST be released here (or earlier), see below.
@@ -1051,7 +1051,7 @@ gotoIfError3(clean, GraphicsDeviceRef_createRenderTexture(
 	ETextureType_2D, 				//2D is only supported currently
     width, height, 1, 				//x, y, z
     ETextureFormatId_BGRA8, 		//Non compressed texture format
-    EGraphicsResourceFlag_ShaderRW, //Allow both shader writes and reads
+    EGraphicsResourceFlag_ShaderRWBindful, //Allow both shader writes and reads
     EMSAASamples_Off,				//No MSAA
     NULL,							//bindlessDescriptorTable; NULL = device's default bindless table
 	CharString_createRefCStrConst("Virtual window backbuffer"),
@@ -2036,7 +2036,7 @@ The commands addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt provid
 gotoIfError3(clean, CommandListRef_startRegionDebugExt(
     commandList, 							//See "Command list"
     F32x4_create4(1, 0, 0, 1), 				//Marker color
-    CharString_createConstRefCStr("Test")	//Marker name
+    CharString_createRefCStrConst("Test")	//Marker name
 ));
 
 //Insert operation that needs to be in the debug region
@@ -2066,7 +2066,7 @@ gotoIfError3(clean, CommandListRef_setScopeTimingExt(commandList, true, e_rr)); 
 gotoIfError3(clean, CommandListRef_startTimingRegionExt(
     commandList, 							//See "Command list"
     1, 										//id, a hot-path key
-    CharString_createConstRefCStr("Shadows")	//optional name
+    CharString_createRefCStrConst("Shadows")	//optional name
 ));
 
 //... work to time ...

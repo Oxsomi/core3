@@ -54,6 +54,14 @@ namespace oxc {
 			return c::C8_transform(c, transform);
 		}
 
+		inline void caseVariants(c::C8 c, c::EStringCase stringCase, c::C8 *lower, c::C8 *upper) noexcept {
+			c::C8_caseVariants(c, stringCase, lower, upper);
+		}
+
+		[[nodiscard]] inline c::Bool matches(c::C8 x, c::C8 c, c::EStringCase stringCase) noexcept {
+			return c::C8_matches(x, c, stringCase);
+		}
+
 		[[nodiscard]] inline c::Bool isBin(c::C8 c) noexcept {
 			return c::C8_isBin(c);
 		}

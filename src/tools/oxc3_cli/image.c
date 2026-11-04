@@ -71,7 +71,7 @@ static EImageFile CLI_imageFileOf(CharString path) {
 
 		const CharString extension = CharString_createRefCStrConst(EImageFile_extensions[i]);
 
-		if(CharString_endsWithStringInsensitive(&path, &extension, 0))
+		if(CharString_endsWithStringInsensitiveAscii(&path, &extension, 0))
 			return (EImageFile) i;
 	}
 
@@ -405,7 +405,7 @@ Bool CLI_imageConvert(const ParsedArgs *args) {
 		tonemap = ETonemap_Count;
 
 		for(U32 i = 0; i < ETonemap_Count; ++i)
-			if(CharString_equalsCStringInsensitive(&name, ETonemap_names[i]))
+			if(CharString_equalsCStringInsensitiveAscii(&name, ETonemap_names[i]))
 				tonemap = (ETonemap) i;
 
 		if(tonemap == ETonemap_Count) {

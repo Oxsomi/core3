@@ -32,6 +32,9 @@
 typedef struct Error Error;
 typedef RefPtr AudioInterfaceRef;
 
+//Has*Ext: the device takes that sample format natively, otherwise streams convert it to 16 bit on the CPU.
+//Debug is informational; AudioDeviceRef_create goes by its isDebug argument.
+
 typedef enum EAudioDeviceFlags {
 	EAudioDeviceFlags_None             = 0,
 	EAudioDeviceFlags_MainOutput       = 1 << 0,
@@ -42,17 +45,20 @@ typedef enum EAudioDeviceFlags {
 	EAudioDeviceFlags_HasU32Ext        = 1 << 5
 } EAudioDeviceFlags;
 
+//position, forward, up and velocity are the listener's, in world space (right handed, default forward -Z and up +Y).
+//Velocity is in world units per second and only feeds Doppler. Gain is a linear factor, 1 is unchanged.
+
 typedef struct AudioDeviceInfo {
 
-	C8 name[96];
+	C8 name[96];                       //Null terminated, at most 95 characters. The device is opened by this name
 
 	F32x4 position;
 	F32x4 forward;
 	F32x4 up;
 	F32x4 velocity;
 
-	U64 id;
-	void *ext;                         //External handle from underlying API
+	U64 id;                            //Index in the enumeration that produced it; the device is opened by name
+	void *ext;                         //Always NULL, the OpenAL backend sets no handle
 
 	EAudioDeviceFlags flags;
 	F32 gain;
@@ -63,19 +69,19 @@ TList(AudioDeviceInfo);
 
 typedef struct AudioDevice {
 
-	AudioDeviceInfo info;
+	AudioDeviceInfo info;              //Also the current listener state, the setters write here
 
-	AudioInterfaceRef *interf;
+	AudioInterfaceRef *interf;         //Reference held by the device
 
-	U8 pendingDirtyMask;
+	U8 pendingDirtyMask;               //Listener bits not yet sent to the backend, same bits as updateListenerTransform
 	U8 padding[7];
 
 	//Pending updates
 
-	ListWeakRefPtr streams;
-	ListWeakRefPtr pendingSources;
+	ListWeakRefPtr streams;            //Playing streams, no references held
+	ListWeakRefPtr pendingSources;     //Sources with changes for the next update, no references held
 
-	SpinLock pendingUpdateLock;
+	SpinLock pendingUpdateLock;        //Guards both lists, see AudioDeviceRef_update
 
 } AudioDevice;
 
@@ -90,6 +96,11 @@ void AudioDeviceInfo_print(AudioDeviceInfo info, const Allocator *alloc);
 
 RefPtrType AudioDevice_makeType(const Allocator *alloc);
 
+//Copies info and adds a reference to interfRef, released with the device. *device must be NULL on entry and stays
+// NULL on failure. Zero up and forward become +Y and -Z; info.gain is ignored and the device starts at 1.
+//isDebug fails the call if the device lacks the backend's debug extension.
+//The backend's current context is process wide and each call switches it, so audio calls (create, update, play,
+// source and stream creation) must not overlap on different threads, even for different devices.
 Bool AudioDeviceRef_create(
 	AudioInterfaceRef *interfRef,
 	const AudioDeviceInfo *info,
@@ -100,6 +111,11 @@ Bool AudioDeviceRef_create(
 	Error *e_rr
 );
 
+//Nothing is sent to the backend until AudioDeviceRef_update. These setters do not lock, so call them from the thread
+// that calls update, or serialize them with it.
+//Only the arguments selected by dirtyMask are read. Vectors are not normalized. They must be finite and gain must be
+// finite and at least 0, or the call is refused with an invalid parameter error and nothing is stored.
+//An argument exactly equal to the stored value queues nothing. Any other value does, however small the change.
 Bool AudioDeviceRef_updateListenerTransform(
 	AudioDeviceRef *dev,
 	F32x4 position,
@@ -135,7 +151,16 @@ static inline Bool AudioDeviceRef_updateListenerGain(AudioDeviceRef *dev, F32 ga
 	return AudioDeviceRef_updateListenerTransform(dev, F32x4_zero(), F32x4_zero(), F32x4_zero(), F32x4_zero(), gain, 16, e_rr);
 }
 
+//There is no audio thread: stream data is read and queued, and listener and source changes applied, only here and
+// on the calling thread. Call it before the queued audio runs out (4 buffers of streamLength per stream): a stream that
+// underruns stops and counts as finished.
+//Takes the device lock (waits up to a second, then fails). Stops at the first failure, so the remaining sources and
+// streams wait for the next call. alloc is scratch.
 Bool AudioDeviceRef_update(AudioDeviceRef *dev, const Allocator *alloc, Error *e_rr);
+
+//Blocks the calling thread, calling AudioDeviceRef_update about every 100 microseconds, until no stream is playing.
+//Streams that loop forever are ignored unless waitForLoopingStream is set, which then only returns once another thread
+// stops them (or on failure).
 Bool AudioDeviceRef_wait(AudioDeviceRef *dev, Bool waitForLoopingStream, const Allocator *alloc, Error *e_rr);
 
 #ifdef __cplusplus

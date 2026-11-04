@@ -20,6 +20,7 @@
 
 //formats/oiCA/ca_read.c
 
+#include "ca_internal.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_headers.h"
 #include "formats/oiCA/ca_edit.h"
@@ -33,6 +34,7 @@
 #include "types/container/list_basic_types.h"
 #include "types/math/vec4i.h"
 #include "types/base/time.h"
+#include "types/base/string_read.h"
 
 Ns CAFile_loadDate(U16 time, U16 date) {
 
@@ -46,6 +48,27 @@ Ns CAFile_loadDate(U16 time, U16 date) {
 	};
 
 	return Time_date(&d, false);
+}
+
+//The parent of the entry whose name is caFile->names[nameId]: folders come first, then files.
+
+static U64 CAFile_nameParent(const CAFile *caFile, U64 nameId) {
+	return nameId < caFile->folders.length ? caFile->folders.ptr[nameId].parent :
+		CAFileInfo_getParent(caFile->files.ptr[nameId - caFile->folders.length]);
+}
+
+//Orders name ids by parent, then by case folded name.
+
+static ECompareResult CAFile_compareNames(const void *aPtr, const void *bPtr, void *context) {
+
+	const CAFile *caFile = (const CAFile*) context;
+	const U64 a = *(const U64*) aPtr, b = *(const U64*) bPtr;
+	const U64 parentA = CAFile_nameParent(caFile, a), parentB = CAFile_nameParent(caFile, b);
+
+	if (parentA != parentB)
+		return parentA < parentB ? ECompareResult_Lt : ECompareResult_Gt;
+
+	return CharString_compareInsensitive(&caFile->names.entryStrings.ptr[a], &caFile->names.entryStrings.ptr[b]);
 }
 
 void DLFile_prepMoveStringRef(DLFile *src, CharString *str, DLFile *dst) {
@@ -92,7 +115,9 @@ Bool CAFile_read(
 	Buffer tmp = Buffer_createNull();
 	ListU16 dirParents = (ListU16) { 0 };                //mem-space parent index per directory
 	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };   //packed parent + timestamp per file
-	ListU16 dirHandles = (ListU16) { 0 };                //disk index -> live handle map
+	ListU16 pathLengths = (ListU16) { 0 };               //Per folder (root first) the length of its path
+	ListU16 depths = (ListU16) { 0 };                    //Per folder the folders above it, the root not counted
+	ListU64 byName = (ListU64) { 0 };                    //Name ids sorted by parent, then folded name
 	I32x4 iv = I32x4_zero();
 	U32 headerKey[8] = { 0 };
 	DLFile names = (DLFile) { 0 };
@@ -408,9 +433,9 @@ Bool CAFile_read(
 		gotoIfError3(clean, DLFile_loadEntry(&names, i, alloc, e_rr));
 	}
 
-	//Pass 2: reconstruct hierarchy via CAFile_add so all parenting bookkeeping is correct.
-	//Directories are written root-to-leaf on disk, so a forward pass always resolves parents before children.
-	//dirHandles maps on-disk folder index (0-based) to a live CAHandle for parent lookups.
+	//Pass 2: the lists are filled in disk order straight from the records, checked as a whole and laid out once.
+	//Adding entry by entry would fix up every folder's offsets on each add, which grows with entries times folders.
+	//Folders are on disk after their parent, so a forward pass knows a parent's path and depth before its children.
 
 	gotoIfError3(clean, CAFile_create(&settings, fileCount, dirCount, alloc, caFile, e_rr));
 
@@ -421,41 +446,62 @@ Bool CAFile_read(
 	gotoIfError3(clean, DLFile_initCache(&caFile->content, Buffer_length(content.cache), alloc, e_rr));
 
 	allocated = true;
-	gotoIfError3(clean, ListU16_reserve(&dirHandles, dirCount, alloc, e_rr));
 
-	for (U64 i = 0; i < dirCount; ++i) {
+	gotoIfError3(clean, ListU16_reserve(&pathLengths, dirCount + 1, alloc, e_rr));
+	gotoIfError3(clean, ListU16_reserve(&depths, dirCount + 1, alloc, e_rr));
+	gotoIfError3(clean, ListU16_pushBack(&pathLengths, 0, alloc, e_rr));
+	gotoIfError3(clean, ListU16_pushBack(&depths, 0, alloc, e_rr));
 
-		U16      parentMem    = dirParents.ptr[i];
-		CAHandle parentHandle = (parentMem == 0) ? CAHandle_Root : CAHandle_makeFolder(dirHandles.ptr[parentMem - 1]);
+	for (U64 i = 0; i < dirCount + fileCount; ++i) {
+
+		const Bool isFolder = i < dirCount;
+		const U16 parent = isFolder ? dirParents.ptr[i] : CAFileInfo_getParent(fileMetas.ptr[i - dirCount]);
 
 		//We're moving this directly from our temp DLFile
 		CharString *name = &names.entryStrings.ptrNonConst[i + 1];
 
+		if (!CharString_isValidFileName(*name))
+			retError(clean, Error_invalidParameter(0, 4, "CAFile_read()::name has invalid characters"));
+
+		const U64 pathLength = (parent ? pathLengths.ptr[parent] + 1 : 0) + CharString_length(*name);
+		const U64 depth = parent ? depths.ptr[parent] + 1 : 0;
+
+		if (pathLength > CAFile_maxFilePathSize)
+			retError(clean, Error_invalidParameter(0, 5, "CAFile_read()::a path exceeds 192 chars"));
+
+		if (depth >= CAFile_maxRecursionSize)
+			retError(clean, Error_invalidParameter(0, 6, "CAFile_read()::a path is nested too deep"));
+
+		if (isFolder) {
+			gotoIfError3(clean, ListU16_pushBack(&pathLengths, (U16) pathLength, alloc, e_rr));
+			gotoIfError3(clean, ListU16_pushBack(&depths, (U16) depth, alloc, e_rr));
+			gotoIfError3(clean, ListCAFolderInfo_pushBack(&caFile->folders, (CAFolderInfo) { .parent = parent }, alloc, e_rr));
+		}
+
+		else gotoIfError3(clean, ListCAFileInfo_pushBack(&caFile->files, fileMetas.ptr[i - dirCount], alloc, e_rr));
+
 		DLFile_prepMoveStringRef(&names, name, &caFile->names);
-
-		CAHandle handle = CAFile_addFolder(caFile, parentHandle, name, alloc, e_rr);
-
-		if (handle == CAHandle_Invalid)
-			retError(clean, Error_invalidState(0, "CAFile_read()::CAFile_addFolder failed"));
-
-		gotoIfError3(clean, ListU16_pushBack(&dirHandles, (U16) CAHandle_getId(handle), alloc, e_rr));
+		gotoIfError3(clean, DLFile_addEntryString(&caFile->names, name, alloc, e_rr));
 	}
+
+	//Names within one folder must differ case folded; sorted by parent and then name, any two that don't are neighbours
+
+	gotoIfError3(clean, ListU64_reserve(&byName, dirCount + fileCount, alloc, e_rr));
+
+	for (U64 i = 1; i <= dirCount + fileCount; ++i)
+		gotoIfError3(clean, ListU64_pushBack(&byName, i, alloc, e_rr));
+
+	if (!ListU64_sortCustom(byName, CAFile_compareNames, caFile))
+		retError(clean, Error_invalidState(1, "CAFile_read()::couldn't sort the names"));
+
+	for (U64 i = 1; i < byName.length; ++i)
+		if (CAFile_compareNames(&byName.ptr[i - 1], &byName.ptr[i], caFile) == ECompareResult_Eq)
+			retError(clean, Error_alreadyDefined(0, "CAFile_read()::a folder holds two names that only differ by case"));
 
 	for (U64 i = 0; i < fileCount; ++i) {
 
-		U16      parentMem    = CAFileInfo_getParent(fileMetas.ptr[i]);
-		CAHandle parentHandle = (parentMem == 0) ? CAHandle_Root : CAHandle_makeFolder(dirHandles.ptr[parentMem - 1]);
-
-		//We're moving this directly from our temp DLFile
-		CharString *name = &names.entryStrings.ptrNonConst[dirCount + i + 1];
-
-		DLFile_prepMoveStringRef(&names, name, &caFile->names);
-
-		CAHandle fileHandle =
-			CAFile_addFile(caFile, parentHandle, name, CAFileInfo_getTimestamp(fileMetas.ptr[i]), alloc, e_rr);
-
-		if (fileHandle == CAHandle_Invalid)
-			retError(clean, Error_invalidState(0, "CAFile_read()::CAFile_addFile failed"));
+		Buffer empty = Buffer_createNull();
+		gotoIfError3(clean, DLFile_addEntry(&caFile->content, &empty, alloc, e_rr));
 
 		//Set file data, use the stream reference directly if the entry is still stream-backed,
 		// otherwise hand over the loaded buffer.
@@ -466,7 +512,7 @@ Bool CAFile_read(
 		if (entryStream.stream) {
 
 			gotoIfError3(clean, CAFile_setDataStream(
-				caFile, fileHandle, alloc, &entryStream.stream, entryStream.dataOff, entryStream.len, e_rr
+				caFile, CAHandle_makeFile(i), alloc, &entryStream.stream, entryStream.dataOff, entryStream.len, e_rr
 			));
 
 			content.entryStreams.ptrNonConst[i] = (DLEntryStream) { 0 };        //Moved
@@ -488,16 +534,18 @@ Bool CAFile_read(
 				Buffer subArea =
 					Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
 				Buffer_memcpy(subArea, contentBuf);
-				gotoIfError3(clean, DLFile_setEntry(&caFile->content, CAHandle_getId(fileHandle), &subArea, alloc, e_rr));
+				gotoIfError3(clean, DLFile_setEntry(&caFile->content, i, &subArea, alloc, e_rr));
 			}
 
 			//We can only move the real buffer if it's a dedicated allocation
 			else {
-				gotoIfError3(clean, DLFile_setEntry(&caFile->content, CAHandle_getId(fileHandle), &contentBuf, alloc, e_rr));
+				gotoIfError3(clean, DLFile_setEntry(&caFile->content, i, &contentBuf, alloc, e_rr));
 				content.entryBuffers.ptrNonConst[i] = Buffer_createNull();
 			}
 		}
 	}
+
+	gotoIfError3(clean, CAFile_relayout(caFile, alloc, e_rr));
 
 	DLFile_free(&names, alloc);        //Even though all data has been moved, we still have the lists themselves.
 	DLFile_free(&content, alloc);
@@ -510,7 +558,9 @@ clean:
 	Buffer_free(&tmp, alloc);
 	ListU16_free(&dirParents, alloc);
 	ListCAFileInfo_free(&fileMetas, alloc);
-	ListU16_free(&dirHandles, alloc);
+	ListU16_free(&pathLengths, alloc);
+	ListU16_free(&depths, alloc);
+	ListU64_free(&byName, alloc);
 	DLFile_free(&names, alloc);
 	DLFile_free(&content, alloc);
 

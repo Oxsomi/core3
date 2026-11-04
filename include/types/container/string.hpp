@@ -111,6 +111,10 @@ namespace oxc {
 			return c::CharString_equalsStringInsensitive(&str, &o.str);
 		}
 
+		[[nodiscard]] bool equalsInsensitiveAscii(const StringView &o) const noexcept {
+			return c::CharString_equalsStringInsensitiveAscii(&str, &o.str);
+		}
+
 		[[nodiscard]] bool operator==(const StringView &o) const noexcept { return equals(o); }
 		[[nodiscard]] bool operator!=(const StringView &o) const noexcept { return !equals(o); }
 
@@ -132,12 +136,20 @@ namespace oxc {
 			return c::CharString_startsWithStringInsensitive(&str, &o.str, off);
 		}
 
+		[[nodiscard]] bool startsWithInsensitiveAscii(const StringView &o, c::U64 off = 0) const noexcept {
+			return c::CharString_startsWithStringInsensitiveAscii(&str, &o.str, off);
+		}
+
 		[[nodiscard]] bool endsWith(const StringView &o, c::U64 off = 0) const noexcept {
 			return c::CharString_endsWithStringSensitive(&str, &o.str, off);
 		}
 
 		[[nodiscard]] bool endsWithInsensitive(const StringView &o, c::U64 off = 0) const noexcept {
 			return c::CharString_endsWithStringInsensitive(&str, &o.str, off);
+		}
+
+		[[nodiscard]] bool endsWithInsensitiveAscii(const StringView &o, c::U64 off = 0) const noexcept {
+			return c::CharString_endsWithStringInsensitiveAscii(&str, &o.str, off);
 		}
 
 		[[nodiscard]] bool startsWith(c::C8 ch, c::U64 off = 0) const noexcept {
@@ -308,8 +320,10 @@ namespace oxc {
 			return c::CharString_popFrontCount(&str, count, e_rr);
 		}
 
-		[[nodiscard]] c::Bool toLower() noexcept { return c::CharString_toLower(&str); }
-		[[nodiscard]] c::Bool toUpper() noexcept { return c::CharString_toUpper(&str); }
+		[[nodiscard]] c::Bool toLower(c::Error *e_rr = nullptr) noexcept { return c::CharString_toLower(&str, alloc, e_rr); }
+		[[nodiscard]] c::Bool toUpper(c::Error *e_rr = nullptr) noexcept { return c::CharString_toUpper(&str, alloc, e_rr); }
+		[[nodiscard]] c::Bool toLowerAscii() noexcept { return c::CharString_toLowerAscii(&str); }
+		[[nodiscard]] c::Bool toUpperAscii() noexcept { return c::CharString_toUpperAscii(&str); }
 
 		void clear() noexcept { c::CharString_clear(&str); }
 

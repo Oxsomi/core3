@@ -23,6 +23,7 @@
 #pragma once
 #include "types/base/constants.h"
 #include "types/base/buffer_base.h"
+#include "types/base/unicode.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -95,8 +96,6 @@ Bool Buffer_resize(
 Bool Buffer_combine(const Buffer *a, const Buffer *b, const Allocator *alloc, Buffer *output, Error *e_rr);
 
 //UTF-8 helpers
-
-typedef U32 UnicodeCodePoint;
 
 typedef struct UnicodeCodePointInfo {
 	U8 chars, bytes, padding[2];

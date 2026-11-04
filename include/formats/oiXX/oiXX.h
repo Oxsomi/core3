@@ -59,10 +59,15 @@ typedef enum EXXDataSizeType {       //Can be represented as a 2-bit array for e
 
 typedef U8 XXDataSizeType;           //EXXDataSizeType
 
+//Byte count of each EXXDataSizeType, indexed by it
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
+//Reads one little endian size of the given type and advances buf past it.
+//On failure buf is unchanged and *result is 0, also for an invalid type.
 Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Error *e_rr);
 
+//*it is the byte offset in the stream and advances by the type's byte count, only on success.
+//On failure *it is unchanged and *result is unspecified.
 Bool StreamCursor_consumeSizeType(
 	StreamCursor *cursor,
 	U64 *it,
@@ -72,6 +77,8 @@ Bool StreamCursor_consumeSizeType(
 	Error *e_rr
 );
 
+//Writes v at byte offset *it and advances *it, only on success. v is truncated to the type's width without a check;
+//EXXDataSizeType_getRequiredType picks a type that holds it.
 Bool StreamCursor_appendSizeType(
 	StreamCursor *cursor,
 	U64 *it,
@@ -81,9 +88,13 @@ Bool StreamCursor_appendSizeType(
 	Error *e_rr
 );
 
+//Unchecked: reads/writes the type's byte count at ptr (any alignment), the caller guarantees the space.
+//Both return 0 on NULL ptr or an invalid type, which a read can't tell from a stored 0.
+//Write returns the bytes written and truncates the value to the type's width.
 U64 Buffer_forceReadSizeType(const U8 *ptr, EXXDataSizeType type);
 U64 Buffer_forceWriteSizeType(U8 *ptr, EXXDataSizeType type, U64 result);
 
+//Smallest type that holds v
 EXXDataSizeType EXXDataSizeType_getRequiredType(U64 v);
 
 #ifdef __cplusplus

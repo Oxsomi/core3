@@ -53,7 +53,7 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
 
-	if(sbFile->bufferSize)
+	if(SBFile_isFilled(sbFile))
 		retError(clean, Error_invalidParameter(4, 0, "SBFile_read()::sbFile is already present, possible memleak"));
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);

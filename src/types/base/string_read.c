@@ -24,6 +24,7 @@
 #include "types/base/algorithm.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
+#include "types/base/unicode.h"
 #include <stdlib.h>
 
 Bool CharString_isValidFileName(const CharString str) {
@@ -223,6 +224,230 @@ Bool CharString_isValidFilePath(CharString str) {
 	return !!strl;
 }
 
+//The folded code point that ends at ptr[*end - 1], moving *end to its start.
+//It's decoded from the nearest byte before it that isn't a continuation, at most three back, and only taken if it
+// ends exactly there; anything else is one invalid byte. That splits a string the same way UnicodeCodePoint_readFolded
+// does.
+
+static inline U32 CharString_prevFolded(const C8 *ptr, U64 *end) {
+
+	const U64 e = *end;
+	const U8 last = (U8) ptr[e - 1];
+
+	if (last < 0x80) {
+		--*end;
+		return (U8) C8_toLower((C8) last);
+	}
+
+	U64 start = e - 1;
+
+	while (start && e - start < 4 && ((U8) ptr[start] & 0xC0) == 0x80)
+		--start;
+
+	UnicodeCodePoint c = 0;
+
+	if (UnicodeCodePoint_fromUTF8(ptr + start, e - start, &c) == e - start) {
+		*end = start;
+		return UnicodeCodePoint_caseFold(c);
+	}
+
+	--*end;
+	return 0x110000 + last;
+}
+
+//The insensitive walks only fold where two strings differ: bytes that are the same in both are passed as they are.
+//How many bytes of a and b that covers from the start: their common bytes, stopping short of a code point that the
+// first difference (or either end) cuts through, since that one has to be folded whole.
+
+__forceinline__ static U64 CharString_sameFolded(const C8 *a, U64 al, const C8 *b, U64 bl) {
+
+	const U64 limit = al < bl ? al : bl;
+	U64 same = 0;
+
+	while (same < limit && a[same] == b[same])
+		++same;
+
+	if (!same)
+		return 0;
+
+	//If the cut is inside a multibyte code point, back up to its lead byte so it gets folded whole: skip continuation
+	// bytes (at most three back), and the first other byte is that lead if its length reaches past the cut.
+
+	for (U64 back = 1; back <= 3 && back <= same; ++back) {
+
+		const C8 c = a[same - back];
+
+		if (((U8) c & 0xC0) == 0x80)
+			continue;
+
+		if (UnicodeCodePoint_leadLengthUTF8(c) > back)
+			same -= back;
+
+		break;
+	}
+
+	return same;
+}
+
+//Folds the code points at a[*i] and b[*j], moves both past them and orders them (<0, 0 or >0)
+
+static I32 CharString_stepFolded(const C8 *a, U64 *i, U64 al, const C8 *b, U64 *j, U64 bl) {
+	const U32 fa = UnicodeCodePoint_readFolded(a, i, al), fb = UnicodeCodePoint_readFolded(b, j, bl);
+	return fa < fb ? -1 : (fa > fb ? 1 : 0);
+}
+
+//How many bytes of s from off match o (ending at or before end), or U64_MAX if o doesn't match there.
+
+__forceinline__ static U64 CharString_matchAt(const C8 *s, U64 off, U64 end, const C8 *o, U64 ol, EStringCase stringCase) {
+
+	if (stringCase != EStringCase_Insensitive) {
+
+		if (end - off < ol)
+			return U64_MAX;
+
+		for (U64 k = 0; k < ol; ++k)
+			if (!C8_matches(s[off + k], o[k], stringCase))
+				return U64_MAX;
+
+		return ol;
+	}
+
+	U64 i = off, k = 0;
+
+	while (k < ol) {
+
+		if (i == end)
+			return U64_MAX;
+
+		const C8 x = s[i], y = o[k];
+
+		if (x == y) {
+
+			const U64 same = CharString_sameFolded(s + i, end - i, o + k, ol - k);
+
+			if (same) {
+				i += same;
+				k += same;
+				continue;
+			}
+		}
+
+		if (((U8) x | (U8) y) < 0x80) {        //Two ASCII bytes that differ can only differ in case
+
+			if (C8_toLower(x) != C8_toLower(y))
+				return U64_MAX;
+
+			++i;
+			++k;
+			continue;
+		}
+
+		if (CharString_stepFolded(s, &i, end, o, &k, ol))
+			return U64_MAX;
+	}
+
+	return i - off;
+}
+
+//The bytes a match of o can start at, so a search passes every other position with a compare or two: o's first byte
+// in either case, and under Insensitive the first folded code point's, plus anything past ASCII, which can fold onto
+// it (U+212A Kelvin sign onto k).
+
+typedef struct CharStringMatchStart {
+	U32 folded;                //Under Insensitive: o's first folded code point, what a code point past ASCII has to fold to
+	C8 lower, upper;
+	Bool pastAscii;
+	U8 padding;
+} CharStringMatchStart;
+
+static inline CharStringMatchStart CharString_matchStart(const CharString *o, EStringCase stringCase) {
+
+	CharStringMatchStart start = (CharStringMatchStart) { 0 };
+
+	if (stringCase != EStringCase_Insensitive) {
+		C8_caseVariants(o->ptr[0], stringCase, &start.lower, &start.upper);
+		return start;
+	}
+
+	U64 k = 0;
+	start.folded = UnicodeCodePoint_readFolded(o->ptr, &k, CharString_length(*o));
+
+	//An invalid first byte only matches itself; a valid code point is reached from its ASCII cases if it has them,
+	// and from any code point past ASCII that folds the same
+
+	if (start.folded >= 0x110000) {
+		start.lower = start.upper = o->ptr[0];
+		return start;
+	}
+
+	start.pastAscii = true;
+
+	if (start.folded < 0x80)
+		C8_caseVariants((C8) start.folded, EStringCase_InsensitiveAscii, &start.lower, &start.upper);
+
+	else start.lower = start.upper = o->ptr[0];
+
+	return start;
+}
+
+//A byte compare or two settles almost every position; only a lead byte past ASCII is folded and compared, before a
+// whole match is tried
+
+__forceinline__ static Bool CharString_canStartMatch(const CharStringMatchStart *start, const C8 *s, U64 i, U64 end) {
+
+	const C8 c = s[i];
+
+	if (c == start->lower || c == start->upper)
+		return true;
+
+	if (!start->pastAscii || (U8) c < 0xC2)
+		return false;
+
+	return UnicodeCodePoint_readFolded(s, &i, end) == start->folded;
+}
+
+//Kept out of CharString_compare so the byte loop there stays tight
+
+static ECompareResult CharString_compareFolded(const C8 *a, U64 al, const C8 *b, U64 bl) {
+
+	U64 i = 0, j = 0;
+
+	while (i < al && j < bl) {
+
+		const U8 x = (U8) a[i], y = (U8) b[j];
+
+		if (x == y) {
+
+			const U64 same = CharString_sameFolded(a + i, al - i, b + j, bl - j);
+
+			if (same) {
+				i += same;
+				j += same;
+				continue;
+			}
+		}
+
+		if ((x | y) < 0x80) {        //Two ASCII bytes that differ, maybe only in case
+
+			const U8 lx = (U8) C8_toLower((C8) x), ly = (U8) C8_toLower((C8) y);
+
+			if (lx != ly)
+				return lx < ly ? ECompareResult_Lt : ECompareResult_Gt;
+
+			++i;
+			++j;
+			continue;
+		}
+
+		const I32 order = CharString_stepFolded(a, &i, al, b, &j, bl);
+
+		if (order)
+			return order < 0 ? ECompareResult_Lt : ECompareResult_Gt;
+	}
+
+	return i < al ? ECompareResult_Gt : (j < bl ? ECompareResult_Lt : ECompareResult_Eq);
+}
+
 ECompareResult CharString_compare(const CharString *a, const CharString *b, EStringCase caseSensitive) {
 
 	const U64 al = !a ? 0 : CharString_length(*a);
@@ -232,18 +457,28 @@ ECompareResult CharString_compare(const CharString *a, const CharString *b, EStr
 	//Provided it's the same level of parenting.
 	//This ensures things with the same parent also stay at the same location
 
+	if (caseSensitive == EStringCase_Insensitive)
+		return CharString_compareFolded(a ? a->ptr : NULL, al, b ? b->ptr : NULL, bl);
+
+	//Only a mismatch asks whether A-Z fold
+
 	for (U64 i = 0; i < al && i < bl; ++i) {
 
-		//TODO: sensitivity for unicode?
+		U8 ai = (U8) a->ptr[i], bi = (U8) b->ptr[i];
 
-		const U8 ai = (U8) C8_transform(a->ptr[i], (EStringTransform) caseSensitive);
-		const U8 bi = (U8) C8_transform(b->ptr[i], (EStringTransform) caseSensitive);
+		if (ai == bi)
+			continue;
 
-		if (ai < bi)
-			return ECompareResult_Lt;
+		if (caseSensitive == EStringCase_InsensitiveAscii) {
 
-		if (ai > bi)
-			return ECompareResult_Gt;
+			ai = (U8) C8_toLower((C8) ai);
+			bi = (U8) C8_toLower((C8) bi);
+
+			if (ai == bi)
+				continue;
+		}
+
+		return ai < bi ? ECompareResult_Lt : ECompareResult_Gt;
 	}
 
 	//If they start with the same thing, we want to sort on length
@@ -264,27 +499,14 @@ Bool CharString_startsWithString(const CharStringSensOff *strSensOff, const Char
 
 	const CharString *str = strSensOff->str;
 	const U64 off = strSensOff->off;
-	const EStringTransform transform = (EStringTransform) strSensOff->caseSensitive;
-
-	const U64 otherl = CharString_length(*other);
-	U64 strl = CharString_length(*str);
+	const U64 strl = CharString_length(*str);
 
 	if(off > strl)
 		return false;
 
-	strl -= off;
-
-	if(!otherl)
-		return true;
-
-	if (otherl > strl)
-		return false;
-
-	for (U64 i = off; i < off + otherl; ++i)
-		if (C8_transform(str->ptr[i], transform) != C8_transform(other->ptr[i - off], transform))
-			return false;
-
-	return true;
+	return CharString_matchAt(
+		str->ptr, off, strl, other->ptr, CharString_length(*other), strSensOff->caseSensitive
+	) != U64_MAX;
 }
 
 Bool CharString_endsWithString(const CharStringSensOff *strSensOff, const CharString *other) {
@@ -294,25 +516,32 @@ Bool CharString_endsWithString(const CharStringSensOff *strSensOff, const CharSt
 
 	const CharString *str = strSensOff->str;
 	const U64 off = strSensOff->off;
-	const EStringTransform transform = (EStringTransform)strSensOff->caseSensitive;
+	const EStringCase caseSensitive = strSensOff->caseSensitive;
 
 	const U64 otherl = CharString_length(*other);
-	U64 strl = CharString_length(*str);
+	const U64 strl = CharString_length(*str);
 
 	if(off > strl)
 		return false;
 
-	strl -= off;
+	const U64 end = strl - off;
 
-	if(!otherl)
-		return true;
+	if (caseSensitive != EStringCase_Insensitive)
+		return otherl <= end &&
+			CharString_matchAt(str->ptr, end - otherl, end, other->ptr, otherl, caseSensitive) != U64_MAX;
 
-	if (otherl > strl)
-		return false;
+	//Folding can change how many bytes match, so walk back from both ends
 
-	for (U64 i = strl - otherl; i < strl; ++i)
-		if (C8_transform(str->ptr[i], transform) != C8_transform(other->ptr[i - (strl - otherl)], transform))
+	U64 i = end, k = otherl;
+
+	while (k) {
+
+		if (!i)
 			return false;
+
+		if (CharString_prevFolded(str->ptr, &i) != CharString_prevFolded(other->ptr, &k))
+			return false;
+	}
 
 	return true;
 }
@@ -324,14 +553,14 @@ U64 CharString_countAll(const CharStringSensOff *strSensOff, C8 c) {
 
 	const C8 *sPtr = strSensOff->str->ptr;
 	const U64 slen = CharString_length(*strSensOff->str);
-	const EStringTransform transform = (EStringTransform)strSensOff->caseSensitive;
 
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, strSensOff->caseSensitive, &lower, &upper);
 
 	U64 count = 0;
 
 	for (U64 i = strSensOff->off; i < slen; ++i)
-		if (C8_transform(sPtr[i], transform) == c)
+		if (sPtr[i] == lower || sPtr[i] == upper)
 			++count;
 
 	return count;
@@ -342,36 +571,35 @@ U64 CharString_countAllString(const CharStringSensOff *strSensOff, const CharStr
 	if (!strSensOff || !strSensOff->str || !other)
 		return 0;
 
-	const U64 off = strSensOff->off;
-	const EStringTransform transform = (EStringTransform)strSensOff->caseSensitive;
-
 	const C8 *sPtr = strSensOff->str->ptr;
 	const U64 strl = CharString_length(*strSensOff->str);
-
 	const U64 otherl = CharString_length(*other);
 
-	if(!otherl || strl < otherl)
+	if(!otherl)
 		return 0;
 
-	U64 j = 0;
+	const CharStringMatchStart start = CharString_matchStart(other, strSensOff->caseSensitive);
+	U64 count = 0;
 
-	for (U64 i = off; i < strl - otherl + 1; ++i) {
+	for (U64 i = strSensOff->off; i < strl; ) {
 
-		Bool match = true;
-
-		for (U64 l = i, k = 0; l < strl && k < otherl; ++l, ++k)
-			if (C8_transform(sPtr[l], transform) != C8_transform(other->ptr[k], transform)) {
-				match = false;
-				break;
-			}
-
-		if (match) {
-			i += otherl - 1;
-			++j;
+		if (!CharString_canStartMatch(&start, sPtr, i, strl)) {
+			++i;
+			continue;
 		}
+
+		const U64 matched = CharString_matchAt(sPtr, i, strl, other->ptr, otherl, strSensOff->caseSensitive);
+
+		if (matched == U64_MAX) {
+			++i;
+			continue;
+		}
+
+		i += matched;
+		++count;
 	}
 
-	return j;
+	return count;
 }
 
 U64 CharString_findFirst(const CharStringSensOffLen *strSensOffLen, C8 c) {
@@ -381,12 +609,12 @@ U64 CharString_findFirst(const CharStringSensOffLen *strSensOffLen, C8 c) {
 
 	const U64 off = strSensOffLen->off;
 	U64 len = strSensOffLen->len;
-	const EStringTransform transform = (EStringTransform) strSensOffLen->caseSensitive;
 
 	const C8 *sPtr = strSensOffLen->str->ptr;
 	const U64 strl = CharString_length(*strSensOffLen->str);
 
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, strSensOffLen->caseSensitive, &lower, &upper);
 
 	if(off >= strl || len > strl - off)
 		return U64_MAX;
@@ -395,25 +623,25 @@ U64 CharString_findFirst(const CharStringSensOffLen *strSensOffLen, C8 c) {
 		len = strl - off;
 
 	for (U64 i = off; i < off + len; ++i)
-		if (C8_transform(sPtr[i], transform) == c)
+		if (sPtr[i] == lower || sPtr[i] == upper)
 			return i;
 
 	return U64_MAX;
 }
 
 U64 CharString_findLast(const CharStringSensOffLen *strSensOffLen, C8 c) {
-	
+
 	if (!strSensOffLen || !strSensOffLen->str)
 		return U64_MAX;
 
 	const U64 off = strSensOffLen->off;
 	U64 len = strSensOffLen->len;
-	const EStringTransform transform = (EStringTransform) strSensOffLen->caseSensitive;
 
 	const C8 *sPtr = strSensOffLen->str->ptr;
 	const U64 strl = CharString_length(*strSensOffLen->str);
 
-	c = C8_transform(c, transform);
+	C8 lower = 0, upper = 0;
+	C8_caseVariants(c, strSensOffLen->caseSensitive, &lower, &upper);
 
 	if(off >= strl || len > strl - off)
 		return U64_MAX;
@@ -422,99 +650,94 @@ U64 CharString_findLast(const CharStringSensOffLen *strSensOffLen, C8 c) {
 		len = strl - off;
 
 	for (U64 i = (off + len) - 1; i != U64_MAX && i >= off; --i)
-		if (C8_transform(sPtr[i], transform) == c)
+		if (sPtr[i] == lower || sPtr[i] == upper)
 			return i;
+
+	return U64_MAX;
+}
+
+U64 CharString_findFirstStringMatch(const CharStringSensOffLen *strSensOffLen, const CharString *other, U64 *matchLen) {
+
+	if (!strSensOffLen || !strSensOffLen->str || !other)
+		return U64_MAX;
+
+	const U64 off = strSensOffLen->off;
+	const U64 len = strSensOffLen->len;
+
+	const C8 *sPtr = strSensOffLen->str->ptr;
+
+	const U64 otherl = CharString_length(*other);
+	const U64 strl = CharString_length(*strSensOffLen->str);
+
+	if(!otherl || off >= strl || len > strl - off)
+		return U64_MAX;
+
+	const U64 end = len ? off + len : strl;
+	const CharStringMatchStart start = CharString_matchStart(other, strSensOffLen->caseSensitive);
+
+	for (U64 i = off; i < end; ++i) {
+
+		if (!CharString_canStartMatch(&start, sPtr, i, end))
+			continue;
+
+		const U64 matched = CharString_matchAt(sPtr, i, end, other->ptr, otherl, strSensOffLen->caseSensitive);
+
+		if (matched == U64_MAX)
+			continue;
+
+		if (matchLen)
+			*matchLen = matched;
+
+		return i;
+	}
+
+	return U64_MAX;
+}
+
+U64 CharString_findLastStringMatch(const CharStringSensOffLen *strSensOffLen, const CharString *other, U64 *matchLen) {
+
+	if (!strSensOffLen || !strSensOffLen->str || !other)
+		return U64_MAX;
+
+	const U64 off = strSensOffLen->off;
+	const U64 len = strSensOffLen->len;
+
+	const C8 *sPtr = strSensOffLen->str->ptr;
+
+	const U64 otherl = CharString_length(*other);
+	const U64 strl = CharString_length(*strSensOffLen->str);
+
+	if(!otherl || off >= strl || len > strl - off)
+		return U64_MAX;
+
+	const U64 end = len ? off + len : strl;
+	const CharStringMatchStart start = CharString_matchStart(other, strSensOffLen->caseSensitive);
+
+	for (U64 i = end - 1; i != U64_MAX && i >= off; --i) {
+
+		if (!CharString_canStartMatch(&start, sPtr, i, end))
+			continue;
+
+		const U64 matched = CharString_matchAt(sPtr, i, end, other->ptr, otherl, strSensOffLen->caseSensitive);
+
+		if (matched == U64_MAX)
+			continue;
+
+		if (matchLen)
+			*matchLen = matched;
+
+		return i;
+	}
 
 	return U64_MAX;
 }
 
 U64 CharString_findFirstString(const CharStringSensOffLen *strSensOffLen, const CharString *other) {
-
-	if (!strSensOffLen || !strSensOffLen->str || !other)
-		return U64_MAX;
-
-	const U64 off = strSensOffLen->off;
-	const U64 len = strSensOffLen->len;
-	const EStringTransform transform = (EStringTransform) strSensOffLen->caseSensitive;
-
-	const C8 *sPtr = strSensOffLen->str->ptr;
-
-	const U64 otherl = CharString_length(*other);
-	U64 strl = CharString_length(*strSensOffLen->str);
-
-	if(!otherl || strl < otherl)
-		return U64_MAX;
-
-	if(off >= strl || len > strl - off)
-		return U64_MAX;
-
-	if(len)
-		strl = off + len;
-
-	U64 i = off;
-
-	for (; i < strl; ++i) {
-
-		Bool match = true;
-		U64 k = 0;
-
-		for (U64 j = i; j < strl && k < otherl; ++j, ++k)
-			if (C8_transform(sPtr[j], transform) != C8_transform(other->ptr[k], transform)) {
-				match = false;
-				break;
-			}
-
-		if (match && k == otherl)
-			break;
-	}
-
-	return i >= strl ? U64_MAX : i;
+	return CharString_findFirstStringMatch(strSensOffLen, other, NULL);
 }
 
 U64 CharString_findLastString(const CharStringSensOffLen *strSensOffLen, const CharString *other) {
-
-	if (!strSensOffLen || !strSensOffLen->str || !other)
-		return U64_MAX;
-	
-	const U64 off = strSensOffLen->off;
-	const U64 len = strSensOffLen->len;
-	const EStringTransform transform = (EStringTransform) strSensOffLen->caseSensitive;
-
-	const C8 *sPtr = strSensOffLen->str->ptr;
-
-	const U64 otherl = CharString_length(*other);
-	U64 strl = CharString_length(*strSensOffLen->str);
-
-	if(!otherl || strl < otherl)
-		return U64_MAX;
-
-	if(off >= strl || len > strl - off)
-		return U64_MAX;
-
-	if(len)
-		strl = off + len;
-
-	if(otherl > strl - off)
-		return U64_MAX;
-
-	for (U64 i = strl - otherl; ; --i) {
-
-		Bool match = true;
-
-		for (U64 k = 0; k < otherl; ++k)
-			if (C8_transform(sPtr[i + k], transform) != C8_transform(other->ptr[k], transform)) {
-				match = false;
-				break;
-			}
-
-		if (match)
-			return i;
-
-		if (i == off)
-			break;
-	}
-
-	return U64_MAX;
+	return CharString_findLastStringMatch(strSensOffLen, other, NULL);
 }
 
 Bool CharString_equalsString(const CharString *s, const CharString *other, EStringCase caseSensitive) {
@@ -525,6 +748,26 @@ Bool CharString_equalsString(const CharString *s, const CharString *other, EStri
 	const U64 strl = CharString_length(*s);
 	const U64 otherl = CharString_length(*other);
 
+	//Folding can change a code point's byte length (U+212A Kelvin sign is 3 bytes, k is 1), so strings of different
+	// lengths can still be equal. Only ASCII strings of one length skip the folded compare.
+
+	if (caseSensitive == EStringCase_Insensitive) {
+
+		if (strl == otherl) {
+
+			U64 i = 0;
+
+			for (; i < strl && ((U8) s->ptr[i] | (U8) other->ptr[i]) < 0x80; ++i)
+				if (!C8_matches(s->ptr[i], other->ptr[i], EStringCase_InsensitiveAscii))
+					return false;
+
+			if (i == strl)
+				return true;
+		}
+
+		return CharString_compare(s, other, caseSensitive) == ECompareResult_Eq;
+	}
+
 	if (strl != otherl)
 		return false;
 
@@ -532,7 +775,7 @@ Bool CharString_equalsString(const CharString *s, const CharString *other, EStri
 		return Buffer_eq(CharString_bufferConst(*s), CharString_bufferConst(*other));
 
 	for (U64 i = 0; i < strl; ++i)
-		if (C8_toLower(s->ptr[i]) != C8_toLower(other->ptr[i]))
+		if (!C8_matches(s->ptr[i], other->ptr[i], caseSensitive))
 			return false;
 
 	return true;
@@ -554,9 +797,15 @@ Bool CharString_equalsStringIgnoreEol(const CharString *s, const CharString *oth
 		if(other->ptr[j] == '\r' && j + 1 < nb && other->ptr[j + 1] == '\n')
 			++j;
 
-		const C8 a = s->ptr[i], b = other->ptr[j];
+		if (caseSensitive == EStringCase_Insensitive) {
 
-		if(caseSensitive == EStringCase_Sensitive ? a != b : C8_toLower(a) != C8_toLower(b))
+			if (UnicodeCodePoint_readFolded(s->ptr, &i, na) != UnicodeCodePoint_readFolded(other->ptr, &j, nb))
+				return false;
+
+			continue;
+		}
+
+		if(!C8_matches(s->ptr[i], other->ptr[j], caseSensitive))
 			return false;
 
 		++i;
@@ -577,9 +826,7 @@ Bool CharString_equalsCString(const CharString *s, const C8 *literal, EStringCas
 }
 
 Bool CharString_equals(const CharString s, C8 c, EStringCase caseSensitive) {
-	return CharString_length(s) == 1 && s.ptr &&
-		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) ==
-		C8_transform(c, (EStringTransform) caseSensitive);
+	return CharString_length(s) == 1 && s.ptr && C8_matches(s.ptr[0], c, caseSensitive);
 }
 
 static inline Bool CharString_offsetAsRef(CharString s, U64 off, CharString *result, Error *e_rr) {
@@ -613,7 +860,7 @@ Bool CharString_parseNyto(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0n");
 
-	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitiveAscii(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -645,7 +892,7 @@ Bool CharString_parseNyto(CharString s, U64 *result) {
 Bool CharString_parseHex(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0x");
-	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitiveAscii(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -674,7 +921,7 @@ Bool CharString_parseHex(CharString s, U64 *result) {
 Bool CharString_parseOct(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0o");
-	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitiveAscii(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -704,7 +951,7 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 Bool CharString_parseBin(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0b");
-	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitiveAscii(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -1076,11 +1323,14 @@ Bool CharString_cutBeforeString(const CharStringCut *cut, const CharString *othe
 		return false;
 
 	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
-	U64 found = isFirst ? CharString_findFirstString(&strSensOffLen, other) : CharString_findLastString(&strSensOffLen, other);
+	U64 matchLen = 0;
+
+	U64 found = isFirst ? CharString_findFirstStringMatch(&strSensOffLen, other, &matchLen) :
+		CharString_findLastStringMatch(&strSensOffLen, other, &matchLen);
 
 	if (found == U64_MAX)
 		return false;
 
-	found += CharString_length(*other);    //The end of the occurence is the begin of the next string
+	found += matchLen;    //The end of the occurence is the begin of the next string
 	return CharString_cut(cut->s, found, 0, cut->result);
 }

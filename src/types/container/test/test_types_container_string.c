@@ -25,6 +25,7 @@
 #include "types/base/allocator.h"
 #include "types/base/type_id.h"
 #include "types/container/string.h"
+#include "types/container/string_helper.h"
 
 #include <locale.h>
 
@@ -237,8 +238,142 @@ static void Test_stringHLSLFailure(Test *t) {
 	Test_assert(t, "HLSL failed output cleanup is safe", !state.live);
 }
 
+//The base suite covers folding itself (test_types_base_unicode.c); this is what needs an allocator: toLower and toUpper
+// growing a string, and the functions that consume a match whose length differs from the needle's.
+//UTF-8 is spelled out as bytes; U+212A Kelvin sign is 3 of them and folds to the 1 byte k.
+
+#define KELVIN "\xE2\x84\xAA"
+
+static Bool Test_transformIs(Test *t, const C8 *in, EStringTransform transform, const C8 *expected, Bool inPlace) {
+
+	CharString s = CharString_createNull();
+	Bool ok = CharString_createCopy(CharString_createRefCStrConst(in), t->alloc, &s, &t->err);
+	const C8 *before = s.ptr;
+
+	ok = ok && CharString_transform(&s, transform, t->alloc, &t->err);
+	ok = ok && CharString_equalsCStringSensitive(&s, expected) && (s.ptr == before) == inPlace;
+	ok = ok && CharString_isNullTerminated(s) && !s.ptr[CharString_length(s)];
+
+	CharString_free(&s, t->alloc);
+	return ok;
+}
+
+static Bool Test_replaceIs(Test *t, const C8 *in, const C8 *search, const C8 *with, Bool all, const C8 *expected) {
+
+	CharString s = CharString_createNull();
+	const CharString searchStr = CharString_createRefCStrConst(search), withStr = CharString_createRefCStrConst(with);
+	Bool ok = CharString_createCopy(CharString_createRefCStrConst(in), t->alloc, &s, &t->err);
+
+	const CharStringReplace2 replace = { &s, &searchStr, &withStr, t->alloc, 0, 0 };
+
+	ok = ok && (
+		all ? CharString_replaceAllStringInsensitive(&replace, &t->err) :
+		CharString_replaceFirstStringInsensitive(&replace, &t->err)
+	);
+
+	ok = ok && CharString_equalsCStringSensitive(&s, expected);
+
+	CharString_free(&s, t->alloc);
+	return ok;
+}
+
+static void Test_stringUnicodeCase(Test *t) {
+
+	Test_setModule(t, "CharString unicode case");
+
+	//In place unless a code point changes its UTF-8 length; invalid UTF-8 stays
+
+	Test_assert(t, "lower", Test_transformIs(t, "\xC3\x89" "COLE", EStringTransform_Lower, "\xC3\xA9" "cole", true));
+	Test_assert(t, "upper grows", Test_transformIs(t, "a\xC9\x90", EStringTransform_Upper, "A\xE2\xB1\xAF", false));
+	Test_assert(t, "lower grows", Test_transformIs(t, "\xC8\xBA", EStringTransform_Lower, "\xE2\xB1\xA5", false));
+	Test_assert(t, "lower shrinks", Test_transformIs(t, KELVIN "\xFF", EStringTransform_Lower, "k\xFF", false));
+	Test_assert(t, "none", Test_transformIs(t, "aB", EStringTransform_None, "aB", true));
+
+	C8 sameBuf[] = "\xC3\xA9t\xC3\xA9";
+	CharString sameRef = CharString_createRefSized(sameBuf, sizeof(sameBuf) - 1, true);
+
+	Test_assert(t, "ref in place", (
+		CharString_toUpper(&sameRef, t->alloc, &t->err) && CharString_equalsCStringSensitive(&sameRef, "\xC3\x89T\xC3\x89")
+	));
+
+	C8 growBuf[] = "\xC9\x90";
+	CharString growRef = CharString_createRefSized(growBuf, sizeof(growBuf) - 1, true);
+
+	Test_assert(t, "ref can't grow", !CharString_toUpper(&growRef, t->alloc, NULL));
+	Test_assert(t, "ref unchanged", (U8) growBuf[0] == 0xC9 && CharString_length(growRef) == 2);
+
+	CharString constRef = CharString_createRefCStrConst("abc");
+	Test_assert(t, "const ref", !CharString_toLower(&constRef, t->alloc, NULL));
+
+	//Split and find all step over each match by its own length
+
+	const CharString hay = CharString_createRefCStrConst("a" KELVIN "bkc"), k = CharString_createRefCStrConst("k");
+	ListCharString parts = (ListCharString) { 0 };
+	const CharStringSplit split = { &hay, t->alloc, &parts };
+
+	Test_assert(t, "split", CharString_splitStringInsensitive(&split, &k, &t->err) && parts.length == 3);
+
+	Test_assert(t, "split parts", parts.length == 3 && (
+		CharString_equalsCStringSensitive(&parts.ptr[0], "a") && CharString_equalsCStringSensitive(&parts.ptr[1], "b") &&
+		CharString_equalsCStringSensitive(&parts.ptr[2], "c")
+	));
+
+	ListCharString_free(&parts, t->alloc);
+
+	ListU64 finds = (ListU64) { 0 };
+	const CharStringFind find = { &hay, t->alloc, 0, 0, &finds };
+
+	Test_assert(t, "find all", (
+		CharString_findAllStringInsensitive(&find, &k, &t->err) && finds.length == 2 && finds.ptr[0] == 1 && finds.ptr[1] == 5
+	));
+
+	ListU64_free(&finds, t->alloc);
+
+	//Replace: matches of one length move in place, matches of different lengths rebuild
+
+	Test_assert(t, "replace mixed", Test_replaceIs(t, "a" KELVIN "bkc", "k", "--", true, "a--b--c"));
+	Test_assert(t, "replace mixed, kelvin search", Test_replaceIs(t, "k" KELVIN, KELVIN, "ab", true, "abab"));
+	Test_assert(t, "replace same size", Test_replaceIs(t, "AkBkC", "K", "x", true, "AxBxC"));
+	Test_assert(t, "replace shrinking", Test_replaceIs(t, KELVIN "-" KELVIN, "k", "x", true, "x-x"));
+	Test_assert(t, "replace growing", Test_replaceIs(t, "k-k", KELVIN, "ab", true, "ab-ab"));
+	Test_assert(t, "replace first", Test_replaceIs(t, "x" KELVIN "yk", "k", "!", false, "x!yk"));
+
+	//Equal under Insensitive means an equal hash, whatever the byte lengths
+
+	const CharString kelvin = CharString_createRefCStrConst(KELVIN), upperK = CharString_createRefCStrConst("K");
+	const CharString kk = CharString_createRefCStrConst("kk");
+	const U64 hashK = CharString_hashSeededInsensitive(&k, 0x1234, NULL);
+
+	Test_assert(t, "hash folds", (
+		CharString_hashSeededInsensitive(&kelvin, 0x1234, NULL) == hashK &&
+		CharString_hashSeededInsensitive(&upperK, 0x1234, NULL) == hashK
+	));
+
+	Test_assert(t, "hash differs", CharString_hashSeededInsensitive(&kk, 0x1234, NULL) != hashK);
+
+	//Sorting under InsensitiveAscii folds A-Z, Sensitive puts uppercase first
+
+	CharString items[3] = {
+		CharString_createRefCStrConst("b"), CharString_createRefCStrConst("C"), CharString_createRefCStrConst("a")
+	};
+
+	ListCharString list = (ListCharString) { 0 };
+
+	Test_assert(t, "sort list", ListCharString_createRef(items, 3, &list, &t->err));
+	Test_assert(t, "sort ascii", ListCharString_sort(list, EStringCase_InsensitiveAscii));
+
+	Test_assert(t, "sort ascii order", (
+		CharString_equalsCStringSensitive(&items[0], "a") && CharString_equalsCStringSensitive(&items[1], "b") &&
+		CharString_equalsCStringSensitive(&items[2], "C")
+	));
+
+	Test_assert(t, "sort sensitive", ListCharString_sort(list, EStringCase_Sensitive));
+	Test_assert(t, "sort sensitive order", CharString_equalsCStringSensitive(&items[0], "C"));
+}
+
 void Test_string(Test *t) {
 	Test_stringNumbers(t);
 	Test_stringDecimal(t);
 	Test_stringHLSLFailure(t);
+	Test_stringUnicodeCase(t);
 }

@@ -215,7 +215,7 @@ Bool CLI_isaResolveAsic(CharString asic, Bool *handled, const Allocator *alloc, 
 
 	const CharString q = CharString_createRefCStrConst("?");
 
-	if(CharString_equalsStringInsensitive(&asic, &q)) {
+	if(CharString_equalsStringInsensitiveAscii(&asic, &q)) {
 		gotoIfError3(clean, CLI_isaPrintDevices(alloc, e_rr));
 		if(handled)
 			*handled = true;
@@ -356,7 +356,7 @@ clean:
 
 			const CharString candidate = CharString_createRefCStrConst(ETextureFormatId_name[i]);
 
-			if(CharString_equalsStringInsensitive(&name, &candidate))
+			if(CharString_equalsStringInsensitiveAscii(&name, &candidate))
 				return (ETextureFormatId) i;
 		}
 
@@ -1073,7 +1073,7 @@ clean:
 			Bool known = false;
 
 			for(U64 i = 0; i < liveTargets.length && !known; ++i)
-				known = CharString_equalsStringInsensitive(&liveTargets.ptr[i], &liveTarget);
+				known = CharString_equalsStringInsensitiveAscii(&liveTargets.ptr[i], &liveTarget);
 
 			if (!known) {
 
@@ -1106,8 +1106,8 @@ clean:
 					);
 
 					if (
-						!CharString_equalsStringInsensitive(&wantedGpu, &targetGpu) &&
-						!CharString_equalsStringInsensitive(&wantedIp, &targetIp)
+						!CharString_equalsStringInsensitiveAscii(&wantedGpu, &targetGpu) &&
+						!CharString_equalsStringInsensitiveAscii(&wantedIp, &targetIp)
 					)
 						continue;
 
@@ -1742,11 +1742,11 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 		//"live" lets the function choose; "live:<index>" targets a specific GPU (it lists them all first)
 
-		Bool live = CharString_equalsStringInsensitive(&asic, &liveStr);
+		Bool live = CharString_equalsStringInsensitiveAscii(&asic, &liveStr);
 		U64 deviceId = U64_MAX;
 		CharString liveTarget = CharString_createNull();
 
-		if(!live && CharString_startsWithStringInsensitive(&asic, &livePfx, 0)) {
+		if(!live && CharString_startsWithStringInsensitiveAscii(&asic, &livePfx, 0)) {
 
 			live = true;
 
@@ -1791,10 +1791,10 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 
 			if (ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &liveMode, NULL)) {
 
-				if(CharString_equalsCStringInsensitive(&liveMode, "DXIL"))
+				if(CharString_equalsCStringInsensitiveAscii(&liveMode, "DXIL"))
 					liveType = EGfxBinaryType_DXIL;
 
-				else if(CharString_equalsCStringInsensitive(&liveMode, "SPV"))
+				else if(CharString_equalsCStringInsensitiveAscii(&liveMode, "SPV"))
 					liveType = EGfxBinaryType_SPIRV;
 
 				else retError(clean, Error_invalidParameter(
@@ -1928,10 +1928,10 @@ Bool CLI_isaDisassemble(const ParsedArgs *args) {
 	const CharString spvExt = CharString_createRefCStrConst(".spv");
 	const CharString oiSHExt = CharString_createRefCStrConst(".oiSH");
 
-	if(CharString_endsWithStringInsensitive(&inputStr, &spvExt, 0))
+	if(CharString_endsWithStringInsensitiveAscii(&inputStr, &spvExt, 0))
 		spirv = Buffer_createRefConst(input.ptr, Buffer_length(input));
 
-	else if(CharString_endsWithStringInsensitive(&inputStr, &oiSHExt, 0)) {
+	else if(CharString_endsWithStringInsensitiveAscii(&inputStr, &oiSHExt, 0)) {
 
 		gotoIfError3(clean, MemoryStream_createFromBuffer(
 			&input, EMemoryStreamFlags_None, &Platform_instance->types.memoryStream, &readStream, e_rr

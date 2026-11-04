@@ -60,7 +60,7 @@ typedef enum ESBMatrix {
 
 //Without flags every matrix is 16-byte aligned. F32x3x4 becomes the same size as F32x4x4 with unused bytes.
 //F32x3x4 represents a F32x3[4] with stride 16. So even F32x1x4 becomes the same size as F32x4x4.
-//**This is only true if ESBVarFlag_IsTightlyPacked isn't set!**
+//**This is only true if ESBFlag_IsTightlyPacked isn't set!**
 define ESBType as U8: [ U2 from ESBStride, U2 from ESBPrimitive, U2 from ESBVector, U2 from ESBMatrix ]
 
 typedef struct SBStruct {

@@ -51,7 +51,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 	if (!combined)
 		retError(clean, Error_nullPointer(0, "SBFile_combine()::combined is required"));
 
-	if(combined->bufferSize)
+	if(SBFile_isFilled(combined))
 		retError(clean, Error_invalidState(0, "SBFile_combine()::combined must be empty, otherwise indicated memleak"));
 
 	if(a->vars.length != b->vars.length || a->structs.length != b->structs.length)

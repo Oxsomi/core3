@@ -74,7 +74,7 @@ Bool registerFile(const FileInfo *file, void *shaderFilesGeneric, const Allocato
 
 		CharString hlsl = CharString_createRefCStrConst(".hlsl");
 
-		if (CharString_endsWithStringInsensitive(&file->path, &hlsl, 0)) {
+		if (CharString_endsWithStringInsensitiveAscii(&file->path, &hlsl, 0)) {
 
 			gotoIfError3(clean, CharString_createCopy(file->path, alloc, &copy, e_rr));
 
@@ -129,7 +129,7 @@ Bool registerFile(const FileInfo *file, void *shaderFilesGeneric, const Allocato
 					alloc, &tempStr, e_rr, "%.*s%s",
 					(int) U64_min(
 						CharString_length(copy),
-						CharString_findLastStringInsensitive(&copy, &hlslSuffix, 0, 0)
+						CharString_findLastStringInsensitiveAscii(&copy, &hlslSuffix, 0, 0)
 					),
 					copy.ptr,
 					shaderFiles->hasCombineFlag ? oiSHCombineSuffix : oiSHSuffixes[i]
@@ -255,7 +255,7 @@ Bool Compiler_getTargetsFromFile(
 			alloc, &tempStr, e_rr, "%.*s%s",
 			output ? (int) U64_min(
 				CharString_length(*output),
-				CharString_findLastStringInsensitive(output, &hlslSuffix, 0, 0)
+				CharString_findLastStringInsensitiveAscii(output, &hlslSuffix, 0, 0)
 			) : (int) (sizeof("output") - 1),
 			output ? output->ptr : "output",
 			oiSHSuffixes[i]

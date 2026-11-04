@@ -65,8 +65,13 @@ static inline void *AudioInterface_extVoid(AudioInterface *interf) { return !int
 
 RefPtrType AudioInterface_makeType(const Allocator *alloc);
 
+//*interf must be NULL on entry and is NULL again on failure. alloc must be the allocator the type was made with.
 Bool AudioInterface_create(AudioInterfaceRef **interf, const Allocator *alloc, const RefPtrType *type, Error *e_rr);
 
+//Appends to infos (existing entries are kept, a name already in the list is skipped); infos must be a valid list.
+//No device (or no sound server) is a success with nothing appended. On failure infos can hold the entries found so
+// far, so free it either way.
+//The preferred device is flagged MainOutput; if the backend names none, the first is.
 impl Bool AudioInterface_getDeviceInfos(
 	const AudioInterface *interf,
 	const Allocator *alloc,
@@ -74,6 +79,8 @@ impl Bool AudioInterface_getDeviceInfos(
 	Error *e_rr
 );
 
+//Every flag in requiredCapabilities must be set. Picks the MainOutput device if it qualifies, else the first one in
+// the enumeration that does. Fails when none qualifies; deviceInfo is only written on success.
 Bool AudioInterface_getPreferredDevice(
 	const AudioInterface *interf,
 	EAudioDeviceFlags requiredCapabilities,

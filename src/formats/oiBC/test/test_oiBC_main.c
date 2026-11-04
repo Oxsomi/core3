@@ -209,6 +209,11 @@ void Test_chimeraCompare(Test *t) {
 	Test_assert(t, "isnan(nan) is true", Chimera_getLastCompare(&chimera) == ECompareResult_Gt);
 	Chimera_stepFidiA(&chimera, EFidiA_isfinite);
 	Test_assert(t, "isfinite(nan) is false", Chimera_getLastCompare(&chimera) == ECompareResult_Eq);
+
+	//A NULL chimera is ignored by the compare too, as it is by the step and the getter
+
+	Chimera_cmp(NULL, 1);
+	Test_assert(t, "cmp on NULL is ignored", Chimera_getLastCompare(NULL) == ECompareResult_Eq);
 }
 
 OXC3_TEST_MAIN(formats_oiBC) {

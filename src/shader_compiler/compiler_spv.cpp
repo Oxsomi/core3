@@ -509,15 +509,15 @@ extern "C" Bool Compiler_processSPIRV(
 				U64 semanticName = 0;
 
 				if (
-					!CharString_equalsCStringInsensitive(&realSemanticName, "SV_TARGET") &&
-					!CharString_equalsCStringInsensitive(&realSemanticName, "TEXCOORD")
+					!CharString_equalsCStringInsensitiveAscii(&realSemanticName, "SV_TARGET") &&
+					!CharString_equalsCStringInsensitiveAscii(&realSemanticName, "TEXCOORD")
 				) {
 					U64 start = isOutput ? inputSemanticCount : 0;
 					U64 end = isOutput ? strings.length : inputSemanticCount;
 					U64 k = start;
 
 					for(; k < end; ++k)
-						if(CharString_equalsStringInsensitive(&strings.ptr[k], &realSemanticName))
+						if(CharString_equalsStringInsensitiveAscii(&strings.ptr[k], &realSemanticName))
 							break;
 
 					if(k == end)

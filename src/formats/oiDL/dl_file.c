@@ -100,7 +100,9 @@ Bool DLFile_create(const DLSettings *settings, U64 cacheSize, const Allocator *a
 
 void DLFile_free(DLFile *dlFile, const Allocator *alloc) {
 
-	if(!DLFile_isAllocated(dlFile))
+	//A file with a cache but no entries (such as a copy of an empty file) still owns that cache
+
+	if(!dlFile || (!dlFile->entryStreams.ptr && !dlFile->entryStrings.ptr && !dlFile->cache.ptr))
 		return;
 
 	for (U64 i = 0; i < dlFile->entryStreams.length; ++i)

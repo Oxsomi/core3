@@ -58,7 +58,6 @@ typedef struct ALAudioDevice {
 } ALAudioDevice;
 
 #define ALAudioStream_bufferCount 4
-#define ALAudioStream_bufferSize 65536
 
 typedef struct ALAudioStream {
 

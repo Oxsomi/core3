@@ -158,7 +158,7 @@ InputHandle InputDevice_getHandle(const InputDevice *d, CharString name) {
 
 		CharString str = CharString_createRefLongStringConst(InputDevice_getButton(d, i)->name);
 
-		if(CharString_equalsStringInsensitive(&str, &name))
+		if(CharString_equalsStringInsensitiveAscii(&str, &name))
 			return InputDevice_createHandle(d, i, EInputType_Button);
 	}
 
@@ -166,7 +166,7 @@ InputHandle InputDevice_getHandle(const InputDevice *d, CharString name) {
 
 		CharString str = CharString_createRefLongStringConst(InputDevice_getAxis(d, i)->name);
 
-		if(CharString_equalsStringInsensitive(&str, &name))
+		if(CharString_equalsStringInsensitiveAscii(&str, &name))
 			return InputDevice_createHandle(d, i, EInputType_Axis);
 	}
 

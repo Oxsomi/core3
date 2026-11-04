@@ -42,8 +42,8 @@ typedef struct Allocator Allocator;
 
 Bool SpvISA_stageHasOfflinePath(Buffer spirv, const Allocator *alloc);
 
-//Disassembles a SPIR-V module to AMD ISA text for `gfxTarget` by driving the bundled amdllpc (SPIR-V -> ELF) then
-// amdgpu-dis (ELF -> ISA text); this produces closer-to-final ISA than a device-independent path.
+//Disassembles a SPIR-V module to AMD ISA text for `gfxTarget` by driving the bundled amdllpc, which emits the ISA as
+// text itself; this produces closer-to-final ISA than a device-independent path.
 //`gfxTarget` is a gfx name ("gfx1100") or an explicit major.minor.step ("11.0.0").
 //`entrypoint` selects which entrypoint to lower from a multi-entry (library) module; pass an empty string to lower
 // the module's default (first) entrypoint.

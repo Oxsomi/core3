@@ -103,22 +103,22 @@ typedef enum EAudioStreamInfoFlags {                  //4-bit flags
 
 typedef struct AudioStreamInfo {
 
-	F32 pitch;
-	U8 dataLengthHi8;
+	F32 pitch;                    //Playback speed factor (speeds up and raises the pitch), 0 = 1, negative is refused
+	U8 dataLengthHi8;             //Bits 32 and up of the data length, read it with AudioStreamInfo_dataLength
 	U8 flags4_format4;            //EAudioStreamInfoFlags, AudioStreamFormat
-	U16 loops;                    //0: infinite, otherwise how many times a loop is permitted for a stream
+	U16 loops;                    //Total plays. 0 is infinite. Without IsLoop it must be 1
 
-	Ns duration;
+	Ns duration;                  //Length of the data at pitch 1, seekTime offsets are bounded by it
 
-	U64 dataStart;
+	U64 dataStart;                //Byte offset in stream of the first sample
 
-	U32 sampleRate;
-	U32 dataLengthLo32;
+	U32 sampleRate;               //Frames per second (Hz)
+	U32 dataLengthLo32;           //Bytes of sample data from dataStart
 
-	U32 streamLength;            //0 = bytesPerSecond, else must be >=64KiB
-	U32 bytesPerSecond;
+	U32 streamLength;            //Bytes of each of the 4 backend buffers, 0 = bytesPerSecond, else 64 KiB to 2 GiB - 1
+	U32 bytesPerSecond;          //Must equal sampleRate times the bytes per frame of the format
 
-	StreamRef *stream;
+	StreamRef *stream;           //Read during AudioDeviceRef_update, so it must stay readable and unchanged while playing
 
 } AudioStreamInfo;
 
@@ -150,17 +150,21 @@ typedef RefPtr AudioDeviceRef;
 
 typedef struct AudioStream {
 
-	AudioDeviceRef *device;
+	AudioDeviceRef *device;       //Reference held by the stream
 
 	AudioStreamInfo info;
 
-	U64 streamOffset;
+	U64 streamOffset;             //Bytes into the data that are read next, ahead of what is audible by the queued buffers
 	Ns timeOffset;                //[0, duration], only knows the one on start, since the streamOffset is always ahead
 
-	U32 loops;                    //How many times the stream has looped, stops at 1 if !isLoop
-	Bool isPlaying;
+	//Passes over the data, counted only by the looping and converting read paths: without IsLoop it stays 0 on a direct
+	// read and reaches 1 on a converting one. Counted when read, so it is ahead of what is audible. Reset to 0 by stop and
+	// by a seek while not playing. A seek while playing steps it back to the pass being heard if the last was already read.
+	U32 loops;
+	Bool isPlaying;               //Cleared by AudioDeviceRef_update when playback ends, and by stop
 	AudioStreamFormat format;     //The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
-	U8 padding[2];
+	Bool seekPending;             //A seek is recorded and the next AudioDeviceRef_update drops the queued audio for it
+	U8 padding;
 
 } AudioStream;
 
@@ -173,9 +177,18 @@ static inline void *AudioStream_extVoid(AudioStream *src) { return !src ? NULL :
 
 RefPtrType AudioStream_makeType(const Allocator *alloc);
 
+//*stream must be NULL on entry. The stream adds a reference to device and is silent until an AudioSource is made for
+// it. The device holds a playing stream weakly, so releasing the last reference stops it.
+//startOffset is in nanoseconds from the start of the data, at most info->duration.
+//A call refused on its arguments, or whose allocation fails, leaves the caller owning info->stream. Past that the
+// created stream owns it and info is zeroed, even if the call then fails.
+//Validation writes the defaults (streamLength = bytesPerSecond, pitch = 1) into info, even if the call then fails.
+//streamLength and the data length are rounded down to whole frames of the format (written back into info), and a stream
+// queues 4 buffers of streamLength ahead of playback.
+//info->loops must be 1 unless info has IsLoop, and the data length (after rounding) must not be 0.
 Bool AudioDeviceRef_createStream(
 	AudioDeviceRef *device,
-	AudioStreamInfo *info,                //Takes ownership of info
+	AudioStreamInfo *info,                //Takes ownership of info (its stream reference), see above
 	Ns startOffset,
 	const Allocator *alloc,
 	const RefPtrType *type,
@@ -184,6 +197,11 @@ Bool AudioDeviceRef_createStream(
 );
 
 //Borrows inputStream: the audio stream takes a reference of its own, so the caller releases its reference either way.
+//inputStreamOffset is the byte offset of the file inside inputStream. inputStream must be readable and is read again
+// during playback, by whoever calls AudioDeviceRef_update.
+//*stream must be NULL on entry and is left NULL on failure. startOffset is in nanoseconds into the audio data.
+//loops is the total number of plays. pitch 0 means 1, negative is refused.
+//Other contracts match AudioDeviceRef_createStream.
 Bool AudioDeviceRef_createFromFile(       //Detect stream by stream file header (currently only wav supported)
 	AudioDeviceRef *device,
 	StreamRef *inputStream,
@@ -198,9 +216,23 @@ Bool AudioDeviceRef_createFromFile(       //Detect stream by stream file header 
 	Error *e_rr
 );
 
+//offset is in nanoseconds from the start of the data, at most the duration. Rounded up to a whole frame, but never
+// past the end of the data.
+//Only records the seek, without a backend call: the next AudioDeviceRef_update drops the audio already queued (up to 4
+// buffers of streamLength) and refills from offset. A playing stream keeps playing and a stopped one stays stopped.
+//A stream that isn't playing starts over from the first pass, so a play after it makes every pass again. This is also how
+// a stream that played to its end is played again: until a seek it stays at its end and a play ends at the next update.
+//Does not lock: don't call it while another thread runs AudioDeviceRef_update on the device.
 Bool AudioStreamRef_seekTime(AudioStreamRef *stream, Ns offset, Error *e_rr);
 
+//Playing and stopping take the device lock (waits up to a second, then fail). Both are no-ops if already in that state.
+//A play the backend can't start fails and leaves the stream not playing. The sound only advances while
+// AudioDeviceRef_update runs. A stream that played to its end stays at its end until a seek: playing it then ends at the
+// next update without sound.
 Bool AudioStreamRef_play(AudioStreamRef *stream, const Allocator *alloc, Error *e_rr);
+
+//Discards the queued audio and resets the loop count without rewinding, so a later play continues from the read
+// position, past what was last audible. seekTime restarts it. If the backend can't stop the stream it keeps playing.
 Bool AudioStreamRef_stop(AudioStreamRef *stream, Error *e_rr);
 
 #ifdef __cplusplus

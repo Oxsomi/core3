@@ -43,12 +43,20 @@ static inline Bool CharString_splitInsensitive(const CharStringSplit *split, C8 
 	return CharString_split(split, c, EStringCase_Insensitive, e_rr);
 }
 
+static inline Bool CharString_splitInsensitiveAscii(const CharStringSplit *split, C8 c, Error *e_rr) {
+	return CharString_split(split, c, EStringCase_InsensitiveAscii, e_rr);
+}
+
 static inline Bool CharString_splitStringSensitive(const CharStringSplit *split, const CharString *other, Error *e_rr) {
 	return CharString_splitString(split, other, EStringCase_Sensitive, e_rr);
 }
 
 static inline Bool CharString_splitStringInsensitive(const CharStringSplit *split, const CharString *other, Error *e_rr) {
 	return CharString_splitString(split, other, EStringCase_Insensitive, e_rr);
+}
+
+static inline Bool CharString_splitStringInsensitiveAscii(const CharStringSplit *split, const CharString *other, Error *e_rr) {
+	return CharString_splitString(split, other, EStringCase_InsensitiveAscii, e_rr);
 }
 
 static inline Bool CharString_replaceAllStringSensitive(const CharStringReplace2 *replace, Error *e_rr) {
@@ -59,12 +67,20 @@ static inline Bool CharString_replaceAllStringInsensitive(const CharStringReplac
 	return CharString_replaceAllString(replace, EStringCase_Insensitive, e_rr);
 }
 
+static inline Bool CharString_replaceAllStringInsensitiveAscii(const CharStringReplace2 *replace, Error *e_rr) {
+	return CharString_replaceAllString(replace, EStringCase_InsensitiveAscii, e_rr);
+}
+
 static inline Bool CharString_replaceStringSensitive(const CharStringReplace2 *replace, Bool isFirst, Error *e_rr) {
 	return CharString_replaceString(replace, isFirst, EStringCase_Sensitive, e_rr);
 }
 
 static inline Bool CharString_replaceStringInsensitive(const CharStringReplace2 *replace, Bool isFirst, Error *e_rr) {
 	return CharString_replaceString(replace, isFirst, EStringCase_Insensitive, e_rr);
+}
+
+static inline Bool CharString_replaceStringInsensitiveAscii(const CharStringReplace2 *replace, Bool isFirst, Error *e_rr) {
+	return CharString_replaceString(replace, isFirst, EStringCase_InsensitiveAscii, e_rr);
 }
 
 static inline Bool CharString_replaceLastStringSensitive(const CharStringReplace2 *replace, Error *e_rr) {
@@ -75,12 +91,20 @@ static inline Bool CharString_replaceLastStringInsensitive(const CharStringRepla
 	return CharString_replaceString(replace, false, EStringCase_Insensitive, e_rr);
 }
 
+static inline Bool CharString_replaceLastStringInsensitiveAscii(const CharStringReplace2 *replace, Error *e_rr) {
+	return CharString_replaceString(replace, false, EStringCase_InsensitiveAscii, e_rr);
+}
+
 static inline Bool CharString_replaceFirstStringSensitive(const CharStringReplace2 *replace, Error *e_rr) {
 	return CharString_replaceString(replace, true, EStringCase_Sensitive, e_rr);
 }
 
 static inline Bool CharString_replaceFirstStringInsensitive(const CharStringReplace2 *replace, Error *e_rr) {
 	return CharString_replaceString(replace, true, EStringCase_Insensitive, e_rr);
+}
+
+static inline Bool CharString_replaceFirstStringInsensitiveAscii(const CharStringReplace2 *replace, Error *e_rr) {
+	return CharString_replaceString(replace, true, EStringCase_InsensitiveAscii, e_rr);
 }
 
 static inline Bool CharString_findAllSensitive(const CharStringFind *find, C8 c, Error *e_rr) {
@@ -91,12 +115,20 @@ static inline Bool CharString_findAllInsensitive(const CharStringFind *find, C8 
 	return CharString_findAll(find, c, EStringCase_Insensitive, e_rr);
 }
 
+static inline Bool CharString_findAllInsensitiveAscii(const CharStringFind *find, C8 c, Error *e_rr) {
+	return CharString_findAll(find, c, EStringCase_InsensitiveAscii, e_rr);
+}
+
 static inline Bool CharString_findAllStringSensitive(const CharStringFind *find, const CharString *other, Error *e_rr) {
 	return CharString_findAllString(find, other, EStringCase_Sensitive, e_rr);
 }
 
 static inline Bool CharString_findAllStringInsensitive(const CharStringFind *find, const CharString *other, Error *e_rr) {
 	return CharString_findAllString(find, other, EStringCase_Insensitive, e_rr);
+}
+
+static inline Bool CharString_findAllStringInsensitiveAscii(const CharStringFind *find, const CharString *other, Error *e_rr) {
+	return CharString_findAllString(find, other, EStringCase_InsensitiveAscii, e_rr);
 }
 
 #ifdef __cplusplus

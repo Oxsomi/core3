@@ -68,6 +68,8 @@ And run the suite, not just the build:
 
 - `python build.py -mode Debug -tests True` (and `Release`). The style check
   (`src/tools/check_style.py`, cmake target `check_style`) runs on every build and fails it.
+  The docs check (`src/tools/check_docs.py`, cmake target `check_docs`) does the same for names, links and the
+  CLI doc; a deliberate placeholder name goes in its `PLACEHOLDER_NAMES`.
 - Graphics interface tests: `OxC3_graphics_interface_test`. A new graphics feature adds a test under
   `src/graphics/test/interface/` and registers it in `test_graphics_shared.h` plus
   `test_graphics_interface.cpp`.

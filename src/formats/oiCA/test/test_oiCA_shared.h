@@ -59,6 +59,8 @@ void Test_CAStress(Test *t);
 void Test_CAWriteFailures(Test *t);
 void Test_CAReadLargeNames(Test *t);
 void Test_CARenameSubtree(Test *t);
+void Test_CAMoveSubtreePaths(Test *t);
+void Test_CACaseFolding(Test *t);
 void Test_CAEmptyStreamCompare(Test *t);
 void Test_CAReadBigHeader(Test *t);
 void Test_CAWriteCursorSize(Test *t);

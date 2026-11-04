@@ -562,14 +562,14 @@ extern "C" Bool Compiler_processDXIL(
 			// defaults to TEXCOORD.
 			//Only a non-default name is recorded, so pixel inputs must go through here too; otherwise they'd
 			// report as the default TEXCOORD instead of their real semantic.
-			if (!(isPixelShader && isOutput) && !CharString_equalsCStringInsensitive(&semanticNameStr, "TEXCOORD")) {
+			if (!(isPixelShader && isOutput) && !CharString_equalsCStringInsensitiveAscii(&semanticNameStr, "TEXCOORD")) {
 
 				U64 start = isOutput ? inputSemanticCount : 0;
 				U64 end = isOutput ? strings.length : inputSemanticCount;
 				U64 k = start;
 
 				for(; k < end; ++k)
-					if(CharString_equalsStringInsensitive(&strings.ptr[k], &semanticNameStr))
+					if(CharString_equalsStringInsensitiveAscii(&strings.ptr[k], &semanticNameStr))
 						break;
 
 				U64 semanticName = (k - start) + 1;

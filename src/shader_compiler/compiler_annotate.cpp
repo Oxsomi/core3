@@ -996,10 +996,10 @@ Bool Compiler_registerBinaryType(U8 *binaryTypes, CharString name, Error *e_rr) 
 
 	//"spv" / "spirv" -> SPIRV, "dxil" -> DXIL (case insensitive)
 
-	if(CharString_equalsCStringInsensitive(&name, "spv") || CharString_equalsCStringInsensitive(&name, "spirv"))
+	if(CharString_equalsCStringInsensitiveAscii(&name, "spv") || CharString_equalsCStringInsensitiveAscii(&name, "spirv"))
 		type = EGfxBinaryType_SPIRV;
 
-	else if(CharString_equalsCStringInsensitive(&name, "dxil"))
+	else if(CharString_equalsCStringInsensitiveAscii(&name, "dxil"))
 		type = EGfxBinaryType_DXIL;
 
 	else retError(clean, Error_invalidParameter(

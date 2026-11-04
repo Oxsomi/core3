@@ -36,30 +36,36 @@ typedef enum EDepthStencilFormat EDepthStencilFormat;
 typedef struct RefPtr RefPtr;
 typedef RefPtr StreamRef;
 
+//One depth slice of one mip of one layer. The pixels stay in the stream; nothing is copied out of it.
 typedef struct SubResourceData {
-	U32 mipId, layerId, z, padding;
-	StreamRef *stream;
-	U64 streamOff;
-	U64 streamLen;
+	U32 mipId, layerId, z, padding;        //z is the slice within this mip, whose depth halves per mip. padding is ignored.
+	StreamRef *stream;                     //Entries from DDS_read own a reference that ListSubResourceData_freeUnderlying drops
+	U64 streamOff;                         //In bytes, from the start of stream
+	U64 streamLen;                         //In bytes, exactly one slice: the size of the mip's width x height at depth 1
 } SubResourceData;
 
 typedef struct DDSInfo {
 
-	U32 w, h, l;                        //Dimensions; these decrease by ~2 for each mip
+	U32 w, h, l;                        //Dimensions; these decrease by ~2 for each mip. l is depth, 1 if not 3D.
 	U32 mips, layers;                  //For cubes, layers counts faces (a multiple of 6).
 
 	TextureFormatId textureFormatId;
 	TextureType type;
-	U16 pad;
+	U16 pad;                           //Ignored by DDS_write and left 0 by DDS_read
 
 } DDSInfo;
 
 TList(SubResourceData);
 
-//buf's contents are sorted based on subresource index, so needs a non const buf
+//buf must hold exactly one entry per (layer, mip, z) of info, each streamLen equal to the slice size. It is sorted in place
+// (layer, then mip, then z) before validation, so it is reordered even when the call fails.
+//The sources are only read: buf and its streams stay owned by the caller, and no reference is taken or dropped.
+//*streamOffset is where the DDS starts and is advanced to its end only on success.
+//Pass a NULL stream to only measure: nothing is written and *streamOffset advances by the file's size.
+//A failure after the header started can leave the stream partially written and reserved.
 Bool DDS_write(
 	StreamRef *stream,
-	U64 *streamOffset,        //Pass NULL to calculate length only (*off)
+	U64 *streamOffset,        //Required, even when stream is NULL
 	ListSubResourceData *buf,
 	const DDSInfo *info,
 	const Allocator *alloc,
@@ -69,6 +75,9 @@ Bool DDS_write(
 //*streamOff is where the DDS starts and is only advanced when the read succeeds (to the end of the last subresource).
 //Sizes in the header are checked against the bytes in the stream before anything is allocated from them.
 //A zero mip count denotes a single mip. Legacy RGBA8 and BGRA8 channel masks are accepted.
+//result has to be empty (NULL ptr) on entry. Pixels are not read: each entry refs stream
+// (one added reference each) and points into it, so the stream's bytes have to stay unchanged while the entries are used.
+//On failure info, result and *streamOff are untouched.
 Bool DDS_read(
 	StreamRef *stream,
 	U64 *streamOff,
@@ -78,6 +87,7 @@ Bool DDS_read(
 	Error *e_rr
 );
 
+//Drops the stream reference of every entry, then frees the list. Every entry must own one reference (as DDS_read gives).
 void ListSubResourceData_freeUnderlying(ListSubResourceData *buf, const Allocator *alloc);
 
 #ifdef __cplusplus

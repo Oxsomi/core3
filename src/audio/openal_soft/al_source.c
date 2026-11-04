@@ -42,10 +42,13 @@ Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e
 	//This is because streams have an offset so different pitches and different time offsets can't be instantiated.
 	//So instead, our AudioSource will basically be taking control of the audio stream.
 
+	ALuint sourceId = 0;
+
 	if (source->stream) {
 		ALAudioStream *streamExt = AudioStream_ext(RefPtr_data(source->stream, AudioStream), AL);
+		sourceId = streamExt->source;
 		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
-		AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, source->modifier.gain));        //We're back
+		AL_PROCESS_ERROR(alSourcef(sourceId, AL_GAIN, source->modifier.gain));        //We're back
 	}
 
 	else {
@@ -53,6 +56,17 @@ Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e
 		AL_PROCESS_ERROR(alGenSources(1, &sourceExt->source));
 		AL_PROCESS_ERROR(alSourcei(sourceExt->source, AL_LOOPING, AL_FALSE));
 		sourceExt->isInitialized = true;
+		sourceId = sourceExt->source;
+	}
+
+	//OpenAL places a source in the world unless it is relative to the listener. A source that isn't spatial has no
+	// position, so it sits on the listener: relative at 0. A spatial one gets its position from the first update.
+
+	AL_PROCESS_ERROR(alSourcei(sourceId, AL_SOURCE_RELATIVE, source->spatialAudio ? AL_FALSE : AL_TRUE));
+
+	if (!source->spatialAudio) {
+		AL_PROCESS_ERROR(alSource3f(sourceId, AL_POSITION, 0, 0, 0));
+		AL_PROCESS_ERROR(alSource3f(sourceId, AL_VELOCITY, 0, 0, 0));
 	}
 
 clean:

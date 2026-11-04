@@ -200,7 +200,7 @@ Bool CLI_helpOperation(const ParsedArgs *args) {
 
 			const CharString catStr = CharString_createRefCStrConst(EOperationCategory_names[cat - 1]);
 
-			if(CharString_equalsStringInsensitive(&split.ptr[0], &catStr)) {
+			if(CharString_equalsStringInsensitiveAscii(&split.ptr[0], &catStr)) {
 
 				EOperation operation = EOperation_Invalid;
 
@@ -211,7 +211,7 @@ Bool CLI_helpOperation(const ParsedArgs *args) {
 
 						if (
 							cat == Operation_values[i].category &&
-							CharString_equalsCStringInsensitive(&split.ptr[1], Operation_values[i].name)
+							CharString_equalsCStringInsensitiveAscii(&split.ptr[1], Operation_values[i].name)
 						) {
 							operation = i;
 							break;
@@ -225,7 +225,7 @@ Bool CLI_helpOperation(const ParsedArgs *args) {
 
 					for(U64 i = 0; i < EFormat_Invalid; ++i)
 
-						if (CharString_equalsCStringInsensitive(&split.ptr[2], Format_values[i].name)) {
+						if (CharString_equalsCStringInsensitiveAscii(&split.ptr[2], Format_values[i].name)) {
 							format = i;
 							break;
 						}
@@ -272,7 +272,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 
-		if (CharString_equalsCStringInsensitive(&arg0, EOperationCategory_names[i - 1])) {
+		if (CharString_equalsCStringInsensitiveAscii(&arg0, EOperationCategory_names[i - 1])) {
 			category = i;
 			break;
 		}
@@ -299,7 +299,7 @@ Bool CLI_execute(ListCharString argList) {
 
 		if (
 			category == Operation_values[i].category &&
-			CharString_equalsCStringInsensitive(&arg1, Operation_values[i].name)
+			CharString_equalsCStringInsensitiveAscii(&arg1, Operation_values[i].name)
 		) {
 			operation = i;
 			break;
@@ -323,7 +323,7 @@ Bool CLI_execute(ListCharString argList) {
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
 
-			if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationFlags_names[i])) {
+			if (CharString_equalsCStringInsensitiveAscii(&argList.ptr[j], EOperationFlags_names[i])) {
 
 				if ((args.flags >> i) & 1) {
 					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
@@ -340,7 +340,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	for(U64 i = 0; i < EOperationHasParameter_CountEnum; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
-			if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationHasParameter_names[i])) {
+			if (CharString_equalsCStringInsensitiveAscii(&argList.ptr[j], EOperationHasParameter_names[i])) {
 
 				const U64 param = (U64) 1 << i;
 
@@ -365,7 +365,7 @@ Bool CLI_execute(ListCharString argList) {
 					if (param == EOperationHasParameter_FileFormat) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
-							if (CharString_equalsCStringInsensitive(&argList.ptr[j + 1], Format_values[k].name)) {
+							if (CharString_equalsCStringInsensitiveAscii(&argList.ptr[j + 1], Format_values[k].name)) {
 								args.format = (EFormat) k;
 								break;
 							}
@@ -428,7 +428,7 @@ Bool CLI_execute(ListCharString argList) {
 				U64 i = 0;
 
 				for (; i < EOperationHasParameter_CountEnum; ++i)
-					if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationHasParameter_names[i]))
+					if (CharString_equalsCStringInsensitiveAscii(&argList.ptr[j], EOperationHasParameter_names[i]))
 						break;
 
 				if(i == EOperationHasParameter_CountEnum) {
@@ -446,7 +446,7 @@ Bool CLI_execute(ListCharString argList) {
 			U64 i = 0;
 
 			for (; i < EOperationFlags_Count; ++i)
-				if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationFlags_names[i]))
+				if (CharString_equalsCStringInsensitiveAscii(&argList.ptr[j], EOperationFlags_names[i]))
 					break;
 
 			if(i == EOperationFlags_Count) {
@@ -558,23 +558,26 @@ U64 CLI_parseGraphicsAPIs(const ParsedArgs *args) {
 			CharString str = strings.ptr[i];
 
 			if (
-				CharString_equalsCStringInsensitive(&str, "d3d12") ||
-				CharString_equalsCStringInsensitive(&str, "directx12") ||
-				CharString_equalsCStringInsensitive(&str, "direct3d12") ||
-				CharString_equalsCStringInsensitive(&str, "dx12")
+				CharString_equalsCStringInsensitiveAscii(&str, "d3d12") ||
+				CharString_equalsCStringInsensitiveAscii(&str, "directx12") ||
+				CharString_equalsCStringInsensitiveAscii(&str, "direct3d12") ||
+				CharString_equalsCStringInsensitiveAscii(&str, "dx12")
 			)
 				queried |= (U64) 1 << EGraphicsApi_Direct3D12;
 
 			else if (
-				CharString_equalsCStringInsensitive(&str, "vulkan") ||
-				CharString_equalsCStringInsensitive(&str, "vk")
+				CharString_equalsCStringInsensitiveAscii(&str, "vulkan") ||
+				CharString_equalsCStringInsensitiveAscii(&str, "vk")
 			)
 				queried |= (U64) 1 << EGraphicsApi_Vulkan;
 
-			else if(CharString_equalsCStringInsensitive(&str, "all"))
+			else if(CharString_equalsCStringInsensitiveAscii(&str, "all"))
 				queried = U32_MAX;
 
-			else if(CharString_equalsCStringInsensitive(&str, "native") || CharString_equalsCStringInsensitive(&str, "def"))
+			else if (
+				CharString_equalsCStringInsensitiveAscii(&str, "native") ||
+				CharString_equalsCStringInsensitiveAscii(&str, "def")
+			)
 				queried |= nativeBit;
 
 			else {

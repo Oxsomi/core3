@@ -22,6 +22,8 @@
 
 #include "formats/json/json_writer.h"
 #include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/base/string_read.h"
 #include "types/base/error.h"
 #include <stdarg.h>
 #include <inttypes.h>
@@ -66,6 +68,8 @@ clean:
 //Escapes what JSON requires and nothing else.
 //Everything below 0x20 becomes \u00XX rather than being dropped, since a name or a diagnostic can carry one and
 // a raw control byte would make the whole document unparseable on the other side.
+//JSON is UTF-8, so above 0x7F a valid code point is copied whole and every byte that doesn't start one becomes
+// an escaped U+FFFD, for the same reason: one broken name mustn't cost the reader the whole document.
 
 static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 
@@ -96,7 +100,22 @@ static Bool JsonWriter_appendEscaped(JsonWriter *w, CharString v, Error *e_rr) {
 					break;
 				}
 
-				gotoIfError3(clean, CharString_append(w->out, c, w->alloc, e_rr));
+				if((U8) c < 0x80) {
+					gotoIfError3(clean, CharString_append(w->out, c, w->alloc, e_rr));
+					break;
+				}
+
+				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+
+				if(!Buffer_readAsUTF8(CharString_bufferConst(v), i, &codepoint, NULL)) {
+					gotoIfError3(clean, JsonWriter_appendRaw(w, "\\ufffd", e_rr));
+					break;
+				}
+
+				for(U8 j = 0; j < codepoint.bytes; ++j)
+					gotoIfError3(clean, CharString_append(w->out, v.ptr[i + j], w->alloc, e_rr));
+
+				i += codepoint.bytes - 1;
 				break;
 		}
 	}
@@ -347,9 +366,12 @@ clean:
 
 Bool JsonWriter_u64(JsonWriter *w, U64 v, Error *e_rr) { return JsonWriter_fmt(w, e_rr, "%"PRIu64, v); }
 Bool JsonWriter_i64(JsonWriter *w, I64 v, Error *e_rr) { return JsonWriter_fmt(w, e_rr, "%"PRIi64, v); }
-//JSON has no NaN or infinity (v - v is 0 for every finite v only), and 17 digits round trip a double
+//JSON has no NaN or infinity (v - v is 0 for every finite v only), so those are written as null.
+//People read these documents, so a number gets the fewest significant digits that read back as the same value
+// (0.1 stays 0.1). Every decimal of up to 6 (F32) or 15 (F64) digits survives a trip through the type, so the search
+// starts there, and 9 (F32) or 17 (F64) always round trip.
 
-Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr) {
+static Bool JsonWriter_number(JsonWriter *w, F64 v, Bool isF32, Error *e_rr) {
 
 	Bool s_uccess = true;
 	C8 text[CharString_decimalLen];
@@ -357,14 +379,36 @@ Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr) {
 	if(v - v != 0)
 		return JsonWriter_null(w, e_rr);
 
-	if(!CharString_formatDecimal(v, 17, text))
-		retError(clean, Error_invalidState(0, "JsonWriter_f64() couldn't format"));
+	const U8 maxDigits = isF32 ? 9 : 17;
+
+	for(U8 digits = isF32 ? 6 : 15; ; ++digits) {
+
+		if(!CharString_formatDecimal(v, digits, text))
+			retError(clean, Error_invalidState(0, "JsonWriter_number() couldn't format"));
+
+		if(digits == maxDigits)
+			break;
+
+		const CharString printed = CharString_createRefCStrConst(text);
+		F32 f = 0;
+		F64 d = 0;
+
+		const Bool roundTrips = isF32 ?
+			CharString_parseFloat(printed, &f) && f == (F32) v :
+			CharString_parseDouble(printed, &d) && d == v;
+
+		if(roundTrips)
+			break;
+	}
 
 	gotoIfError3(clean, JsonWriter_raw(w, text, e_rr));
 
 clean:
 	return s_uccess;
 }
+
+Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr) { return JsonWriter_number(w, v, false, e_rr); }
+Bool JsonWriter_f32(JsonWriter *w, F32 v, Error *e_rr) { return JsonWriter_number(w, (F64) v, true, e_rr); }
 
 Bool JsonWriter_keyObject(JsonWriter *w, const C8 *key, Error *e_rr) {
 	return JsonWriter_key(w, key, e_rr) && JsonWriter_beginObject(w, e_rr);
@@ -400,6 +444,10 @@ Bool JsonWriter_keyI64(JsonWriter *w, const C8 *key, I64 v, Error *e_rr) {
 
 Bool JsonWriter_keyF64(JsonWriter *w, const C8 *key, F64 v, Error *e_rr) {
 	return JsonWriter_key(w, key, e_rr) && JsonWriter_f64(w, v, e_rr);
+}
+
+Bool JsonWriter_keyF32(JsonWriter *w, const C8 *key, F32 v, Error *e_rr) {
+	return JsonWriter_key(w, key, e_rr) && JsonWriter_f32(w, v, e_rr);
 }
 
 Bool JsonWriter_keyRaw(JsonWriter *w, const C8 *key, const C8 *v, Error *e_rr) {

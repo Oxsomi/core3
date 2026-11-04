@@ -55,6 +55,8 @@ OXC3_TEST_MAIN(formats_dds) {
 	Test_DDSDepthOnNonVolume(&t);
 	Test_DDSSortComparator(&t);
 	Test_DDSWriteFailedWrites(&t);
+	Test_DDSWriteOffsetOverflow(&t);
+	Test_DDSWriteHugeExtents(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

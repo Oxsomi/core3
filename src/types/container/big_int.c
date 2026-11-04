@@ -153,7 +153,7 @@ Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding t
 		retError(clean, Error_invalidEnum(1, (U64) type, EIntEncoding_Base2End, "BigInt_createFromBase2Type()::type"));
 
 	const CharString prefix = CharString_createRefCStrConst(base2Types[type]);
-	const U8 prefixChars = CharString_startsWithStringInsensitive(bigIntCreate->text, &prefix, 0) ? 2 : 0;
+	const U8 prefixChars = CharString_startsWithStringInsensitiveAscii(bigIntCreate->text, &prefix, 0) ? 2 : 0;
 	const U8 bitsPerChar = base2Count[type];
 	const U64 textLength = CharString_length(*bigIntCreate->text), chars = textLength - prefixChars;
 

@@ -327,7 +327,20 @@ Bool File_add(
 	}
 
 	{
-		if(!CharString_startsWithStringInsensitive(&resolved, &Platform_instance->defaultDir, 0))
+		//The working directory is compared the way the platform's file system compares names: ASCII case insensitive
+		// on Windows and exact elsewhere.
+		//File_resolve accepts absolute paths, so a looser compare would let a path into a different directory pass,
+		// while a stricter one only refuses some paths that are equal.
+
+		#ifdef _WIN32
+			const EStringCase dirCase = EStringCase_InsensitiveAscii;
+		#else
+			const EStringCase dirCase = EStringCase_Sensitive;
+		#endif
+
+		const CharStringSensOff resolvedOff = { &resolved, dirCase, 0 };
+
+		if(!CharString_startsWithString(&resolvedOff, &Platform_instance->defaultDir))
 			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."));
 
 		const CharStringSplit split = (CharStringSplit) {
@@ -800,17 +813,17 @@ Bool File_virtualOp(
 	const CharString function = CharString_createRefCStrConst("function/");
 	const CharString network = CharString_createRefCStrConst("network/");
 
-	if (CharString_startsWithStringInsensitive(&resolved, &access, 0)) {
+	if (CharString_startsWithStringInsensitiveAscii(&resolved, &access, 0)) {
 		//TODO: Allow //access folder
 		retError(clean, Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet"));
 	}
 
-	if (CharString_startsWithStringInsensitive(&resolved, &function, 0)) {
+	if (CharString_startsWithStringInsensitiveAscii(&resolved, &function, 0)) {
 		//TODO: Allow //function folder (user callbacks)
 		retError(clean, Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet"));
 	}
 
-	if (CharString_startsWithStringInsensitive(&resolved, &network, 0)) {
+	if (CharString_startsWithStringInsensitiveAscii(&resolved, &network, 0)) {
 		//TODO: Allow //network folder (access to \\ on windows)
 		retError(clean, Error_unimplemented(1, "File_virtualOp()::loc //network/ not supported yet"));
 	}
@@ -861,7 +874,7 @@ Bool File_resolveVirtual(
 		retError(clean, Error_invalidState(0, "File_resolveVirtual() requires virtualSectionsLock"));
 
 	gotoIfError3(clean, CharString_createCopy(*loc, alloc, &locLower, e_rr));
-	CharString_toLower(&locLower);
+	CharString_toLowerAscii(&locLower);
 
 	gotoIfError3(clean, CharString_createCopy(locLower, alloc, &locSlash, e_rr));
 	gotoIfError3(clean, CharString_append(&locSlash, '/', alloc, e_rr));
@@ -889,11 +902,17 @@ Bool File_resolveVirtual(
 		gotoIfError3(clean, CharString_createCopy(sec->path, alloc, &secSlash, e_rr));
 		gotoIfError3(clean, CharString_append(&secSlash, '/', alloc, e_rr));
 
-		if(CharString_startsWithStringInsensitive(&locLower, &secSlash, 0)) {
-			//Section matching is case-insensitive, but the subPath must keep its original case: archive entry lookup
-			//(CAFile_resolve) is case-sensitive. locLower and loc have the same length, so the offset is valid for both.
+		U64 prefixLen = 0;
+		const CharStringSensOffLen locSearch = (CharStringSensOffLen) {
+			&locLower, EStringCase_Insensitive, 0, CharString_length(locLower)
+		};
+
+		if(!CharString_findFirstStringMatch(&locSearch, &secSlash, &prefixLen)) {
+			//The subPath is cut from loc so it keeps the caller's bytes. Case folding can make the matched prefix a
+			// different byte count than secSlash, so the cut uses the match length. toLowerAscii keeps every byte in
+			// place, so an offset measured in locLower is the same offset in loc.
 			CharString sub = CharString_createNull();
-			CharString_cut(loc, CharString_length(secSlash), 0, &sub);
+			CharString_cut(loc, prefixLen, 0, &sub);
 			gotoIfError3(clean, CharString_createCopy(sub, alloc, subPath, e_rr));
 			*section = sec;
 			goto clean;
@@ -1148,7 +1167,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 	Bool foundAny            = false;
 
 	gotoIfError3(clean, CharString_createCopy(*resolved, alloc, &resolvedLower, e_rr));
-	CharString_toLower(&resolvedLower);
+	CharString_toLowerAscii(&resolvedLower);
 
 	gotoIfError3(clean, CharString_createCopy(resolvedLower, alloc, &resolvedSlash, e_rr));
 	gotoIfError3(clean, CharString_append(&resolvedSlash, '/', alloc, e_rr));
@@ -1175,7 +1194,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 		CharString_free(&secSlash, alloc);
 
 		gotoIfError3(clean, CharString_createCopy(section->path, alloc, &secLower, e_rr));
-		CharString_toLower(&secLower);
+		CharString_toLowerAscii(&secLower);
 
 		gotoIfError3(clean, CharString_createCopy(secLower, alloc, &secSlash, e_rr));
 		gotoIfError3(clean, CharString_append(&secSlash, '/', alloc, e_rr));
@@ -1191,7 +1210,13 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 		Bool sectionBelowQuery  = !CharString_length(resolvedLower) ||
 			CharString_startsWithStringInsensitive(&secLower, &resolvedSlash, 0);
 		Bool sectionIsQuery     = CharString_equalsStringInsensitive(&secLower,        &resolvedLower);
-		Bool queryInsideSection = CharString_startsWithStringInsensitive(&resolvedLower, &secSlash, 0);
+		U64 secPrefixLen = 0;
+		const CharStringSensOffLen querySearch = (CharStringSensOffLen) {
+			&resolvedLower, EStringCase_Insensitive, 0, CharString_length(resolvedLower)
+		};
+
+		//Case folding can make the matched prefix a different byte count than secSlash, so the child is cut by match length
+		Bool queryInsideSection = !CharString_findFirstStringMatch(&querySearch, &secSlash, &secPrefixLen);
 
 		if(!sectionBelowQuery && !sectionIsQuery && !queryInsideSection)
 			continue;
@@ -1273,7 +1298,7 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 			CharString child = CharString_createNull();
 
 			if(queryInsideSection)
-				CharString_cut(&resolvedLower, CharString_length(secSlash), 0, &child);
+				CharString_cut(&resolvedLower, secPrefixLen, 0, &child);
 
 			//currentPath is what File_virtualForeachCallback prepends to each archive internal name
 			foreach->currentPath = secSlash;

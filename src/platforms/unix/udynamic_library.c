@@ -40,7 +40,7 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 		const CharString ext = CharString_createRefCStrConst(".so");
 	#endif
 
-	return CharString_endsWithStringInsensitive(&str, &ext, 0);
+	return CharString_endsWithStringInsensitiveAscii(&str, &ext, 0);
 }
 
 #ifdef SUPPORTS_DYNAMIC_LINKING

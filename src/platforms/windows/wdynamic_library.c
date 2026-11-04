@@ -38,7 +38,7 @@
 
 Bool DynamicLibrary_isValidPath(CharString str) {
 	const CharString dll = CharString_createRefCStrConst(".dll");
-	return CharString_endsWithStringInsensitive(&str, &dll, 0);
+	return CharString_endsWithStringInsensitiveAscii(&str, &dll, 0);
 }
 
 Bool CharString_toLongPath(wchar_t *buf, const CharString *str, Error *e_rr);

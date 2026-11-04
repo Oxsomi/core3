@@ -247,7 +247,7 @@ class oxc3(ConanFile):
 			self.requires("dxc/2026.11.01", options=sanitized)
 			self.requires("spirv_reflect/2026.11.01", options=sanitized)
 
-			# The AMD offline compilers RGA vendors (amdllpc, amdgpu-dis): offline SPIR-V to AMD ISA for the isa
+			# The AMD offline compiler RGA vendors (amdllpc): offline SPIR-V to AMD ISA for the isa
 			# commands. Only exists where AMD prebuilds them (Windows/Linux x64); run=True so the tools' bin dir
 			# reaches the run environment (RGA_PATH/PATH) for tests and the OxC3 CLI.
 			if self.settings.os in ("Windows", "Linux") and self.settings.arch == "x86_64":

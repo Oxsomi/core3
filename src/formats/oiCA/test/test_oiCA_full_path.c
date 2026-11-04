@@ -81,16 +81,16 @@ void Test_CAResolve(Test *t) {
 		CharString missDir = CharString_createRefCStrConst("nope");
 		Test_assert(t, "missing dir invalid",    CAFile_resolve(&ca, missDir) == CAHandle_Invalid);
 
-		//Resolution is case-sensitive, wrong case must NOT find anything
+		//Names compare case folded, so any case finds the same entry
 
 		CharString srcUp = CharString_createRefCStrConst("SRC/MAIN.C");
-		Test_assert(t, "wrong-case path fails",  CAFile_resolve(&ca, srcUp) == CAHandle_Invalid);
+		Test_assert(t, "other-case path resolves",  CAFile_resolve(&ca, srcUp) == hMain);
 
 		CharString srcFolderUp = CharString_createRefCStrConst("SRC");
-		Test_assert(t, "wrong-case folder fails", CAFile_resolve(&ca, srcFolderUp) == CAHandle_Invalid);
+		Test_assert(t, "other-case folder resolves", CAFile_resolve(&ca, srcFolderUp) == hSrc);
 
-		CharString mixedUtil = CharString_createRefCStrConst("INCLUDE/UTIL");
-		Test_assert(t, "wrong-case multi-segment fails", CAFile_resolve(&ca, mixedUtil) == CAHandle_Invalid);
+		CharString mixedUtil = CharString_createRefCStrConst("INCLUDE/Util");
+		Test_assert(t, "other-case multi-segment resolves", CAFile_resolve(&ca, mixedUtil) == hUtil);
 
 	doneResolve:
 		CAFile_free(&ca, t->alloc);

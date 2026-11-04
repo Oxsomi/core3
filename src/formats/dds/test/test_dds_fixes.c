@@ -561,33 +561,173 @@ void Test_DDSDepthOnNonVolume(Test *t) {
 	Test_assert(t, "cube with depth 2", !readBytes(t, file, sizeof(file), 0, t->alloc, &info, &res, NULL));
 }
 
-//The sort comparator must be a strict weak order, which means equal elements compare equal
+//DDS_write sorts the subresources it is given in place: layer major, then mip, then depth slice.
+//Equal entries are a duplicate, which the validation after the sort refuses.
 
-ECompareResult SubResourceData_sort(const void *aRaw, const void *bRaw, void *context);
+static Bool sortedAsExpected(const ListSubResourceData *subs, U32 layers, U32 mips, U32 depth) {
+
+	U64 at = 0;
+
+	for (U32 i = 0; i < layers; ++i)
+		for (U32 j = 0, currL = depth; j < mips; ++j, currL = U32_max(1, currL >> 1))
+			for (U32 k = 0; k < currL; ++k, ++at) {
+
+				const SubResourceData dat = subs->ptr[at];
+
+				if (dat.layerId != i || dat.mipId != j || dat.z != k)
+					return false;
+			}
+
+	return at == subs->length;
+}
 
 void Test_DDSSortComparator(Test *t) {
 
-	Test_setModule(t, "DDS_write: subresource comparator");
+	Test_setModule(t, "DDS_write: subresource order");
 
-	SubResourceData a = (SubResourceData) { .layerId = 1, .mipId = 2, .z = 3 };
-	SubResourceData b = a;
+	const RefPtrType *type = streamType(t);
+	const ETextureFormatId fmtId = ETextureFormatId_RGBA8;
 
-	Test_assert(t, "equal is Eq", SubResourceData_sort(&a, &b, NULL) == ECompareResult_Eq);
-	Test_assert(t, "equal is Eq reversed", SubResourceData_sort(&b, &a, NULL) == ECompareResult_Eq);
+	for (U32 is3D = 0; is3D < 2; ++is3D) {
 
-	b.z = 4;
-	Test_assert(t, "z lt", SubResourceData_sort(&a, &b, NULL) == ECompareResult_Lt);
-	Test_assert(t, "z gt", SubResourceData_sort(&b, &a, NULL) == ECompareResult_Gt);
+		const U32 depth = is3D ? 4 : 1, layers = is3D ? 1 : 2, mips = 3;
 
-	b = a;
-	b.mipId = 1;
-	Test_assert(t, "mip gt", SubResourceData_sort(&a, &b, NULL) == ECompareResult_Gt);
-	Test_assert(t, "mip lt", SubResourceData_sort(&b, &a, NULL) == ECompareResult_Lt);
+		StreamRef *data = NULL;
+		ListSubResourceData subs = { 0 };
 
-	b = a;
-	b.layerId = 0;
-	Test_assert(t, "layer gt", SubResourceData_sort(&a, &b, NULL) == ECompareResult_Gt);
-	Test_assert(t, "layer lt", SubResourceData_sort(&b, &a, NULL) == ECompareResult_Lt);
+		DDSInfo info = (DDSInfo) {
+			.w = 4, .h = 4, .l = depth, .mips = mips, .layers = layers,
+			.type = is3D ? ETextureType_3D : ETextureType_2D, .textureFormatId = fmtId
+		};
+
+		Test_assert(t, "build", buildSubResources(t, 4, 4, depth, mips, layers, fmtId, &data, &subs, type));
+
+		if (!subs.length)
+			goto doneOrder;
+
+		//Reversed, so every pair is out of order
+
+		for (U64 i = 0; i < subs.length / 2; ++i) {
+			SubResourceData tmp = subs.ptr[i];
+			subs.ptrNonConst[i] = subs.ptr[subs.length - 1 - i];
+			subs.ptrNonConst[subs.length - 1 - i] = tmp;
+		}
+
+		U64 off = 0;
+
+		Test_assert(t, "reversed is not in order", !sortedAsExpected(&subs, layers, mips, depth));
+		Test_assert(t, "reversed is accepted", DDS_write(NULL, &off, &subs, &info, t->alloc, &t->err));
+		Test_assert(t, "layer, mip, then z", sortedAsExpected(&subs, layers, mips, depth));
+
+		//Two equal entries are a duplicate
+
+		subs.ptrNonConst[2] = subs.ptr[1];
+		off = 0;
+		Test_assert(t, "duplicate is refused", !DDS_write(NULL, &off, &subs, &info, t->alloc, NULL));
+
+	doneOrder:
+		RefPtr_dec(&data);
+		ListSubResourceData_freeUnderlying(&subs, t->alloc);
+	}
+}
+
+//The file's size and its end in the stream are not allowed to wrap
+
+void Test_DDSWriteOffsetOverflow(Test *t) {
+
+	Test_setModule(t, "DDS_write: size arithmetic doesn't wrap");
+
+	const RefPtrType *type = streamType(t);
+	const ETextureFormatId fmtId = ETextureFormatId_RGBA8;
+
+	StreamRef *data = NULL;
+	ListSubResourceData subs = { 0 };
+
+	DDSInfo info = (DDSInfo) {
+		.w = 4, .h = 4, .l = 1, .mips = 1, .layers = 1, .type = ETextureType_2D, .textureFormatId = fmtId
+	};
+
+	Test_assert(t, "build", buildSubResources(t, 4, 4, 1, 1, 1, fmtId, &data, &subs, type));
+
+	//Measure the file first: a header and a 4x4 RGBA8 slice
+
+	U64 size = 0;
+	Test_assert(t, "measure", DDS_write(NULL, &size, &subs, &info, t->alloc, &t->err));
+	Test_assert(t, "measured size", size == sizeof(DDSHeader) + 4 * 4 * 4);
+
+	//Ending exactly at U64_MAX is the last offset that fits
+
+	U64 off = U64_MAX - size;
+	Test_assert(t, "fits exactly", DDS_write(NULL, &off, &subs, &info, t->alloc, &t->err));
+	Test_assert(t, "ends at U64_MAX", off == U64_MAX);
+
+	//One byte further wraps, and a failure leaves the offset alone
+
+	for (U64 i = 1; i <= size; i += size - 1) {
+
+		off = U64_MAX - size + i;
+
+		const U64 before = off;
+
+		Test_assert(t, "wrapping start is refused", !DDS_write(NULL, &off, &subs, &info, t->alloc, NULL));
+		Test_assert(t, "offset is unchanged", off == before);
+	}
+
+	off = U64_MAX;
+	Test_assert(t, "start at U64_MAX is refused", !DDS_write(NULL, &off, &subs, &info, t->alloc, NULL));
+	Test_assert(t, "start at U64_MAX unchanged", off == U64_MAX);
+
+	//A stream refuses it too, before anything is written to it
+
+	StreamRef *out = NULL;
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, type, &out, &t->err));
+
+	off = U64_MAX - size + 1;
+	Test_assert(t, "stream write is refused", !DDS_write(out, &off, &subs, &info, t->alloc, NULL));
+	Test_assert(t, "stream untouched", !out || RefPtr_data(out, OxStream)->size == 0);
+
+	RefPtr_dec(&out);
+	RefPtr_dec(&data);
+	ListSubResourceData_freeUnderlying(&subs, t->alloc);
+}
+
+//ETextureFormat_getSize doesn't bound its input, so a 2^29 x 2^29 RGBA32f slice would wrap to a size of 0
+
+void Test_DDSWriteHugeExtents(Test *t) {
+
+	Test_setModule(t, "DDS_write: huge extents are refused");
+
+	const RefPtrType *type = streamType(t);
+	const ETextureFormatId fmtId = ETextureFormatId_RGBA32f;
+
+	StreamRef *data = NULL;
+	ListSubResourceData subs = { 0 };
+
+	Test_assert(t, "build", buildSubResources(t, 4, 4, 1, 1, 1, fmtId, &data, &subs, type));
+
+	//The wrapped slice size is 0, which is what a matching entry would claim
+
+	if (subs.length)
+		subs.ptrNonConst[0].streamLen = 0;
+
+	DDSInfo info = (DDSInfo) {
+		.w = 1 << 29, .h = 1 << 29, .l = 1, .mips = 1, .layers = 1, .type = ETextureType_2D, .textureFormatId = fmtId
+	};
+
+	U64 off = 0;
+	Test_assert(t, "measure is refused", !DDS_write(NULL, &off, &subs, &info, t->alloc, NULL));
+	Test_assert(t, "offset is unchanged", !off);
+
+	StreamRef *out = NULL;
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, type, &out, &t->err));
+
+	Test_assert(t, "stream write is refused", !DDS_write(out, &off, &subs, &info, t->alloc, NULL));
+	Test_assert(t, "stream untouched", !out || RefPtr_data(out, OxStream)->size == 0);
+	Test_assert(t, "offset is still unchanged", !off);
+
+	RefPtr_dec(&out);
+	RefPtr_dec(&data);
+	ListSubResourceData_freeUnderlying(&subs, t->alloc);
 }
 
 //Failing each write in turn: a lost write must not be reported as a success

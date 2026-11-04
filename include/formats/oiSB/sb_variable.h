@@ -100,6 +100,7 @@ static inline ESBStride ESBType_getStride(ESBType type) {
 	return (ESBStride)((type >> 4) & 3);
 }
 
+//Size in bytes. Unpacked pads every vector of a matrix to 16 bytes except the last
 static inline U8 ESBType_getSize(ESBType type, Bool isPacked) {
 
 	U8 primitiveSize = 1 << ESBType_getStride(type);
@@ -114,10 +115,11 @@ static inline U8 ESBType_getSize(ESBType type, Bool isPacked) {
 	return stride * (h - 1) + realStride;
 }
 
+//Static string, empty for a type that doesn't exist. type has to be below 256
 const C8 *ESBType_name(ESBType type);
 
 typedef struct SBStruct {
-	U32 stride;
+	U32 stride;        //Bytes between array elements, never 0
 } SBStruct;
 
 typedef enum ESBVarFlag {
@@ -130,12 +132,12 @@ typedef enum ESBVarFlag {
 typedef struct SBVar {        //Is seen as a U32[3] for hashing
 
 	U16 structId;             //If not U16_MAX, ESBType needs to be 0 and this should be a valid struct
-	U16 arrayDimOrArrayId;    //<= 32767: array dimension, otherwise arrayId (& 0x7FFF)
+	U16 arrayDimOrArrayId;    //<= 32767: array dimension (0 = not an array), otherwise arrayId (& 0x7FFF)
 
-	U32 offset;
+	U32 offset;               //Bytes from the start of the buffer
 
 	U8 type;                  //ESBType if structId == U16_MAX
-	U8 flags;                 //ESBStructVarFlag
+	U8 flags;                 //ESBVarFlag
 	U16 parentId;             //root = U16_MAX
 
 } SBVar;

@@ -32,9 +32,9 @@
 typedef struct Allocator Allocator;
 
 //Appends one JSON document to a CharString. Containers track their own separators, keys and values are
-//checked against the container they land in, strings escape what JSON requires, and pretty mode lays the
-//document out with a tab per level. A document is consumed whole by whoever reads it, a page or a file, so
-//this materializes into the string rather than streaming.
+//checked against the container they land in, strings escape what JSON requires (bytes that aren't valid UTF-8
+//become U+FFFD), and pretty mode lays the document out with a tab per level. A document is consumed whole by
+//whoever reads it, a page or a file, so this materializes into the string rather than streaming.
 //Nesting is bounded at 64 levels, one bit per level in the masks below.
 
 typedef struct JsonWriter {
@@ -66,6 +66,8 @@ Bool JsonWriter_key(JsonWriter *w, const C8 *key, Error *e_rr);
 Bool JsonWriter_keyString(JsonWriter *w, CharString key, Error *e_rr);
 
 //Values. A NULL C string is the empty string, the way a null CharString is; null is written on purpose only.
+//Floats get the fewest digits that read back as the same value, which is why F32 has its own entry (0.1f as F64
+// needs 17 digits); NaN and infinity become null, since JSON has neither.
 
 Bool JsonWriter_str(JsonWriter *w, CharString v, Error *e_rr);
 Bool JsonWriter_cstr(JsonWriter *w, const C8 *v, Error *e_rr);
@@ -74,6 +76,7 @@ Bool JsonWriter_null(JsonWriter *w, Error *e_rr);
 Bool JsonWriter_u64(JsonWriter *w, U64 v, Error *e_rr);
 Bool JsonWriter_i64(JsonWriter *w, I64 v, Error *e_rr);
 Bool JsonWriter_f64(JsonWriter *w, F64 v, Error *e_rr);
+Bool JsonWriter_f32(JsonWriter *w, F32 v, Error *e_rr);
 
 //Bytes as a lowercase hex string, two characters per byte and no separators, which is how a document carries
 // something binary that a reader may want to decode again.
@@ -98,6 +101,7 @@ Bool JsonWriter_keyNull(JsonWriter *w, const C8 *key, Error *e_rr);
 Bool JsonWriter_keyU64(JsonWriter *w, const C8 *key, U64 v, Error *e_rr);
 Bool JsonWriter_keyI64(JsonWriter *w, const C8 *key, I64 v, Error *e_rr);
 Bool JsonWriter_keyF64(JsonWriter *w, const C8 *key, F64 v, Error *e_rr);
+Bool JsonWriter_keyF32(JsonWriter *w, const C8 *key, F32 v, Error *e_rr);
 Bool JsonWriter_keyRaw(JsonWriter *w, const C8 *key, const C8 *v, Error *e_rr);
 Bool JsonWriter_keyHex(JsonWriter *w, const C8 *key, Buffer v, Error *e_rr);
 

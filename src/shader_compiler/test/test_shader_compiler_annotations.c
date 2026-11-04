@@ -442,9 +442,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	);
 
 	//--- An extension needing a newer model than the entry declared is PROMOTED, not refused. ---
-	//The declared model is a floor: AtomicI64 needs 6.6, 6.5 is what's given, and the combination lands on
-	//6.6. This used to be a parse error, which is what forced an entry to declare the highest model any of
-	//its extensions needed and pulled every other permutation up to it.
+	//The declared model is a floor: AtomicI64 needs 6.6, 6.5 is what's given, and the combination lands on 6.6.
 
 	src = CharString_createRefCStrConst(
 		"[[oxc::extension(\"AtomicI64\")]]\n"

@@ -30,6 +30,7 @@
 #include "types/container/container_types.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
+#include "types/base/mathi.h"
 
 Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) {
 
@@ -44,13 +45,24 @@ Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) 
 		retError(clean, Error_invalidParameter(1, 0, "AudioStreamRef_seekTime() duration offset out of bounds"));
 
 	stream->timeOffset = offset;
+	stream->seekPending = true;
+
+	//A stream that isn't playing starts over, so a later play makes every pass again.
+
+	if(!stream->isPlaying)
+		stream->loops = 0;
+
+	//The frame size isn't always a power of two (24 bit), so it rounds by division.
 
 	U64 stride = EAudioStreamFormat_getSize(AudioStreamInfo_format(&stream->info));
 
 	U64 streamOffset = offset / SECOND * stream->info.bytesPerSecond;
 	streamOffset += (Ns) ((offset % SECOND) * (stream->info.bytesPerSecond / (F64) SECOND));
+	streamOffset = (streamOffset + stride - 1) / stride * stride;
 
-	stream->streamOffset = (streamOffset + stride - 1) &~ (stride - 1);
+	//Rounding up can pass the end if the data doesn't end on a frame, and update subtracts this from the data length.
+
+	stream->streamOffset = U64_min(streamOffset, AudioStreamInfo_dataLength(&stream->info));
 
 clean:
 	return s_uccess;
@@ -61,6 +73,7 @@ impl Bool AudioStream_playExt(AudioStream *stream, Error *e_rr);
 Bool AudioStreamRef_play(AudioStreamRef *streamRef, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool listed = false;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	AudioDevice *dev = NULL;
 
@@ -78,11 +91,25 @@ Bool AudioStreamRef_play(AudioStreamRef *streamRef, const Allocator *alloc, Erro
 	if(stream->isPlaying)
 		goto clean;
 
-	gotoIfError3(clean, ListWeakRefPtr_pushBack(&dev->streams, streamRef, alloc, e_rr));
+	//A stream is listed once, and only while it plays: if the backend can't start it, it's unlisted again.
+
+	if(ListWeakRefPtr_findFirst(dev->streams, streamRef, 0, NULL) == U64_MAX) {
+		gotoIfError3(clean, ListWeakRefPtr_pushBack(&dev->streams, streamRef, alloc, e_rr));
+		listed = true;
+	}
+
 	gotoIfError3(clean, AudioStream_playExt(stream, e_rr));
 	stream->isPlaying = true;
 
 clean:
+
+	if(listed && !s_uccess) {
+
+		U64 id = ListWeakRefPtr_findFirst(dev->streams, streamRef, 0, NULL);
+
+		if(id != U64_MAX)
+			ListWeakRefPtr_erase(&dev->streams, id, NULL);
+	}
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&dev->pendingUpdateLock);
@@ -112,12 +139,15 @@ Bool AudioStreamRef_stop(AudioStreamRef *streamRef, Error *e_rr) {
 	if(!stream->isPlaying)
 		goto clean;
 
+	//Unlisted only once the backend stopped it, so a failed stop leaves a stream that still updates.
+
+	gotoIfError3(clean, AudioStream_stopExt(stream, e_rr));
+
 	U64 id = ListWeakRefPtr_findFirst(dev->streams, streamRef, 0, NULL);
 
 	if(id != U64_MAX)
 		ListWeakRefPtr_erase(&dev->streams, id, NULL);
 
-	gotoIfError3(clean, AudioStream_stopExt(stream, e_rr));
 	stream->isPlaying = false;
 	stream->loops = 0;
 
@@ -140,9 +170,8 @@ void AudioStream_free(void *streamGeneric, const Allocator *alloc) {
 	if(!stream)
 		return;
 
-	AudioStream_freeExt(stream, alloc);
-
-	//Ensure stream isn't updated next time
+	//Unlisted before the backend objects go, so an update never sees a stream without them.
+	//The lock is held through the backend release because update uses the same context.
 
 	AudioStreamRef *streamRef = (AudioStreamRef*)stream - 1;
 
@@ -155,10 +184,12 @@ void AudioStream_free(void *streamGeneric, const Allocator *alloc) {
 
 		if (id != U64_MAX)
 			ListWeakRefPtr_erase(&dev->streams, id, NULL);
-
-		if (acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&dev->pendingUpdateLock);
 	}
+
+	AudioStream_freeExt(stream, alloc);
+
+	if (acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&dev->pendingUpdateLock);
 
 	RefPtr_dec(&stream->info.stream);
 	RefPtr_dec(&stream->device);
@@ -192,6 +223,13 @@ Bool AudioDeviceRef_createStream(
 	if(!info)
 		retError(clean, Error_nullPointer(1, "AudioDeviceRef_createStream()::info is required"));
 
+	//Without IsLoop a stream plays once, so loops can only say 1. Looping wraps with a modulo of the data length.
+
+	if(info->loops != 1 && !AudioStreamInfo_isLoop(info))
+		retError(clean, Error_invalidParameter(
+			1, 0, "AudioDeviceRef_createStream()::info.loops must be 1 without IsLoop"
+		));
+
 	if(!info->sampleRate || !info->bytesPerSecond)
 		retError(clean, Error_invalidParameter(
 			1, 0, "AudioDeviceRef_createStream()::info.sampleRate and bytesPerSecond are required"
@@ -205,6 +243,16 @@ Bool AudioDeviceRef_createStream(
 		));
 	
 	U8 bytesPerBlock = EAudioStreamFormat_getSize(format);
+
+	//The data is whole frames, so a trailing partial frame is never queued. A length under one frame is empty.
+
+	U64 dataLength = AudioStreamInfo_dataLength(info);
+	dataLength -= dataLength % bytesPerBlock;
+	info->dataLengthLo32 = (U32) dataLength;
+	info->dataLengthHi8 = (U8) (dataLength >> 32);
+
+	if(!dataLength)
+		retError(clean, Error_invalidParameter(1, 0, "AudioDeviceRef_createStream()::info.dataLength is required"));
 
 	if((U64) info->sampleRate * bytesPerBlock != info->bytesPerSecond)
 		retError(clean, Error_invalidParameter(
@@ -229,6 +277,15 @@ Bool AudioDeviceRef_createStream(
 
 	if(!info->streamLength)
 		info->streamLength = info->bytesPerSecond;
+
+	//The backend takes the buffer size as a signed int. A buffer holds whole frames, which aren't always a power of two.
+
+	if(info->streamLength > (U32) I32_MAX)
+		retError(clean, Error_invalidParameter(
+			1, 0, "AudioDeviceRef_createStream()::info.streamLength is too large"
+		));
+
+	info->streamLength -= info->streamLength % bytesPerBlock;
 
 	if(!info->pitch)
 		info->pitch = 1;

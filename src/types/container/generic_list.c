@@ -1069,15 +1069,24 @@ ECompareResult GenericList_compareStringInsensitive(const void *aRaw, const void
 	return CharString_compareInsensitive((const CharString*) aRaw, (const CharString*) bRaw);
 }
 
+static ECompareResult GenericList_compareStringInsensitiveAscii(const void *aRaw, const void *bRaw, void *context) {
+	(void) context;
+	return CharString_compare((const CharString*) aRaw, (const CharString*) bRaw, EStringCase_InsensitiveAscii);
+}
+
 Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 
 	if(list.stride != sizeof(CharString))        //We don't know the real type, but at least it's a check
 		return false;
 
-	return
-		stringCase == EStringCase_Insensitive ?
-		GenericList_sortCustom(list, GenericList_compareStringInsensitive, NULL) :
-		GenericList_sortCustom(list, GenericList_compareString, NULL);
+	return GenericList_sortCustom(
+		list,
+		stringCase == EStringCase_Insensitive ? GenericList_compareStringInsensitive : (
+			stringCase == EStringCase_InsensitiveAscii ? GenericList_compareStringInsensitiveAscii :
+			GenericList_compareString
+		),
+		NULL
+	);
 }
 
 Bool GenericList_pushBack(GenericList *list, const Buffer *buf, const Allocator *allocator, Error *e_rr) {

@@ -126,12 +126,17 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 
 	//Buffer to handle things like mono -> stereo, reverse, looping, etc.
 	//Things that can't be handled by directly reading the stream
-	gotoIfError3(clean, Buffer_createUninitializedBytes(ALAudioStream_bufferSize, alloc, &streamExt->tmp, e_rr));
+	//tmp is one buffer in the format the backend gets. tmpCvt holds the source data of one buffer, which is bigger when
+	// the sample is converted to a smaller one or folded from stereo to mono. It's cut to whole source frames, which
+	// aren't always a power of two.
+	//Both come from streamLength, which createStream rounded to whole frames and limited to a signed int.
 
-	U8 newStride = EAudioStreamFormat_getStrideBytes(format);
-	gotoIfError3(clean, Buffer_createUninitializedBytes(
-		ALAudioStream_bufferSize * stride / newStride, alloc, &streamExt->tmpCvt, e_rr
-	));
+	U64 outLength = stream->info.streamLength;
+	U64 cvtLength = outLength * EAudioStreamFormat_getSize(ogFormat) / EAudioStreamFormat_getSize(format);
+	cvtLength -= cvtLength % EAudioStreamFormat_getSize(ogFormat);
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(outLength, alloc, &streamExt->tmp, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(cvtLength, alloc, &streamExt->tmpCvt, e_rr));
 
 	streamExt->format = fmt;
 
@@ -176,6 +181,11 @@ void AudioStream_freeExt(AudioStream *stream, const Allocator *alloc) {
 	ALAudioDevice *deviceExt = AudioDevice_ext(AudioDeviceRef_ptr(stream->device), AL);
 	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
 
+	//Every call below acts on the current context, so it has to be this device's.
+
+	if(streamExt->initializedBuffers | streamExt->initializedSource)
+		alcMakeContextCurrent(deviceExt->context);
+
 	if (stream->isPlaying) {
 
 		alSourceStop(streamExt->source);
@@ -191,9 +201,6 @@ void AudioStream_freeExt(AudioStream *stream, const Allocator *alloc) {
 
 	Buffer_free(&streamExt->tmp, alloc);
 	Buffer_free(&streamExt->tmpCvt, alloc);
-
-	if(streamExt->initializedBuffers | streamExt->initializedSource)
-		alcMakeContextCurrent(deviceExt->context);
 
 	if(streamExt->initializedSource)
 		alDeleteSources(1, &streamExt->source);
@@ -214,14 +221,37 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 	StreamCursor cursor = (StreamCursor){ 0 };
 
+	//A seek drops what is queued, so the buffers are refilled from the new offset. Only a stream with queued audio has
+	// anything to drop, and update only sees playing streams, so a stopped one stays stopped.
+	//loops counts passes as they are read, ahead of what is heard. If the last pass was read, the pass that gets dropped
+	// is the one being heard, so the count steps back to it and the refill reads that pass again.
+
+	if (stream->seekPending) {
+
+		if (streamExt->filledStream) {
+
+			gotoIfError3(clean, AudioStream_stopExt(stream, e_rr));
+			freeBufferCount = ALAudioStream_bufferCount;
+
+			if (stream->info.loops && stream->loops >= stream->info.loops)
+				stream->loops = stream->info.loops - 1;
+		}
+
+		stream->seekPending = false;
+	}
+
 	if (!freeBufferCount) {
 
 		ALint state = 0;
 		AL_PROCESS_ERROR(alGetSourcei(streamExt->source, AL_SOURCE_STATE, &state));
 
+		//The processed buffers are dropped too, so a later play never replays them. The stream ends first, so a failed
+		// drop can't keep every later update failing on it.
+
 		if (state == AL_STOPPED || state == AL_PAUSED) {
 			stream->isPlaying = false;
 			ListWeakRefPtr_erase(&device->streams, index, NULL);
+			gotoIfError3(clean, AudioStream_stopExt(stream, e_rr));
 			goto clean;
 		}
 
@@ -243,8 +273,17 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 	Bool finished = stream->loops >= stream->info.loops;
 	Bool isInfiniteLoop = AudioStreamInfo_isInfiniteLoop(&stream->info);
 
-	if (finished && !isInfiniteLoop)
+	//A finished stream plays out what is queued. With nothing queued (a seek dropped it) it has nothing left to do.
+
+	if (finished && !isInfiniteLoop) {
+
+		if (!streamExt->filledStream) {
+			stream->isPlaying = false;
+			ListWeakRefPtr_erase(&device->streams, index, NULL);
+		}
+
 		goto clean;
+	}
 
 	EAudioStreamFormat ogFormat = AudioStreamInfo_format(&stream->info);
 	Bool isFallback = ogFormat != stream->format;
@@ -283,7 +322,6 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 			void *tmp = (void*) streamExt->tmp.ptr;
 			U8 *tmp8 = (U8*) tmp;
-			U16 *tmp16 = (U16*) tmp;
 
 			Bool finishedLoop = false;
 
@@ -299,7 +337,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 					U64 blocks = len / ogStride;
 
-					for (U64 j = 0, k = filled / newStride; j < blocks; j += inputStep, ++k) {
+					for (U64 j = 0, k = filled; j < blocks; j += inputStep, k += newStride) {
 
 						U64 result = WAVFile_cvt(src, ogStride, newStride, j, ogPcm, newPcm);
 
@@ -311,10 +349,10 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 								newPcm
 							);
 
-						switch (newStride) {
-							default:       tmp16[k] = (U16) result;  break;
-							case 1:        tmp8[k] = (U8) result;    break;
-						}
+						//Written byte by byte, little endian, because the sample can be 1, 2, 3, 4 or 8 bytes and unaligned.
+
+						for (U8 b = 0; b < newStride; ++b)
+							tmp8[k + b] = (U8) (result >> (b << 3));
 					}
 
 					consumed += len;
@@ -333,23 +371,28 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 					consumed += len;
 				}
 
+				//A pass ends when the read reaches the end of the data, whether or not that also fills the buffer.
+				//Only a stream that keeps looping wraps; a finished one stays at the end like the direct path.
+
 				U64 dataLength = AudioStreamInfo_dataLength(&stream->info);
-				stream->streamOffset = (stream->streamOffset + len) % dataLength;
-				len = U64_min(dataLength - stream->streamOffset, maxLen - consumed);
+				stream->streamOffset += len;
 
-				if (consumed < maxLen) {
+				if (stream->streamOffset >= dataLength) {
 
-					if (!isLoop || (stream->info.loops && stream->loops + 1 >= stream->info.loops)) {
+					++stream->loops;
+
+					if (!isLoop || (stream->info.loops && stream->loops >= stream->info.loops)) {
 						finishedLoop = true;
-						++stream->loops;
 						break;
 					}
 
-					++stream->loops;
-					continue;
+					stream->streamOffset = 0;
 				}
 
-				break;
+				if (consumed >= maxLen)
+					break;
+
+				len = U64_min(dataLength - stream->streamOffset, maxLen - consumed);
 			}
 
 			if (!filled)
@@ -381,6 +424,14 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 		stream->streamOffset += len;
 		++queued;
+	}
+
+	//Playing from the end of the data (no seek since it ended) has nothing to queue, so the stream ends.
+
+	if (!queued && !streamExt->filledStream) {
+		stream->isPlaying = false;
+		ListWeakRefPtr_erase(&device->streams, index, NULL);
+		goto clean;
 	}
 
 	if (queued)

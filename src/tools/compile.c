@@ -115,7 +115,7 @@
 			Bool match = false;
 
 			for(U64 j = 0; j < modeCount; ++j)
-				if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
+				if (CharString_equalsStringInsensitiveAscii(splits.ptr[i], modes[j])) {
 
 					if(j == modeCount - 1) {
 						compileModeU64 = (1 << EGfxBinaryType_Count) - 1;
@@ -201,16 +201,16 @@
 
 			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr, e_rr));
 
-			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
+			if (CharString_equalsStringInsensitiveAscii(compileTypeStr, CharString_createRefCStrConst("preprocess")))
 				compileType = ECompileType_Preprocess;
 
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
+			else if (CharString_equalsStringInsensitiveAscii(compileTypeStr, CharString_createRefCStrConst("includes")))
 				compileType = ECompileType_Includes;
 
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
+			else if (CharString_equalsStringInsensitiveAscii(compileTypeStr, CharString_createRefCStrConst("symbols")))
 				compileType = ECompileType_Symbols;
 
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
+			else if (CharString_equalsStringInsensitiveAscii(compileTypeStr, CharString_createRefCStrConst("compile")))
 				compileType = ECompileType_Compile;
 
 			else {

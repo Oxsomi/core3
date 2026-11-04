@@ -97,7 +97,7 @@ extern "C" {
 
 			const CharString entry = CharString_createRefCStrConst(CompilerBuiltInIncludes[i].name);
 
-			if(CharString_equalsStringInsensitive(&name, &entry))
+			if(CharString_equalsStringInsensitiveAscii(&name, &entry))
 				return &CompilerBuiltInIncludes[i];
 		}
 

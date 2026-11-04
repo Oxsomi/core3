@@ -22,6 +22,7 @@
 
 #include "test_oiSB_shared.h"
 #include "formats/oiSB/sb_file.h"
+#include "formats/oiDL/dl_entry.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/string_base.h"
 #include "types/container/memory_stream.h"
@@ -863,4 +864,297 @@ void Test_SBFileReadHugeCounts(Test *t) {
 		SBFile_free(&result, &capped);
 		RefPtr_dec(&s);
 	}
+}
+
+//A failed add leaves the caller's arrays list as it was, also when the add would have reused an entry or inlined it
+
+static Bool sbOwnedList(Test *t, const U32 *values, U64 count, ListU32 *result) {
+
+	ListU32 ref = { 0 };
+	return ListU32_createRefConst(values, count, &ref, &t->err) && ListU32_createCopy(ref, t->alloc, result, &t->err);
+}
+
+static void sbArraysKeptOnFailure(Test *t, Bool asStruct, const U32 *dims, U64 count) {
+
+	SBFile sb = { 0 };
+	Allocator refuse = (Allocator) { .alloc = sbRefuseAlloc, .free = sbRefuseFree };
+
+	CharString sn = CharString_createRefCStrConst("S");
+	CharString first = CharString_createRefCStrConst("first");
+	CharString second = CharString_createRefCStrConst("second");
+
+	Test_assert(t, "create", SBFile_create(ESBSettingsFlags_None, 256, t->alloc, &sb, &t->err));
+	Test_assert(t, "struct", SBFile_addStruct(&sb, &sn, (SBStruct) { .stride = 16 }, t->alloc, &t->err));
+
+	//More than one dimension is stored in the file, so a second identical list is a reuse of that entry
+
+	if (count > 1) {
+
+		ListU32 ref = { 0 };
+
+		Test_assert(t, "ref", ListU32_createRefConst(dims, count, &ref, &t->err));
+		Test_assert(t, "first var", asStruct ?
+			SBFile_addVariableAsStruct(&sb, &first, 0, U16_MAX, 0, ESBVarFlag_None, &ref, t->alloc, &t->err) :
+			SBFile_addVariableAsType(&sb, &first, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, &ref, t->alloc, &t->err)
+		);
+	}
+
+	//The variable list is created with room for 4, so with 4 in it the next push needs memory the refusing allocator won't give
+
+	for (U32 i = (U32) sb.vars.length; i < 4; ++i) {
+		const C8 fillerName[2] = { (C8) ('a' + i), '\0' };
+		Test_assert(t, "filler", sbAddType(&sb, fillerName, 192 + i * 4, U16_MAX, ESBType_F32, NULL, t->alloc));
+	}
+
+	ListU32 arrays = { 0 };
+	Test_assert(t, "owned list", sbOwnedList(t, dims, count, &arrays));
+
+	const U32 *ptr = arrays.ptr;
+	const U64 vars = sb.vars.length;
+	const U64 hash = sb.hash;
+
+	Test_assert(t, "add fails", asStruct ?
+		!SBFile_addVariableAsStruct(&sb, &second, 128, U16_MAX, 0, ESBVarFlag_None, &arrays, &refuse, NULL) :
+		!SBFile_addVariableAsType(&sb, &second, 128, U16_MAX, ESBType_F32, ESBVarFlag_None, &arrays, &refuse, NULL)
+	);
+
+	Test_assert(t, "file unchanged", sb.vars.length == vars && sb.hash == hash);
+	Test_assert(t, "arrays still owned", arrays.ptr == ptr && arrays.length == count);
+
+	Bool same = arrays.ptr && arrays.length == count;
+
+	for (U64 i = 0; same && i < count; ++i)
+		same = arrays.ptr[i] == dims[i];
+
+	Test_assert(t, "arrays intact", same);
+
+	//The same list is accepted by a call that succeeds, and is then the file's
+
+	Test_assert(t, "add works", asStruct ?
+		SBFile_addVariableAsStruct(&sb, &second, 128, U16_MAX, 0, ESBVarFlag_None, &arrays, t->alloc, &t->err) :
+		SBFile_addVariableAsType(&sb, &second, 128, U16_MAX, ESBType_F32, ESBVarFlag_None, &arrays, t->alloc, &t->err)
+	);
+
+	Test_assert(t, "arrays emptied on success", !arrays.ptr && !arrays.length);
+
+	ListU32_free(&arrays, t->alloc);
+	SBFile_free(&sb, t->alloc);
+}
+
+void Test_SBFileArraysKeptOnFailure(Test *t) {
+
+	Test_setModule(t, "SBFile add: a failed add leaves *arrays as it was");
+
+	const U32 inlineDim[1] = { 5 };
+	const U32 nd[2] = { 2, 3 };
+
+	sbArraysKeptOnFailure(t, false, inlineDim, 1);
+	sbArraysKeptOnFailure(t, false, nd, 2);
+	sbArraysKeptOnFailure(t, true, inlineDim, 1);
+	sbArraysKeptOnFailure(t, true, nd, 2);
+}
+
+//A freed file is empty again, and so is the output of a failed read
+
+void Test_SBFileFreeZeroes(Test *t) {
+
+	Test_setModule(t, "SBFile free: the struct is zeroed and can be created into again");
+
+	SBFile sb = { 0 };
+
+	Test_assert(t, "create", SBFile_create(ESBSettingsFlags_IsTightlyPacked, 32, t->alloc, &sb, &t->err));
+	Test_assert(t, "add", sbAddType(&sb, "a", 0, U16_MAX, ESBType_F32, NULL, t->alloc));
+	SBFile_free(&sb, t->alloc);
+
+	Test_assert(t, "bufferSize zeroed", sb.bufferSize == 0);
+	Test_assert(t, "flags zeroed", sb.flags == 0);
+	Test_assert(t, "hash zeroed", sb.hash == 0);
+	Test_assert(t, "not filled", !SBFile_isFilled(&sb));
+	Test_assert(t, "create again", SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &sb, &t->err));
+	SBFile_free(&sb, t->alloc);
+
+	//A read that fails after it allocated is followed by a good one into the same struct
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+	StreamRef *s = NULL;
+	SBFile src = { 0 }, result = { 0 };
+	U64 off = 0;
+
+	Test_assert(t, "create src", SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &src, &t->err));
+	Test_assert(t, "add src", sbAddType(&src, "a", 0, U16_MAX, ESBType_F32, NULL, t->alloc));
+	Test_assert(t, "stream", MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &s, &t->err));
+	Test_assert(t, "write", SBFile_write(&src, t->alloc, s, &off, &t->err));
+
+	if (s) {
+
+		MemoryStream *ms = RefPtr_data(s, MemoryStream);
+
+		//[magic 4][header 12][structs 0][SBVar: structId 2, array 2, offset 4]
+		const U32 bad = 0xFFFFFFFC;
+		U32 good = 0;
+
+		Buffer_memcpy(Buffer_createRef(&good, 4), Buffer_createRefConst(ms->data.ptr + 20, 4));
+		Buffer_memcpy(Buffer_createRef(ms->data.ptrNonConst + 20, 4), Buffer_createRefConst(&bad, 4));
+
+		U64 ro = 0;
+
+		Test_assert(t, "bad read fails", !SBFile_read(s, &ro, false, t->alloc, &result, NULL));
+		Test_assert(t, "failed read leaves it empty", !SBFile_isFilled(&result));
+
+		Buffer_memcpy(Buffer_createRef(ms->data.ptrNonConst + 20, 4), Buffer_createRefConst(&good, 4));
+
+		ro = 0;
+		Test_assert(t, "good read into the same struct", SBFile_read(s, &ro, false, t->alloc, &result, &t->err));
+		Test_assert(t, "read equals src", SBFile_equals(&result, &src));
+	}
+
+	SBFile_free(&result, t->alloc);
+	SBFile_free(&src, t->alloc);
+	RefPtr_dec(&s);
+}
+
+//Create refuses anything that would leak, whichever member is set
+
+void Test_SBFileCreateRefusesFilled(Test *t) {
+
+	Test_setModule(t, "SBFile create: refuses an output that holds any member");
+
+	const Allocator *alloc = t->alloc;
+	SBFile sb = { 0 };
+
+	//Names only, a struct only and an array only
+
+	DLSettings settings = (DLSettings) { .dataType = EDLDataType_String, .flags = EDLSettingsFlags_HideMagicNumber };
+
+	Test_assert(t, "names", DLFile_create(&settings, KIBI, alloc, &sb.names, &t->err));
+	Test_assert(t, "names only is refused", !SBFile_create(ESBSettingsFlags_None, 16, alloc, &sb, NULL));
+	DLFile_free(&sb.names, alloc);
+
+	Test_assert(t, "struct", ListSBStruct_pushBack(&sb.structs, (SBStruct) { .stride = 16 }, alloc, &t->err));
+	Test_assert(t, "struct only is refused", !SBFile_create(ESBSettingsFlags_None, 16, alloc, &sb, NULL));
+	ListSBStruct_free(&sb.structs, alloc);
+
+	const U32 nd[2] = { 2, 3 };
+	ListU32 dims = { 0 };
+
+	Test_assert(t, "dims", sbOwnedList(t, nd, 2, &dims));
+	Test_assert(t, "array", ListListU32_pushBack(&sb.arrays, dims, alloc, &t->err));
+	Test_assert(t, "array only is refused", !SBFile_create(ESBSettingsFlags_None, 16, alloc, &sb, NULL));
+	ListListU32_freeUnderlying(&sb.arrays, alloc);
+
+	//The other creators refuse the same outputs
+
+	Test_assert(t, "empty is accepted", SBFile_create(ESBSettingsFlags_None, 16, alloc, &sb, &t->err));
+	Test_assert(t, "add", sbAddType(&sb, "a", 0, U16_MAX, ESBType_F32, NULL, alloc));
+	Test_assert(t, "filled is refused", !SBFile_create(ESBSettingsFlags_None, 16, alloc, &sb, NULL));
+
+	SBFile other = { 0 };
+
+	Test_assert(t, "copy", SBFile_createCopy(&sb, alloc, &other, &t->err));
+	Test_assert(t, "copy into filled is refused", !SBFile_createCopy(&sb, alloc, &other, NULL));
+	Test_assert(t, "combine into filled is refused", !SBFile_combine(&sb, &other, alloc, &other, NULL));
+
+	SBFile_free(&other, alloc);
+
+	//Names alone count for createCopy and combine too
+
+	Test_assert(t, "names for copy", DLFile_create(&settings, KIBI, alloc, &other.names, &t->err));
+	Test_assert(t, "copy into names only is refused", !SBFile_createCopy(&sb, alloc, &other, NULL));
+	Test_assert(t, "combine into names only is refused", !SBFile_combine(&sb, &sb, alloc, &other, NULL));
+	DLFile_free(&other.names, alloc);
+
+	SBFile_free(&sb, alloc);
+}
+
+//The Invalid mask leaves every defined flag alone
+
+void Test_SBFileSettingsFlags(Test *t) {
+
+	Test_setModule(t, "SBFile create: settings flags");
+
+	const ESBSettingsFlags defined = (ESBSettingsFlags) (
+		ESBSettingsFlags_HideMagicNumber | ESBSettingsFlags_IsTightlyPacked | ESBSettingsFlags_CreateNoReserve
+	);
+
+	Test_assert(t, "Invalid excludes every defined flag", !(ESBSettingsFlags_Invalid & defined));
+
+	SBFile sb = { 0 };
+
+	Test_assert(t, "unknown flag is refused", !SBFile_create((ESBSettingsFlags) (1 << 3), 16, t->alloc, &sb, NULL));
+	Test_assert(t, "defined flags are accepted", SBFile_create(defined, 16, t->alloc, &sb, &t->err));
+	SBFile_free(&sb, t->alloc);
+}
+
+//A struct name can be as long as a variable name and the file format's limit
+
+void Test_SBFileStructNameLength(Test *t) {
+
+	Test_setModule(t, "SBFile addStruct: 128 byte name accepted, 129 refused");
+
+	SBFile sb = { 0 };
+	C8 name[130];
+
+	for (U32 i = 0; i < 129; ++i)
+		name[i] = 'a';
+
+	name[129] = '\0';
+
+	CharString n129 = CharString_createRefCStrConst(name);
+	CharString n128 = CharString_createRefSizedConst(name, 128, false);
+
+	Test_assert(t, "create", SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &sb, &t->err));
+	Test_assert(t, "129 refused", !SBFile_addStruct(&sb, &n129, (SBStruct) { .stride = 16 }, t->alloc, NULL));
+	Test_assert(t, "refused leaves no struct", sb.structs.length == 0);
+	Test_assert(t, "128 accepted", SBFile_addStruct(&sb, &n128, (SBStruct) { .stride = 16 }, t->alloc, &t->err));
+	SBFile_free(&sb, t->alloc);
+}
+
+//A file that refers to names, structs or arrays that aren't there prints instead of reading out of bounds
+
+void Test_SBFilePrintMalformed(Test *t) {
+
+	Test_setModule(t, "SBFile print: a malformed file doesn't read out of bounds");
+
+	SBFile sb = { 0 };
+
+	Test_assert(t, "create", SBFile_create(ESBSettingsFlags_None, 64, t->alloc, &sb, &t->err));
+	Test_assert(t, "add a", sbAddType(&sb, "a", 0, U16_MAX, ESBType_F32, NULL, t->alloc));
+	Test_assert(t, "add b", sbAddType(&sb, "b", 16, U16_MAX, ESBType_F32, NULL, t->alloc));
+
+	if (sb.vars.length == 2) {
+
+		SBFile_print(&sb, 0, U16_MAX, true, t->alloc);
+
+		SBVar *vars = sb.vars.ptrNonConst;
+
+		//The lists have no allocation, so reading past their length faults instead of reading stale memory
+
+		ListSBStruct_free(&sb.structs, t->alloc);
+		ListListU32_freeUnderlying(&sb.arrays, t->alloc);
+
+		//The struct id points past the structs and the names
+
+		vars[0].structId = 7;
+		SBFile_print(&sb, 0, U16_MAX, true, t->alloc);
+		vars[0].structId = U16_MAX;
+
+		//The array id points past the arrays
+
+		vars[0].arrayDimOrArrayId = 0x8000 | 9;
+		SBFile_print(&sb, 0, U16_MAX, true, t->alloc);
+		vars[0].arrayDimOrArrayId = 0;
+
+		//A parent that's the variable itself would recurse forever
+
+		vars[1].parentId = 1;
+		SBFile_print(&sb, 0, 1, true, t->alloc);
+		vars[1].parentId = U16_MAX;
+
+		//There are fewer names than variables
+
+		DLFile_remove(&sb.names, sb.names.entryStrings.length - 1, t->alloc, NULL);
+		SBFile_print(&sb, 0, U16_MAX, true, t->alloc);
+	}
+
+	SBFile_free(&sb, t->alloc);
 }

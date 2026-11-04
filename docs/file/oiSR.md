@@ -1,6 +1,6 @@
 # oiSR (Oxsomi Shader Reflection)
 
-*The oiSR format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported, since oiSR is most often packaged inside of an oiSH, which itself lives inside an oiCA/oiDL file).*
+*The oiSR format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported; a file that needs either gets it from the container it's stored in, such as an oiCA or oiDL).*
 
 oiSR stores the **source-level (pre-codegen) symbol AST** of a shader: the entrypoints, functions, user types (struct/enum/union/typedef), resources, namespaces, parameters and control-flow scopes as they appear in the HLSL *before* DXIL/SPIR-V is generated, together with (optionally) their source locations. It is a compiler-*frontend* reflection, complementing oiSB (buffer layouts) and the oiSH register reflection (backend bindings).
 
@@ -19,7 +19,7 @@ Just like any oiXX file it's made with the following things in mind:
 ```c
 typedef struct SRHeader {		//Should be aligned to 4-byte
 
-	U32 magicNumber;			//oiSR (0x5253696F); optional if it's part of an oiSH.
+	U32 magicNumber;			//oiSR (0x5253696F); optional if it's embedded in another file.
 
 	U8 version;					//ESRVersion; on-disk byte 1 (ESRVersion_V1_1), displayed as 1.1
 	U8 flags;					//ESRFlag: & 1 = HasSymbols (the symbols[] location array is present)
@@ -217,7 +217,7 @@ SRFile {		//Has to be 16-byte aligned
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer.
 
-The magic number can only be absent if embedded in another file. The intended host is an oiSH: an oiSR is written as a subfile (HideMagicNumber) only when the shader is compiled with reflection enabled, keyed to the entrypoint / define / uniform combination it was reflected under (reflection only navigates to the code paths the active defines/uniforms expose).
+The magic number can only be absent if embedded in another file (HideMagicNumber). An oiSR is not part of an oiSH: it is a file of its own for tooling (`Compiler_reflect`, `OxC3 shader reflect-symbols`), and it reflects only the code paths the defines it was reflected under expose.
 
 ### Sentinels & invariants
 
@@ -241,7 +241,7 @@ Hashes are generated like following:
 - The whole `nodes[]` byte buffer is FNVed, then `symbols[]`, then `annotations[]`, then `registers[]`, then `enumValues[]`.
 - Every string in the pool (in order) is FNVed by its bytes.
 
-This hash is refreshed by `SRFile_finalize` (and on read). It can be used for quick comparison (e.g. deduplicating identical reflection trees across entrypoint combinations in an oiSH) and is only available at runtime.
+This hash is refreshed by `SRFile_finalize` (and on read). It can be used for quick comparison (e.g. deduplicating identical reflection trees) and is only available at runtime.
 
 ## Relationship to the producer (DXC / Slang)
 

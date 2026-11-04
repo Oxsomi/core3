@@ -541,10 +541,10 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 			goto clean;
 		}
 
-		if(CharString_equalsCStringInsensitive(&shaderOutputMode, "DXIL"))
+		if(CharString_equalsCStringInsensitiveAscii(&shaderOutputMode, "DXIL"))
 			binaryType = EGfxBinaryType_DXIL;
 
-		else if(CharString_equalsCStringInsensitive(&shaderOutputMode, "SPV"))
+		else if(CharString_equalsCStringInsensitiveAscii(&shaderOutputMode, "SPV"))
 			binaryType = EGfxBinaryType_SPIRV;
 
 		else {

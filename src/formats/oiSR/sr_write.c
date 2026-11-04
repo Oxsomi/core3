@@ -81,7 +81,7 @@ Bool SRFile_write(const SRFile *srFile, const Allocator *alloc, StreamRef *strea
 
 	U64 headerSize = sizeof(SRHeader);
 
-	if(!(srFile->flags & ESRSettingsFlags_HideMagicNumber))        //Magic number (can be hidden by parent; such as oiSH)
+	if(!(srFile->flags & ESRSettingsFlags_HideMagicNumber))        //Magic number (can be hidden by a parent file)
 		headerSize += sizeof(U32);
 
 	headerSize += ListSRNode_bytes(srFile->nodes);

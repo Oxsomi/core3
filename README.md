@@ -82,6 +82,9 @@ software driver here, so it is built but never run under a sanitizer.
 - **OxC3_graphics**, modern-only GPU abstraction over **Vulkan** and **Direct3D12** (Metal/WebGPU reserved): refcounted objects, *virtual command lists* with automatic resource transitions, descriptor heap/layout/table model, bindless, compute/graphics/raytracing pipelines, BLAS/TLAS, swapchains (mesh shaders and VRS are partial: capabilities only, see STATUS.md). Vulkan and D3D12 can be loaded side-by-side via dynamic linking and selected at runtime.
   - Docs: [docs/graphics_api.md](docs/graphics_api.md), minimum spec: [docs/graphics_spec.md](docs/graphics_spec.md).
 - **OxC3_shader_compiler**, statically linked DXC wrapper: HLSL → DXIL and/or SPIR-V on all target platforms, multithreaded batch compilation, `[[oxc::...]]` annotations (stage/model/vendor/extensions/uniforms/binary masks), reflection + include tracking for incremental builds and hot reload, output to oiSH.
+  - Docs: [docs/shader_compiler.md](docs/shader_compiler.md).
+- **OxC3_audio**, sound output over OpenAL Soft (WebAudio on the web): device enumeration, WAV files streamed from disk, sources with gain and 3D positioning, a listener.
+  - Docs: [docs/audio.md](docs/audio.md).
 - **OxC3(CLI)**, the `OxC3` command line tool: oiCA/oiDL ↔ raw conversion, encrypt/decrypt, file inspection, hashing (sha256/crc32c/md5), random generation, profiling (float casts, CSPRNG, hashes, AES), multithreaded shader compilation, graphics device enumeration, and the asset packager used by the CMake integration.
   - Docs: [docs/OxC3_tool.md](docs/OxC3_tool.md).
 
@@ -174,7 +177,7 @@ Cross compiled from Windows, Linux or macOS; the host half goes through the same
 python3 build_android.py -mode Debug
 ```
 
-An android build can't run its own packager: the shader compiler is off there, and the resulting
+An android build can't run its own packager: the shader compiler is off there by default, and the resulting
 binaries wouldn't be runnable on the build machine anyway. So it `tool_requires` a *host* OxC3 that has
 `OxC3_package` in it, which `add_virtual_files()` then finds via `find_program`. `build_android.py`
 builds and exports that host package from your working tree before cross compiling. The option set it's
@@ -278,7 +281,8 @@ python build_android.py -mode Release -arch arm64 -generator Ninja -tests True -
   -package net.osomi.oxc3test -version 0.1.0 -lib OxC3_atest -name "OxC3 tests"
 ```
 
-Every suite is bundled except **shader_compiler**, since DXC isn't built for android.
+Every suite is bundled; **shader_compiler** only when the build has it (`-shader_compiler True`), since DXC is
+off by default on android. Its corpus test skips itself there.
 
 #### Android SDK setup
 

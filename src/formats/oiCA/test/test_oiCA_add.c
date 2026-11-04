@@ -138,7 +138,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{                            //Names differing only in case are distinct (resolution is case-sensitive)
+	{                            //Names differing only in case collide (names compare case folded)
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -148,21 +148,21 @@ void Test_CAAddFile(Test *t) {
 		}
 
 		CAHandle hAssets = addFolder(t, &ca, root, "Assets", false);
-		CAHandle hAssets2 = addFile(t, &ca, root, "assets", 0, false);
+		CAHandle hAssets2 = addFile(t, &ca, root, "assets", 0, true);
 
-		//Both must succeed, "Assets" (folder) and "assets" (file) are different names
+		//"Assets" (folder) and "assets" (file) are the same name, so the file is refused
 
 		Test_assert(t, "Assets folder added",    hAssets  != CAHandle_Invalid);
-		Test_assert(t, "assets file added",      hAssets2 != CAHandle_Invalid);
+		Test_assert(t, "assets file refused",    hAssets2 == CAHandle_Invalid);
 		Test_assert(t, "folders 2",              ca.folders.length == 2);
-		Test_assert(t, "files 1",                ca.files.length   == 1);
+		Test_assert(t, "files 0",                ca.files.length   == 0);
 
-		//Exact-case lookup finds each independently
+		//Either case finds the folder
 
 		CharString upper = CharString_createRefCStrConst("Assets");
 		CharString lower = CharString_createRefCStrConst("assets");
 		Test_assert(t, "Assets resolves as folder", CAFile_resolve(&ca, upper) == hAssets);
-		Test_assert(t, "assets resolves as file",   CAFile_resolve(&ca, lower) == hAssets2);
+		Test_assert(t, "assets resolves as folder", CAFile_resolve(&ca, lower) == hAssets);
 
 	doneCaseDistinct:
 		CAFile_free(&ca, t->alloc);

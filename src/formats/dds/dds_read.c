@@ -42,21 +42,21 @@ Bool DDS_read(
 	Bool s_uccess = true;
 
 	if(!info || !result)
-		retError(clean, Error_nullPointer(!info ? 1 : 3, "DDS_read()::info and result are required"));
+		retError(clean, Error_nullPointer(!info ? 2 : 4, "DDS_read()::info and result are required"));
 
 	if(result->ptr)
-		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::result isn't empty, potential memleak"));
+		retError(clean, Error_invalidParameter(4, 0, "DDS_read()::result isn't empty, potential memleak"));
 
 	if (!streamRef || !streamOff)
 		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "DDS_read()::streamRef and streamOff are required"));
 
 	if (streamRef->refPtrType->typeId != (TypeId)EContainerTypeId_Stream)
-		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::streamRef is of invalid type"));
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::streamRef is of invalid type"));
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if (!stream->read)
-		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::streamRef is not readable"));
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::streamRef is not readable"));
 
 	DDSHeaderMax dds;
 

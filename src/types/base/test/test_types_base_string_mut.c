@@ -225,15 +225,15 @@ void Test_stringMut(Test *test) {
 	//Test transform toLower
 
 	fillStr(buf1, "HeLLo WoRLd!", &str);
-	Test_assert(test, "CharString_toLower", CharString_toLower(&str));
+	Test_assert(test, "CharString_toLowerAscii", CharString_toLowerAscii(&str));
 
-	Test_assert(test, "CharString_toLower (value)", CharString_equalsCStringSensitive(&str, "hello world!"));
+	Test_assert(test, "CharString_toLowerAscii (value)", CharString_equalsCStringSensitive(&str, "hello world!"));
 
 	//Test transform toUpper
 
-	Test_assert(test, "CharString_toUpper", CharString_toUpper(&str));
+	Test_assert(test, "CharString_toUpperAscii", CharString_toUpperAscii(&str));
 
-	Test_assert(test, "CharString_toUpper (value)", CharString_equalsCStringSensitive(&str, "HELLO WORLD!"));
+	Test_assert(test, "CharString_toUpperAscii (value)", CharString_equalsCStringSensitive(&str, "HELLO WORLD!"));
 
 	//Test formatPath
 
@@ -253,7 +253,7 @@ void Test_stringMut(Test *test) {
 
 	//Test transform on const ref (should fail)
 
-	Test_assert(test, "CharString_toLower (const ref)", !CharString_toLower(&constRef));
+	Test_assert(test, "CharString_toLowerAscii (const ref)", !CharString_toLowerAscii(&constRef));
 
 	//Test bounds checking
 

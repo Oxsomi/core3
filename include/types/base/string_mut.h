@@ -37,6 +37,8 @@ typedef struct CharStringReplaceErase {
 	U64 len;
 } CharStringReplaceErase;
 
+//A C8 overload matches one byte, and either insensitive case only folds A-Z there (see EStringCase).
+
 Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c);
 Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharString *other);
 Bool CharString_erase(const CharStringReplaceErase *erase, C8 c, Bool isFirst);
@@ -47,7 +49,8 @@ Bool CharString_replace(const CharStringReplaceErase *replace, C8 c, C8 v, Bool 
 
 CharString CharString_trim(const CharString s);        //Returns a substring ref in a string
 
-Bool CharString_transform(CharString *s, EStringTransform stringTransform);
+//Maps A-Z or a-z in place; everything else, UTF-8 included, stays as it is. CharString_transform maps all of Unicode.
+Bool CharString_transformAscii(CharString *s, EStringTransform stringTransform);
 
 static inline Bool CharString_popEndCount(CharString *s, U64 count, Error *e_rr) {
 	return CharString_eraseAtCount(s, s ? CharString_length(*s) - count : 0, count, e_rr);
@@ -63,8 +66,8 @@ static inline Bool CharString_popEnd(CharString *s, Error *e_rr) {
 	return CharString_eraseAt(s, s ? CharString_length(*s) - 1 : 0, e_rr);
 }
 
-static inline Bool CharString_toLower(CharString *str) { return CharString_transform(str, EStringTransform_Lower); }
-static inline Bool CharString_toUpper(CharString *str) { return CharString_transform(str, EStringTransform_Upper); }
+static inline Bool CharString_toLowerAscii(CharString *str) { return CharString_transformAscii(str, EStringTransform_Lower); }
+static inline Bool CharString_toUpperAscii(CharString *str) { return CharString_transformAscii(str, EStringTransform_Upper); }
 
 static inline Bool CharString_formatPath(CharString *str) {
 	CharStringReplaceErase replace = { str, EStringCase_Sensitive, 0, 0 };

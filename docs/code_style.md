@@ -222,6 +222,8 @@ call/condition layout. These checks ignore comments, strings and preprocessor di
 and leave ambiguous syntax for review. They do not choose logical groups or add padding inside braces. The accepted
 and rejected examples in `src/tools/test_check_style.py` run with the style build target and as `OxC3_style_test` in CTest.
 
+`src/tools/check_docs.py` checks the markdown docs, except `docs/proposals/`, `docs/roadmap.md` and `Changelog.md`. An OxC3-style name (uppercase first letter, an underscore and a lowercase letter, e.g. `CharString_parseDec`) in a code span or in a fenced block that is untagged or tagged as C, C++, HLSL, CMake or Python must occur as a word in the code. A name that is deliberately not real goes in `PLACEHOLDER_NAMES` in the script, with the reason. Relative links must point at an existing file or directory and their `#anchor` at a heading of the target, using GitHub's slugs. `docs/OxC3_tool.md` must name every category, operation, format, flag and parameter the CLI defines in `src/tools/oxc3_cli/operations.c`, and every OxC3 flag it shows must exist there. The accepted and rejected examples in `src/tools/test_check_docs.py` run with the docs build target and as `OxC3_docs_test` in CTest.
+
 ## Defines & Macros
 
 Constants as defines should only be used if required; e.g. An array is typedeffed and needs it to be constexpr. But since C doesn't have constexpr, a define should be used. If it's just a constant that's not used for that purpose, it should just be defined as extern.

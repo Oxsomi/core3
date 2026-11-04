@@ -21,7 +21,7 @@
 //shader_compiler/shaders/variants.hlsli
 //
 //Disabling combinations an entry's annotations would build but can't or shouldn't, so the annotations stay a full
-//cross product (OxC3_tool.md, Disabling combinations). An entry's binaries are then only the ones left, and a lookup
+//cross product (shader_compiler.md, Disabling combinations). An entry's binaries are then only the ones left, and a lookup
 //that names a disabled one falls through to the next extension line, as it does where one isn't supported.
 //
 //OXC_DISABLE_COMBINATION, written under an #if on what a combination is made of (its defines, $NAME, and its
