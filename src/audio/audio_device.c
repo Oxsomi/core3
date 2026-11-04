@@ -131,6 +131,12 @@ void AudioDeviceInfo_print(AudioDeviceInfo info, const Allocator *alloc) {
 
 typedef struct AudioSource AudioSource;
 
+//The backend refuses a non finite vector or gain and a negative gain, so the setter refuses them first.
+
+static inline Bool AudioDevice_validVec3(F32x4 v) {
+	return F32_isValid(F32x4_x(v)) && F32_isValid(F32x4_y(v)) && F32_isValid(F32x4_z(v));
+}
+
 impl Bool AudioDevice_updateListenerTransformExt(AudioDevice *device, Error *e_rr);
 impl Bool AudioSource_update(AudioSource *source, Error *e_rr);
 impl Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, Error *e_rr);
@@ -157,32 +163,53 @@ Bool AudioDeviceRef_updateListenerTransform(
 
 	AudioDevice *dev = AudioDeviceRef_ptr(devRef);
 
+	//Everything selected is checked before any of it is stored.
+
+	if ((dirtyMask & 1) && !AudioDevice_validVec3(position))
+		retError(clean, Error_invalidParameter(1, 0, "AudioDeviceRef_updateListenerTransform()::position must be finite"));
+
+	if ((dirtyMask & 2) && !AudioDevice_validVec3(forward))
+		retError(clean, Error_invalidParameter(2, 0, "AudioDeviceRef_updateListenerTransform()::forward must be finite"));
+
+	if ((dirtyMask & 4) && !AudioDevice_validVec3(up))
+		retError(clean, Error_invalidParameter(3, 0, "AudioDeviceRef_updateListenerTransform()::up must be finite"));
+
+	if ((dirtyMask & 8) && !AudioDevice_validVec3(velocity))
+		retError(clean, Error_invalidParameter(4, 0, "AudioDeviceRef_updateListenerTransform()::velocity must be finite"));
+
+	if ((dirtyMask & 16) && (!F32_isValid(gain) || gain < 0))
+		retError(clean, Error_invalidParameter(
+			5, 0, "AudioDeviceRef_updateListenerTransform()::gain must be finite and at least 0"
+		));
+
+	//A value is only skipped if it is exactly the stored one, so a slow fade or drift still reaches the backend.
+
 	if (dirtyMask & 1) {
-		dirtyMask &= F32x4_eqApprox4(position, dev->info.position) ? ~1 : U8_MAX;
+		dirtyMask &= F32x4_eqExact4(position, dev->info.position) ? ~1 : U8_MAX;
 		dev->info.position = position;
 	}
 
 	if (dirtyMask & 2) {
-		dirtyMask &= F32x4_eqApprox4(forward, dev->info.forward) ? ~2 : U8_MAX;
+		dirtyMask &= F32x4_eqExact4(forward, dev->info.forward) ? ~2 : U8_MAX;
 		dev->info.forward = forward;
 	}
 
 	if (dirtyMask & 4) {
-		dirtyMask &= F32x4_eqApprox4(up, dev->info.up) ? ~4 : U8_MAX;
+		dirtyMask &= F32x4_eqExact4(up, dev->info.up) ? ~4 : U8_MAX;
 		dev->info.up = up;
 	}
 
 	if (dirtyMask & 8) {
-		dirtyMask &= F32x4_eqApprox4(velocity, dev->info.velocity) ? ~8 : U8_MAX;
+		dirtyMask &= F32x4_eqExact4(velocity, dev->info.velocity) ? ~8 : U8_MAX;
 		dev->info.velocity = velocity;
 	}
 
 	if (dirtyMask & 16) {
-		dirtyMask &= F32_approxEq(gain, dev->info.gain, 0.01f) ? ~16 : U8_MAX;
+		dirtyMask &= gain == dev->info.gain ? ~16 : U8_MAX;
 		dev->info.gain = gain;
 	}
 
-	dev->pendingDirtyMask |= dirtyMask;
+	dev->pendingDirtyMask |= dirtyMask & 31;
 
 clean:
 	return s_uccess;

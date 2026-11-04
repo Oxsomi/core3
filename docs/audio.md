@@ -26,8 +26,10 @@ that was not made for it.
   `AudioDeviceRef_createFromFile` to detect the file type from its first bytes). It can loop a number of times or
   forever, seek (`AudioStreamRef_seekTime`), play and stop. Only WAV is recognized; any other file is refused.
 - **`AudioSource`**: where a stream is heard (`AudioDeviceRef_createSource`, with 2D and 3D variants). It holds the
-  gain and, for spatial audio, the position and velocity. Several sources can share one stream, so they play the same
-  data at the same offset; sounds that need their own starting point need their own streams.
+  gain and, for spatial audio, the position and velocity. A source that is not spatial plays at the listener, wherever
+  the listener is. Several sources can share one stream, but they play the same data at the same offset through one
+  OpenAL voice: the gain, position and velocity set last apply to all of them, and releasing one mutes the stream.
+  Sounds that need their own starting point or settings need their own streams.
 
 A stream and a source each keep a reference to the device, and a source keeps one to its stream. A device keeps a
 reference to its interface, so the interface lives until everything made from it is released. The device also tracks
@@ -38,28 +40,37 @@ its streams and pending sources, but only weakly.
 `AudioDeviceRef_createFromFile` reads the file's magic from the input stream, then calls `WAV_read`, which walks the
 RIFF chunks through the stream and returns the format and where the sample data starts. The audio stream keeps its own
 reference to the input stream, so the caller releases its reference whether the call succeeds or not. The file is never
-loaded whole: playback keeps the stream's data in four OpenAL buffers of 64 KiB, and refills them as they drain.
+loaded whole: playback keeps the stream's data in four OpenAL buffers of `streamLength` bytes (one second by default,
+at least 64 KiB if set) and refills them as they drain. A seek takes effect at the next update, which drops the queued
+buffers. A stream that played to its end stays there until a seek, and a seek while it isn't playing also resets its
+loop count, so the next play makes every pass again.
 
 Refilling happens in `AudioDeviceRef_update`, which the application calls regularly, not on a thread of the module's
 own. `AudioDeviceRef_wait` calls it in a loop until every stream has finished, and with `waitForLoopingStream` set it
 also waits on endless loops, which only end when someone stops them. The update, wait, play, stop and source creation
 calls take the device's spin lock for up to a second and fail with an error rather than waiting forever.
-The listener and source setters only record what changed; the next update applies it.
+The listener and source setters only record what changed; the next update applies it. Any change reaches the backend,
+however small, and only a value exactly equal to the stored one is skipped.
 
 WAV files of 8, 16, 24 and 32 bit PCM and 32 and 64 bit float, mono or stereo, are accepted. A sample format the
-device cannot take natively (24 bit PCM, 32 bit PCM, 32 or 64 bit float, as `EAudioDeviceFlags` reports) is converted
-to 16 bit on the CPU while streaming, and a debug build logs that it did. `flattenSound` on a stream folds stereo to
-mono.
+device cannot take natively is converted to 16 bit on the CPU while streaming, and a debug build logs that it did:
+32 and 64 bit float unless `EAudioDeviceFlags` reports them, and 24 and 32 bit PCM always, because the OpenAL backend
+reports neither. `flattenSound` on a stream folds stereo to mono.
 
 ## What is refused
 
 - **Stereo with spatial audio.** OpenAL positions mono sources only, so a spatial source on a stereo stream is an
   error unless the stream was made with `flattenSound`. The CLI's `-split` option exists to prepare such files.
 - **A pitch on a source for a stream.** A stream owns its pitch, set when it is created, so a pitch given to
-  `AudioDeviceRef_createSource` for one is an error, and a negative pitch is refused at stream creation.
+  `AudioDeviceRef_createSource` for one is an error, as is a pitch update on a source that differs from the stream's,
+  and a negative pitch is refused at stream creation.
+- **Values the backend would refuse.** A negative or non finite gain and a non finite position, velocity or listener
+  orientation are errors at the setters and at source creation, and nothing is stored.
+- **A sound from another device.** A source is made on the device its stream was created on.
 - **Inconsistent stream info.** A sample rate that does not match the bytes per second, a data range past the end of
-  the stream, an unknown format or a `streamLength` under 64 KiB fails `AudioDeviceRef_createStream`, which takes
-  ownership of the info it is given.
+  the stream, an unknown format, a `streamLength` under 64 KiB, a data length of 0, or a `loops` other than 1 without
+  `EAudioStreamInfoFlags_IsLoop`
+  fails `AudioDeviceRef_createStream`, which takes ownership of the info it is given.
 - **A bad type or a missing object.** Every call checks the type id of the reference it is given.
 
 ## The CLI
@@ -71,9 +82,10 @@ mono.
 ## Tests
 
 - [test_audio_interface_main.c](../src/audio/test/interface/test_audio_interface_main.c) is `OxC3_audio_interface_test`:
-  interface and device lifetime, device enumeration, the preferred device, the listener setters, a stereo spatial
-  source being rejected, and a WAV opened at an offset inside a larger stream. It is automatic. With no audio device
-  it checks what it can and skips the device dependent modules.
+  interface and device lifetime, device enumeration, the preferred device, the listener and source setters, the values
+  they refuse, a source released before an update, a sound from another device, stream creation and seeking at the
+  edges, a stereo spatial source being rejected, and a WAV opened at an offset inside a larger stream. It is automatic.
+  With no audio device it checks what it can and skips the device dependent modules.
 - [test_audio_functional_main.c](../src/audio/test/functional/test_audio_functional_main.c) is
   `OxC3_audio_functional_test` and needs a person listening. It plays the WAV files next to it in every bit depth,
   looped and once, then sweeps gain, source and listener position and orientation, a Doppler pass, several sources at

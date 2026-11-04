@@ -104,7 +104,8 @@ Bool AudioInterface_getPreferredDevice(
 			goto clean;
 		}
 
-		firstSupported = i;
+		if (firstSupported == U64_MAX)
+			firstSupported = i;
 	}
 
 	if (firstSupported == U64_MAX)

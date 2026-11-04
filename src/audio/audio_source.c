@@ -33,6 +33,14 @@ impl extern U32 AudioSource_sizeExt;
 impl Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e_rr);
 impl void AudioSource_freeExt(AudioSource *source, const Allocator *alloc);
 
+//The backend refuses a negative gain and any non finite value, so setters and creation refuse them first.
+
+static inline Bool AudioSource_validGain(F32 gain) { return F32_isValid(gain) && gain >= 0; }
+
+static inline Bool AudioSource_validVec3(F32x4 v) {
+	return F32_isValid(F32x4_x(v)) && F32_isValid(F32x4_y(v)) && F32_isValid(F32x4_z(v));
+}
+
 void AudioSource_free(void *sourceGeneric, const Allocator *alloc) {
 
 	AudioSource *source = (AudioSource*) sourceGeneric;
@@ -40,7 +48,31 @@ void AudioSource_free(void *sourceGeneric, const Allocator *alloc) {
 	if(!source)
 		return;
 
-	AudioSource_freeExt(source, alloc);
+	//The device lists a source with pending changes weakly, so it has to be unlisted before the memory goes, and before
+	// the backend objects go so an update never sees a source without them.
+	//A source that failed before its device was set has nothing in the backend to release.
+
+	if(source->device) {
+
+		AudioSourceRef *sourceRef = (AudioSourceRef*)source - 1;
+
+		AudioDevice *dev = AudioDeviceRef_ptr(source->device);
+		ELockAcquire acq = SpinLock_lock(&dev->pendingUpdateLock, U64_MAX);
+
+		if (acq >= ELockAcquire_Success) {
+
+			U64 id = ListWeakRefPtr_findFirst(dev->pendingSources, sourceRef, 0, NULL);
+
+			if (id != U64_MAX)
+				ListWeakRefPtr_erase(&dev->pendingSources, id, NULL);
+		}
+
+		AudioSource_freeExt(source, alloc);
+
+		if (acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&dev->pendingUpdateLock);
+	}
+
 	RefPtr_dec(&source->stream);
 	RefPtr_dec(&source->device);
 }
@@ -88,15 +120,30 @@ Bool AudioDeviceRef_createSourceGeneric(
 	if(!soundRef || soundRef->refPtrType->typeId != (TypeId)EAudioTypeId_AudioStream)
 		retError(clean, Error_nullPointer(1, "AudioDeviceRef_createSourceGeneric()::soundRef is required"));
 
-	Bool isStream = soundRef && soundRef->refPtrType->typeId == (TypeId)EAudioTypeId_AudioStream;
 	AudioStream *stream = AudioStreamRef_ptr(soundRef);
 
-	if(!modifier.pitch)
-		modifier.pitch = isStream ? stream->info.pitch : 1;
-
-	else if(isStream)
+	if(stream->device != deviceRef)
 		retError(clean, Error_invalidParameter(
-			1, 0, "AudioDeviceRef_createSourceGeneric() specifying pitch is only allowed for AudioBuffer sources"
+			1, 0, "AudioDeviceRef_createSourceGeneric()::soundRef was created on another device"
+		));
+
+	//A stream owns its pitch, so only 0 (the stream's own) is accepted.
+
+	if(modifier.pitch)
+		retError(clean, Error_invalidParameter(
+			2, 0, "AudioDeviceRef_createSourceGeneric()::modifier.pitch must be 0, a stream owns its pitch"
+		));
+
+	modifier.pitch = stream->info.pitch;
+
+	if(!AudioSource_validGain(modifier.gain))
+		retError(clean, Error_invalidParameter(
+			2, 1, "AudioDeviceRef_createSourceGeneric()::modifier.gain must be finite and at least 0"
+		));
+
+	if(!AudioSource_validVec3(point.pos) || !AudioSource_validVec3(point.velocity))
+		retError(clean, Error_invalidParameter(
+			3, 0, "AudioDeviceRef_createSourceGeneric()::point must be finite"
 		));
 
 	Bool flattenSound = AudioStreamInfo_flattenSound(&stream->info);
@@ -228,7 +275,7 @@ Bool AudioSourceRef_onUpdate(AudioSource *source, AudioSourceRef *sourceRef, con
 	ELockAcquire acq = SpinLock_lock(&dev->pendingUpdateLock, SECOND);
 
 	if (acq < ELockAcquire_Success)
-		retError(clean, Error_invalidState(0, "AudioDeviceRef_createSourceGeneric() couldn't acquire device lock in time"));
+		retError(clean, Error_invalidState(0, "AudioSourceRef_onUpdate() couldn't acquire device lock in time"));
 
 	if(ListWeakRefPtr_contains(dev->pendingSources, sourceRef, 0, NULL))
 		goto clean;
@@ -251,10 +298,17 @@ Bool AudioSourceRef_updateGain(AudioSourceRef *sourceRef, F32 gain, const Alloca
 
 	AudioSource *source = AudioSourceRef_ptr(sourceRef);
 
+	if(!AudioSource_validGain(gain))
+		retError(clean, Error_invalidParameter(
+			1, 0, "AudioSourceRef_updateGain()::gain must be finite and at least 0"
+		));
+
+	//Queued before it is stored, so a source that can't be queued keeps its value and the same call can be retried.
+
 	if(source->modifier.gain != gain) {
+		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
 		source->modifier.gain = gain;
 		source->dirtyMask |= 1;
-		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
 	}
 
 clean:
@@ -269,18 +323,18 @@ Bool AudioSourceRef_updatePitchExt(AudioSourceRef *sourceRef, F32 pitch, const A
 		retError(clean, Error_nullPointer(0, "AudioSourceRef_updatePitchExt()::sourceRef is required"));
 
 	AudioSource *source = AudioSourceRef_ptr(sourceRef);
+	(void) alloc;
 
 	//TODO: updating pitch on the stream itself
-	if (sourceRef && sourceRef->refPtrType->typeId == (TypeId)EAudioTypeId_AudioStream)
-		retError(clean, Error_nullPointer(
-			0, "AudioSourceRef_updatePitchExt() is only allowed on sources with an AudioBuffer"
-		));
+	//Every source plays a stream, and the stream owns its pitch.
 
-	if(source->modifier.pitch != pitch) {
-		source->modifier.pitch = pitch;
-		source->dirtyMask |= 2;
-		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
-	}
+	if (
+		source->stream && source->stream->refPtrType->typeId == (TypeId)EAudioTypeId_AudioStream &&
+		source->modifier.pitch != pitch
+	)
+		retError(clean, Error_invalidParameter(
+			1, 0, "AudioSourceRef_updatePitchExt()::pitch must be the pitch of the stream, which owns it"
+		));
 
 clean:
 	return s_uccess;
@@ -289,6 +343,22 @@ clean:
 Bool AudioSourceRef_updateModifierExt(AudioSourceRef *source, AudioModifier modifier, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
+
+	//Both parts are checked before either is applied.
+
+	if (!source || source->refPtrType->typeId != (TypeId)EAudioTypeId_AudioSource)
+		retError(clean, Error_nullPointer(0, "AudioSourceRef_updateModifierExt()::source is required"));
+
+	if(!AudioSource_validGain(modifier.gain))
+		retError(clean, Error_invalidParameter(
+			1, 0, "AudioSourceRef_updateModifierExt()::modifier.gain must be finite and at least 0"
+		));
+
+	if(AudioSourceRef_ptr(source)->modifier.pitch != modifier.pitch)
+		retError(clean, Error_invalidParameter(
+			1, 1, "AudioSourceRef_updateModifierExt()::modifier.pitch must be the pitch of the stream, which owns it"
+		));
+
 	gotoIfError3(clean, AudioSourceRef_updateGain(source, modifier.gain, alloc, e_rr));
 	gotoIfError3(clean, AudioSourceRef_updatePitchExt(source, modifier.pitch, alloc, e_rr));
 
@@ -308,10 +378,13 @@ Bool AudioSourceRef_updatePosition3D(AudioSourceRef *sourceRef, F32x4 pos, const
 	if(!source->spatialAudio)
 		retError(clean, Error_invalidParameter(0, 0, "AudioSourceRef_updatePosition3D()::source->spatialAudio is required"));
 
-	if(F32x4_neqApprox4(source->point.pos, pos)) {
+	if(!AudioSource_validVec3(pos))
+		retError(clean, Error_invalidParameter(1, 0, "AudioSourceRef_updatePosition3D()::pos must be finite"));
+
+	if(F32x4_neqExact4(source->point.pos, pos)) {
+		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
 		source->point.pos = pos;
 		source->dirtyMask |= 4;
-		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
 	}
 
 clean:
@@ -330,10 +403,13 @@ Bool AudioSourceRef_updateVelocity3D(AudioSourceRef *sourceRef, F32x4 velocity, 
 	if (!source->spatialAudio)
 		retError(clean, Error_invalidParameter(0, 0, "AudioSourceRef_updateVelocity3D()::source->spatialAudio is required"));
 
-	if(F32x4_neqApprox4(source->point.velocity, velocity)) {
+	if(!AudioSource_validVec3(velocity))
+		retError(clean, Error_invalidParameter(1, 0, "AudioSourceRef_updateVelocity3D()::velocity must be finite"));
+
+	if(F32x4_neqExact4(source->point.velocity, velocity)) {
+		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
 		source->point.velocity = velocity;
 		source->dirtyMask |= 8;
-		gotoIfError3(clean, AudioSourceRef_onUpdate(source, sourceRef, alloc, e_rr));
 	}
 
 clean:
@@ -343,6 +419,18 @@ clean:
 Bool AudioSourceRef_updatePoint3D(AudioSourceRef *source, AudioPoint3D point, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
+
+	//Both parts are checked before either is applied.
+
+	if (!source || source->refPtrType->typeId != (TypeId)EAudioTypeId_AudioSource)
+		retError(clean, Error_nullPointer(0, "AudioSourceRef_updatePoint3D()::source is required"));
+
+	if(!AudioSourceRef_ptr(source)->spatialAudio)
+		retError(clean, Error_invalidParameter(0, 0, "AudioSourceRef_updatePoint3D()::source->spatialAudio is required"));
+
+	if(!AudioSource_validVec3(point.pos) || !AudioSource_validVec3(point.velocity))
+		retError(clean, Error_invalidParameter(1, 0, "AudioSourceRef_updatePoint3D()::point must be finite"));
+
 	gotoIfError3(clean, AudioSourceRef_updatePosition3D(source, point.pos, alloc, e_rr));
 	gotoIfError3(clean, AudioSourceRef_updateVelocity3D(source, point.velocity, alloc, e_rr));
 
